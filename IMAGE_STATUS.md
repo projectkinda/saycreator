@@ -1,6 +1,6 @@
 # Image engine status
 
-Last updated: after Step 2 of 6. Contract: `IMAGE_CONTRACT.md`. Licences: `LICENSES-MODELS.md`.
+Last updated: after Step 4 of 6 (Step 3 parked). Contract: `IMAGE_CONTRACT.md`. Licences: `LICENSES-MODELS.md`.
 
 ## Read this first
 
@@ -14,8 +14,8 @@ Last updated: after Step 2 of 6. Contract: `IMAGE_CONTRACT.md`. Licences: `LICEN
 |---|---|---|
 | 1 | Plan, patcher, Fabric, fonts | **Done, see below** |
 | 2 | Thumbnail composer and phone-size checker | **Done, see "Step 2" below** |
-| 3 | Carousel and quote cards (7 slides, lint) | Not started |
-| 4 | Background removal (ISNet, BiRefNet_lite), `/lab` page | Not started |
+| 3 | Carousel and quote cards (7 slides, lint) | **Parked until after the style system** |
+| 4 | Background removal (ISNet, BiRefNet_lite), `/lab` page | **Built, but no real model produced a cutout on this machine. See "Step 4" below** |
 | 5 | Hook into the app behind the mock engine's names | Not started |
 | 6 | Frame mining from video | **Deferred, not tested.** Waits until you say the video engine can supply clips |
 
@@ -87,6 +87,39 @@ Time to compose, draw, check and export all options for one picture: about 0.4 t
 
 **What I changed after looking at the pictures** (the first run had passes that hid real problems): the 9:16 outline and panel were 40 px from the left edge and the margin check caught it (layout bug, fixed); the outline's dark band had a hard edge across faces (now a soft fade); the crop guess cut the rider's arm (stronger pull to the centre); a tall photo cropped wide lost the head and nothing flagged it (new `crop` check).
 
+## Step 4: background removal and the lab
+
+**Plain result: the machinery works and is tested on WebGPU and WASM, but no real background-removal model produced a cutout here.** ISNet is blocked for licence reasons (never downloaded). BiRefNet_lite downloads and loads on WebGPU but fails on its first picture; on WASM it runs out of memory. Every cutout image in `out/image-engine/step4/` is from the **toy self-test model**, which turns brightness into a mask and is labelled as such. **None of those pictures says anything about real cutout quality.**
+
+Machine (Chrome 156 headless via Playwright, Windows 10): NVIDIA Blackwell GPU, WebGPU yes (16 storage buffers per shader, shader-f16 yes), 24 cores, 32 GB, cross-origin isolated (threaded WASM available).
+
+### What exists
+- `src/image-engine/cutout/`: `BgRemover` (`load(onProgress)`, `remove(image) -> { cutout PNG Blob, mask, timings }`, `dispose()`), a module Web Worker doing all inference with **onnxruntime-web 1.22.0** (reason in LICENSES-MODELS.md), automatic WebGPU with fallback to WASM, plain-language errors, Cache Storage so a model downloads once, size and sha256 checks before use. No CDN at runtime: model files in `public/models/`, runtime files in `public/ort/`.
+- `npm run fetch:models` downloads approved models with pinned size and hash and builds the derived file; blocked models are never fetched. `npm run check:licenses` fails on disallowed or unclear licences (models, 125 npm packages, fonts). **It passes**, with one printed exception: `lightningcss` (MPL-2.0, a Vite build tool, not shipped). Your call.
+- Mask helpers (pure, 11 unit tests): edge feathering (soft edge), small-hole filling (holes up to a share of the picture size), edge decontamination (pulls colour from inside the subject onto the half-transparent rim to reduce halos). Subject helpers: bounding box, robust bounding box, centre of mass, area fraction. Decontamination is tested for running and for changing pixels, **not for how it looks on real hair**: no real mask was available.
+- `/lab` (dev only, `npm run dev`, then open `/lab`): every picture in `test-images/` with original, cutout on checkerboard, dark, light and coloured backgrounds plus the mask; load time, inference time, download size, backend, failures; "pick best" per picture; good / meh / bad with a one-line reason; all Step 2 thumbnails with the checker's PASS or FAIL beside them and a flag where you and the checker disagree; Export verdicts JSON; autosaved in the browser. Tested in Chrome by a script (loads, ISNet shown blocked, self-test runs, verdicts survive a reload, export contents). Uploading your own pictures from the lab page is **not built**; use `test-images/`.
+
+### Models
+| Model | Result here |
+|---|---|
+| ISNet general-use | **Blocked, not downloaded.** Weights licence not stated by the authors; training data non-commercial. See LICENSES-MODELS.md. Needs your decision |
+| BiRefNet_lite (MIT) | 213.6 MB download (224.0 MB after the graph split). **WebGPU:** loads in about 5 s, then fails on the first picture (a shader compile error in onnxruntime-web 1.22; newer onnxruntime-web versions abort in WASM before the GPU path gets that far). **WASM:** runs out of memory. Reported as a clear error, page stays usable. Not solved |
+| Self-test (toy) | Works on WebGPU and WASM, same subject area on both within 1% on all 8 pictures |
+
+What I tried for BiRefNet_lite: splitting every wide Concat/Split so WebGPU's buffer limit is respected (works, kept), widening the device limit to the adapter's 16, onnxruntime-web 1.22 to 1.30, one thread, graph optimisation off. The remaining failures are inside onnxruntime-web, not our code. Not tried: an ONNX re-export of the model with simpler operators, other runtimes, another model.
+
+### Timings (this machine, self-test only, 2048 px working size, not a benchmark)
+WebGPU inference 16 ms, WASM 8 ms on the toy: meaningless for real models. Real-model timings: **none measured**.
+
+### Not done or not tested
+- **No real cutout has been judged.** Hard cases (hair, glass, low light, busy backgrounds) were **not added**, because there was no real model to test them on. Adding them first would be pictures of nothing.
+- Safari, Firefox, other GPUs, Linux, Mac: not tested. BiRefNet_lite on a different GPU may behave differently.
+- Reading pictures with EXIF rotation, very large photos beyond 3024 px, memory use of the real model: not tested.
+- The lab's own upload button and "pick best" with real results: pick-best radios exist but have only been shown in their empty state.
+
+## Plan after this step
+Style-system step first (richer toolbox, style spec JSON, extraction from reference thumbnails), then carousels (the parked Step 3), then wiring into the app. Frame mining from video (Step 6) stays deferred and untested.
+
 ## Known problems and not tested (Step 2)
 
 - **Titles can cover the subject.** Layouts place the title by position, not by where the face is. In the full-size `wp13337965 ... outline.png` the title sits over the man's chin and hand. Nothing checks this; it needs subject detection, which is out of scope.
@@ -103,7 +136,10 @@ Time to compose, draw, check and export all options for one picture: about 0.4 t
 
 ```bash
 npm install
-npm run test:image      # 34 tests in real Chrome, writes out/image-engine/ (Step 2 reads test-images/)
+npm run test:image      # 55 tests in real Chrome, writes out/image-engine/ (reads test-images/)
+npm run fetch:models    # once: BiRefNet_lite and the ONNX runtime files (about 224 MB)
+npm run check:licenses
+npm run dev             # then open /lab
 npm run typecheck       # app + tests
 ```
 
@@ -133,6 +169,6 @@ Timings in this run (one machine, not a benchmark): carousel slide 160 ms, quote
 - Editing: only move, resize and rotate proposals exist. Text cannot be scaled by dragging (locked on purpose; size is a style value). Re-rendering rebuilds every layer each time; fine at these sizes, to revisit if plans get big.
 - Retina: Fabric's retina scaling is switched off so exports are exactly plan size. The on-screen editable canvas is therefore not sharper on high-DPI screens.
 
-## Next (waiting for your go-ahead)
+## Next (waiting for your decision)
 
-Step 3: carousel and quote cards (7-slide carousel from a script, quote cards, their own checks). No new images are needed.
+See the end of the Step 4 report: approve ISNet, choose another permissively licensed model, or keep working on BiRefNet_lite.
