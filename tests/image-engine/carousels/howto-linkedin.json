@@ -1,0 +1,16 @@
+{
+  "id": "howto-linkedin",
+  "title": "How-to list: fix your LinkedIn profile",
+  "note": "Sample copy written for layout. The figure on the stat slide is a placeholder, not sourced.",
+  "aspect": "4:5",
+  "brand": { "handle": "@maya.builds" },
+  "slides": [
+    { "type": "cover", "kicker": "LinkedIn, fixed", "headline": "Fix your LinkedIn profile in 15 minutes", "sub": "Three edits that make people stop scrolling and start replying.", "highlight": "15 minutes" },
+    { "type": "step", "number": 1, "headline": "Rewrite your headline", "body": "Skip the job title. Say who you help and how. Something like: I help B2B teams ship onboarding that sticks. Keep it under 120 characters." },
+    { "type": "step", "number": 2, "headline": "Lead your About with a result", "body": "Open with one number or outcome, not a list of adjectives. Two short paragraphs is plenty. End with how to reach you." },
+    { "type": "step", "number": 3, "headline": "Pin one proof post", "body": "Feature your best post or case study at the top. People decide in seconds. Give them one thing worth clicking.", "highlight": "proof" },
+    { "type": "checklist", "headline": "Before you hit save", "items": ["Photo is a clear, well-lit headshot", "Headline names who you help", "Banner says what you do, not a slogan", "Contact info and booking link are current"], "highlight": "save" },
+    { "type": "stat", "kicker": "Why bother", "value": "3x", "label": "more replies when your headline says who you help", "note": "Placeholder figure for layout. Use your own data." },
+    { "type": "closing", "headline": "Save this and fix it tonight", "cta": "Follow for weekly posts", "highlight": "tonight" }
+  ]
+}

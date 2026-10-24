@@ -1,0 +1,16 @@
+{
+  "id": "myths-remote",
+  "title": "Myth vs fact: remote work myths",
+  "note": "Sample copy written for layout.",
+  "aspect": "4:5",
+  "brand": { "handle": "@northdesk" },
+  "slides": [
+    { "type": "cover", "kicker": "Myth busting", "headline": "Remote work myths that quietly hurt your team", "sub": "Three beliefs worth dropping this quarter.", "highlight": "myths" },
+    { "type": "beforeafter", "beforeLabel": "Myth", "before": "People who work from home are less productive.", "afterLabel": "Fact", "after": "Output depends on clear goals and fewer meetings, not on where the desk is." },
+    { "type": "beforeafter", "beforeLabel": "Myth", "before": "You need to reply instantly to look committed.", "afterLabel": "Fact", "after": "Fast replies reward noise. Agree on a response window and protect deep work." },
+    { "type": "content", "headline": "The real problem is unclear ownership", "body": "When nobody knows who decides, work stalls in every office. Remote just makes the stall visible.", "highlight": "ownership" },
+    { "type": "beforeafter", "beforeLabel": "Myth", "before": "More video calls build more trust.", "afterLabel": "Fact", "after": "Trust comes from doing what you said you would, and saying so in writing." },
+    { "type": "quote", "quote": "The best remote teams write more and meet less.", "by": "Five years of running one", "highlight": "write more" },
+    { "type": "closing", "headline": "Which myth did your team believe?", "cta": "Tell me in the comments", "highlight": "myth" }
+  ]
+}

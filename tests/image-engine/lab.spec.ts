@@ -93,3 +93,25 @@ test('lab: BiRefNet_lite that cannot run shows the reason in the page and the la
   }
   await expect(page.getByRole('button', { name: 'Export verdicts JSON' })).toBeEnabled();
 });
+
+test('lab: carousel slides are shown with the checker result, and a verdict on one is saved and exported', async ({ page }) => {
+  await page.goto('/lab');
+  const section = page.locator('section[aria-label="Step 3: Carousels"]');
+  await expect(section.locator('.lab-slide').first()).toBeVisible();
+  // 4 scripts x 3 themes x 7 slides, plus the deliberately broken ones.
+  expect(await section.locator('.lab-slide').count()).toBeGreaterThanOrEqual(84 + 7);
+  expect(await section.locator('.lab-slide .chk-pass, .lab-slide .chk-fail').count()).toBeGreaterThanOrEqual(84 + 7);
+  const slide = section.locator('.lab-slide').first();
+  await slide.getByRole('button', { name: 'meh' }).click();
+  await slide.getByPlaceholder('why? (one line)').fill('a bit plain');
+  await page.reload();
+  await expect(section.locator('.lab-slide').first().getByPlaceholder('why? (one line)')).toHaveValue('a bit plain');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export verdicts JSON' }).click();
+  const saved = path.join(OUT, 'lab-export-carousel.json');
+  await (await download).saveAs(saved);
+  const data = JSON.parse(fs.readFileSync(saved, 'utf8'));
+  const rec = data.verdicts.find((v: { kind: string }) => v.kind === 'carousel');
+  expect(rec).toMatchObject({ verdict: 'meh', reason: 'a bit plain', option: expect.stringMatching(/slide 1/), checker: { pass: expect.any(Boolean) } });
+  await page.screenshot({ path: path.join(OUT, 'lab-carousels.png'), clip: { x: 0, y: 0, width: 1500, height: 1000 } });
+});

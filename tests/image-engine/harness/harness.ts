@@ -17,8 +17,15 @@ import {
   layoutText,
   loadFonts,
   measureWidth,
+  type CarouselScript,
   type Patch,
   type Plan,
+  THEMES,
+  applyPatch,
+  validatePlan,
+  checkCarousel,
+  checkSlidePlan,
+  composeCarousel,
   type RenderReport,
   type TextLayer,
   type ThumbnailOption,
@@ -397,7 +404,99 @@ async function makeSheet(args: { sourceUrl: string; sourceLines: string[]; tiles
   return toBase64(blob);
 }
 
+// ---- Step 3: carousels ----
+
+const themeById = (id: string) => THEMES.find((t) => t.id === id)!;
+
+/** Composes, draws and checks one script in one theme. */
+async function carouselRun(script: CarouselScript, themeId: string) {
+  const t0 = performance.now();
+  const checked = await checkCarousel(script, themeById(themeId));
+  const ms = Math.round(performance.now() - t0);
+  const slides = [];
+  for (const c of checked)
+    slides.push({ id: c.slide.id, type: c.slide.type, notes: c.slide.notes, plan: c.slide.plan, lint: c.lint, warnings: c.render.warnings, png: await toBase64(c.png), phone: await toBase64(c.phonePng) });
+  return { ms, slides };
+}
+
+/** Draws a plan and checks it, so tests can edit a plan with patches and look again. */
+async function carouselCheckPlan(plan: Plan, themeId: string) {
+  const a = new FabricAdapter();
+  await a.mount(null);
+  try {
+    const c = await checkSlidePlan(a, { id: 'x', type: 'content', plan, notes: [] }, themeById(themeId).spacing.margin);
+    return { lint: c.lint, warnings: c.render.warnings, png: await toBase64(c.png), phone: await toBase64(c.phonePng) };
+  } finally {
+    a.dispose();
+  }
+}
+
+/** Composes only (no drawing), for tests that look at the plan itself. */
+function carouselCompose(script: CarouselScript, themeId: string) {
+  return composeCarousel(script, themeById(themeId));
+}
+
+const patchPlan = (plan: Plan, patch: Patch) => applyPatch(plan, patch);
+
+/** The widest box (stepping down by 2 px) at which this text ends with one word alone on its last line. */
+function orphanWidth(layer: TextLayer): number | null {
+  for (let w = layer.width; w >= 300; w -= 2) {
+    const block = layoutText({ ...layer, width: w });
+    const last = block.lines[block.lines.length - 1];
+    if (block.lines.length >= 2 && last.words.length === 1) return w;
+  }
+  return null;
+}
+
+/** Seven slides side by side for each row (one row per theme), with a label on top of each row. */
+async function makeCarouselSheet(rows: { label: string; lines?: string[]; slides: { b64: string; pass: boolean }[] }[], tileW = 270) {
+  const loaded = await Promise.all(rows.map((r) => Promise.all(r.slides.map(async (s) => ({ ...s, bm: await createImageBitmap(await (await fetch('data:image/png;base64,' + s.b64)).blob()) })))));
+  const gap = 12;
+  const tileH = Math.round((tileW * 1350) / 1080);
+  const head = 54;
+  const cols = Math.max(...rows.map((r) => r.slides.length));
+  const W = gap + cols * (tileW + gap);
+  const H = rows.length * (head + tileH + gap) + gap;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+  rows.forEach((r, ri) => {
+    const y0 = gap + ri * (head + tileH + gap);
+    ctx.fillStyle = '#111';
+    ctx.font = '600 20px sans-serif';
+    ctx.fillText(r.label, gap, y0 + 22);
+    ctx.fillStyle = '#555';
+    ctx.font = '14px sans-serif';
+    ctx.fillText((r.lines ?? []).join('   '), gap, y0 + 44);
+    loaded[ri].forEach((s, i) => {
+      const x = gap + i * (tileW + gap);
+      ctx.drawImage(s.bm, x, y0 + head, tileW, tileH);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = s.pass ? '#1b8a4b' : '#c62828';
+      ctx.strokeRect(x - 2, y0 + head - 2, tileW + 4, tileH + 4);
+      ctx.fillStyle = s.pass ? '#1b8a4b' : '#c62828';
+      ctx.fillRect(x, y0 + head, 64, 22);
+      ctx.fillStyle = '#fff';
+      ctx.font = '600 14px sans-serif';
+      ctx.fillText(s.pass ? 'PASS' : 'FAIL', x + 10, y0 + head + 16);
+    });
+  });
+  const blob: Blob = await new Promise((r) => canvas.toBlob((b) => r(b!), 'image/png'));
+  return toBase64(blob);
+}
+
 (window as unknown as { __ie: unknown }).__ie = {
+  themes: () => THEMES,
+  validate: validatePlan,
+  orphanWidth,
+  carouselRun,
+  carouselCheckPlan,
+  carouselCompose,
+  patchPlan,
+  makeCarouselSheet,
   cutoutLoad,
   cutoutRemove,
   cutoutDispose,
