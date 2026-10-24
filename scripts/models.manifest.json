@@ -1,0 +1,114 @@
+{
+  "_comment": "Single source of truth for model files. status 'approved' means the weights licence is explicit and permissive. 'blocked' means it is NOT downloaded or used until the project owner says so. See LICENSES-MODELS.md.",
+  "models": [
+    {
+      "id": "birefnet-lite",
+      "label": "BiRefNet_lite (high-quality mode)",
+      "status": "approved",
+      "file": "birefnet-lite-split.onnx",
+      "bytes": 224083337,
+      "sha256": "c914ac70502cb18e8c8f8ca1eb2091cc025fd4e5ea07fb372c960f2faa654975",
+      "upstream": {
+        "file": "birefnet-lite.onnx",
+        "url": "https://github.com/ZhengPeng7/BiRefNet/releases/download/v1/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+        "bytes": 224005088,
+        "sha256": "5600024376f572a557870a5eb0afb1e5961636bef4e1e22132025467d0f03333"
+      },
+      "derive": {
+        "script": "scripts/split-concat.mjs",
+        "maxConcatInputs": 8,
+        "why": "The upstream file has Concat operators with up to 1,024 inputs. WebGPU limits a shader to 16 storage buffers (8 on many GPUs) and onnxruntime-web does not split them, so the model cannot run. Splitting is an exact rewrite of the graph; no weights change."
+      },
+      "licence": "MIT",
+      "licenceSources": [
+        "https://github.com/ZhengPeng7/BiRefNet/blob/main/LICENSE",
+        "https://huggingface.co/ZhengPeng7/BiRefNet_lite (model card: license mit)"
+      ],
+      "input": {
+        "size": 1024,
+        "mean": [
+          0.485,
+          0.456,
+          0.406
+        ],
+        "std": [
+          0.229,
+          0.224,
+          0.225
+        ],
+        "output": "logits"
+      }
+    },
+    {
+      "id": "isnet-general-use",
+      "label": "ISNet general-use (default engine)",
+      "status": "blocked",
+      "blockedBecause": "The DIS repository licenses its code and evaluation metric as Apache-2.0 but states no licence for the isnet-general-use weights, and its DIS5K dataset terms allow non-commercial research use only. Unclear, so not downloaded or used until the project owner approves.",
+      "file": "isnet-general-use.onnx",
+      "url": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx",
+      "bytes": null,
+      "sha256": null,
+      "licence": "unclear",
+      "licenceSources": [
+        "https://github.com/xuebinqin/DIS/blob/main/LICENSE.md (Apache-2.0, repository)",
+        "https://github.com/xuebinqin/DIS#license (code and evaluation metric)",
+        "https://github.com/xuebinqin/DIS/blob/main/DIS5K-Dataset-Terms-of-Use.pdf"
+      ],
+      "input": {
+        "size": 1024,
+        "mean": [
+          0.485,
+          0.456,
+          0.406
+        ],
+        "std": [
+          1,
+          1,
+          1
+        ],
+        "output": "sigmoid-minmax"
+      }
+    },
+    {
+      "id": "selftest",
+      "label": "Pipeline self-test (NOT a real remover: brightness becomes the mask)",
+      "status": "approved",
+      "testOnly": true,
+      "file": "selftest.onnx",
+      "bytes": 289,
+      "sha256": "4aafc78975b7e5e55f669cbc70a5f765aa8c82a062be4d9cc9e41fcfc85f5d7d",
+      "generate": {
+        "script": "scripts/make-selftest-model.mjs"
+      },
+      "licence": "none (generated in this repository, contains no weights)",
+      "licenceSources": [
+        "scripts/make-selftest-model.mjs"
+      ],
+      "input": {
+        "size": 1024,
+        "mean": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "std": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "output": "logits"
+      }
+    }
+  ],
+  "runtime": {
+    "package": "onnxruntime-web",
+    "licence": "MIT",
+    "copyToPublic": [
+      "ort-wasm-simd-threaded.jsep.mjs",
+      "ort-wasm-simd-threaded.jsep.wasm",
+      "ort-wasm-simd-threaded.mjs",
+      "ort-wasm-simd-threaded.wasm"
+    ],
+    "version": "1.22.0"
+  }
+}

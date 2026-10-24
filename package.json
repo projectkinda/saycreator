@@ -8,10 +8,13 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
-    "test:image": "playwright test -c tests/image-engine/playwright.config.ts"
+    "test:image": "playwright test -c tests/image-engine/playwright.config.ts",
+    "fetch:models": "node scripts/fetch-models.mjs",
+    "check:licenses": "node scripts/check-licenses.mjs"
   },
   "dependencies": {
     "fabric": "^7.4.0",
+    "onnxruntime-web": "1.22.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.4"
