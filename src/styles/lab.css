@@ -269,3 +269,34 @@
   font-weight: 600;
   color: var(--warn-text);
 }
+
+/* Carousels */
+.lab-car-row {
+  margin: 12px 0 20px;
+}
+.lab-car-row h4 {
+  text-transform: capitalize;
+  margin-bottom: 6px;
+}
+.lab-slides {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.lab-slide {
+  width: 190px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-thumb);
+  padding: 8px;
+}
+.lab-slide.disagree {
+  border: 2px solid var(--warn-text);
+}
+.lab-slide img {
+  width: 100%;
+  border-radius: 6px;
+  display: block;
+}
+.lab-slide .lab-verdict input {
+  flex-basis: 100%;
+}

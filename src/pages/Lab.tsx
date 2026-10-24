@@ -18,7 +18,7 @@ import '../styles/lab.css';
 type Verdict = 'good' | 'meh' | 'bad';
 interface Record_ {
   key: string;
-  kind: 'cutout' | 'thumbnail';
+  kind: 'cutout' | 'thumbnail' | 'carousel';
   image: string;
   option: string;
   verdict: Verdict | null;
@@ -50,6 +50,17 @@ interface Thumb {
   phoneUrl: string;
   notes: string[];
   lint: { id: string; label: string; pass: boolean; reason: string }[];
+}
+interface CarouselSlide {
+  script: string;
+  scriptTitle?: string;
+  theme: string;
+  index: number;
+  type: string;
+  notes?: string[];
+  lint: { id: string; label: string; pass: boolean; reason: string }[];
+  variant?: string;
+  pngUrl: string;
 }
 interface CutResult {
   cutout: string;
@@ -95,6 +106,7 @@ function VerdictBox({ rec, onChange, label }: { rec: Record_ | undefined; onChan
 export default function Lab() {
   const [pics, setPics] = useState<Pic[]>([]);
   const [thumbs, setThumbs] = useState<Thumb[] | null>(null);
+  const [slides, setSlides] = useState<CarouselSlide[] | null>(null);
   const [models, setModels] = useState<ModelEntry[] | null>(null);
   const [modelError, setModelError] = useState('');
   const [state, setState] = useState<State>(load);
@@ -110,6 +122,7 @@ export default function Lab() {
   useEffect(() => {
     document.title = 'Lab (dev only)';
     fetch('/__lab/images').then((r) => r.json()).then(setPics).catch(() => setPics([]));
+    fetch('/__lab/carousels').then((r) => r.json()).then(setSlides).catch(() => setSlides([]));
     fetch('/__lab/thumbnails').then((r) => r.json()).then(setThumbs).catch(() => setThumbs([]));
     loadManifest().then(setModels).catch((e: BgRemoverError) => setModelError(e.message));
     (async () => {
@@ -193,6 +206,16 @@ export default function Lab() {
   };
 
   const count = Object.values(state.records).filter((r) => r.verdict).length;
+  const badSlides = useMemo(() => (slides ?? []).filter((s) => s.theme === 'bad'), [slides]);
+  const carouselGroups = useMemo(() => {
+    const m = new Map<string, Map<string, CarouselSlide[]>>();
+    for (const s of (slides ?? []).filter((x) => x.theme !== 'bad')) {
+      const t = m.get(s.script) ?? new Map<string, CarouselSlide[]>();
+      t.set(s.theme, [...(t.get(s.theme) ?? []), s].sort((a, b) => a.index - b.index));
+      m.set(s.script, t);
+    }
+    return [...m.entries()].map(([k, t]) => [k, [...t.entries()]] as const);
+  }, [slides]);
   const groups = useMemo(() => {
     const m = new Map<string, Thumb[]>();
     for (const t of thumbs ?? []) m.set(`${t.image}|${t.aspect}`, [...(m.get(`${t.image}|${t.aspect}`) ?? []), t]);
@@ -339,6 +362,58 @@ export default function Lab() {
             </div>
           </div>
         ))}
+      </section>
+
+      <section className="lab-box" aria-label="Step 3: Carousels">
+        <h2>3. Step 3: Carousels (out/image-engine/step3)</h2>
+        <p className="lab-dim">Each script is drawn in three themes from the same words. The checker's PASS or FAIL is on every slide; give your own verdict under it. The last group is broken on purpose, one check each.</p>
+        {slides === null && <p role="status">Loading…</p>}
+        {slides?.length === 0 && <p className="lab-err">No Step 3 outputs found. Run <code>npm run test:image</code> first.</p>}
+        {carouselGroups.map(([script, themes]) => (
+          <div key={script} className="lab-thumb-group">
+            <h3>{themes[0][1][0].scriptTitle ?? script}</h3>
+            {themes.map(([theme, list]) => (
+              <div key={theme} className="lab-car-row">
+                <h4>{theme}{list.every((s) => s.lint.every((x) => x.pass)) ? ' · all 7 pass' : ' · ' + list.filter((s) => s.lint.some((x) => !x.pass)).length + ' slide(s) fail'}</h4>
+                <div className="lab-slides">
+                  {list.map((s) => {
+                    const failed = s.lint.filter((x) => !x.pass);
+                    const key = 'carousel|' + script + '|' + theme + '|' + s.index;
+                    const base = { key, kind: 'carousel' as const, image: s.scriptTitle ?? script, option: theme + ' slide ' + s.index + ' (' + s.type + ')', checker: { pass: failed.length === 0, failed: failed.map((f) => ({ id: f.id, reason: f.reason })) } };
+                    const rec = state.records[key];
+                    const disagree = rec?.verdict && ((failed.length === 0 && rec.verdict === 'bad') || (failed.length > 0 && rec.verdict === 'good'));
+                    return (
+                      <div key={key} className={'lab-slide' + (disagree ? ' disagree' : '')}>
+                        <img src={s.pngUrl} alt={theme + ' slide ' + s.index + ', ' + s.type + ', of ' + (s.scriptTitle ?? script)} loading="lazy" />
+                        <p><b>{s.index}. {s.type}</b> <span className={failed.length ? 'chk-fail' : 'chk-pass'}>{failed.length ? 'FAIL (' + failed.length + ')' : 'PASS'}</span></p>
+                        {failed.length > 0 && <ul className="lab-fails">{failed.map((f) => <li key={f.id}>{f.reason}</li>)}</ul>}
+                        <VerdictBox label={theme + ' slide ' + s.index + ' of ' + (s.scriptTitle ?? script)} rec={rec} onChange={(vv, r) => setRecord(base, vv, r)} />
+                        {disagree && <p className="lab-disagree">You and the checker disagree here.</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+        {badSlides.length > 0 && (
+          <div className="lab-thumb-group">
+            <h3>Broken on purpose (one check each)</h3>
+            <div className="lab-slides">
+              {badSlides.map((s) => {
+                const failed = s.lint.filter((x) => !x.pass);
+                return (
+                  <div key={s.variant} className="lab-slide">
+                    <img src={s.pngUrl} alt={'Broken on purpose: ' + s.variant} loading="lazy" />
+                    <p><b>{s.variant}</b> <span className="chk-fail">FAIL ({failed.length})</span></p>
+                    <ul className="lab-fails">{failed.map((f) => <li key={f.id}>{f.reason}</li>)}</ul>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

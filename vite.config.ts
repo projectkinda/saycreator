@@ -40,6 +40,32 @@ function labEndpoints(): Plugin {
           }
         json(res, out);
       });
+      server.middlewares.use('/__lab/carousels', (_req, res) => {
+        const base = path.join(root, 'out/image-engine/step3');
+        const out: unknown[] = [];
+        if (fs.existsSync(base))
+          for (const script of fs.readdirSync(base)) {
+            const sd = path.join(base, script);
+            if (!fs.statSync(sd).isDirectory()) continue;
+            if (script === 'bad-variants') {
+              for (const f of fs.readdirSync(sd).filter((x) => x.endsWith('.lint.json'))) {
+                const d = JSON.parse(fs.readFileSync(path.join(sd, f), 'utf8'));
+                out.push({ ...d, script, theme: 'bad', index: 0, type: d.variant, pngUrl: '/out/image-engine/step3/bad-variants/' + f.replace('.lint.json', '.png') });
+              }
+              continue;
+            }
+            for (const theme of fs.readdirSync(sd)) {
+              const td = path.join(sd, theme);
+              if (!fs.statSync(td).isDirectory()) continue;
+              for (const f of fs.readdirSync(td).filter((x) => x.endsWith('.lint.json'))) {
+                const d = JSON.parse(fs.readFileSync(path.join(td, f), 'utf8'));
+                const rel = '/out/image-engine/step3/' + script + '/' + theme + '/' + f.replace('.lint.json', '');
+                out.push({ ...d, pngUrl: rel + '.png', phoneUrl: rel + '-phone.png' });
+              }
+            }
+          }
+        json(res, out);
+      });
     },
   };
 }
