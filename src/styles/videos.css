@@ -1,0 +1,339 @@
+/* Tabs (shared) */
+.tabs {
+  display: flex;
+  gap: 4px;
+  box-shadow: inset 0 -1px 0 var(--line);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.tab {
+  padding: 12px 18px;
+  min-height: 44px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--text-2);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.tab[aria-selected='true'] {
+  border-bottom-color: var(--text);
+  color: var(--text);
+  font-weight: 600;
+}
+.page-tight {
+  gap: 24px;
+}
+.page-tight .page-header {
+  align-items: center;
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  outline-offset: 4px;
+}
+
+/* Filters */
+.filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.search-field,
+.select-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--page);
+}
+.search-field {
+  flex: 0 1 320px;
+  min-width: 200px;
+  color: var(--text-2);
+}
+.search-field input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+}
+.search-field:focus-within,
+.select-pill:focus-within {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.select-pill select {
+  max-width: 220px;
+  text-overflow: ellipsis;
+  border: 0;
+  outline: 0;
+  background: none;
+  font-weight: 500;
+  padding: 10px 0;
+  cursor: pointer;
+}
+
+/* Videos table */
+.table-card {
+  overflow: hidden;
+}
+.vtable {
+  width: 100%;
+  border-collapse: collapse;
+}
+.vtable th {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.vtable td {
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.vtable tr:last-child td {
+  border-bottom: 0;
+}
+.vtable th:first-child,
+.vtable td:first-child {
+  padding-left: 24px;
+}
+.vtable tbody tr {
+  position: relative;
+}
+.vtable tbody tr:hover {
+  background: var(--surface-tint);
+}
+.c-video {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 260px;
+}
+.c-length {
+  font-variant-numeric: tabular-nums;
+}
+.vt-thumb {
+  flex: none;
+  border-radius: 8px;
+}
+.vt-thumb.port {
+  width: 56px;
+  height: 84px;
+}
+.vt-thumb.land {
+  width: 112px;
+  height: 63px;
+}
+.vt-link {
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none;
+}
+/* Whole row is clickable through the title link */
+.vt-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.vt-link:focus-visible {
+  outline: none;
+}
+.vt-link:focus-visible::after {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+.mini-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mini {
+  padding: 2px 10px;
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Phones: each row becomes a card */
+@media (max-width: 759px) {
+  .vtable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .vtable,
+  .vtable tbody,
+  .vtable tr,
+  .vtable td {
+    display: block;
+  }
+  .vtable tr {
+    padding: 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .vtable tr:last-child {
+    border-bottom: 0;
+  }
+  .vtable td {
+    padding: 4px 0;
+    border: 0;
+  }
+  .vtable td:first-child {
+    padding: 0 0 8px;
+  }
+  .vtable td[data-label]::before {
+    content: attr(data-label) ': ';
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+  }
+  .vtable td[data-label='Made from this video'] .mini-chips {
+    display: inline-flex;
+  }
+  .c-video {
+    display: flex;
+    min-width: 0;
+  }
+}
+
+/* Styles tab */
+.styles-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.styles-bar .upload {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.styles-intro {
+  max-width: 75ch;
+}
+.chip-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chip-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--page);
+  font-weight: 500;
+  font-size: 14px;
+}
+.chip-btn[aria-pressed='true'] {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--page);
+  font-weight: 600;
+}
+.style-card {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.style-thumb {
+  height: 200px;
+  border-radius: var(--radius-thumb);
+}
+.style-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Upload, progress and notices (shared) */
+.upload {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+.upload-status {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+}
+.bar > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+.notice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: var(--radius-thumb);
+  font-size: 14px;
+}
+.notice-error {
+  background: var(--surface);
+  border: 1px solid var(--error);
+  color: var(--text);
+}
+.notice-error strong {
+  color: var(--error);
+}
+.notice-warn {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+.notice-ok {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+.notice-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.new-card {
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 640px;
+}
+
+@media (max-width: 899px) {
+  .styles-bar .upload {
+    align-items: flex-start;
+  }
+}

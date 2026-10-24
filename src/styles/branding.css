@@ -1,0 +1,186 @@
+.kit {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.voice-what {
+  max-width: 75ch;
+}
+
+/* Colors */
+.swatches {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 12px;
+}
+.sw {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.sw i {
+  display: block;
+  height: 56px;
+  border-radius: var(--radius-thumb);
+  border: 1px solid var(--line);
+  margin-bottom: 6px;
+}
+.sw .small {
+  font-weight: 400;
+}
+.color-edit {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.color-pair {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.color-pair input[type='color'] {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-thumb);
+  background: var(--page);
+  cursor: pointer;
+}
+.text-input[aria-invalid='true'] {
+  border-color: var(--error);
+}
+
+/* Fonts, logo */
+.kv {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kv dt {
+  margin-top: 8px;
+}
+.kv dt:first-child {
+  margin-top: 0;
+}
+.kv dd {
+  margin: 0;
+}
+.font-sample {
+  font-size: 20px;
+  font-weight: 700;
+}
+.logo-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.logo-box {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-thumb);
+  border: 1px solid var(--line);
+}
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Preview slide: shows the user's brand, not the app's */
+.brand-slide {
+  position: relative;
+  width: 100%;
+  max-width: 240px;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--radius-thumb);
+  border: 1px solid var(--line);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+.slide-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+.slide-head {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.slide-head mark {
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.slide-body {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.slide-bar {
+  margin-top: auto;
+  height: 6px;
+  width: 56px;
+  border-radius: 3px;
+}
+.slide-handle {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Writing voice */
+.voice-paste {
+  min-height: 110px;
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-thumb);
+  padding: 12px 14px;
+  background: var(--surface-tint);
+  resize: vertical;
+}
+.voice-paste:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+.meter {
+  display: inline-flex;
+  gap: 4px;
+  vertical-align: middle;
+}
+.meter i {
+  width: 22px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+}
+.meter i.on {
+  background: var(--text);
+}
+.quote {
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-thumb);
+  background: var(--surface);
+}

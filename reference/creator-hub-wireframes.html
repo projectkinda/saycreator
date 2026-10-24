@@ -1,0 +1,771 @@
+<title>Creator Hub Wireframes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout concept: SaaS shell. Fixed left menu, content column, workspace with a right-hand direction panel. Low-fidelity: grey surfaces, one teal accent, state colors kept separate from the accent. */
+:root{
+  --bg:#f3f5f6; --surface:#ffffff; --surface-2:#eaeef0; --line:#d5dce0; --fg:#1a2226; --muted:#5d6b72;
+  --accent:#0f7b78; --accent-soft:#d9efee; --on-accent:#ffffff;
+  --ok:#2f7d46; --warn:#9a6a00; --bad:#b3372f; --ok-soft:#dff0e4; --warn-soft:#f6ebcc; --bad-soft:#f5dcd9;
+  --note:#fff4c2; --note-line:#d9bf4a; --note-fg:#4d4000; --tl:68%; --ts:22%;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111719; --surface:#192124; --surface-2:#222d31; --line:#334146; --fg:#e6eef0; --muted:#94a5ab;
+  --accent:#3fc1bb; --accent-soft:#16373a; --on-accent:#08201f;
+  --ok:#6cc58a; --warn:#e0b24a; --bad:#ee8b83; --ok-soft:#1b3324; --warn-soft:#3a3016; --bad-soft:#3d2220;
+  --note:#3a3414; --note-line:#8a7a2a; --note-fg:#f0e6a8; --tl:36%; --ts:20%; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111719; --surface:#192124; --surface-2:#222d31; --line:#334146; --fg:#e6eef0; --muted:#94a5ab;
+  --accent:#3fc1bb; --accent-soft:#16373a; --on-accent:#08201f;
+  --ok:#6cc58a; --warn:#e0b24a; --bad:#ee8b83; --ok-soft:#1b3324; --warn-soft:#3a3016; --bad-soft:#3d2220;
+  --note:#3a3414; --note-line:#8a7a2a; --note-fg:#f0e6a8; --tl:36%; --ts:20%; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.45;
+  padding-block:0;padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{margin:0;font-weight:600;text-wrap:balance}
+h1{font-size:22px} h2{font-size:15px} h3{font-size:13px}
+p{margin:0}
+.mono{font-family:var(--font-mono)}
+.label{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+
+.app{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100%}
+.side{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 12px;gap:12px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);width:100%;text-align:left}
+.avatar{width:26px;height:26px;border-radius:6px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:600;font-size:12px;flex:none}
+.brand b{display:block;font-size:13px;line-height:1.2} .brand span{font-size:11px;color:var(--muted)}
+.newbtn{background:var(--accent);color:var(--on-accent);border:0;border-radius:6px;padding:9px 12px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:10px;background:none;border:0;border-radius:6px;padding:8px 10px;text-align:left;color:var(--muted);width:100%}
+.nav button:hover{background:var(--surface-2);color:var(--fg)}
+.nav button[aria-current="page"]{background:var(--accent-soft);color:var(--fg);font-weight:600}
+.ico{width:16px;height:16px;border:1.5px solid currentColor;border-radius:4px;flex:none;opacity:.8}
+.tag{margin-left:auto;font-family:var(--font-mono);font-size:10px;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--muted)}
+.spacer{flex:1}
+.usage{border:1px solid var(--line);border-radius:6px;padding:10px;font-size:12px}
+.bar{height:6px;border-radius:3px;background:var(--surface-2);margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;width:38%;background:var(--accent)}
+
+.main{padding:22px max(16px,3vw) 40px;min-width:0}
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.top .grow,.grow{flex:1}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:2px 9px;font-size:12px;border:1px solid var(--line);background:var(--surface);white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.pill.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.pill.bad{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.pill.accent{background:var(--accent-soft);color:var(--fg);border-color:transparent}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 12px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:transparent;font-weight:600}
+.btn.sm{padding:4px 9px;font-size:12px}
+.field{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;padding:8px 10px;font:inherit}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;min-width:0}
+.sec{margin-top:24px}
+.sec-h{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+.sec-sub{color:var(--muted);font-size:12.5px;margin-bottom:10px}
+.sec-h .more{margin-left:auto;font-size:12px;color:var(--accent);background:none;border:0;padding:0}
+.grid{display:grid;gap:12px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.g5{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.col{display:flex;flex-direction:column;gap:8px}
+
+/* placeholder imagery: hue set per item */
+.img{--h:190;position:relative;border-radius:6px;border:1px solid var(--line);background:
+  linear-gradient(135deg,hsl(var(--h) var(--ts) var(--tl)),hsl(calc(var(--h) + 40) var(--ts) calc(var(--tl) - 8%)));
+  display:grid;place-items:center;color:var(--fg);font-family:var(--font-mono);font-size:10.5px;text-align:center;overflow:hidden;width:100%}
+.img span{background:var(--surface);opacity:.9;border-radius:3px;padding:1px 6px}
+.r916{aspect-ratio:9/14}.r169{aspect-ratio:16/9}.r45{aspect-ratio:4/5}.r11{aspect-ratio:1/1}.r43{aspect-ratio:4/3}
+.img .dur{position:absolute;right:6px;bottom:6px;background:var(--fg);color:var(--bg);padding:0 5px;border-radius:3px;opacity:.85}
+.img.none{background:var(--surface-2)}
+.img.thumb-sm{width:64px;flex:none}
+
+/* HOME */
+.drop{border:1.5px dashed var(--line);border-radius:8px;background:var(--surface);padding:22px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.drop .grow{flex:1;min-width:220px}
+.todo{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.todo-i{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line)}
+.todo-i:last-child{border-bottom:0}
+.todo-i .grow{flex:1;min-width:200px}
+.todo-i .dot{width:8px;height:8px;border-radius:50%;background:var(--warn);flex:none}
+.todo-i .dot.bad{background:var(--bad)}
+.vcard{display:flex;flex-direction:column;gap:8px}
+.vcard h3{font-size:13px}
+.vcard .img{aspect-ratio:16/10 !important}
+.stage{display:flex;gap:3px;margin-top:2px}
+.stage i{height:4px;flex:1;border-radius:2px;background:var(--surface-2)}
+.stage i.on{background:var(--accent)}
+.agenda{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.ag{display:grid;grid-template-columns:78px 86px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line)}
+.ag:last-child{border-bottom:0}
+.ag .when{font-family:var(--font-mono);font-size:12px}
+.ag.today{background:var(--accent-soft)}
+.ag.empty-d{color:var(--muted)}
+.plat{font-family:var(--font-mono);font-size:11px;border:1px solid var(--line);border-radius:4px;padding:1px 6px;background:var(--surface);text-align:center;white-space:nowrap}
+.tcard{display:flex;flex-direction:column;gap:8px}
+.tcard .src{font-size:11px;color:var(--muted)}
+
+/* tables */
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.table th{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.scroll-x{overflow-x:auto}
+.vt{display:flex;gap:12px;align-items:center;min-width:240px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:12px}
+.chip:hover{background:var(--accent-soft)}
+.mini{font-family:var(--font-mono);font-size:11px;border:1px solid var(--line);border-radius:4px;padding:1px 6px;background:var(--bg);white-space:nowrap}
+
+/* tabs */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:14px 0 16px;overflow-x:auto;align-items:flex-end}
+.tabs button{background:none;border:0;padding:9px 14px;border-bottom:2px solid transparent;color:var(--muted);white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
+.tabs .end{margin-left:auto;padding:0 0 6px 12px}
+
+/* workspace */
+.crumbs{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.crumbs button{background:none;border:0;padding:0;color:var(--accent)}
+.ws{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+.player{display:grid;grid-template-columns:minmax(150px,230px) minmax(0,1fr);gap:14px;align-items:start}
+.phone{aspect-ratio:9/16;border-radius:14px;border:2px solid var(--line);background:linear-gradient(180deg,var(--surface-2),var(--bg));display:flex;flex-direction:column;justify-content:flex-end;padding:12px;position:relative;overflow:hidden;max-width:100%}
+.phone .cap{background:var(--fg);color:var(--bg);font-weight:600;font-size:14px;text-align:center;padding:4px 8px;border-radius:4px}
+.phone .play{position:absolute;inset:0;margin:auto;width:46px;height:46px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;font-size:14px}
+.tl{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.track{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;gap:8px}
+.track .t{font-family:var(--font-mono);font-size:10px;color:var(--muted);text-transform:uppercase}
+.lane{position:relative;height:26px;background:var(--surface-2);border-radius:4px}
+.lane i{position:absolute;top:3px;bottom:3px;border-radius:3px;background:var(--accent);opacity:.85}
+.lane i.b{background:var(--muted);opacity:.55}
+.lane i.m{background:var(--warn);width:4px;border-radius:2px;opacity:1}
+.lane i.cap{background:var(--fg);opacity:.35}
+.prompt textarea{width:100%;min-height:62px;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;padding:9px 10px;font:inherit;resize:vertical}
+.understood{border:1px solid var(--line);border-radius:6px;background:var(--surface-2);padding:9px 10px;font-size:13px}
+.panel{display:flex;flex-direction:column;gap:12px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{background:var(--surface);border:0;padding:7px 4px;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);font-weight:600}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.notes-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.notes-list li{display:flex;flex-direction:column;gap:5px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.notes-list li:last-child{border-bottom:0;padding-bottom:0}
+.hist{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.hist li{display:flex;gap:8px;align-items:center}
+.hist .rev{font-family:var(--font-mono);font-size:11px;color:var(--muted);width:34px}
+.empty{border:1.5px dashed var(--line);border-radius:8px;padding:28px;color:var(--muted);text-align:center}
+.thumbopt{display:flex;flex-direction:column;gap:8px}
+.thumbopt.sel{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+.make{display:flex;flex-direction:column;gap:8px}
+.make .what{font-size:12.5px;color:var(--muted)}
+.make .foot{display:flex;gap:8px;align-items:center;margin-top:auto;flex-wrap:wrap}
+.steps{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 4px}
+.steps div{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted)}
+.steps b{width:20px;height:20px;border-radius:50%;background:var(--accent-soft);color:var(--fg);display:grid;place-items:center;font-size:11px}
+.made{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.made-i{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line)}
+.made-i:last-child{border-bottom:0}
+
+/* assets */
+.chk{display:inline-block;width:12px;height:12px;border-radius:3px;border:1.5px solid var(--line);margin-right:4px;vertical-align:-1px}
+.wave{display:flex;align-items:center;gap:2px;height:46px;background:var(--surface-2);border-radius:6px;padding:0 8px}
+.wave i{display:block;width:3px;background:var(--muted);opacity:.6;border-radius:2px}
+
+/* calendar */
+.cwrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.wcol{border:1px solid var(--line);border-radius:6px;background:var(--surface);min-height:230px;padding:6px;display:flex;flex-direction:column;gap:6px}
+.wcol.today{border-color:var(--accent)}
+.wcol .d{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.slot{display:flex;flex-direction:column;gap:4px;padding:6px;border-radius:5px;border:1px solid var(--line);background:var(--bg);text-align:left;width:100%;font-size:11.5px;line-height:1.3}
+.slot:hover,.slot[aria-pressed="true"]{border-color:var(--accent)}
+.slot.sug{border-style:dashed;color:var(--muted)}
+.slot .top2{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.goalbox{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+
+/* branding */
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.sw{display:flex;flex-direction:column;gap:4px;font-size:11px;font-family:var(--font-mono);color:var(--muted)}
+.sw i{display:block;width:64px;height:44px;border-radius:6px;border:1px solid var(--line)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.styleopt{display:flex;flex-direction:column;gap:8px}
+.meter{display:flex;gap:2px}
+.meter i{flex:1;height:6px;border-radius:2px;background:var(--surface-2)}
+.meter i.on{background:var(--accent)}
+.kv{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px 12px;align-items:center}
+.quote{border-left:3px solid var(--accent);padding:2px 0 2px 12px;color:var(--fg)}
+
+/* analytics */
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat b{font-size:24px;font-variant-numeric:tabular-nums;font-weight:600}
+.spark{height:64px;display:flex;align-items:flex-end;gap:4px}
+.spark i{flex:1;background:var(--accent);opacity:.55;border-radius:2px 2px 0 0}
+.spark i.hi{opacity:1}
+
+/* annotations */
+.note{display:none;margin-top:10px;background:var(--note);color:var(--note-fg);border:1px solid var(--note-line);border-radius:6px;padding:8px 10px;font-size:12.5px}
+.note b{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
+body.show-notes .note{display:block}
+.notes-toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.ex{font-family:var(--font-mono);font-size:10px;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--muted);white-space:nowrap}
+
+@media (max-width:1100px){.ws,.cwrap{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:820px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .nav{flex-direction:row;overflow-x:auto;gap:4px}
+  .nav button{width:auto;white-space:nowrap}
+  .usage,.spacer,.side .bottom{display:none}
+  .main{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .player{grid-template-columns:minmax(0,1fr)}
+  .phone{max-width:230px}
+  .week{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ag{grid-template-columns:70px minmax(0,1fr);}
+  .ag .plat,.ag .act{grid-column:2}
+  .kv{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:no-preference){.view{animation:in .15s ease-out}@keyframes in{from{opacity:.4}to{opacity:1}}}
+</style>
+
+<div class="app">
+  <aside class="side" aria-label="Main menu">
+    <button class="brand" type="button" aria-label="Switch brand">
+      <span class="avatar">M</span>
+      <span><b>Maya Rao</b><span>Brand 1 of 1</span></span>
+    </button>
+    <button class="newbtn" type="button" data-go="workspace">+ New project</button>
+    <nav class="nav" aria-label="Sections">
+      <button type="button" data-go="home"><span class="ico"></span>Home</button>
+      <button type="button" data-go="videos"><span class="ico"></span>Videos</button>
+      <button type="button" data-go="images"><span class="ico"></span>Images</button>
+      <button type="button" data-go="assets"><span class="ico"></span>Assets</button>
+      <button type="button" data-go="calendar"><span class="ico"></span>Calendar<span class="tag">plan</span></button>
+      <button type="button" data-go="branding"><span class="ico"></span>Branding</button>
+      <button type="button" data-go="analytics"><span class="ico"></span>Analytics<span class="tag">P1</span></button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="usage"><span class="label">Credits</span><div>1,240 of 2,000 left</div><div class="bar"><i></i></div></div>
+    <div class="nav bottom">
+      <button type="button" data-go="settings"><span class="ico"></span>Settings &amp; Billing</button>
+      <button type="button" data-go="help"><span class="ico"></span>Help</button>
+    </div>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="top">
+      <label class="notes-toggle"><input type="checkbox" id="notesToggle"> Show design notes</label>
+      <span class="grow"></span>
+      <span class="ex">Wireframe · example data</span>
+    </div>
+
+    <!-- ============ HOME ============ -->
+    <section class="view" id="view-home" hidden>
+      <h1>Good morning, Maya</h1>
+      <p class="muted" style="margin:4px 0 16px">Start something new, or pick up where you left off.</p>
+
+      <div class="drop">
+        <div class="grow">
+          <h2>Start a new video</h2>
+          <p class="muted small" style="margin-top:2px">Upload a video you've already shot, or record one now. We'll listen to it, then ask you three quick questions.</p>
+        </div>
+        <div class="row"><button class="btn primary" type="button" data-go="workspace">Upload a video</button><button class="btn" type="button" data-go="workspace">Record now</button></div>
+      </div>
+      <div class="note"><b>Changed</b>Removed “paste a link”. We only edit videos the user uploads or records themselves, so no pulling of videos from other sites.</div>
+
+      <div class="sec">
+        <div class="sec-h"><h2>Your to-do list</h2><span class="pill warn">3 tasks</span></div>
+        <p class="sec-sub">Things we can't do without you. Each one belongs to a video below.</p>
+        <div class="todo">
+          <div class="todo-i"><span class="dot"></span><div class="grow"><b>Choose a style</b><div class="muted small">“Cutting onboarding from 14 days to 3” · 3 suggestions ready</div></div><button class="btn sm primary" type="button" data-go="workspace">Choose style</button></div>
+          <div class="todo-i"><span class="dot"></span><div class="grow"><b>Approve a thumbnail</b><div class="muted small">“Three emails we stopped sending” · 3 options</div></div><button class="btn sm" type="button" data-go="workspace">Review</button></div>
+          <div class="todo-i"><span class="dot bad"></span><div class="grow"><b>Retry the render</b><div class="muted small">“Pricing page teardown” · your footage is safe</div></div><button class="btn sm" type="button">Retry</button></div>
+        </div>
+        <div class="note"><b>Changed</b>To-do lists actions only (verb first, one button). It no longer repeats video statuses, so it stops colliding with the video list.</div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><h2>Continue where you left off</h2><button class="more" type="button" data-go="videos">All videos</button></div>
+        <p class="sec-sub">Your latest videos and how far along each one is.</p>
+        <div class="grid g4">
+          <div class="card vcard"><div class="img r916" style="--h:190"><span>video frame</span><em class="dur" style="font-style:normal">3:02</em></div><h3>Cutting onboarding from 14 days to 3</h3><div class="stage" aria-label="Step 2 of 5"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div><div class="muted small">Step 2 of 5 · Choose a style</div><button class="btn sm" type="button" data-go="workspace">Continue</button></div>
+          <div class="card vcard"><div class="img r916" style="--h:30"><span>video frame</span><em class="dur" style="font-style:normal">0:48</em></div><h3>Three emails we stopped sending</h3><div class="stage" aria-label="Step 4 of 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div><div class="muted small">Step 4 of 5 · Thumbnail</div><button class="btn sm" type="button" data-go="workspace">Continue</button></div>
+          <div class="card vcard"><div class="img r916" style="--h:330"><span>video frame</span><em class="dur" style="font-style:normal">1:15</em></div><h3>Pricing page teardown</h3><div class="stage" aria-label="Step 3 of 5"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div><div class="muted small">Step 3 of 5 · Render needs a retry</div><button class="btn sm" type="button" data-go="workspace">Open</button></div>
+          <div class="card vcard"><div class="img r169" style="--h:250"><span>video frame</span><em class="dur" style="font-style:normal">42:10</em></div><h3>Founder Q&amp;A, October</h3><div class="stage" aria-label="Step 1 of 5"><i class="on"></i><i></i><i></i><i></i><i></i></div><div class="muted small">Step 1 of 5 · Listening to it now</div><span class="pill">Analysing</span></div>
+        </div>
+        <div class="note"><b>Changed</b>Each video shows its step out of five (Upload, Style, Edit, Thumbnail, Ready to post) and a Continue button, so it reads as progress, not as a second list of problems.</div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><h2>Posting plan this week</h2><span class="pill accent">3 planned · 1 suggested</span><button class="more" type="button" data-go="calendar">Open calendar</button></div>
+        <p class="sec-sub">What is going out and when. You post it; we get everything ready.</p>
+        <div class="agenda">
+          <div class="ag today"><span class="when">Today, Mon</span><span class="plat">LinkedIn</span><span>Post: “14 days to 3”</span><span class="act"><span class="pill ok">Ready to post</span> <button class="btn sm" type="button" data-go="calendar">Copy &amp; post</button></span></div>
+          <div class="ag empty-d"><span class="when">Tue</span><span class="plat">—</span><span>Nothing planned</span><span class="act"></span></div>
+          <div class="ag"><span class="when">Wed</span><span class="plat">Instagram</span><span>Reel: “Three emails we stopped sending”</span><span class="act"><span class="pill warn">Needs thumbnail</span></span></div>
+          <div class="ag"><span class="when">Wed</span><span class="plat">X</span><span>Thread: onboarding in 7 posts</span><span class="act"><span class="pill ok">Ready to post</span></span></div>
+          <div class="ag"><span class="when">Thu</span><span class="plat">Instagram</span><span class="muted">Suggested: carousel from “14 days to 3”</span><span class="act"><button class="btn sm" type="button">Add</button></span></div>
+        </div>
+        <div class="note"><b>Changed</b>Replaced seven tiny boxes with a readable agenda: day, platform, what, and its state. “Copy &amp; post” because direct posting isn't confirmed yet.</div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><h2>Trending in your niche</h2><span class="ex">example</span><button class="more" type="button">See all trends</button></div>
+        <p class="sec-sub">What's working for others, with the source. Tap “Make this” to start a video or post from it.</p>
+        <div class="grid g3">
+          <div class="card tcard"><div class="img r169" style="--h:200"><span>image from source</span></div><span class="pill accent" style="align-self:flex-start">Format</span><b>Talking head with an on-screen checklist</b><div class="muted small">Short cuts, a checklist builds line by line.</div><div class="src">Source: curated format library · updated Monday</div><button class="btn sm" type="button">Make this</button></div>
+          <div class="card tcard"><div class="img r169" style="--h:20"><span>article image</span></div><span class="pill accent" style="align-self:flex-start">Topic</span><b>“We replaced our onboarding call”</b><div class="muted small">Rising in SaaS operator posts this week.</div><div class="src">Source: news and RSS · 14 articles</div><button class="btn sm" type="button">Make this</button></div>
+          <div class="card tcard"><div class="img r169 none"><span>no image from source</span></div><span class="pill accent" style="align-self:flex-start">Hook</span><b>“Here's what nobody tells you about…”</b><div class="muted small">Question-first hooks in your niche.</div><div class="src">Source: public trend pages</div><button class="btn sm" type="button">Make this</button></div>
+        </div>
+        <div class="note"><b>Changed</b>Cards show the source's own image when one exists, and a plain placeholder when it doesn't (third card). Trend sources are still being decided.</div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><h2>Ideas for you</h2><span class="ex">example</span><button class="more" type="button">See all ideas</button></div>
+        <p class="sec-sub">Suggestions based on your own videos and your niche.</p>
+        <div class="grid g3">
+          <div class="card tcard"><b>Turn “14 days to 3” into a 5-slide carousel</b><div class="muted small">From your latest video. 4 key moments found.</div><div class="row"><button class="btn sm primary" type="button">Start</button><button class="btn sm" type="button">Save</button></div></div>
+          <div class="card tcard"><b>Answer the pricing question in 30 seconds</b><div class="muted small">Asked 3 times in your Q&amp;A recording.</div><div class="row"><button class="btn sm primary" type="button">Start</button><button class="btn sm" type="button">Save</button></div></div>
+          <div class="card tcard"><b>Write the article behind your onboarding video</b><div class="muted small">About 900 words, based on the transcript.</div><div class="row"><button class="btn sm primary" type="button">Start</button><button class="btn sm" type="button">Save</button></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ VIDEOS ============ -->
+    <section class="view" id="view-videos" hidden>
+      <div class="top" style="margin-bottom:6px"><h1>Videos</h1><span class="grow"></span><button class="btn primary" type="button" data-go="workspace">+ New project</button></div>
+      <div class="tabs" role="tablist" aria-label="Videos sections" style="margin-top:4px"><button type="button" data-vtab="all" aria-selected="true">All videos</button><button type="button" data-vtab="styles" aria-selected="false">Styles</button></div>
+      <div id="vt-all">
+      <div class="row" style="margin-bottom:12px">
+        <input class="field" style="max-width:260px" type="search" id="vsearch" placeholder="Search videos" aria-label="Search videos">
+        <button class="btn sm" type="button">Status: All</button><button class="btn sm" type="button">Sort: Last edited</button>
+      </div>
+      <div class="card scroll-x" style="padding:4px 8px">
+        <table class="table">
+          <thead><tr><th>Video</th><th>Length</th><th>Where it is</th><th>Made from this video</th><th>Edited</th></tr></thead>
+          <tbody>
+            <tr><td><div class="vt"><div class="img r916 thumb-sm" style="--h:190"><span>frame</span></div><b>Cutting onboarding from 14 days to 3</b></div></td><td class="mono">3:02</td><td><span class="pill accent">Step 2 · Choose a style</span></td><td><span class="muted small">Nothing yet</span></td><td class="muted">Today</td></tr>
+            <tr><td><div class="vt"><div class="img r916 thumb-sm" style="--h:30"><span>frame</span></div><b>Three emails we stopped sending</b></div></td><td class="mono">0:48</td><td><span class="pill ok">Ready to post</span></td><td><div class="chips"><span class="mini">1 video</span><span class="mini">3 thumbnails</span><span class="mini">4 posts</span></div></td><td class="muted">Yesterday</td></tr>
+            <tr><td><div class="vt"><div class="img r916 thumb-sm" style="--h:330"><span>frame</span></div><b>Pricing page teardown</b></div></td><td class="mono">1:15</td><td><span class="pill bad">Render needs a retry</span></td><td><span class="muted small">Nothing yet</span></td><td class="muted">Mon</td></tr>
+            <tr><td><div class="vt"><div class="img r169 thumb-sm" style="--h:250"><span>frame</span></div><b>Founder Q&amp;A, October</b></div></td><td class="mono">42:10</td><td><span class="pill">Analysing</span></td><td><span class="muted small">Clips will appear when it's ready</span></td><td class="muted">Mon</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note"><b>Changed</b>Every row has a thumbnail. “Pieces” became “Made from this video”: the things already created from it (video, thumbnails, posts, clips), shown as small chips. “Nothing yet” when empty.</div>
+      <p style="margin-top:12px"><button class="btn" type="button" data-go="workspace">Open the first video →</button></p>
+      </div>
+      <div id="vt-styles" hidden>
+        <div class="row" style="margin-bottom:10px"><div class="chips"><button class="chip" type="button">Suggested</button><button class="chip" type="button">My styles</button><button class="chip" type="button">From references</button></div><span class="grow"></span><button class="btn primary" type="button">Upload a reference video</button></div>
+        <p class="muted small" style="margin-bottom:12px;max-width:75ch">A style is how a video is cut: pace, zooms, captions, music. Upload a video you like and we'll build a style from it. Your styles are private to you.</p>
+        <div class="grid g3">
+          <div class="card styleopt"><div class="img r916" style="--h:190;max-height:200px"><span>preview on your footage</span></div><div class="row"><h3>Fast talking head</h3><span class="pill accent">Suggested</span></div><div class="muted small">Cuts about every 2 seconds, emphasis zooms, bold captions.</div><div class="row"><button class="btn sm primary" type="button">Use</button><button class="btn sm" type="button">Preview</button></div></div>
+          <div class="card styleopt"><div class="img r916" style="--h:30;max-height:200px"><span>preview on your footage</span></div><div class="row"><h3>Calm explainer</h3><span class="pill accent">Suggested</span></div><div class="muted small">Cuts every 4 seconds, one gentle push-in, clean captions.</div><div class="row"><button class="btn sm primary" type="button">Use</button><button class="btn sm" type="button">Preview</button></div></div>
+          <div class="card styleopt"><div class="img r916" style="--h:330;max-height:200px"><span>from your reference</span></div><div class="row"><h3>Like Sam's reel</h3><span class="pill">Mine</span></div><div class="muted small">Copied: pacing, caption timing. Approximated: fonts, custom effects.</div><div class="row"><button class="btn sm primary" type="button">Use</button><button class="btn sm" type="button">Edit</button></div></div>
+        </div>
+      </div>
+      <div class="note"><b>Changed</b>Styles moved here from Branding. This is the library of how videos are cut; the “Choose a style” step inside a video picks from it.</div>
+    </section>
+
+    <!-- ============ WORKSPACE ============ -->
+    <section class="view" id="view-workspace" hidden>
+      <div class="crumbs"><button type="button" data-go="videos">Videos</button><span>/</span><span>Cutting onboarding from 14 days to 3</span></div>
+      <div class="top" style="margin:8px 0 0"><h1>Cutting onboarding from 14 days to 3</h1><span class="pill ok">Edit rendered</span><span class="grow"></span><button class="btn" type="button">Share for review</button><button class="btn primary" type="button">Export</button></div>
+      <div class="tabs" role="tablist" aria-label="Video workspace">
+        <button role="tab" type="button" data-tab="edit" aria-selected="true">Edit</button>
+        <button role="tab" type="button" data-tab="more" aria-selected="false">Make more from this video</button>
+      </div>
+
+      <div id="tab-edit">
+        <div class="ws">
+          <div class="panel">
+            <div class="card">
+              <div class="player">
+                <div class="phone"><div class="play">▶</div><div class="cap">cut onboarding to three days</div></div>
+                <div>
+                  <div class="row"><span class="label">Preview</span><span class="pill">0:00 / 0:48</span><span class="pill">1080×1920</span></div>
+                  <div class="tl" aria-label="Simplified timeline">
+                    <div class="track"><span class="t">Video</span><div class="lane"><i style="left:0;width:22%"></i><i class="b" style="left:23%;width:30%"></i><i style="left:54%;width:46%"></i></div></div>
+                    <div class="track"><span class="t">Camera</span><div class="lane"><i class="m" style="left:6%"></i><i class="m" style="left:31%"></i><i class="m" style="left:62%"></i><i class="m" style="left:81%"></i></div></div>
+                    <div class="track"><span class="t">Captions</span><div class="lane"><i class="cap" style="left:2%;width:94%"></i></div></div>
+                    <div class="track"><span class="t">Assets</span><div class="lane"><i class="b" style="left:40%;width:10%"></i><i class="b" style="left:70%;width:8%"></i></div></div>
+                    <div class="track"><span class="t">Audio</span><div class="lane"><i class="b" style="left:0;width:100%;opacity:.3"></i></div></div>
+                  </div>
+                  <p class="muted small" style="margin-top:8px">Simplified view: clips, camera moves, captions, assets, audio. Tap a block to adjust.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="card prompt col">
+              <h2>Change the edit</h2>
+              <div class="chips" id="chips">
+                <button class="chip" type="button">Slower cuts</button>
+                <button class="chip" type="button">Bigger captions</button>
+                <button class="chip" type="button">Add a stat callout at 0:12</button>
+                <button class="chip" type="button">Fewer effects</button>
+              </div>
+              <textarea id="promptBox" aria-label="Describe a change" placeholder="Describe what to change, or tap a suggestion"></textarea>
+              <div class="understood" id="understood" hidden></div>
+              <div class="row"><button class="btn primary" id="applyBtn" type="button">Preview change</button><span class="muted small" id="applyMsg"></span></div>
+            </div>
+
+            <div class="card">
+              <div class="sec-h" style="margin-bottom:2px"><h2>Thumbnail</h2><span class="muted small">Built from frames in your video</span></div>
+              <p class="sec-sub">Pick one, or edit the text and layout. Each option is checked at phone size.</p>
+              <div class="grid g3">
+                <div class="thumbopt sel"><div class="img r169" style="--h:190"><span>frame 0:47 + “14 → 3 days”</span></div><div class="row"><b>Option A</b><span class="pill ok">Readable on a phone</span></div><div class="row"><button class="btn sm primary" type="button">Use this</button><button class="btn sm" type="button">Edit</button></div></div>
+                <div class="thumbopt"><div class="img r169" style="--h:30"><span>screenshot + big number</span></div><div class="row"><b>Option B</b><span class="pill warn">Text a bit small</span></div><div class="row"><button class="btn sm" type="button">Use this</button><button class="btn sm" type="button">Edit</button></div></div>
+                <div class="thumbopt"><div class="img r169" style="--h:330"><span>close-up, no text</span></div><div class="row"><b>Option C</b><span class="pill ok">Readable on a phone</span></div><div class="row"><button class="btn sm" type="button">Use this</button><button class="btn sm" type="button">Edit</button></div></div>
+              </div>
+              <p class="muted small" style="margin-top:10px">Want to make something from scratch? <button class="btn sm" type="button" data-go="images">Open Images</button></p>
+              <div class="note"><b>Changed</b>Thumbnails now sit right below the edit instead of in their own tab, so the flow reads edit, then cover, then what to make next.</div>
+            </div>
+          </div>
+
+          <aside class="panel" aria-label="Direction and notes">
+            <div class="card">
+              <h2>Direction</h2>
+              <div class="seg" id="seg" role="group" aria-label="Direction preset" style="margin:10px 0">
+                <button type="button" aria-pressed="true" data-p="punchy">Punchy</button>
+                <button type="button" aria-pressed="false" data-p="calm">Calm</button>
+                <button type="button" aria-pressed="false" data-p="cinematic">Cinematic</button>
+              </div>
+              <label class="label" for="inten">Intensity</label>
+              <input type="range" id="inten" min="0" max="100" value="60">
+            </div>
+            <div class="card"><h2>Director's notes</h2><ul class="notes-list" id="dnotes" style="margin-top:10px"></ul></div>
+            <div class="card">
+              <h2>Checks</h2>
+              <div class="row" style="margin-top:8px"><span class="pill ok">Pacing OK</span><span class="pill ok">Captions OK</span><span class="pill warn">1 soft zoom</span></div>
+              <p class="muted small" style="margin-top:8px">At 0:31 the zoom crops a 720p clip and may look soft. <button class="btn sm" type="button">Reduce zoom</button></p>
+            </div>
+            <div class="card">
+              <div class="row"><h2>History</h2><span class="grow"></span><button class="btn sm" type="button">Undo</button><button class="btn sm" type="button">Redo</button></div>
+              <ul class="hist" style="margin-top:10px">
+                <li><span class="rev">v4</span>Bigger captions<span class="pill accent" style="margin-left:auto">current</span></li>
+                <li><span class="rev">v3</span>Before “punchier”</li>
+                <li><span class="rev">v2</span>First edit (Punchy)</li>
+                <li><span class="rev">v1</span>Raw upload</li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div id="tab-more" hidden>
+        <h2 style="font-size:17px">One video, a week of content</h2>
+        <p class="muted" style="margin-top:4px;max-width:70ch">Choose what to make from “Cutting onboarding from 14 days to 3”. Everything is written from what you said in the video, in your voice, and every claim links back to the moment you said it.</p>
+        <div class="steps"><div><b>1</b>Choose what to make</div><div><b>2</b>Review and edit</div><div><b>3</b>Add to your calendar</div></div>
+
+        <div class="grid g3" style="margin-top:12px">
+          <div class="card make"><div class="row"><h3>Short clips</h3><span class="pill">2 found</span></div><div class="what">Best moments cut into their own vertical videos, each with a hook, captions and thumbnail.</div><div class="foot"><span class="mini">120 credits</span><button class="btn sm primary" type="button">Make clips</button></div></div>
+          <div class="card make"><div class="row"><h3>LinkedIn post</h3><span class="pill ok">Ready</span></div><div class="what">A post with a strong first line, based on your key points. About 1,200 characters.</div><div class="foot"><button class="btn sm" type="button">Open</button><button class="btn sm" type="button">Add to calendar</button></div></div>
+          <div class="card make"><div class="row"><h3>X thread</h3><span class="pill">Not made</span></div><div class="what">Your story as 7 short posts, each under the character limit.</div><div class="foot"><span class="mini">5 credits</span><button class="btn sm primary" type="button">Make it</button></div></div>
+          <div class="card make"><div class="row"><h3>Instagram carousel</h3><span class="pill warn">Needs review</span></div><div class="what">7 swipeable slides in your brand colors. One number needs your confirmation.</div><div class="foot"><button class="btn sm primary" type="button">Review</button></div></div>
+          <div class="card make"><div class="row"><h3>Captions and hashtags</h3><span class="pill">Not made</span></div><div class="what">A caption for each platform you post to: Instagram, TikTok, YouTube Shorts.</div><div class="foot"><span class="mini">2 credits</span><button class="btn sm primary" type="button">Make it</button></div></div>
+          <div class="card make"><div class="row"><h3>Article</h3><span class="pill">Not made</span></div><div class="what">A blog post of about 900 words with a title and meta description, based on your transcript.</div><div class="foot"><span class="mini">15 credits</span><button class="btn sm primary" type="button">Make it</button></div></div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-h"><h2>Made from this video</h2></div>
+          <div class="made">
+            <div class="made-i"><div class="img r169 thumb-sm" style="--h:190"><span>video</span></div><div class="grow"><b>Edited video</b><div class="muted small">0:48 · Punchy</div></div><span class="pill ok">Ready</span><button class="btn sm" type="button">Add to calendar</button></div>
+            <div class="made-i"><div class="img r169 thumb-sm" style="--h:190"><span>cover</span></div><div class="grow"><b>Thumbnail, Option A</b><div class="muted small">Checked at phone size</div></div><span class="pill ok">Ready</span><button class="btn sm" type="button">Download</button></div>
+            <div class="made-i"><div class="img r11 thumb-sm" style="--h:210"><span>text</span></div><div class="grow"><b>LinkedIn post</b><div class="muted small">1,240 characters</div></div><span class="pill ok">Ready</span><button class="btn sm" type="button">Copy</button></div>
+          </div>
+        </div>
+        <div class="note"><b>Changed</b>Posts and Clips merged into one page that says what you can make from this video, what it costs, and where each piece stands. A short three-step line explains the flow for new users.</div>
+      </div>
+    </section>
+
+    <!-- ============ IMAGES ============ -->
+    <section class="view" id="view-images" hidden>
+      <div class="top" style="margin-bottom:0"><h1>Images</h1><span class="grow"></span><button class="btn primary" type="button" id="createToggle">+ Create image</button></div>
+      <p class="muted" style="margin-top:4px">Thumbnails, carousels and quote cards from your videos, plus anything you make on its own.</p>
+
+      <div class="card" id="createPanel" hidden style="margin-top:14px">
+        <h2>Create an image</h2>
+        <p class="sec-sub">Pick a starting point.</p>
+        <div class="grid g4">
+          <button class="card col" type="button" style="text-align:left"><b>Upload an image</b><span class="muted small">Add text, crop, cut out a subject.</span></button>
+          <button class="card col" type="button" style="text-align:left"><b>Start from a template</b><span class="muted small">Thumbnail, carousel or quote card in your brand.</span></button>
+          <button class="card col" type="button" style="text-align:left"><b>Use a video frame</b><span class="muted small">Pick a moment from any of your videos.</span></button>
+          <button class="card col" type="button" style="text-align:left"><b>Generate with AI</b><span class="muted small">Costs credits. Text is added separately, so it stays sharp.</span></button>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Image types" style="margin-top:14px">
+        <button type="button" data-itab="all" aria-selected="true">All</button>
+        <button type="button" data-itab="thumb" aria-selected="false">Thumbnails</button>
+        <button type="button" data-itab="car" aria-selected="false">Carousels</button>
+        <button type="button" data-itab="quote" aria-selected="false">Quote cards</button>
+      </div>
+      <div class="row" style="margin-bottom:12px"><input class="field" style="max-width:240px" type="search" placeholder="Search images" aria-label="Search images"><button class="btn sm" type="button">From: All videos</button><button class="btn sm" type="button">Sort: Newest</button></div>
+
+      <div class="grid g4" id="imgGrid">
+        <div class="col" data-kind="thumb"><div class="img r169" style="--h:190"><span>“14 → 3 days”</span></div><b class="small">Thumbnail · Option A</b><div class="row"><span class="pill ok">Readable on a phone</span></div><span class="muted small">From “Cutting onboarding…”</span></div>
+        <div class="col" data-kind="thumb"><div class="img r169" style="--h:30"><span>“Stop sending these”</span></div><b class="small">Thumbnail</b><div class="row"><span class="pill warn">Text a bit small</span></div><span class="muted small">From “Three emails…”</span></div>
+        <div class="col" data-kind="car"><div class="img r45" style="--h:210"><span>slide 1 of 7</span></div><b class="small">Carousel · 7 slides</b><div class="row"><span class="mini">4:5</span><span class="pill ok">Ready</span></div><span class="muted small">From “Cutting onboarding…”</span></div>
+        <div class="col" data-kind="quote"><div class="img r11" style="--h:160"><span>“Onboarding is the product.”</span></div><b class="small">Quote card</b><div class="row"><span class="mini">1:1</span><span class="pill ok">Ready</span></div><span class="muted small">Quote at 1:12</span></div>
+        <div class="col" data-kind="car"><div class="img r45" style="--h:340"><span>slide 1 of 5</span></div><b class="small">Carousel · 5 slides</b><div class="row"><span class="mini">4:5</span><span class="pill warn">1 number to confirm</span></div><span class="muted small">From “Pricing page teardown”</span></div>
+        <div class="col" data-kind="thumb"><div class="img r916" style="--h:280"><span>reel cover</span></div><b class="small">Reel cover</b><div class="row"><span class="mini">9:16</span><span class="pill ok">Safe zones OK</span></div><span class="muted small">From “Three emails…”</span></div>
+        <div class="col" data-kind="quote"><div class="img r11" style="--h:100"><span>“Ask the customer first.”</span></div><b class="small">Quote card</b><div class="row"><span class="mini">1:1</span><span class="pill ok">Ready</span></div><span class="muted small">Made on its own</span></div>
+        <div class="col" data-kind="thumb"><div class="img r169" style="--h:60"><span>standalone</span></div><b class="small">Thumbnail</b><div class="row"><span class="pill accent">Draft</span></div><span class="muted small">Made on its own</span></div>
+      </div>
+      <div class="note"><b>Changed</b>“Create” is now its own button, away from the type tabs (Thumbnails, Carousels, Quote cards). It opens four starting points. Each image says which video it came from and has a phone-size check.</div>
+    </section>
+
+    <!-- ============ ASSETS ============ -->
+    <section class="view" id="view-assets" hidden>
+      <div class="top" style="margin-bottom:0"><h1>Assets</h1><span class="grow"></span><button class="btn primary" type="button">+ Upload assets</button></div>
+      <p class="muted" style="margin-top:4px;max-width:70ch">Things you want in your videos and images: product shots, logos, screenshots, music. We label them, cut out the background, and place them when you mention them.</p>
+      <div class="tabs" style="margin-top:14px"><button type="button" aria-selected="true">All · 14</button><button type="button" aria-selected="false">Product images · 6</button><button type="button" aria-selected="false">Logos · 3</button><button type="button" aria-selected="false">Screenshots · 3</button><button type="button" aria-selected="false">Music · 2</button></div>
+      <div class="drop" style="padding:14px;margin-bottom:14px"><span class="grow muted small">Drop files here. Images (PNG, JPG, WebP), logos (SVG) and audio (MP3, WAV).</span><button class="btn sm" type="button">Choose files</button></div>
+      <div class="grid g5">
+        <div class="card col"><div class="img r11" style="--h:190"><span>Notion template</span></div><b class="small">Notion template</b><div class="row"><span class="pill ok"><span class="chk"></span>Cut out</span></div><span class="muted small">Used in 3 videos</span></div>
+        <div class="card col"><div class="img r11" style="--h:30"><span>Figma plugin</span></div><b class="small">Figma plugin</b><div class="row"><span class="pill ok">Cut out</span></div><span class="muted small">Used in 1 video</span></div>
+        <div class="card col"><div class="img r11" style="--h:330"><span>Logo, dark</span></div><b class="small">Logo, dark</b><div class="row"><span class="pill ok">Transparent</span></div><span class="muted small">Used everywhere</span></div>
+        <div class="card col"><div class="img r11" style="--h:250"><span>Pricing screenshot</span></div><b class="small">Pricing screenshot</b><div class="row"><span class="pill warn">Low resolution</span></div><span class="muted small">Not used yet</span></div>
+        <div class="card col"><div class="img r11" style="--h:100"><span>Onboarding checklist</span></div><b class="small">Onboarding checklist</b><div class="row"><span class="pill accent">Labelling…</span></div><span class="muted small">Just uploaded</span></div>
+        <div class="card col"><div class="wave" aria-hidden="true"><i style="height:30%"></i><i style="height:60%"></i><i style="height:80%"></i><i style="height:45%"></i><i style="height:90%"></i><i style="height:55%"></i><i style="height:35%"></i><i style="height:70%"></i><i style="height:50%"></i><i style="height:25%"></i><i style="height:65%"></i><i style="height:40%"></i></div><b class="small">Soft office loop</b><div class="row"><span class="mini">2:10</span><span class="pill">Music</span></div><span class="muted small">Used in 2 videos</span></div>
+      </div>
+      <div class="note"><b>Note</b>Warnings that matter show up here: low resolution, no transparent background, unused. The same assets feed videos and images.</div>
+    </section>
+
+    <!-- ============ CALENDAR ============ -->
+    <section class="view" id="view-calendar" hidden>
+      <div class="top" style="margin-bottom:6px"><h1>Calendar</h1><span class="pill accent">Planning only</span><span class="grow"></span><div class="row"><button class="btn sm" type="button" aria-pressed="true">Week</button><button class="btn sm" type="button">Month</button></div></div>
+      <div class="card">
+        <div class="goalbox">
+          <div class="grow" style="min-width:240px"><label class="label" for="goal">Your goal</label><input id="goal" class="field" type="text" value="Get 20 demo requests from the onboarding series in the next 2 weeks"></div>
+          <button class="btn primary" type="button">Plan it for me</button>
+        </div>
+        <p class="muted small" style="margin-top:8px">We fill in the calendar from your videos and this goal. You drag things around, accept or remove suggestions, then post each one yourself.</p>
+      </div>
+
+      <div class="row" style="margin:16px 0 8px"><b>Week of 26 Oct</b><span class="grow"></span><button class="btn sm" type="button">‹ Previous</button><button class="btn sm" type="button">Next ›</button></div>
+      <div class="cwrap">
+        <div>
+          <div class="week" id="weekGrid">
+            <div class="wcol today"><div class="d">Mon 26 · Today</div>
+              <button class="slot" type="button" data-slot="s1"><div class="top2"><span class="plat">LinkedIn</span></div>Post: “14 days to 3”<span class="pill ok" style="align-self:flex-start">Ready</span></button></div>
+            <div class="wcol"><div class="d">Tue 27</div></div>
+            <div class="wcol"><div class="d">Wed 28</div>
+              <button class="slot" type="button" data-slot="s2"><div class="top2"><span class="plat">Instagram</span></div>Reel: “Three emails”<span class="pill warn" style="align-self:flex-start">Needs thumbnail</span></button>
+              <button class="slot" type="button" data-slot="s3"><div class="top2"><span class="plat">X</span></div>Thread: 7 posts<span class="pill ok" style="align-self:flex-start">Ready</span></button></div>
+            <div class="wcol"><div class="d">Thu 29</div>
+              <button class="slot sug" type="button" data-slot="s4"><div class="top2"><span class="plat">Instagram</span></div>Suggested: carousel<span class="pill" style="align-self:flex-start">Suggestion</span></button></div>
+            <div class="wcol"><div class="d">Fri 30</div>
+              <button class="slot" type="button" data-slot="s5"><div class="top2"><span class="plat">YouTube Shorts</span></div>Short: “Pricing teardown”<span class="pill bad" style="align-self:flex-start">Render retry</span></button></div>
+            <div class="wcol"><div class="d">Sat 31</div></div>
+            <div class="wcol"><div class="d">Sun 1</div></div>
+          </div>
+          <div class="card" style="margin-top:12px"><h3>Not scheduled yet</h3><div class="chips" style="margin-top:8px"><span class="mini">Article: onboarding</span><span class="mini">Quote card ×2</span><span class="mini">2 short clips</span></div><p class="muted small" style="margin-top:8px">Drag these onto a day, or tap one and pick a day.</p></div>
+        </div>
+        <aside class="card col" id="slotPanel" aria-live="polite">
+          <div class="label">Selected</div>
+          <b id="spTitle">LinkedIn post: “14 days to 3”</b>
+          <div class="row"><span class="plat" id="spPlat">LinkedIn</span><span class="mini" id="spWhen">Mon 26 Oct · 9:00</span></div>
+          <div class="img r169" style="--h:190"><span id="spImg">cover image</span></div>
+          <div class="understood small" id="spText">We cut onboarding from 14 days to 3. Here's what we changed first, and what we stopped doing…</div>
+          <div class="row"><button class="btn sm primary" type="button">Copy text</button><button class="btn sm" type="button">Download image</button></div>
+          <div class="row"><button class="btn sm" type="button">Mark as posted</button><button class="btn sm" type="button">Move</button></div>
+          <p class="muted small">We don't post for you yet. Copy it, then post from the app itself.</p>
+        </aside>
+      </div>
+      <div class="note"><b>Note</b>Calendar is planning plus “ready to post”. Posting directly to platforms depends on access we haven't confirmed.</div>
+    </section>
+
+    <!-- ============ BRANDING & STYLES ============ -->
+    <section class="view" id="view-branding" hidden>
+      <h1>Branding</h1>
+      <p class="muted" style="margin-top:4px">How everything you make looks and sounds.</p>
+      <div class="tabs" role="tablist" aria-label="Branding sections">
+        <button type="button" data-btab="kit" aria-selected="true">Brand kit</button>
+        <button type="button" data-btab="voice" aria-selected="false">Writing voice</button>
+      </div>
+
+      <div id="bt-kit">
+        <div class="two">
+          <div class="card col"><h2>Colors</h2><div class="swatches"><div class="sw"><i style="background:#0f7b78"></i>Primary<br>#0F7B78</div><div class="sw"><i style="background:#1a2226"></i>Text<br>#1A2226</div><div class="sw"><i style="background:#f3f5f6"></i>Background<br>#F3F5F6</div><div class="sw"><i style="background:#e8a33d"></i>Highlight<br>#E8A33D</div></div><button class="btn sm" type="button" style="align-self:flex-start">Edit colors</button></div>
+          <div class="card col"><h2>Fonts</h2><div class="kv"><span class="label">Headlines</span><b style="font-size:20px">IBM Plex Sans Bold</b><span class="label">Body</span><span>IBM Plex Sans Regular</span></div><button class="btn sm" type="button" style="align-self:flex-start">Change fonts</button></div>
+          <div class="card col"><h2>Logo and handle</h2><div class="row"><div class="img r11 thumb-sm" style="--h:190"><span>logo</span></div><div class="col"><b>@mayarao</b><span class="muted small">Shown on carousels and quote cards</span></div></div><button class="btn sm" type="button" style="align-self:flex-start">Replace logo</button></div>
+          <div class="card col"><h2>Preview</h2><div class="img r45" style="--h:190;max-width:220px"><span>sample carousel slide in your brand</span></div></div>
+        </div>
+      </div>
+
+      <div id="bt-voice" hidden>
+        <div class="card" style="margin-bottom:12px"><h2>What is “writing voice”?</h2>
+          <p class="muted" style="margin-top:6px;max-width:75ch">It's how your words sound. When we write a LinkedIn post, X thread, caption, carousel or article from your video, we follow your voice, so it reads like you wrote it and not like generic AI. It doesn't change how your videos look or are cut (that's “Styles”, under Videos).</p>
+        </div>
+        <div class="two">
+          <div class="card col"><h2>Teach us your voice</h2><p class="muted small">Paste 2 or 3 posts you've written and liked. We pick up your sentence length, favourite words, how you open, and how you use emoji.</p><textarea class="field" style="min-height:110px" aria-label="Paste past posts" placeholder="Paste a past post here"></textarea><div class="row"><button class="btn sm primary" type="button">Add post</button><span class="muted small">2 added</span></div></div>
+          <div class="card col"><h2>What we picked up</h2>
+            <div class="kv"><span class="label">Tone</span><div class="chips"><span class="chip">Direct</span><span class="chip">Warm</span><span class="chip">No hype</span></div>
+              <span class="label">Sentences</span><div class="meter" aria-label="Short sentences"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+              <span class="label">Words you use</span><span class="small">“here's what changed”, “in practice”, “specifically”</span>
+              <span class="label">Words to avoid</span><span class="small">“game-changer”, “unlock”, “synergy”</span>
+              <span class="label">Emoji</span><span class="small">None</span></div>
+            <button class="btn sm" type="button" style="align-self:flex-start">Edit</button></div>
+        </div>
+        <div class="card col" style="margin-top:12px"><h2>Try it</h2><p class="muted small">The same point, written two ways.</p>
+          <div class="two"><div><span class="label">Generic</span><p class="quote small" style="margin-top:4px">🚀 Excited to share how we unlocked a game-changing onboarding process!</p></div><div><span class="label">In your voice</span><p class="quote small" style="margin-top:4px">We cut onboarding from 14 days to 3. Here's what changed first.</p></div></div></div>
+      </div>
+
+      <div class="note"><b>Changed</b>Voice explained on the page itself, with a before and after. Tabs: Brand kit, Writing voice. Video styles now live under Videos.</div>
+    </section>
+
+    <!-- ============ ANALYTICS ============ -->
+    <section class="view" id="view-analytics" hidden>
+      <div class="top" style="margin-bottom:6px"><h1>Analytics</h1><span class="pill">Phase 1</span><span class="ex">example data</span></div>
+      <div class="card" style="border-left:3px solid var(--accent)"><div class="row"><div class="grow" style="min-width:220px"><b>Connect an account to see your real numbers</b><div class="muted small">What you see below is an example of what appears once an account is connected.</div></div><button class="btn primary" type="button">Connect Instagram</button><button class="btn" type="button">Connect YouTube</button></div></div>
+
+      <div class="grid g4" style="margin-top:14px">
+        <div class="card stat"><span class="label">Views, last 28 days</span><b>48,210</b><span class="muted small">+12% vs before</span></div>
+        <div class="card stat"><span class="label">Average watched</span><b>61%</b><span class="muted small">of each video</span></div>
+        <div class="card stat"><span class="label">Posts published</span><b>11</b><span class="muted small">across 3 platforms</span></div>
+        <div class="card stat"><span class="label">Profile visits</span><b>1,904</b><span class="muted small">+4%</span></div>
+      </div>
+
+      <div class="grid g3" style="margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+        <div class="card col"><h2>Views by day</h2><div class="spark" aria-hidden="true"><i style="height:30%"></i><i style="height:42%"></i><i style="height:38%"></i><i style="height:55%"></i><i style="height:48%"></i><i style="height:70%"></i><i style="height:62%"></i><i class="hi" style="height:96%"></i><i style="height:60%"></i><i style="height:52%"></i><i style="height:66%"></i><i style="height:58%"></i></div><span class="muted small">Peak: 7 Oct, “Three emails we stopped sending”</span></div>
+        <div class="card col"><h2>What seems to work</h2><span class="pill warn" style="align-self:flex-start">Early patterns, not proof</span>
+          <div class="quote small">Videos that open with a question held viewers 22% longer than the others.</div>
+          <div class="quote small">Posts on Tuesdays and Wednesdays got more views.</div>
+          <div class="quote small">Shorter videos (under 45s) were watched to the end more often.</div></div>
+        <div class="card col"><h2>Try next</h2>
+          <div class="row"><span class="grow small">Open the next video with a question</span><button class="btn sm" type="button">Plan it</button></div>
+          <div class="row"><span class="grow small">Post the carousel on Wednesday</span><button class="btn sm" type="button">Add to calendar</button></div>
+          <div class="row"><span class="grow small">Make a 40-second cut of the pricing video</span><button class="btn sm" type="button">Start</button></div></div>
+      </div>
+
+      <div class="sec"><div class="sec-h"><h2>Your posts</h2></div>
+        <div class="card scroll-x" style="padding:4px 8px"><table class="table"><thead><tr><th>Post</th><th>Platform</th><th>Views</th><th>Watched</th><th>How it was edited</th></tr></thead><tbody>
+          <tr><td><div class="vt"><div class="img r916 thumb-sm" style="--h:30"><span>frame</span></div><b>Three emails we stopped sending</b></div></td><td><span class="plat">Instagram</span></td><td class="mono">18,420</td><td class="mono">72%</td><td><div class="chips"><span class="mini">Punchy</span><span class="mini">question hook</span><span class="mini">0:48</span></div></td></tr>
+          <tr><td><div class="vt"><div class="img r916 thumb-sm" style="--h:190"><span>frame</span></div><b>Cutting onboarding from 14 days to 3</b></div></td><td><span class="plat">LinkedIn</span></td><td class="mono">9,730</td><td class="mono">58%</td><td><div class="chips"><span class="mini">Calm</span><span class="mini">statement hook</span><span class="mini">3:02</span></div></td></tr>
+        </tbody></table></div></div>
+      <div class="note"><b>Note</b>The last column is our advantage: because we made the edit, we know how each post was cut and can compare. Every finding is labelled early, never proven.</div>
+    </section>
+
+    <section class="view" id="view-settings" hidden><h1>Settings &amp; Billing</h1><div class="empty" style="margin-top:14px">Plan and credits, what an action costs before it runs, connected accounts, export defaults, and an account deletion that is easy to find.</div></section>
+    <section class="view" id="view-help" hidden><h1>Help</h1><div class="empty" style="margin-top:14px">Guides, contact and what's new.</div></section>
+  </main>
+</div>
+
+<script>
+(function(){
+  var views=['home','videos','workspace','images','assets','calendar','branding','analytics','settings','help'];
+  var navKey={workspace:'videos'};
+  function show(name){
+    if(views.indexOf(name)<0) name='home';
+    views.forEach(function(v){ var el=document.getElementById('view-'+v); if(el) el.hidden=(v!==name); });
+    var active=navKey[name]||name;
+    document.querySelectorAll('.nav [data-go]').forEach(function(b){
+      if(b.getAttribute('data-go')===active) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
+    });
+    try{ history.replaceState(null,'','#'+name); }catch(e){}
+    window.scrollTo(0,0);
+  }
+  document.addEventListener('click',function(e){
+    var g=e.target.closest('[data-go]'); if(g){ show(g.getAttribute('data-go')); }
+  });
+  var start=(location.hash||'').replace('#','');
+  show(views.indexOf(start)>=0?start:'home');
+
+  var nt=document.getElementById('notesToggle');
+  nt.addEventListener('change',function(e){
+    document.body.classList.toggle('show-notes',e.target.checked);
+    try{ localStorage.setItem('wf-notes',e.target.checked?'1':'0'); }catch(_){}
+  });
+  try{ if(localStorage.getItem('wf-notes')==='1'){ nt.checked=true; document.body.classList.add('show-notes'); } }catch(e){}
+
+  function tabGroup(attr,prefix,ids){
+    document.querySelectorAll('['+attr+']').forEach(function(t){
+      t.addEventListener('click',function(){
+        var n=t.getAttribute(attr);
+        document.querySelectorAll('['+attr+']').forEach(function(x){ x.setAttribute('aria-selected',x===t?'true':'false'); });
+        ids.forEach(function(k){ var el=document.getElementById(prefix+k); if(el) el.hidden=(k!==n); });
+      });
+    });
+  }
+  tabGroup('data-tab','tab-',['edit','more']);
+  tabGroup('data-btab','bt-',['kit','voice']);
+  tabGroup('data-vtab','vt-',['all','styles']);
+
+  // images: filter + create panel
+  document.querySelectorAll('[data-itab]').forEach(function(t){
+    t.addEventListener('click',function(){
+      var n=t.getAttribute('data-itab');
+      document.querySelectorAll('[data-itab]').forEach(function(x){ x.setAttribute('aria-selected',x===t?'true':'false'); });
+      document.querySelectorAll('#imgGrid [data-kind]').forEach(function(c){ c.hidden=!(n==='all'||c.getAttribute('data-kind')===n); });
+    });
+  });
+  document.getElementById('createToggle').addEventListener('click',function(){
+    var p=document.getElementById('createPanel'); p.hidden=!p.hidden;
+  });
+
+  // calendar slots
+  var slots={
+    s1:['LinkedIn post: “14 days to 3”','LinkedIn','Mon 26 Oct · 9:00','cover image','We cut onboarding from 14 days to 3. Here’s what we changed first, and what we stopped doing…'],
+    s2:['Reel: “Three emails we stopped sending”','Instagram','Wed 28 Oct · 12:30','no thumbnail yet','Caption: Three emails we stopped sending, and what happened next.'],
+    s3:['X thread: onboarding in 7 posts','X','Wed 28 Oct · 17:00','thread image','1/ We cut onboarding from 14 days to 3. Here’s the short version:'],
+    s4:['Suggested: carousel from “14 days to 3”','Instagram','Thu 29 Oct · 11:00','slide 1 of 7','Not made yet. Accept the suggestion and we’ll prepare the slides and caption.'],
+    s5:['Short: “Pricing page teardown”','YouTube Shorts','Fri 30 Oct · 18:00','render failed','The render needs a retry before this can be posted.']
+  };
+  document.querySelectorAll('[data-slot]').forEach(function(b){
+    b.addEventListener('click',function(){
+      var s=slots[b.getAttribute('data-slot')]; if(!s) return;
+      document.querySelectorAll('[data-slot]').forEach(function(x){ x.setAttribute('aria-pressed',x===b?'true':'false'); });
+      document.getElementById('spTitle').textContent=s[0];
+      document.getElementById('spPlat').textContent=s[1];
+      document.getElementById('spWhen').textContent=s[2];
+      document.getElementById('spImg').textContent=s[3];
+      document.getElementById('spText').textContent=s[4];
+    });
+  });
+
+  // direction presets
+  var texts={
+    punchy:[['Cuts about every 2 seconds','Calmer pace'],['Emphasis zoom on 4 key words','Fewer zooms'],['Bold captions, one phrase at a time','Smaller captions'],['Music dips under your voice','Keep music steady']],
+    calm:[['Cuts about every 4 seconds','Faster pace'],['One gentle push-in at the key point','Add emphasis zooms'],['Clean captions at the bottom','Bolder captions'],['Soft music, low volume','Louder music']],
+    cinematic:[['Longer shots with slow push-ins','Cut sooner'],['Letterbox and a light film look','Remove the look'],['Minimal captions, key lines only','Show all captions'],['Room tone and a slow score','Simpler audio']]
+  };
+  var dn=document.getElementById('dnotes');
+  var pb=document.getElementById('promptBox'), un=document.getElementById('understood'), msg=document.getElementById('applyMsg');
+  function showUnderstood(){
+    var v=pb.value.trim();
+    if(!v){ un.hidden=true; return; }
+    un.hidden=false;
+    un.textContent='Reading this as: "'+v+'". You can edit the request before we preview it.';
+    msg.textContent='';
+  }
+  function renderNotes(p){
+    dn.innerHTML='';
+    texts[p].forEach(function(r){
+      var li=document.createElement('li');
+      var s=document.createElement('span'); s.textContent=r[0];
+      var b=document.createElement('button'); b.type='button'; b.className='btn sm'; b.textContent=r[1]; b.style.alignSelf='flex-start';
+      b.addEventListener('click',function(){ pb.value=r[1]; showUnderstood(); });
+      li.appendChild(s); li.appendChild(b); dn.appendChild(li);
+    });
+  }
+  renderNotes('punchy');
+  document.querySelectorAll('#seg button').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('#seg button').forEach(function(x){ x.setAttribute('aria-pressed',x===b?'true':'false'); });
+      renderNotes(b.getAttribute('data-p'));
+    });
+  });
+  document.querySelectorAll('#chips .chip').forEach(function(c){ c.addEventListener('click',function(){ pb.value=c.textContent; showUnderstood(); }); });
+  pb.addEventListener('input',showUnderstood);
+  document.getElementById('applyBtn').addEventListener('click',function(){
+    if(!pb.value.trim()){ msg.textContent='Type a change or tap a suggestion first.'; return; }
+    msg.textContent='Wireframe only: this would render a short preview of the changed part.';
+  });
+})();
+</script>

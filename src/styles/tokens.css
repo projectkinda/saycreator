@@ -1,0 +1,42 @@
+/* Design tokens. The brand colour lives in --accent only: change it here and nowhere else. */
+:root {
+  /* Colour */
+  --text: #0f0f0f;
+  --text-2: #606060;
+  --page: #ffffff;
+  --surface: #f2f2f2;
+  --surface-tint: #f9f9f9;
+  --line: #e5e5e5;
+  --line-strong: #cccccc; /* outline buttons and chips: 1.6:1 is fine for a decorative edge, text inside is --text */
+
+  --accent: #6d28d9; /* PLACEHOLDER brand colour */
+  --on-accent: #ffffff;
+
+  --error: #c62828;
+  --warn-text: #7a4e00;
+  --warn-bg: #fbefd0;
+  --ok-text: #17632f;
+  --ok-bg: #ddf2e4;
+  --warn-dot: #c9840a;
+
+  /* Type */
+  --font-head: 'Schibsted Grotesk', system-ui, sans-serif;
+  --font-body: 'Instrument Sans', system-ui, sans-serif;
+
+  /* Shape */
+  --radius-card: 16px;
+  --radius-thumb: 12px;
+  --radius-pill: 999px;
+
+  /* Layout */
+  --sidebar-w: 248px;
+  --page-pad-x: 48px;
+  --page-pad-y: 36px;
+}
+
+@media (max-width: 899px) {
+  :root {
+    --page-pad-x: 16px;
+    --page-pad-y: 24px;
+  }
+}

@@ -1,0 +1,140 @@
+.jump {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.jump-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.anchor {
+  scroll-margin-top: 16px;
+}
+.plan-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.plan-name {
+  font-family: var(--font-head);
+  font-size: 22px;
+}
+.big-credits {
+  max-width: 560px;
+}
+.choose {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.choose legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+.choose-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  gap: 10px;
+}
+.choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 14px 14px 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-thumb);
+  cursor: pointer;
+}
+.choice input {
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--text);
+}
+.choice.is-selected {
+  border: 2px solid var(--accent);
+  padding: 13px 13px 13px 39px;
+}
+.choice:focus-within {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.cost-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.cost-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cost-table td {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.cost-table tr:last-child td {
+  border-bottom: 0;
+}
+.cost-table .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding-left: 16px;
+}
+.acc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.acc-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.acc-list li:last-child {
+  border-bottom: 0;
+}
+.narrow {
+  max-width: 260px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--text);
+}
+.rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 6px 0;
+  width: 100%;
+}
+.delete-copy {
+  max-width: 70ch;
+}
