@@ -140,6 +140,56 @@ export interface RenderWarning {
 export interface RenderReport {
   ok: boolean;
   warnings: RenderWarning[];
-  /** Lint results arrive with the thumbnail checker in Step 2. */
-  lint?: unknown[];
+  /** Lint results, filled in by the thumbnail checker. */
+  lint?: LintResult[];
+}
+
+// ---- Thumbnails (Step 2) ----
+
+export interface BrandInput {
+  primary: string;
+  text: string;
+  background: string;
+  highlight: string;
+  headlineFont: FontFamily;
+  bodyFont: FontFamily;
+  handle?: string;
+  logoUrl?: string;
+}
+
+export type ThumbnailLayout = 'plate' | 'outline' | 'panel';
+export type ThumbnailAspect = '16:9' | '9:16';
+
+export interface ThumbnailRequest {
+  /** A plain image for now. Later this will be a frame mined from the video. */
+  source: { url: string; width: number; height: number };
+  /** Up to about 4 words. Longer titles are drawn, and fail the checks. */
+  title: string;
+  aspect: ThumbnailAspect;
+  /** Default: all three. */
+  layouts?: ThumbnailLayout[];
+  brand: BrandInput;
+}
+
+export interface ThumbnailOption {
+  id: string;
+  layout: ThumbnailLayout;
+  plan: Plan;
+  /** Ids the checker looks for. */
+  titleLayerId: string;
+  photoLayerId: string;
+  /** Plain notes about choices made (for example where the crop was centred). */
+  notes: string[];
+}
+
+export type LintId = 'words' | 'readable' | 'contrast' | 'overlay' | 'margins' | 'resolution' | 'crop' | 'brightness' | 'sharpness';
+
+export interface LintResult {
+  id: LintId;
+  label: string;
+  pass: boolean;
+  /** One plain sentence: what was found, and what is needed if it failed. */
+  reason: string;
+  measured?: number;
+  limit?: number;
 }
