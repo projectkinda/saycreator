@@ -10,3 +10,7 @@ export { composeThumbnails, THUMBNAIL_SIZES } from './thumbnail/compose';
 export { checkOption, checkThumbnails, PHONE_WIDTH, type CheckedOption } from './thumbnail/check';
 export { suggestFocal } from './thumbnail/focal';
 export { lintThumbnail, THRESHOLDS, OVERLAY_ZONES } from './lint/thumbnail-lint';
+export { BgRemover, loadManifest } from './cutout/bg-remover';
+export { composeCutout, maskToPng } from './cutout/compose';
+export { applyMaskOptions, decontaminateEdges, featherAlpha, fillSmallHoles, subjectStats } from './cutout/mask';
+export * from './cutout/types';
