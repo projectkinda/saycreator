@@ -48,7 +48,7 @@ Op =
 
 - **Brand** (`BrandInput`): primary, text, background and highlight colours, headline and body font, optional handle and logo URL.
 - **Thumbnail request** (built in Step 2): `{source: {url, width, height}, title, aspect: 16:9 | 9:16, layouts?, brand}`. The source is a plain image for now and will later be a frame mined from video. `composeThumbnails(request)` returns one option per layout (`plate`, `outline`, `panel`), each a plan whose layers are called `photo` and `title` (plus `plate`, `bar`, `scrim-N` as needed). Titles longer than about 4 words are still drawn; they fail the check.
-- **Carousel script** (Step 3): slides with headline, optional body, optional highlight word; 4:5.
+- **Carousel script** (Step 3, built): `{id, title, aspect: "4:5", brand: {handle}, slides: [7 x SlideScript]}`. Slide types: `cover`, `content`, `step`, `stat`, `checklist`, `beforeafter`, `quote`, `closing`. `composeCarousel(script, theme)` returns 7 plans (1080 x 1350) built only from `Theme` tokens (palettes, fonts, sizes, shape style, spacing). Plans use three more things than Step 1: `path` layers (SVG path data inside the layer box, commands M L C Q H V Z), gradient fills on shapes (`{type: "linear", angle, stops}`) and a `role` on layers (`decor`, `content`, `container`). `checkCarousel` returns, per slide, the PNG, a 320 px phone copy and seven `fit`, `size`, `contrast`, `orphan`, `margins`, `edges`, `overlap` results.
 - **Quote** (Step 3): text, attribution; 1:1.
 
 ## Lint (thumbnails, Step 2)

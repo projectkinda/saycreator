@@ -1,6 +1,6 @@
 # Image engine status
 
-Last updated: after Step 4 of 6 (Step 3 parked). Contract: `IMAGE_CONTRACT.md`. Licences: `LICENSES-MODELS.md`.
+Last updated: after Step 3 (text-first carousels). Cutouts are blocked. Contract: `IMAGE_CONTRACT.md`. Licences: `LICENSES-MODELS.md`.
 
 ## Read this first
 
@@ -14,8 +14,8 @@ Last updated: after Step 4 of 6 (Step 3 parked). Contract: `IMAGE_CONTRACT.md`. 
 |---|---|---|
 | 1 | Plan, patcher, Fabric, fonts | **Done, see below** |
 | 2 | Thumbnail composer and phone-size checker | **Done, see "Step 2" below** |
-| 3 | Carousel and quote cards (7 slides, lint) | **Parked until after the style system** |
-| 4 | Background removal (ISNet, BiRefNet_lite), `/lab` page | **Built, but no real model produced a cutout on this machine. See "Step 4" below** |
+| 3 | Text-first carousels (8 slide types, 3 themes, phone-size checker) | **Done, see "Step 3" below. No photos, no cutouts** |
+| 4 | Background removal (ISNet, BiRefNet_lite), `/lab` page | **Cutouts are BLOCKED, parked.** The lab page and pipeline exist; no real model produced a cutout. See "Cutouts: blocked, and why" |
 | 5 | Hook into the app behind the mock engine's names | Not started |
 | 6 | Frame mining from video | **Deferred, not tested.** Waits until you say the video engine can supply clips |
 
@@ -87,7 +87,43 @@ Time to compose, draw, check and export all options for one picture: about 0.4 t
 
 **What I changed after looking at the pictures** (the first run had passes that hid real problems): the 9:16 outline and panel were 40 px from the left edge and the margin check caught it (layout bug, fixed); the outline's dark band had a hard edge across faces (now a soft fade); the crop guess cut the rider's arm (stronger pull to the centre); a tall photo cropped wide lost the head and nothing flagged it (new `crop` check).
 
-## Step 4: background removal and the lab
+## Step 3: text-first carousels
+
+Text only: every slide is drawn in code from a script and a theme. No photos, no cutouts, no external images, no network.
+
+### What exists
+- `src/image-engine/carousel/`: `composeCarousel(script, theme)` returns 7 slide plans (4:5, 1080 x 1350); `checkCarousel` draws and checks them; `lintSlide` is the checker.
+- **Script JSON** (`CarouselScript`, 7 slides, brand handle) with 8 slide types: cover, content, numbered step, stat callout, checklist, before/after split (used as myth/fact), quote, closing (handle and call to action).
+- **Four scripts** in `tests/image-engine/carousels/`: how-to list (LinkedIn profile), myth vs fact (remote work), story in steps (first 100 newsletter readers), and one **deliberately awkward** script (27-word cover headline, body copy that would end on one word, long checklist items, a long stat value, a long button label). Copy is written for layout. The stat figures are placeholders and say so on the slide.
+- **Three themes** (`themes.ts`), tokens only: Paper (light, editorial, underlined words), Midnight (dark gradients, round shapes, filled highlight boxes) and Pop (flat yellow and black, hard edges, offset shadows, brush strokes). Colours, fonts, sizes, corner radius, outline weight, badge, marker and sticker style, decoration and spacing all come from the theme. A test checks that no slide uses a colour or font its theme does not own, and that the three themes give the same words and clearly different pictures.
+- **Toolbox** (`toolbox.ts`), all drawn in code: gradient and solid backgrounds, numbered badges, three marker styles (highlight box, wavy underline, brush stroke), arrows, swipe cue, progress dots, quote marks, 8 icons (check, cross, bulb, clock, star, bookmark, chat, arrow-down), three sticker shapes (pill, tag, starburst), dividers, big decorative shapes, buttons.
+- **The plan format grew** (Step 1's three layer kinds were not enough): a `path` layer (SVG path data inside the layer's box), gradient fills on shapes, and a `role` on every layer (decor, content or container) so the checker knows what may overlap. Old plans still work. Tested by pixel: a path lands where the plan says, offset paths land at the right place, gradients run the right way, and bad paths and gradients are refused in plain words.
+- Every slide is an ordinary plan, editable by patches. Tested: a text patch, undo (identical pixels) and redo.
+
+### The checker (seven checks, working guesses in one block, `CAROUSEL_LIMITS`)
+Text fits its box. Text at least 32 px on the 1080 wide slide (about 9.5 px on a 320 px phone copy). Contrast 4.5:1 over 95% of the pixels behind each word, **measured on rendered pixels with the words removed**. No one-word last line. Content sits on the theme margin. Nothing within 48 px of an edge. No overlapping elements (a container may hold content fully; content may not stick out of it). Geometry comes from the plan with the real loaded fonts; only contrast is measured on pixels.
+Deliberately broken variants (`out/image-engine/step3/bad-variants/`): one slide broken once per check, each failing for the right reason, made with patches.
+
+### Results
+12 combinations (4 scripts x 3 themes), 7 slides each. **The three normal scripts pass every check in every theme.** The awkward script fails on its cover in Paper and Midnight (the long headline pushes the sub line into the dots) and passes in Pop. That is what the checker is for, but a pass here only means "none of these seven measures failed". It does not mean the slide is good.
+Where the layout code helps on its own: it shrinks type to fit (never below 84 px on a cover, 64 px on other headlines), narrows boxes or sets line breaks by hand to avoid a one-word last line, and grows a button around a long label. Those choices are listed per slide in the `notes` of `slide-N.lint.json`.
+
+### Looked at by me (what is still weak)
+- **Generic.** Content, step and checklist slides are a heading and a paragraph on a flat colour, placed in the upper middle with a lot of empty space below. They are tidy and a little dull. No slide uses a photo, a diagram or a real illustration. Three themes share the same layouts, so the difference is colour, type and shape language, not composition.
+- Pop's starburst sticker is busy at small sizes ("MYTH" in a black burst is hard to read at phone size, though it passes the size check at 34 px).
+- Underline marker (Paper) and brush marker (Pop) are positioned by estimating where letters sit inside their line. It looks right in these fonts and sizes; a different font could put it a few pixels off. Not tested with other fonts.
+- Shrunk type is legal but ugly: the awkward cover at 84 px is a wall of text, and the checker only calls it a problem because of what it bumps into.
+- The `before/after` "before" half is deliberately muted; at phone size it reads as disabled rather than as "the wrong way".
+- Decoration (rings, orbs, blocks) is limited to the top 360 px of covers and closings so it cannot sit under text. That makes it predictable.
+
+### Not tested
+Other fonts or languages than the two bundled Latin ones (the arrow glyph is not in the fonts, so arrows are drawn as paths); real phones (the phone copy is a 320 px render, not a screenshot from a phone); Instagram or LinkedIn cropping or compression; Safari and Firefox; dark-mode feed rendering; whether any of these slides performs better than another. There is no claim here about engagement.
+
+## Cutouts: blocked, and why
+
+Cutouts are parked. Plainly: **no real background-removal model has produced a cutout on this machine.** ISNet general-use is blocked on licence grounds (the authors state no licence for the weights and the training data is non-commercial research only), and was never downloaded. BiRefNet_lite (MIT) downloads and loads on WebGPU but fails on its first picture inside onnxruntime-web (a shader compile error in 1.22; newer versions abort in WASM earlier), and on WASM it runs out of memory. Details and what was tried are in "Step 4" below and in `LICENSES-MODELS.md`. Nothing in the carousels depends on cutouts.
+
+## Step 4: background removal and the lab (parked)
 
 **Plain result: the machinery works and is tested on WebGPU and WASM, but no real background-removal model produced a cutout here.** ISNet is blocked for licence reasons (never downloaded). BiRefNet_lite downloads and loads on WebGPU but fails on its first picture; on WASM it runs out of memory. Every cutout image in `out/image-engine/step4/` is from the **toy self-test model**, which turns brightness into a mask and is labelled as such. **None of those pictures says anything about real cutout quality.**
 
@@ -118,7 +154,7 @@ WebGPU inference 16 ms, WASM 8 ms on the toy: meaningless for real models. Real-
 - The lab's own upload button and "pick best" with real results: pick-best radios exist but have only been shown in their empty state.
 
 ## Plan after this step
-Style-system step first (richer toolbox, style spec JSON, extraction from reference thumbnails), then carousels (the parked Step 3), then wiring into the app. Frame mining from video (Step 6) stays deferred and untested.
+Carousels are done (Step 3 above). Cutouts stay blocked until you decide on a model. Not started: the style system (richer toolbox, style spec JSON, extraction from reference thumbnails) and wiring into the app. Frame mining from video (Step 6) stays deferred and untested.
 
 ## Known problems and not tested (Step 2)
 
@@ -171,4 +207,4 @@ Timings in this run (one machine, not a benchmark): carousel slide 160 ms, quote
 
 ## Next (waiting for your decision)
 
-See the end of the Step 4 report: approve ISNet, choose another permissively licensed model, or keep working on BiRefNet_lite.
+Your call on the next step. Cutouts need a decision (approve ISNet, another permissive model, or keep working on BiRefNet_lite), or we move on without them.
