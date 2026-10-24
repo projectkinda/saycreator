@@ -1,5 +1,12 @@
 // Runs inside real Chrome. Tests call these through window.__ie.
 import {
+  BgRemover,
+  BgRemoverError,
+  composeCutout,
+  maskToPng,
+  subjectStats,
+  type BgRemoverOptions,
+  type MaskOptions,
   FabricAdapter,
   FONT_WEIGHTS,
   History,
@@ -139,6 +146,154 @@ async function fontStatus() {
   return { loaded, expected, ours, serif: c.measureText('Hamburgefonstiv').width };
 }
 
+// ---- background removal ----
+let remover: BgRemover | null = null;
+
+function describe(e: unknown) {
+  return e instanceof BgRemoverError ? { code: e.code, message: e.message } : { code: 'unknown', message: String(e) };
+}
+
+/** Loads a model. Never throws: the answer says what happened. */
+async function cutoutLoad(options: BgRemoverOptions) {
+  remover?.dispose();
+  remover = new BgRemover(options);
+  const progress: string[] = [];
+  let lastPhase = '';
+  try {
+    const info = await remover.load((p) => {
+      if (p.phase !== lastPhase) progress.push(p.phase);
+      lastPhase = p.phase;
+    });
+    return { ok: true as const, info, phases: progress };
+  } catch (e) {
+    remover = null;
+    return { ok: false as const, error: describe(e), phases: progress };
+  }
+}
+
+/** Cuts one picture out and returns PNGs plus measurements. */
+async function cutoutRemove(url: string, mask?: MaskOptions) {
+  if (!remover) return { ok: false as const, error: { code: 'disposed', message: 'No model loaded.' } };
+  try {
+    const blob = await (await fetch(url)).blob();
+    const r = await remover.remove(blob);
+    const composed = mask ? await composeCutout(blob, r.mask, mask) : null;
+    const finalAlpha = composed?.alpha ?? r.mask;
+    let partial = 0;
+    for (let i = 0; i < finalAlpha.data.length; i++) if (finalAlpha.data[i] > 8 && finalAlpha.data[i] < 247) partial++;
+    return {
+      ok: true as const,
+      partialAlphaShare: partial / finalAlpha.data.length,
+      cutout: await toBase64(composed?.png ?? r.cutout),
+      maskPng: await toBase64(await maskToPng(composed?.alpha ?? r.mask)),
+      width: r.width,
+      height: r.height,
+      scale: r.scale,
+      timings: r.timings,
+      backend: r.backend,
+      warm: r.warm,
+      stats: subjectStats(composed?.alpha ?? r.mask),
+    };
+  } catch (e) {
+    return { ok: false as const, error: describe(e) };
+  }
+}
+
+/** A known picture for geometry checks: left half white, right half black, as a PNG data URL. */
+async function halfImage() {
+  const c = document.createElement('canvas');
+  c.width = 800;
+  c.height = 400;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, 800, 400);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, 400, 400);
+  return c.toDataURL('image/png');
+}
+
+/** RGBA at points of a PNG given as base64. */
+async function pngPixels(b64: string, points: [number, number][]) {
+  const bm = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob());
+  const c = new OffscreenCanvas(bm.width, bm.height);
+  const ctx = c.getContext('2d')!;
+  ctx.drawImage(bm, 0, 0);
+  return points.map(([x, y]) => Array.from(ctx.getImageData(x, y, 1, 1).data));
+}
+
+interface CutRow {
+  label: string;
+  lines: string[];
+  cutout?: string;
+  mask?: string;
+}
+
+/** Contact sheet for cutouts: source, then per row the cutout on checkerboard, dark, light and colour, plus the mask. */
+async function makeCutoutSheet(args: { sourceUrl: string; sourceLines: string[]; rows: CutRow[] }) {
+  const TILE = 220;
+  const load = async (src: string) => {
+    const i = new Image();
+    i.src = src;
+    await i.decode();
+    return i;
+  };
+  const source = await load(args.sourceUrl);
+  const rows = await Promise.all(args.rows.map(async (r) => ({ ...r, cut: r.cutout ? await load('data:image/png;base64,' + r.cutout) : null, m: r.mask ? await load('data:image/png;base64,' + r.mask) : null })));
+  const aspect = source.naturalHeight / source.naturalWidth;
+  const th = Math.round(TILE * aspect);
+  const GAP = 12;
+  const HEAD = 34;
+  const canvas = document.createElement('canvas');
+  canvas.width = GAP + 6 * (TILE + GAP);
+  const rowH = th + 70;
+  canvas.height = GAP + HEAD + th + 56 + rows.length * (rowH + GAP);
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const text = (t: string, x: number, y: number, bold = false, color = '#222') => {
+    ctx.font = (bold ? 'bold ' : '') + '12px sans-serif';
+    ctx.fillStyle = color;
+    ctx.fillText(t, x, y);
+  };
+  const checker = (x: number, y: number, w: number, h: number) => {
+    for (let yy = 0; yy < h; yy += 10) for (let xx = 0; xx < w; xx += 10) {
+      ctx.fillStyle = ((xx + yy) / 10) % 2 ? '#cfcfcf' : '#fafafa';
+      ctx.fillRect(x + xx, y + yy, Math.min(10, w - xx), Math.min(10, h - yy));
+    }
+  };
+  let y = GAP;
+  text('SOURCE', GAP, y + 12, true);
+  ctx.drawImage(source, GAP, y + 18, TILE, th);
+  args.sourceLines.forEach((l, i) => text(l, GAP + TILE + GAP, y + 30 + i * 16));
+  y += HEAD + th + 24;
+  for (const r of rows) {
+    text(r.label, GAP, y + 12, true);
+    text(r.lines.join('   |   '), GAP + 190, y + 12, false, '#555');
+    const ty = y + 20;
+    const bgs: [string, string][] = [['checker', ''], ['dark', '#14181a'], ['light', '#f3f5f6'], ['colour', '#0F7B78']];
+    bgs.forEach(([, colour], i) => {
+      const x = GAP + i * (TILE + GAP);
+      if (!colour) checker(x, ty, TILE, th);
+      else {
+        ctx.fillStyle = colour;
+        ctx.fillRect(x, ty, TILE, th);
+      }
+      if (r.cut) ctx.drawImage(r.cut, x, ty, TILE, th);
+      else text('no cutout', x + 8, ty + 20, false, '#C62828');
+    });
+    const mx = GAP + 4 * (TILE + GAP);
+    if (r.m) ctx.drawImage(r.m, mx, ty, TILE, th);
+    y += rowH + GAP - 10;
+  }
+  const blob: Blob = await new Promise((res) => canvas.toBlob((b) => res(b!), 'image/png'));
+  return toBase64(blob);
+}
+
+function cutoutDispose() {
+  remover?.dispose();
+  remover = null;
+}
+
 async function imageSize(url: string) {
   const img = new Image();
   img.src = url;
@@ -243,6 +398,12 @@ async function makeSheet(args: { sourceUrl: string; sourceLines: string[]; tiles
 }
 
 (window as unknown as { __ie: unknown }).__ie = {
+  cutoutLoad,
+  cutoutRemove,
+  cutoutDispose,
+  halfImage,
+  pngPixels,
+  makeCutoutSheet,
   checkThumb,
   checkCustom,
   makeSheet,
