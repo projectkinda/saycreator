@@ -5,3 +5,7 @@ dist
 out/
 test-results/
 playwright-report/
+
+# Your own test photos stay on your machine unless you decide otherwise
+test-images/*
+!test-images/README.txt

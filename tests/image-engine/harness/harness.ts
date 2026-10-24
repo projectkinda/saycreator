@@ -3,6 +3,8 @@ import {
   FabricAdapter,
   FONT_WEIGHTS,
   History,
+  checkOption,
+  checkThumbnails,
   coverCrop,
   fitText,
   layoutText,
@@ -12,6 +14,8 @@ import {
   type Plan,
   type RenderReport,
   type TextLayer,
+  type ThumbnailOption,
+  type ThumbnailRequest,
 } from '../../../src/image-engine';
 
 async function toBase64(blob: Blob): Promise<string> {
@@ -135,7 +139,114 @@ async function fontStatus() {
   return { loaded, expected, ours, serif: c.measureText('Hamburgefonstiv').width };
 }
 
+async function imageSize(url: string) {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  return { width: img.naturalWidth, height: img.naturalHeight };
+}
+
+/** Every option for one picture: PNGs, phone copies, lint. */
+async function checkThumb(req: ThumbnailRequest) {
+  const t0 = performance.now();
+  const res = await checkThumbnails(req);
+  const ms = Math.round(performance.now() - t0);
+  const options = await Promise.all(
+    res.map(async (r) => ({
+      id: r.option.id,
+      layout: r.option.layout,
+      plan: r.option.plan,
+      notes: r.option.notes,
+      lint: r.lint,
+      renderWarnings: r.render.warnings,
+      png: await toBase64(r.png),
+      phone: await toBase64(r.phonePng),
+    })),
+  );
+  return { ms, options };
+}
+
+/** Checks one hand-built or hand-edited option. */
+async function checkCustom(req: ThumbnailRequest, option: ThumbnailOption) {
+  const r = await checkOption(req, option);
+  return { lint: r.lint, phone: await toBase64(r.phonePng) };
+}
+
+interface SheetTile {
+  title: string;
+  pass: boolean;
+  lines: string[];
+  b64: string;
+}
+
+/** A contact sheet for people to look at: the source picture, then every option at phone size with its failed checks. Test tooling, not part of the engine. */
+async function makeSheet(args: { sourceUrl: string; sourceLines: string[]; tiles: SheetTile[] }) {
+  const TILE = 320;
+  const GAP = 18;
+  const imgOf = async (src: string) => {
+    const i = new Image();
+    i.src = src;
+    await i.decode();
+    return i;
+  };
+  const source = await imgOf(args.sourceUrl);
+  const tiles = await Promise.all(args.tiles.map(async (t) => ({ ...t, img: await imgOf('data:image/png;base64,' + t.b64) })));
+  const font = '12px sans-serif';
+  const wrap = (ctx: CanvasRenderingContext2D, text: string) => {
+    const out: string[] = [];
+    let line = '';
+    for (const w of text.split(' ')) {
+      const t = line ? line + ' ' + w : w;
+      if (ctx.measureText(t).width > TILE) {
+        out.push(line);
+        line = w;
+      } else line = t;
+    }
+    if (line) out.push(line);
+    return out;
+  };
+  const measure = document.createElement('canvas').getContext('2d')!;
+  measure.font = font;
+  const columns = [{ kind: 'src' as const }, ...tiles.map((t) => ({ kind: 'tile' as const, t }))];
+  const heights = columns.map((c) => {
+    if (c.kind === 'src') return Math.round((TILE * source.naturalHeight) / source.naturalWidth) + 26 + args.sourceLines.flatMap((l) => wrap(measure, l)).length * 16;
+    return Math.round((TILE * c.t.img.height) / c.t.img.width) + 26 + c.t.lines.flatMap((l) => wrap(measure, l)).length * 16;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = GAP + columns.length * (TILE + GAP);
+  canvas.height = GAP + Math.max(...heights) + GAP;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  columns.forEach((c, i) => {
+    const x = GAP + i * (TILE + GAP);
+    const img = c.kind === 'src' ? source : c.t.img;
+    const iw = c.kind === 'src' ? source.naturalWidth : img.width;
+    const ih = c.kind === 'src' ? source.naturalHeight : img.height;
+    const h = Math.round((TILE * ih) / iw);
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = c.kind === 'src' ? '#222222' : c.t.pass ? '#17632F' : '#C62828';
+    ctx.fillText(c.kind === 'src' ? 'SOURCE' : (c.t.pass ? 'PASS  ' : 'FAIL  ') + c.t.title, x, GAP + 4);
+    ctx.drawImage(img, x, GAP + 12, TILE, h);
+    ctx.strokeStyle = '#cccccc';
+    ctx.strokeRect(x - 0.5, GAP + 11.5, TILE + 1, h + 1);
+    ctx.font = font;
+    ctx.fillStyle = '#333333';
+    let y = GAP + 12 + h + 18;
+    for (const l of c.kind === 'src' ? args.sourceLines : c.t.lines) for (const part of wrap(ctx, l)) {
+      ctx.fillText(part, x, y);
+      y += 16;
+    }
+  });
+  const blob: Blob = await new Promise((r) => canvas.toBlob((b) => r(b!), 'image/png'));
+  return toBase64(blob);
+}
+
 (window as unknown as { __ie: unknown }).__ie = {
+  checkThumb,
+  checkCustom,
+  makeSheet,
+  imageSize,
   renderPlan,
   pixels,
   patchCycle,

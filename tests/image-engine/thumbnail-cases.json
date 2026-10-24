@@ -1,0 +1,10 @@
+[
+  { "file": "360.jpg", "title": "Break Every Chain", "aspects": ["16:9"] },
+  { "file": "GCKR3575.JPG", "title": "Ride Before Sunrise", "aspects": ["16:9", "9:16"] },
+  { "file": "GHWd3WIW0AICE11.jpg", "title": "The Quiet Genius", "aspects": ["16:9"] },
+  { "file": "filters_quality(95)format(webp) (1).jpg", "title": "Two Sides Of Him", "aspects": ["16:9"] },
+  { "file": "filters_quality(95)format(webp).webp", "title": "That Smile Means Trouble", "aspects": ["16:9"] },
+  { "file": "wallpaperflare.com_wallpaper.jpg", "title": "He Waits In The Dark", "aspects": ["16:9"], "note": "Five words on purpose: the word-count check should fail." },
+  { "file": "wp13065863-mahesh-babu-guntur-kaaram-wallpapers.jpg", "title": "Walk Through The Dust", "aspects": ["16:9", "9:16"] },
+  { "file": "wp13337965-guntur-kaaram-wallpapers.jpg", "title": "Calm Before The Storm", "aspects": ["16:9"] }
+]
