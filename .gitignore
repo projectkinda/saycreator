@@ -2,3 +2,6 @@ node_modules
 dist
 *.log
 .claude/
+out/
+test-results/
+playwright-report/
