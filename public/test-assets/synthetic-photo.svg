@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f3b57"/><stop offset="0.6" stop-color="#e8a0a0"/><stop offset="1" stop-color="#f6d9a8"/></linearGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <circle cx="1180" cy="330" r="110" fill="#fff4cf"/>
+  <polygon points="0,720 260,420 520,700 780,380 1100,720 1340,500 1600,700 1600,1000 0,1000" fill="#2e4a4a"/>
+  <polygon points="0,860 300,640 640,880 980,600 1300,860 1600,700 1600,1000 0,1000" fill="#1c2f33"/>
+  <rect x="300" y="250" width="70" height="520" fill="#c62828"/>
+  <rect x="1230" y="250" width="70" height="520" fill="#1565c0"/>
+  <text x="800" y="140" font-family="sans-serif" font-size="56" fill="#ffffff" text-anchor="middle">SYNTHETIC TEST IMAGE, NOT A PHOTO</text>
+</svg>

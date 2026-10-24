@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "revision": 1,
+  "canvas": { "width": 1080, "height": 1080, "background": "#0F7B78" },
+  "layers": [
+    { "id": "quote", "name": "Quote", "kind": "text", "x": 90, "y": 150, "width": 900, "height": 620, "rotation": 0, "opacity": 1,
+      "text": "“Onboarding is the product, not a step before it.”",
+      "style": { "font": "Schibsted Grotesk", "weight": 700, "size": 116, "color": "#FFFFFF", "align": "left", "valign": "middle", "lineHeight": 1.1 },
+      "autoFit": { "minSize": 52 },
+      "highlight": { "words": ["product"], "color": "#E8A33D", "textColor": "#1A2226", "paddingX": 12, "paddingY": 4, "radius": 14 } },
+    { "id": "rule", "name": "Rule", "kind": "shape", "x": 90, "y": 820, "width": 120, "height": 8, "rotation": 0, "opacity": 1,
+      "shape": "rect", "fill": "#FFFFFF", "radius": 4 },
+    { "id": "attribution", "name": "Attribution", "kind": "text", "x": 90, "y": 850, "width": 900, "height": 60, "rotation": 0, "opacity": 0.9,
+      "text": "Maya Rao, founder",
+      "style": { "font": "Instrument Sans", "weight": 600, "size": 40, "color": "#FFFFFF", "align": "left", "lineHeight": 1.2 } },
+    { "id": "handle", "name": "Handle", "kind": "text", "x": 90, "y": 970, "width": 500, "height": 44, "rotation": 0, "opacity": 0.8,
+      "text": "@mayarao",
+      "style": { "font": "Instrument Sans", "weight": 500, "size": 32, "color": "#FFFFFF", "align": "left", "lineHeight": 1.2 } }
+  ]
+}
