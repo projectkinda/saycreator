@@ -300,3 +300,225 @@
 .lab-slide .lab-verdict input {
   flex-basis: 100%;
 }
+
+/* Results screen, built on the app's page, card and button styles */
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1400px;
+  font-size: 14px;
+}
+.res-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+}
+.res-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.res-upload {
+  position: relative;
+  cursor: pointer;
+}
+.res-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+}
+.res-upload:focus-within {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.res-uploads {
+  flex-basis: 100%;
+}
+.res-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.res-jump a {
+  text-decoration: none;
+}
+.res-section {
+  padding: 24px;
+  scroll-margin-top: 16px;
+}
+.res-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.res-last {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.res-intro {
+  margin-bottom: 16px;
+  max-width: 80ch;
+}
+.res-banner {
+  background: var(--surface-tint);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-thumb);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+.res-source {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+.res-aspect {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin: 10px 0 16px;
+}
+.res-orig {
+  width: 180px;
+  flex: none;
+}
+.res-opts {
+  flex: 1 1 520px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+.res-pic {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  max-width: 100%;
+}
+.res-pic img {
+  display: block;
+  max-width: 100%;
+}
+.res-pic:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.res-opt .res-pic img {
+  width: 320px;
+  max-width: 100%;
+  max-height: 560px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: var(--surface);
+}
+.res-orig-pic img {
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.res-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+.res-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-thumb);
+  padding: 12px;
+}
+.res-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.res-fig {
+  margin: 0;
+  max-width: 100%;
+}
+.res-fig img {
+  max-width: 100%;
+  max-height: 340px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  object-fit: contain;
+}
+.lab-tile .res-pic,
+.lab-tile .res-pic img {
+  max-width: 100%;
+  max-height: 100%;
+  border: 0;
+}
+.lab-tile .res-pic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.res-viewer {
+  border: 0;
+  padding: 16px;
+  background: var(--page);
+  border-radius: var(--radius-card);
+  max-width: 96vw;
+  max-height: 96vh;
+}
+.res-viewer::backdrop {
+  background: rgba(0, 0, 0, 0.7);
+}
+.res-viewer img {
+  display: block;
+  max-width: 90vw;
+  max-height: 84vh;
+  margin-top: 10px;
+}
+.res-try .lab-row input[type='text'] {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+
+/* Fixes after looking at the screen */
+.lab-car-row h4 {
+  text-transform: none;
+}
+.lab-slide {
+  min-width: 0;
+}
+.lab-slide .lab-verdict {
+  gap: 4px;
+}
+.lab-slide .lab-verdict button {
+  padding: 0 10px;
+  min-height: 30px;
+}
+.lab-slide .lab-verdict input {
+  min-width: 0;
+  width: 100%;
+  flex: 1 1 100%;
+}
+.lab-tile {
+  width: 170px;
+  height: 170px;
+}
+.res-fig {
+  width: 230px;
+}
+.res-fig img {
+  width: 100%;
+}
+.res-wide {
+  grid-column: 1 / -1;
+}

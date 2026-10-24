@@ -108,6 +108,12 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
             {n.label}
           </NavLink>
         ))}
+        {import.meta.env.DEV && (
+          <NavLink to="/lab" className="nav-link" onClick={onNavigate}>
+            <Icon name="check" />
+            Results
+          </NavLink>
+        )}
       </nav>
 
       <div className="sidebar-spacer" />

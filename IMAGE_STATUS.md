@@ -87,6 +87,12 @@ Time to compose, draw, check and export all options for one picture: about 0.4 t
 
 **What I changed after looking at the pictures** (the first run had passes that hid real problems): the 9:16 outline and panel were 40 px from the left edge and the margin check caught it (layout bug, fixed); the outline's dark band had a hard edge across faces (now a soft fade); the crop guess cut the rider's arm (stronger pull to the centre); a tall photo cropped wide lost the head and nothing flagged it (new `crop` check).
 
+## The Results screen (where to look at everything)
+
+Run `npm run dev` and open **http://localhost:5173/lab**, or click **Results** in the left menu (it only exists on the dev server, never in a production build). Sections, newest first: Step 3 Carousels, Step 4 Cutouts, Step 2 Thumbnails and checks, Step 1 Plan and patch proof. Each shows a "last run" time and a Refresh button. Every item has good / meh / bad and a one-line reason, autosaved in the browser (key `ie-lab-v1`), and **Export verdicts JSON** at the top. "Add pictures" lets you try your own picture: thumbnails and the checker (Step 2) and cutouts (Step 4) run live in the browser; those pictures are not saved between visits.
+
+**RULE for every new step:** its tests finish by calling `writeStepResults()` from `tests/image-engine/results.ts`. That writes `out/image-engine/results/<step>.json`, and the Results screen shows it on its own, newest first, with pictures, the checker's PASS or FAIL and reasons, facts (model, backend, times), a TOY or REAL tag, a failure if there was one, and verdict boxes. No page edits are needed (a test proves it). The folders under `out/` are backup only.
+
 ## Step 3: text-first carousels
 
 Text only: every slide is drawn in code from a script and a theme. No photos, no cutouts, no external images, no network.

@@ -66,6 +66,42 @@ function labEndpoints(): Plugin {
           }
         json(res, out);
       });
+      // Newest file time under each step's output, so every section can say when it was last run.
+      const newest = (p: string): number => {
+        if (!fs.existsSync(p)) return 0;
+        const st = fs.statSync(p);
+        if (!st.isDirectory()) return st.mtimeMs;
+        return Math.max(0, ...fs.readdirSync(p).map((f) => newest(path.join(p, f))));
+      };
+      const outDir = path.join(root, 'out/image-engine');
+      server.middlewares.use('/__lab/lastrun', (_req, res) => {
+        const step1 = fs.existsSync(outDir) ? Math.max(0, ...fs.readdirSync(outDir).filter((f) => f.startsWith('step1-')).map((f) => newest(path.join(outDir, f)))) : 0;
+        const generic: Record<string, number> = {};
+        const rd = path.join(outDir, 'results');
+        if (fs.existsSync(rd)) for (const f of fs.readdirSync(rd)) generic[f] = newest(path.join(rd, f));
+        json(res, { step1, step2: newest(path.join(outDir, 'step2')), step3: newest(path.join(outDir, 'step3')), step4: newest(path.join(outDir, 'step4')), generic });
+      });
+      server.middlewares.use('/__lab/step1', (_req, res) => {
+        const files = fs.existsSync(outDir) ? fs.readdirSync(outDir).filter((f) => f.startsWith('step1-')) : [];
+        const f = path.join(outDir, 'step1-findings.json');
+        json(res, { files, findings: fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null });
+      });
+      server.middlewares.use('/__lab/step4', (_req, res) => {
+        const d = path.join(outDir, 'step4');
+        const rep = path.join(d, 'step4-report.json');
+        const cutouts: { backend: string; slug: string }[] = [];
+        for (const backend of ['webgpu', 'wasm'])
+          if (fs.existsSync(path.join(d, 'selftest-' + backend)))
+            for (const f of fs.readdirSync(path.join(d, 'selftest-' + backend)).filter((x) => x.endsWith('-cutout.png'))) cutouts.push({ backend, slug: f.replace('-cutout.png', '') });
+        json(res, { report: fs.existsSync(rep) ? JSON.parse(fs.readFileSync(rep, 'utf8')) : null, cutouts });
+      });
+      // Results written by later steps: out/image-engine/results/<step>.json, shown on the Results screen with no page changes.
+      server.middlewares.use('/__lab/steps', (_req, res) => {
+        const rd = path.join(outDir, 'results');
+        const out: unknown[] = [];
+        if (fs.existsSync(rd)) for (const f of fs.readdirSync(rd).filter((x) => x.endsWith('.json'))) out.push({ file: f, ...JSON.parse(fs.readFileSync(path.join(rd, f), 'utf8')) });
+        json(res, out);
+      });
     },
   };
 }

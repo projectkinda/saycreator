@@ -22,18 +22,18 @@ export default function App() {
   return (
     <AppProvider>
       <Routes>
-        {Lab && (
-          <Route
-            path="lab"
-            element={
-              <Suspense fallback={<p>Loading the lab…</p>}>
-                <Lab />
-              </Suspense>
-            }
-          />
-        )}
         <Route element={<Shell />}>
           <Route index element={<Home />} />
+          {Lab && (
+            <Route
+              path="lab"
+              element={
+                <Suspense fallback={<p>Loading the results…</p>}>
+                  <Lab />
+                </Suspense>
+              }
+            />
+          )}
           <Route path="videos" element={<Videos />} />
           <Route path="videos/new" element={<NewProject />} />
           <Route path="videos/:id" element={<Workspace />} />
