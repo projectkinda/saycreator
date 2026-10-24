@@ -20,9 +20,27 @@ export interface Mask {
   radius?: number;
 }
 
+/** A straight-edged gradient. angle is CSS-style: 0 = towards the top, 90 = towards the right, 180 = towards the bottom. */
+export interface LinearGradient {
+  type: 'linear';
+  angle: number;
+  /** 2 to 6 stops, `at` from 0 to 1, in order. */
+  stops: { at: number; color: string }[];
+}
+export type Fill = string | LinearGradient;
+
+/**
+ * What a layer is for, so the carousel checker knows what may overlap.
+ * decor: backgrounds, markers, dividers, big shapes. May sit under anything and bleed off the edge.
+ * content: text, icons, arrows, dots. Must not overlap other content, and must keep clear of the edges.
+ * container: a card, badge or sticker that content may sit fully inside.
+ */
+export type Role = 'decor' | 'content' | 'container';
+
 export interface LayerBase {
   id: string;
   name?: string;
+  role?: Role;
   /** Box, top-left origin, px at final canvas size. */
   x: number;
   y: number;
@@ -84,13 +102,24 @@ export interface TextLayer extends LayerBase {
 export interface ShapeLayer extends LayerBase {
   kind: 'shape';
   shape: 'rect' | 'ellipse';
-  fill: string;
+  fill: Fill;
   stroke?: { color: string; width: number };
   /** rect corners, px */
   radius?: number;
 }
 
-export type Layer = ImageLayer | TextLayer | ShapeLayer;
+/**
+ * A drawn path (arrows, icons, strokes, quote marks). `d` is SVG path data in pixels inside the layer's own box:
+ * (0,0) is the box's top-left corner and nothing is scaled. Use absolute commands M L C Q H V Z.
+ */
+export interface PathLayer extends LayerBase {
+  kind: 'path';
+  d: string;
+  fill?: string;
+  stroke?: { color: string; width: number; cap?: 'round' | 'butt'; join?: 'round' | 'miter' };
+}
+
+export type Layer = ImageLayer | TextLayer | ShapeLayer | PathLayer;
 
 export interface Canvas {
   width: number;

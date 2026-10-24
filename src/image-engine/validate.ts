@@ -7,8 +7,27 @@ const MAX_SIDE = 4096;
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const RGBA = /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(?:,\s*(?:0|1|0?\.\d+)\s*)?\)$/i;
 
+const PATH_OK = /^[MLCQHVZ0-9eE.,\s+-]+$/;
+const ROLES = ['decor', 'content', 'container'];
+
+export function validFill(f: unknown, who: string, errors: string[]) {
+  if (isColor(f)) return;
+  const g = f as { type?: unknown; angle?: unknown; stops?: { at: unknown; color: unknown }[] } | null;
+  if (!g || typeof g !== 'object' || g.type !== 'linear') return void errors.push(`${who}: the fill must be a colour or a linear gradient.`);
+  if (!num(g.angle)) errors.push(`${who}: the gradient angle must be a number of degrees.`);
+  if (!Array.isArray(g.stops) || g.stops.length < 2 || g.stops.length > 6) return void errors.push(`${who}: a gradient needs 2 to 6 colour stops.`);
+  let prev = -1;
+  for (const s of g.stops) {
+    if (!num(s.at) || s.at < 0 || s.at > 1 || s.at < prev) errors.push(`${who}: gradient stops must go from 0 to 1 in order.`);
+    else prev = s.at;
+    if (!isColor(s.color)) errors.push(`${who}: a gradient stop colour is not a colour.`);
+  }
+}
+
 export const isColor = (v: unknown): v is string => typeof v === 'string' && (HEX.test(v) || RGBA.test(v));
-const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+function num(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
 const label = (l: { id?: unknown; name?: unknown }) => `Layer "${String(l.name ?? l.id)}"`;
 
 function range(errors: string[], who: string, what: string, v: unknown, lo: number, hi: number, optional = false) {
@@ -25,6 +44,7 @@ function validateLayer(l: Layer, errors: string[]) {
   if (!num(l.height) || l.height <= 0) errors.push(`${who}: height must be more than 0.`);
   if (!num(l.rotation)) errors.push(`${who}: rotation must be a number of degrees.`);
   range(errors, who, 'opacity', l.opacity, 0, 1);
+  if (l.role !== undefined && !ROLES.includes(l.role)) errors.push(`${who}: role must be decor, content or container.`);
   if (l.mask) {
     if (!['rect', 'roundRect', 'ellipse'].includes(l.mask.shape)) errors.push(`${who}: mask shape must be rect, roundRect or ellipse.`);
     range(errors, who, 'mask radius', l.mask.radius, 0, 4096, true);
@@ -90,15 +110,24 @@ function validateLayer(l: Layer, errors: string[]) {
     }
     case 'shape':
       if (!['rect', 'ellipse'].includes(l.shape)) errors.push(`${who}: shape must be rect or ellipse.`);
-      if (!isColor(l.fill)) errors.push(`${who}: the fill colour "${String(l.fill)}" is not a colour.`);
+      validFill(l.fill, who, errors);
       if (l.stroke) {
         if (!isColor(l.stroke.color)) errors.push(`${who}: the outline colour is not a colour.`);
         range(errors, who, 'outline width', l.stroke.width, 0, 100);
       }
       range(errors, who, 'corner radius', l.radius, 0, 4096, true);
       break;
+    case 'path':
+      if (typeof l.d !== 'string' || l.d.trim() === '' || !PATH_OK.test(l.d)) errors.push(`${who}: the path needs SVG path data using only the commands M L C Q H V Z with absolute numbers.`);
+      if (l.fill !== undefined && !isColor(l.fill)) errors.push(`${who}: the path fill is not a colour.`);
+      if (l.stroke) {
+        if (!isColor(l.stroke.color)) errors.push(`${who}: the stroke colour is not a colour.`);
+        range(errors, who, 'stroke width', l.stroke.width, 0, 100);
+      }
+      if (l.fill === undefined && !l.stroke) errors.push(`${who}: a path needs a fill or a stroke, or nothing would be drawn.`);
+      break;
     default:
-      errors.push(`${who}: "${String((l as { kind?: unknown }).kind)}" is not a layer type. Use image, text or shape.`);
+      errors.push(`${who}: "${String((l as { kind?: unknown }).kind)}" is not a layer type. Use image, text, shape or path.`);
   }
   if ('filters' in l && l.kind !== 'image' && (l as { filters?: unknown }).filters)
     errors.push(`${who}: filters only work on image layers.`);

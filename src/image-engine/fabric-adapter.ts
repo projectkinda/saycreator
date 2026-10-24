@@ -5,8 +5,10 @@ import {
   FabricImage,
   FabricText,
   FixedLayout,
+  Gradient,
   Group,
   LayoutManager,
+  Path,
   Point,
   Rect,
   Shadow,
@@ -19,7 +21,7 @@ import { clampRadius, containFit, coverCrop } from './draw/geometry';
 import { layoutText } from './draw/text';
 import { FONT_WEIGHTS, loadFonts, nearestWeight } from './fonts';
 import { applyPatch } from './patcher';
-import type { ImageLayer, Layer, Patch, PatchResult, Plan, RenderReport, RenderWarning, ShapeLayer, TextLayer } from './types';
+import type { Fill, ImageLayer, Layer, PathLayer, Patch, PatchResult, Plan, RenderReport, RenderWarning, ShapeLayer, TextLayer } from './types';
 import { validatePlan } from './validate';
 
 interface Meta {
@@ -29,6 +31,23 @@ interface Meta {
 }
 
 const CLEAR = 'rgba(0,0,0,0)';
+
+/** A plan fill as something Fabric can paint. Gradient coordinates are pixels inside the object, CSS angle convention. */
+function paint(fill: Fill, w: number, h: number) {
+  if (typeof fill === 'string') return fill;
+  const a = (fill.angle * Math.PI) / 180;
+  const dx = Math.sin(a);
+  const dy = -Math.cos(a);
+  const half = (Math.abs(w * dx) + Math.abs(h * dy)) / 2;
+  const cx = w / 2;
+  const cy = h / 2;
+  return new Gradient({
+    type: 'linear',
+    gradientUnits: 'pixels',
+    coords: { x1: cx - dx * half, y1: cy - dy * half, x2: cx + dx * half, y2: cy + dy * half },
+    colorStops: fill.stops.map((s) => ({ offset: s.at, color: s.color })),
+  });
+}
 
 export class FabricAdapter implements CanvasAdapter {
   private canvas: Canvas | StaticCanvas | null = null;
@@ -170,7 +189,7 @@ export class FabricAdapter implements CanvasAdapter {
   }
 
   private async build(layer: Layer, warnings: RenderWarning[]): Promise<FabricObject | null> {
-    const pad = layer.kind === 'text' ? Math.ceil(layer.style.stroke?.width ?? 0) + 2 : layer.kind === 'shape' ? Math.ceil(layer.stroke?.width ?? 0) : 0;
+    const pad = layer.kind === 'text' ? Math.ceil(layer.style.stroke?.width ?? 0) + 2 : layer.kind === 'shape' || layer.kind === 'path' ? Math.ceil(layer.stroke?.width ?? 0) : 0;
     const w = layer.width;
     const h = layer.height;
     // An invisible box the size of the layer (plus pad) fixes the group's size and centre.
@@ -181,6 +200,7 @@ export class FabricAdapter implements CanvasAdapter {
       const part = await this.buildImage(layer, pad, warnings);
       if (part) parts.push(part);
     } else if (layer.kind === 'shape') parts.push(this.buildShape(layer, pad));
+    else if (layer.kind === 'path') parts.push(this.buildPath(layer, pad));
     else parts.push(...this.buildText(layer, pad, warnings));
 
     // Fixed size: the group is exactly the box (plus pad), so children can never move its centre.
@@ -247,10 +267,30 @@ export class FabricAdapter implements CanvasAdapter {
 
   private buildShape(layer: ShapeLayer, pad: number): FabricObject {
     const sw = layer.stroke?.width ?? 0;
-    const common = { left: pad + sw / 2, top: pad + sw / 2, fill: layer.fill, stroke: layer.stroke?.color, strokeWidth: sw };
+    const common = { left: pad + sw / 2, top: pad + sw / 2, fill: paint(layer.fill, layer.width - sw, layer.height - sw), stroke: layer.stroke?.color, strokeWidth: sw };
     if (layer.shape === 'ellipse') return new Ellipse({ ...common, rx: (layer.width - sw) / 2, ry: (layer.height - sw) / 2 });
     const r = clampRadius(layer.radius, layer.width, layer.height);
     return new Rect({ ...common, width: layer.width - sw, height: layer.height - sw, rx: r, ry: r });
+  }
+
+  private buildPath(layer: PathLayer, pad: number): FabricObject {
+    const st = layer.stroke;
+    const p = new Path(layer.d, {
+      originX: 'left',
+      originY: 'top',
+      fill: layer.fill ?? CLEAR,
+      stroke: st?.color,
+      strokeWidth: st?.width ?? 0,
+      strokeLineCap: st?.cap ?? 'round',
+      strokeLineJoin: st?.join ?? 'round',
+      objectCaching: false,
+    });
+    // Fabric starts a path at the top-left of its points; keep the plan's meaning: coordinates are inside the box.
+    // Fabric centres a path on its own points, so the top-left of the points is the centre of the path minus half its size.
+    const minX = p.pathOffset.x - p.width / 2;
+    const minY = p.pathOffset.y - p.height / 2;
+    p.set({ left: pad + minX, top: pad + minY });
+    return p;
   }
 
   private buildText(layer: TextLayer, pad: number, warnings: RenderWarning[]): FabricObject[] {
