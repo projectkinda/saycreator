@@ -6,3 +6,7 @@ export { validatePlan } from './validate';
 export { loadFonts, FONT_WEIGHTS, nearestWeight } from './fonts';
 export { coverCrop, containFit, clampRadius, placeLogo } from './draw/geometry';
 export { fitText, layoutText, measureWidth, wrapText } from './draw/text';
+export { composeThumbnails, THUMBNAIL_SIZES } from './thumbnail/compose';
+export { checkOption, checkThumbnails, PHONE_WIDTH, type CheckedOption } from './thumbnail/check';
+export { suggestFocal } from './thumbnail/focal';
+export { lintThumbnail, THRESHOLDS, OVERLAY_ZONES } from './lint/thumbnail-lint';
