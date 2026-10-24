@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { AppProvider } from './AppContext';
 import { Shell } from './components/Shell';
@@ -14,10 +15,23 @@ import Videos from './pages/Videos';
 import Workspace from './pages/Workspace';
 import { Placeholder } from './pages/Placeholder';
 
+// Dev-only lab for judging the image engine. Not built into production.
+const Lab = import.meta.env.DEV ? lazy(() => import('./pages/Lab')) : null;
+
 export default function App() {
   return (
     <AppProvider>
       <Routes>
+        {Lab && (
+          <Route
+            path="lab"
+            element={
+              <Suspense fallback={<p>Loading the lab…</p>}>
+                <Lab />
+              </Suspense>
+            }
+          />
+        )}
         <Route element={<Shell />}>
           <Route index element={<Home />} />
           <Route path="videos" element={<Videos />} />
