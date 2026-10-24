@@ -44,9 +44,16 @@ Op =
 - Every applied patch returns its **inverse patch**. Undo and redo apply inverse patches; History keeps labels.
 - Selection and transform events from the canvas **emit patch proposals** (`onPatchRequest`). They never change state.
 
-## Inputs (filled in from Step 2 on)
+## Inputs
 
-Brand kit (colours, headline and body font, logo, handle). Thumbnail request (source image, title up to about 4 words, layout, 16:9 or 9:16; the source is a plain image for now, later a mined video frame). Carousel script (slides with headline, optional body, optional highlight word; 4:5). Quote (text, attribution; 1:1).
+- **Brand** (`BrandInput`): primary, text, background and highlight colours, headline and body font, optional handle and logo URL.
+- **Thumbnail request** (built in Step 2): `{source: {url, width, height}, title, aspect: 16:9 | 9:16, layouts?, brand}`. The source is a plain image for now and will later be a frame mined from video. `composeThumbnails(request)` returns one option per layout (`plate`, `outline`, `panel`), each a plan whose layers are called `photo` and `title` (plus `plate`, `bar`, `scrim-N` as needed). Titles longer than about 4 words are still drawn; they fail the check.
+- **Carousel script** (Step 3): slides with headline, optional body, optional highlight word; 4:5.
+- **Quote** (Step 3): text, attribution; 1:1.
+
+## Lint (thumbnails, Step 2)
+
+`checkThumbnails(request)` and `checkOption(request, option)` return, per option: the PNG, a 320 px phone copy, and nine `LintResult`s: `words`, `readable`, `contrast`, `overlay`, `margins`, `resolution`, `crop`, `brightness`, `sharpness`. Each has `pass`, a plain-language `reason`, and the measured value and limit. Thresholds live in one block (`THRESHOLDS`) and are working guesses. `checkOption` re-checks a plan after it has been edited with patches, as long as the layers keep the ids `title` and `photo`.
 
 ## Outputs
 
