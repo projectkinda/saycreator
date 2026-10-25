@@ -325,3 +325,29 @@ Covered: all of these except photo cutouts and true 3D renders. Photo cutouts ne
 - Tags are hand-written for 4 decks, so how well a model would choose them is unknown, and the concept table has not been tried on other topics.
 - Quote cards have no element_tags yet.
 - Some matched pictures are still poor: Fluent's plain check mark with a sticker outline looks like a blob; the stat slide's pill outline is empty (an older layout problem, not changed here).
+
+
+## Step 8: Carousel editor in the app
+
+### What exists
+- **Images > Make a carousel** (`/images/carousel`, code in `src/carousel/`): 1. format (carousel 4:5 or quote card 1:1), 2. style (every stored style, with a small preview), 3. script, then the slide cards. Nothing else on the Images screen changed except one new button.
+- **Script, two ways, no API key:** "Copy prompt for Claude" (topic, JSON format, rules) and a paste box that checks the JSON live with plain-language problems and where they are (it also accepts a whole chat answer with a code fence). "Write it for me" is a disabled button labelled coming soon; `ScriptWriter` in `src/carousel/script.ts` is the interface a future backend fills. A small example script lets you try the editor without writing anything.
+- **Slide cards:** each slide is its own picture with phone-size check badges (plain reasons for failures), every field editable, tag chips (2 to 4), layout, shuffle elements, swap an element, regenerate from the plan, download PNG. Click the picture for full size.
+- **Undo and redo** for everything above, including style and format changes. **Export:** one PNG or a zip of individual files named by deck and number. **Autosave** in this browser with the history; a refresh brings it all back.
+- The engine got three small additions for this: per-slide layout choice, an element shuffle salt and element swaps (`overrides` in `composeStyled`). The old mock path is behind a flag (see ENGINE_CONTRACT.md).
+
+### Measured (one run, not a benchmark)
+- Machine: AMD Ryzen 9 5900X 12-Core Processor, 24 logical cores, 32 GB memory, win32 10.0.19045; Chrome 156.0.8078.48.
+- Drawing and checking 7 slides: 2068 ms; longest block of work 119 ms (2 blocks over 50 ms); longest gap between frames 117 ms.
+- Zip of the 7 drawn slides: 105 ms; no block over 50 ms. This is the export from already-drawn slides; a cold redraw costs what the drawing line says.
+- **No Worker was used.** Fabric needs a document and cannot run in a Worker (found in Step 1), so drawing stays on the main thread, one slide at a time with a pause between slides, and PNG encoding is the browser's own asynchronous one. On a slower computer the same work takes longer; that was not measured.
+
+### Tested
+18 Playwright tests drive the real app: the Make a carousel button, copy prompt (clipboard), bad script, good script (also inside a chat code block), edit a headline (only that slide redraws), tags, change style, layout/shuffle/swap/regenerate with undo, full size, export of a PNG and a zip (names, PNG signature, size, CRC), refresh and recover (script, edits, style, undo history, unsent paste), a broken saved project, quote cards, keyboard and accessible names, no test asset and no network call from the carousel code, the mock flag, a phone-width screen, and the timing above. Screenshots of each state are in the Results screen (Step 8).
+
+### Not done or not tested
+- The prompt has only been read by me, not run in a real Claude chat; the quality of what Claude writes from it is unknown. The tags it asks for have the same limits as in Step 7.
+- Only installed Chrome. Safari, Firefox, a real phone and a screen reader were not tried.
+- The clipboard fallback (when the browser blocks copying) is written but not run.
+- One project at a time; it does not appear in the Images list, and does not use Branding colours or fonts.
+- See the Step 8 section of the Results screen for the confusing things found by using it, which are fixed and which are not.

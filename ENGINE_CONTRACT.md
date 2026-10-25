@@ -171,6 +171,23 @@ Not in the contract yet: opening a draft to edit text, crop or layout; deleting 
 
 Not in the contract yet: rename, delete, replace, "cut out the background" again, where an asset is used (list of videos), and audio preview.
 
+## Carousels and quote cards: the real image engine (Images > Make a carousel)
+
+This part does **not** go through `src/engine/index.ts`. The page `/images/carousel` (code in `src/carousel/`, loaded on its own so the image engine is not part of every page) uses the real image engine in `src/image-engine/` directly, in the browser. No key, no network call from this code. The mock `createImage({start: 'template', kind: 'carousel' | 'quote'})` is **kept behind a flag**: set `VITE_MOCK_CAROUSEL=1` when starting the app, or `localStorage.setItem('creator.mockCarousel', '1')`, and the Images screen shows "Make a carousel (mock)" which opens the old template draft. The mock `generateText(projectId, 'carousel')` inside a video project is **not** replaced yet.
+
+| Piece | What it is |
+|---|---|
+| Script (input) | JSON: `{ title, brand: {handle}, slides: [...] }`. A carousel has exactly 7 slides, quote cards 1 to 7 slides of type `quote`. Slide types: cover, content, step, stat, checklist, beforeafter, quote, closing; fields per type are in `src/carousel/script.ts` (`FIELDS`). Every slide may carry `element_tags` (2 to 4 lower-case words). `validateScriptText(text, format)` returns plain-language errors with the place in the JSON, and warnings (long copy, a highlight that is not in the headline, no tags). A pasted chat answer with a ```json fence or text around it is cleaned first. |
+| Prompt | `scriptPrompt(topic, format)`: topic, the JSON format with an example of every slide type, and the rules (7 slides, short copy, one idea per slide, tags from the planner vocabulary, no invented figures). Copied to the clipboard; pasted into any Claude chat by the person. |
+| Writer (future) | `ScriptWriter { available, label, write(topic, format): Promise<string> }`. `comingSoonWriter` is the only one; the "Write it for me" button is disabled and says coming soon. A backend would return script JSON text, which goes through the same validation as a pasted script. |
+| Project | `Doc { version, format, style, topic, script, choices }`, saved in `localStorage` key `creator.carousel.project.v1` together with the undo and redo history (80 steps). An unsent pasted text is kept under `creator.carousel.paste.v1`. Anything saved that no longer validates is dropped instead of crashing. |
+| Changes | Every change is a `DocPatch { label, coalesce?, ops: [{path, value}] }` with an inverse, so Undo and Redo cover everything: edit a field, edit tags, change layout, swap an element, shuffle elements, regenerate a slide from the plan, change style, change format, load a script. A change that would make the script invalid is refused with reasons. Typing in one field within 1.5 s is one undo step. |
+| Styles | `loadStyles()`: every folder under `src/image-engine/styles/` with a valid `style.json`. A new folder appears in the picker with a small preview by itself. |
+| Drawing | `composeDoc(doc)` makes the plans (shippable library only, never test assets); `renderer.render(slide, margin)` draws and checks one slide (8 phone-size checks) and caches by plan, so editing one slide redraws only that slide. |
+| Export | One PNG per slide (`<deck>-NN.png`, 1080 x 1350 or 1080 x 1080) or a zip of those files, written in the browser (`src/carousel/export.ts`). |
+
+Not in the contract yet: saving a finished carousel to the Images list or to a video project, more than one project at a time, brand colours and fonts from the Branding screen, server-side rendering, sharing for review, and a real "Write it for me" backend.
+
 ## Test switches (mock only)
 
 `mockControls.failNext('upload' | 'render' | 'text' | 'image' | 'connect' | 'payment' | 'support')` makes the next call fail. In dev it is also on
