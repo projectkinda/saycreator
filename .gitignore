@@ -13,3 +13,8 @@ test-images/*
 # Model weights and runtime files are fetched by npm run fetch:models
 public/models/
 public/ort/
+
+# Reference pictures are the user's own and stay on their machine; only the notes about them are kept
+Reference carousels likes/*
+!Reference carousels likes/clusters.json
+!Reference carousels likes/grids.json

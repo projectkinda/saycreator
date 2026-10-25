@@ -1,6 +1,6 @@
 # Image engine status
 
-Last updated: after Step 3 (text-first carousels). Cutouts are blocked. Contract: `IMAGE_CONTRACT.md`. Licences: `LICENSES-MODELS.md`.
+Last updated: after Step 5 Phase 1 (style reading). Cutouts are blocked. Contract: `IMAGE_CONTRACT.md`. Licences: `LICENSES-MODELS.md`.
 
 ## Read this first
 
@@ -16,8 +16,9 @@ Last updated: after Step 3 (text-first carousels). Cutouts are blocked. Contract
 | 2 | Thumbnail composer and phone-size checker | **Done, see "Step 2" below** |
 | 3 | Text-first carousels (8 slide types, 3 themes, phone-size checker) | **Done, see "Step 3" below. No photos, no cutouts** |
 | 4 | Background removal (ISNet, BiRefNet_lite), `/lab` page | **Cutouts are BLOCKED, parked.** The lab page and pipeline exist; no real model produced a cutout. See "Cutouts: blocked, and why" |
-| 5 | Hook into the app behind the mock engine's names | Not started |
-| 6 | Frame mining from video | **Deferred, not tested.** Waits until you say the video engine can supply clips |
+| 5 | Style learning. Phase 1 read and sorted the references; Phase 2 stores and recreates the styles | **Phase 1 done, see "Step 5" below. Phase 2 waits for your go** |
+| 6 | Hook into the app behind the mock engine's names | Not started |
+| 7 | Frame mining from video | **Deferred, not tested.** Waits until you say the video engine can supply clips |
 
 ## Step 1: what exists
 
@@ -87,9 +88,34 @@ Time to compose, draw, check and export all options for one picture: about 0.4 t
 
 **What I changed after looking at the pictures** (the first run had passes that hid real problems): the 9:16 outline and panel were 40 px from the left edge and the margin check caught it (layout bug, fixed); the outline's dark band had a hard edge across faces (now a soft fade); the crop guess cut the rider's arm (stronger pull to the centre); a tall photo cropped wide lost the head and nothing flagged it (new `crop` check).
 
+## Step 5: style learning, Phase 1 (read and sort)
+
+**Input:** the folder you gave me, `Reference carousels likes/` (the brief called it `style-refs/`; there is no `dislike/` subfolder, so nothing is marked "avoid" yet). 16 pictures. **Every picture is a mosaic of several slides**, not one slide, so I cut each into slides first: 150 slides in total.
+
+**Scope:** carousel slides and quote cards. **Recorded as "later":** thumbnail and poster references. A few sheets are poster-shaped or story-shaped (the tall orange and black sheet, the lime story mock-up); I treated them as carousel slides for now and said so in their descriptions. None of the 16 is a thumbnail.
+
+**How it was read (Results screen, "Step 5: Style reading"):**
+- `npm run style:read` (real Chrome): cuts each mosaic into slides and measures every slide from its pixels: palette (k-means on pixels, fixed start so it repeats), background, text colour and contrast, ink margins, empty space, text bands, alignment. Writes `out/image-engine/style/measurements.json` and an overlay picture per file showing the cut.
+- `npm run style:aggregate`: adds those numbers up per cluster.
+- Cut method per file is recorded in the measurements. Fully automatic (blobs): 4 files. Equal grid inside a box I gave: 11 files. Manual rectangles: 1 file (the scattered mock-up). The boxes and rectangles are **GUESS** (read by eye); everything computed inside them is **MEASURED**. The first automatic cut of one sheet found two false blobs; I caught it with a test and cut that sheet by grid instead.
+- `Reference carousels likes/clusters.json` holds my reading (format and one-line description per picture, 4 clusters, draft spec, missing tools, unplaced). Moving a picture in the Results screen edits only the placement in that file. The reference pictures themselves are gitignored; only `clusters.json` and `grids.json` are kept in git.
+
+**Result:** 4 clusters and 1 unplaced picture.
+1. **Hot flat colour, heavy type** (6 pictures, 58 slides). Confidence medium: the structure is shared but the hot colour is four different hues, and the lime story mock-up is borderline with cluster 2.
+2. **Warm editorial collage** (3 pictures, 36 slides). Confidence low to medium: three quite different decks.
+3. **Quiet dark minimal** (2 pictures, 18 slides). Confidence medium.
+4. **3D object with a neon accent** (4 pictures, 30 slides). Confidence medium to high.
+- **Unplaced:** the blurred orange-gradient glass deck. It sits between 3 and 4.
+
+**Limits of the measuring (not hidden):** only slides with a plain background can be measured for margins, empty space, text bands and alignment (about 40% of slides); photo-led slides give a palette only. Small accents under about 1% of a slide are often missed by the pixel count (the bright lime words in one deck were not picked up). Text bands are band heights, not font sizes. Font names, case, weights and layouts are **GUESS** (my reading), and every line in the draft specs is tagged MEASURED or GUESS. Not tested: whether any of this helps a viewer.
+
+**Conflicts already visible between the references and our lint (to raise in Phase 2, not changed):** tiny body text in the quiet minimal cluster (below our 32 px rule); mid-grey secondary text (below 4.5:1); yellow or lime text on white; violet text on black.
+
+**Missing tools, across all clusters:** fonts we do not bundle (heavy condensed, extended, serif italic, monospace, handwriting); photo treatments (black and white, halftone, blur) and irregular masks; 3D objects (cannot be made, not faked); glow and soft shadows; tape banners; per-word fonts inside one headline; per-line highlight bars; hard offset shadows under cards; hand-drawn loops; cut-outs of people (blocked). Cheap ones to build in Phase 2: icon row, page number, small outlined pill and round arrow button, more icons.
+
 ## The Results screen (where to look at everything)
 
-Run `npm run dev` and open **http://localhost:5173/lab**, or click **Results** in the left menu (it only exists on the dev server, never in a production build). Sections, newest first: Step 3 Carousels, Step 4 Cutouts, Step 2 Thumbnails and checks, Step 1 Plan and patch proof. Each shows a "last run" time and a Refresh button. Every item has good / meh / bad and a one-line reason, autosaved in the browser (key `ie-lab-v1`), and **Export verdicts JSON** at the top. "Add pictures" lets you try your own picture: thumbnails and the checker (Step 2) and cutouts (Step 4) run live in the browser; those pictures are not saved between visits.
+Run `npm run dev` and open **http://localhost:5173/lab**, or click **Results** in the left menu (it only exists on the dev server, never in a production build). Sections, newest first: Step 5 Style reading, Step 3 Carousels, Step 4 Cutouts, Step 2 Thumbnails and checks, Step 1 Plan and patch proof. Each shows a "last run" time and a Refresh button. Every item has good / meh / bad and a one-line reason, autosaved in the browser (key `ie-lab-v1`), and **Export verdicts JSON** at the top. "Add pictures" lets you try your own picture: thumbnails and the checker (Step 2) and cutouts (Step 4) run live in the browser; those pictures are not saved between visits.
 
 **RULE for every new step:** its tests finish by calling `writeStepResults()` from `tests/image-engine/results.ts`. That writes `out/image-engine/results/<step>.json`, and the Results screen shows it on its own, newest first, with pictures, the checker's PASS or FAIL and reasons, facts (model, backend, times), a TOY or REAL tag, a failure if there was one, and verdict boxes. No page edits are needed (a test proves it). The folders under `out/` are backup only.
 

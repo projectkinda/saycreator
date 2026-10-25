@@ -2,7 +2,9 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { Icon } from '../../components/Icon';
 
-export type Verdict = 'good' | 'meh' | 'bad';
+/** good / meh / bad for most items; other sections use their own words (right / partly right / wrong). */
+export type Verdict = string;
+export const GOOD_MEH_BAD: { value: string; label: string }[] = [{ value: 'good', label: 'good' }, { value: 'meh', label: 'meh' }, { value: 'bad', label: 'bad' }];
 export interface Record_ {
   key: string;
   step: string;
@@ -62,13 +64,13 @@ export function Section({ id, title, intro, lastRun, onRefresh, busy, children }
   );
 }
 
-export function VerdictBox({ rec, onChange, label }: { rec: Record_ | undefined; onChange: (v: Verdict | null, reason: string) => void; label: string }) {
+export function VerdictBox({ rec, onChange, label, options = GOOD_MEH_BAD }: { rec: Record_ | undefined; onChange: (v: Verdict | null, reason: string) => void; label: string; options?: { value: string; label: string }[] }) {
   const v = rec?.verdict ?? null;
   return (
     <div className="lab-verdict" role="group" aria-label={`Verdict for ${label}`}>
-      {(['good', 'meh', 'bad'] as const).map((x) => (
-        <button key={x} type="button" className={`v-${x}`} aria-pressed={v === x} onClick={() => onChange(v === x ? null : x, rec?.reason ?? '')}>
-          {x}
+      {options.map((o, i) => (
+        <button key={o.value} type="button" className={`v-${['good', 'meh', 'bad', 'bad'][Math.min(i, 3)]}`} aria-pressed={v === o.value} onClick={() => onChange(v === o.value ? null : o.value, rec?.reason ?? '')}>
+          {o.label}
         </button>
       ))}
       <input type="text" aria-label={`One-line reason for ${label}`} placeholder="why? (one line)" value={rec?.reason ?? ''} onChange={(e) => onChange(v, e.target.value)} />

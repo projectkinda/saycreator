@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "test:image": "playwright test -c tests/image-engine/playwright.config.ts",
     "fetch:models": "node scripts/fetch-models.mjs",
-    "check:licenses": "node scripts/check-licenses.mjs"
+    "check:licenses": "node scripts/check-licenses.mjs",
+    "style:read": "node scripts/style-read.mjs",
+    "style:aggregate": "node scripts/style-aggregate.mjs"
   },
   "dependencies": {
     "fabric": "^7.4.0",

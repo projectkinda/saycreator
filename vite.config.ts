@@ -95,6 +95,45 @@ function labEndpoints(): Plugin {
             for (const f of fs.readdirSync(path.join(d, 'selftest-' + backend)).filter((x) => x.endsWith('-cutout.png'))) cutouts.push({ backend, slug: f.replace('-cutout.png', '') });
         json(res, { report: fs.existsSync(rep) ? JSON.parse(fs.readFileSync(rep, 'utf8')) : null, cutouts });
       });
+      // Style reading: the clusters I wrote, the measurements, and saving a picture moved to another cluster.
+      const refs = path.join(root, 'Reference carousels likes');
+      const clustersFile = path.join(refs, 'clusters.json');
+      server.middlewares.use('/__lab/style', (_req, res) => {
+        const read = (f: string) => (fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null);
+        const sd = path.join(outDir, 'style');
+        json(res, {
+          clusters: read(clustersFile),
+          measurements: read(path.join(sd, 'measurements.json')),
+          aggregate: read(path.join(sd, 'cluster-measurements.json')),
+          lastRun: Math.max(newest(sd), newest(clustersFile)),
+          folder: 'Reference carousels likes',
+        });
+      });
+      server.middlewares.use('/__lab/clusters', (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          return json(res, { error: 'Use POST.' });
+        }
+        let body = '';
+        req.on('data', (c) => (body += c));
+        req.on('end', () => {
+          try {
+            const next = JSON.parse(body);
+            const cur = JSON.parse(fs.readFileSync(clustersFile, 'utf8'));
+            const names = Object.keys(cur.images);
+            const placed = [...next.clusters.flatMap((c: { images: string[] }) => c.images), ...next.unplaced.map((u: { file: string }) => u.file)];
+            const bad = names.filter((n) => placed.filter((p) => p === n).length !== 1);
+            if (bad.length || placed.length !== names.length) throw new Error('Every picture must be in exactly one cluster or in "unplaced". Problem with: ' + (bad.join(', ') || 'the picture count') + '.');
+            // Only the placement may change here; the words I wrote stay as they are.
+            const merged = { ...cur, clusters: cur.clusters.map((c: { id: string; images: string[] }) => ({ ...c, images: next.clusters.find((n: { id: string }) => n.id === c.id)?.images ?? [] })), unplaced: next.unplaced };
+            fs.writeFileSync(clustersFile, JSON.stringify(merged, null, 2) + '\n');
+            json(res, { ok: true });
+          } catch (e) {
+            res.statusCode = 400;
+            json(res, { error: e instanceof Error ? e.message : String(e) });
+          }
+        });
+      });
       // Results written by later steps: out/image-engine/results/<step>.json, shown on the Results screen with no page changes.
       server.middlewares.use('/__lab/steps', (_req, res) => {
         const rd = path.join(outDir, 'results');

@@ -9,6 +9,7 @@ import Step1 from './results/Step1';
 import Step2, { type Upload } from './results/Step2';
 import Step3 from './results/Step3';
 import Step4 from './results/Step4';
+import StyleReading from './results/StyleReading';
 import '../styles/lab.css';
 
 const STORE = 'ie-lab-v1';
@@ -125,7 +126,7 @@ export default function Lab() {
         </div>
 
         <nav aria-label="Steps on this page" className="res-jump">
-          {[...newestFirst.map((m) => [m.file.replace(/\.json$/, ''), m.title] as const), ['step3', 'Step 3: Carousels'], ['step4', 'Step 4: Cutouts'], ['step2', 'Step 2: Thumbnails and checks'], ['step1', 'Step 1: Plan and patch proof']].map(([id, label]) => (
+          {[...newestFirst.map((m) => [m.file.replace(/\.json$/, ''), m.title] as const), ['style-reading', 'Step 5: Style reading'], ['step3', 'Step 3: Carousels'], ['step4', 'Step 4: Cutouts'], ['step2', 'Step 2: Thumbnails and checks'], ['step1', 'Step 1: Plan and patch proof']].map(([id, label]) => (
             <a key={id} href={`#${id}`} className="chip chip-tag">{label}</a>
           ))}
         </nav>
@@ -133,6 +134,7 @@ export default function Lab() {
         {newestFirst.map((m) => (
           <Generic key={m.file} manifest={m} lastRun={last.generic[m.file] ?? 0} onRefresh={reloadManifests} busy={manifestBusy} />
         ))}
+        <StyleReading refreshKey={refreshKey} onRefreshed={done} />
         <Step3 lastRun={last.step3} refreshKey={refreshKey} onRefreshed={done} />
         <Step4 lastRun={last.step4} refreshKey={refreshKey} onRefreshed={done} uploads={uploads} />
         <Step2 lastRun={last.step2} refreshKey={refreshKey} onRefreshed={done} uploads={uploads} />

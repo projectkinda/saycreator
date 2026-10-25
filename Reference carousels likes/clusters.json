@@ -1,0 +1,214 @@
+{
+  "version": 1,
+  "note": "Phase 1 reading. Every picture here is a mosaic of several slides, not one slide. Formats and descriptions are my reading (GUESS). Numbers live in out/image-engine/style/ and are MEASURED. No text, logos, faces or brand names are copied from the pictures.",
+  "dislikeFolder": "none given: this folder has no dislike/ subfolder, so nothing is marked as 'avoid' yet",
+  "images": {
+    "05bedfc030d7d583cb8618bbe7985d86.jpg": { "format": "carousel slides (12-up sheet)", "description": "Twelve tall cards in yellow and black with huge condensed uppercase headlines, big numerals, photo and 3D-object crops; text is garbled filler." },
+    "1503c1de8dded2a7cbe333f061c7131a.jpg": { "format": "carousel slides (9-up sheet)", "description": "Near-black and cream slides with a light sans heading, tiny body text, monochrome photos and soft grey gradients; very quiet." },
+    "1f13499493341400cfc3fe6e05fe3d58.jpg": { "format": "poster-style slides (9-up, tall)", "description": "Black, white and one orange-red; huge condensed uppercase heads with a brush-script word, black-and-white city photography." },
+    "2f6d16ce07d65271ba43f1d75f54c5d0.jpg": { "format": "carousel slides (6-up, white and black alternating)", "description": "Bold grotesk headline with the last line in violet, a small violet square marker, a glossy 3D object on each slide, page number bottom right." },
+    "40f8168b9a4fcc23045c5d03ff999d9a.jpg": { "format": "story-shaped slides shown as a mock-up scene (other)", "description": "Lime, black and cream; blurred black-and-white portrait photos, a heavy grotesk head with a thin serif-italic word, oval image masks, a starburst sticker." },
+    "44937935e682165c1f93e99a11a47123.jpg": { "format": "carousel slides (12-up, includes a testimonial / quote card)", "description": "Lime, black and cream; huge tight grotesk heads on solid highlight bars, mono labels, halftone black-and-white portraits, diagonal tape banners, a countdown and a quote slide." },
+    "58d68b12ac74ce8cc0f8d2f9df45e6de.jpg": { "format": "carousel slides (9-up, tall)", "description": "Sage, white and black; a light grotesk heading with one serif-italic phrase, outlined pill buttons, a big asterisk and a big faded numeral." },
+    "5f8f31661dfcbde65cb15e7314e9a9ff.jpg": { "format": "carousel slides (9-up, includes a testimonial / quote card)", "description": "Crimson, white and black; very wide bold sans in lower case, black-and-white photos, outline pill buttons, a big '45+' stat, a testimonial slide." },
+    "852e2681fb61df8358bc7c729488be50.jpg": { "format": "carousel slides (9-up, square-ish)", "description": "Orange-red, black and off-white; a plain sans heading with key phrases in orange pills set in a monospace italic, giant percentage numbers, outlined arrow pills, grey photos." },
+    "9885e1020f38cd3f6c18df82813e7699.jpg": { "format": "carousel slides (9-up, tall)", "description": "Black and cream slides with lime accent words in condensed uppercase, a glossy 3D object on almost every slide, a round lime button bottom right." },
+    "9897a861375e0f0abb77f9b7ac28febd.jpg": { "format": "carousel slides (12-up, photo-led)", "description": "Dark film-photo slides with lime and cream type in several voices (tall serif, condensed, handwriting), paper notes, stickers and tape, one flower-shaped photo crop." },
+    "af4224d23eb688a8eb56abb9515b593e.jpg": { "format": "carousel slides (12-up)", "description": "Cream, near-black and brick red; very heavy lower-case grotesk heads with a serif-italic word, photos with the type over them, thin arrow bottom right." },
+    "bf7d6a6e42c4742031644ad3118f8eb1.jpg": { "format": "carousel slides (8 slides, one deck)", "description": "Soft blurred orange gradients on white or black, thin light sans text, a glass-effect card, one black swoosh line; step-by-step deck." },
+    "download.png": { "format": "carousel slides (6 ads, 4:5)", "description": "Dark green and white versions of the same layouts; sentence-case heading with mint words, a 3D object, white and mint callout cards, mint button, hand-drawn arrows." },
+    "e1071ec22dc051d04dd8e8e099c48a02.jpg": { "format": "carousel slides (9-up, square)", "description": "Dark violet and white alternating; sentence-case heading with the second line in violet, UI-card graphics, icon rows, a 3D object, small button." },
+    "ee0ae4cdbf5353c1b9dfa8df40f6e21c.jpg": { "format": "carousel slides (12-up, collage-style)", "description": "Butter yellow, black and cream; condensed grotesk mixed with a serif italic, highlight bars behind words, halftone cut-outs, stickers, photo collage." }
+  },
+  "clusters": [
+    {
+      "id": "hot-flat",
+      "name": "Hot flat colour, heavy type",
+      "images": ["05bedfc030d7d583cb8618bbe7985d86.jpg", "1f13499493341400cfc3fe6e05fe3d58.jpg", "44937935e682165c1f93e99a11a47123.jpg", "5f8f31661dfcbde65cb15e7314e9a9ff.jpg", "852e2681fb61df8358bc7c729488be50.jpg", "40f8168b9a4fcc23045c5d03ff999d9a.jpg"],
+      "why": [
+        "Each deck pairs one saturated colour (yellow, lime, red or orange-red; the hue changes per deck) with near-black and cream or white, in flat blocks with no gradients.",
+        "Headlines are the biggest thing on the slide, set very heavy and tight, with small plain labels around them and black-and-white photography."
+      ],
+      "confidence": "medium. The structure is shared, the hue is not (four different hot colours), and one image (the lime mock-up scene) is borderline with the warm editorial group.",
+      "summary": "Loud and flat. One hot colour per deck on near-black and cream, with a very heavy headline that is the biggest thing on the slide, often sitting on a solid colour bar. Small mono or plain labels, black-and-white photos, arrows in outlined pills, tape banners. No gradients and not much decoration beyond bars and pills. Would you say yes to that?",
+      "spec": {
+        "palette": [
+          { "t": "MEASURED", "text": "Per deck the hot colour is yellow #FBCA06, lime #DBF920, orange-red #D73C1B / #DD4E2D or crimson #BF092F (see the per-image swatches). Around it: near-black about #141311 to #0E0E0E and cream or white about #FDFDF7. Merged palette and shares are in the table." },
+          { "t": "MEASURED", "text": "Text against its own slide background: median 13.5:1, worst 3.7:1 across the 58 slides cut. Hot colour on black: yellow 12.2:1, lime 15.9:1, orange-red 4.1 to 4.7:1, crimson 3.0:1. Hot colour on white: yellow 1.5:1, lime 1.2:1, orange-red 4.0 to 4.6:1, crimson 6.4:1. So yellow and lime only work as text on black; red and orange only barely pass 4.5:1 and only on the right side." },
+          { "t": "GUESS", "text": "Role: hot colour = highlight bars, big numerals and one or two key words; near-black = text and alternate slide backgrounds; cream = alternate slide backgrounds." }
+        ],
+        "type": [
+          { "t": "GUESS", "text": "Weight: extra-bold or black. Case: uppercase in the yellow, lime and orange-red decks; lower case in the crimson deck; sentence case with mono-italic phrases in one orange deck. Tight line spacing, headline lines often touch." },
+          { "t": "MEASURED", "text": "Alignment on the 24 plain-background slides that could be measured: 9 left, 7 centred, 6 mixed (2 had too few lines to tell). Tallest ink band over the smallest, median 11.6 (band heights, not font sizes: a multi-line headline is one band, so this overstates the font-size ratio). Tallest band about 38% of slide height." },
+          { "t": "GUESS", "text": "Rough sizes: headline about 10 to 12 times the label size, body about 2 times the label size. Labels are small, often uppercase or monospace with // marks." },
+          { "t": "GUESS", "text": "Nearest bundled fonts: Schibsted Grotesk 800 for the heavy head (it is wider and softer than the condensed or extended faces used in the references); Instrument Sans 500 for body. No bundled monospace, no condensed, no extended face." }
+        ],
+        "layouts": {
+          "cover": [{ "t": "GUESS", "text": "Huge headline filling the upper two thirds, left aligned, one line or phrase on a hot-colour bar; a photo cut-out or crop lower right; small mono label and handle strip along the top and bottom edge." }],
+          "content": [{ "t": "GUESS", "text": "Heading top, one short paragraph in small type, a boxed black-and-white photo or laptop mock-up in the lower half; or a full-colour slide with just the heading and a button." }],
+          "stat": [{ "t": "GUESS", "text": "Giant numeral (84%, 45+, 4 24 33 countdown) taking half the slide, in the hot colour or white, with one short label line and an outlined arrow pill." }],
+          "quote": [{ "t": "GUESS", "text": "Dark slide, centred quote in uppercase mono, key phrase in the hot colour, a closing-quote mark, a round avatar above and five stars and a name below." }],
+          "closing": [{ "t": "GUESS", "text": "Heading on a hot bar, a full-width black button bar reading like a call to action with a small arrow, a photo strip." }],
+          "grid": [{ "t": "MEASURED", "text": "Margins on plain-background slides: about 6.9% left and right, 6.5% top and 6.1% bottom (median of 24). Empty space: median 78% of the slide (range 29% to 91%)." }]
+        },
+        "graphics": [
+          { "t": "GUESS", "text": "Solid highlight bars behind heading lines; black label tags; diagonal tape banners with repeated text; outlined pills with an arrow; a starburst sticker; oval photo masks; halftone black-and-white portraits; big numerals; thin frame lines; asterisk and plus marks; one brush squiggle; hard offset shadows on mock-up cards." }
+        ],
+        "rhythm": [
+          { "t": "GUESS", "text": "Colour alternates hot, black, cream from slide to slide. Cover and stat slides have the largest type; middle slides pair a smaller heading with a small body and a photo; the last slide is a bar-style call to action." }
+        ],
+        "missingTools": [
+          "Heavy condensed and extended display fonts (none bundled), and a monospace",
+          "Black-and-white and halftone treatment of photos; image masks beyond rectangle, rounded and oval",
+          "Tape banner (a rotated strip of repeated text that runs off the slide)",
+          "Different fonts or italics for single words inside one headline",
+          "Per-line solid bars that hug each line of a multi-line heading (our box highlight does this for single words only)",
+          "Hard offset shadows under cards; photographs of laptops and phones (mock-up frames)",
+          "Cutouts of people (blocked, see Step 4)"
+        ]
+      }
+    },
+    {
+      "id": "editorial-collage",
+      "name": "Warm editorial collage",
+      "images": ["ee0ae4cdbf5353c1b9dfa8df40f6e21c.jpg", "af4224d23eb688a8eb56abb9515b593e.jpg", "9897a861375e0f0abb77f9b7ac28febd.jpg"],
+      "why": [
+        "Conversational, lower-case or sentence-case headlines mixing a very heavy grotesk with a serif italic word, on warm cream, butter yellow or dark photo backgrounds.",
+        "Photos sit under the type, and the surface feels hand-made: highlight bars behind phrases, stickers, tape, paper and halftone cut-outs."
+      ],
+      "confidence": "low to medium. Only three images, and they differ: one is butter yellow and graphic, one is cream and brick red and calm, one is dark and photo-led with handwriting.",
+      "summary": "Warm, human and a bit messy on purpose. Lower-case or sentence-case headlines in a very heavy sans with one serif-italic word, over photos or on cream and butter yellow. Highlight bars behind phrases, stickers, tape, halftone cut-outs, a little handwriting. Calmer than the first group and more about photos. Would you say yes to that?",
+      "spec": {
+        "palette": [
+          { "t": "MEASURED", "text": "Butter yellow #EAE26D with near-black #181817 and cream #ECEAD7 (one deck); cream #F5EEE4 with near-black #0B0808 and brick red #7B2512 (one deck); dark #1B1A14 film-photo palette with cream #E1DCCF and a lime that the pixel count only partly caught (one deck). Dark backgrounds on 64% of the 36 slides." },
+          { "t": "MEASURED", "text": "Text against its own slide background: median 11.8:1, worst 3.5:1. Butter yellow on black 14.2:1, on white 1.3:1. Brick red on cream is about 9.8:1 against white, so it is safe as text." },
+          { "t": "GUESS", "text": "Role: butter yellow or brick red is the highlight; cream is the paper; near-black is both text and the photo-heavy slides." }
+        ],
+        "type": [
+          { "t": "GUESS", "text": "Weight: very heavy for the main voice, light or regular serif italic for the accent word, handwriting in one deck. Case: mostly lower case or sentence case, some condensed uppercase. Leading very tight, letters tight." },
+          { "t": "MEASURED", "text": "Alignment on the 6 measurable flat slides: 4 left, 1 centred, 1 mixed. 26 of 36 slides are photo-led, so most could not be measured for margins or bands." },
+          { "t": "GUESS", "text": "Rough sizes: headline 8 to 10 times the label; labels are tiny uppercase handles and strapline text near the bottom edge." },
+          { "t": "GUESS", "text": "Nearest bundled font: Schibsted Grotesk 800 for the heavy voice. No bundled serif italic, condensed face or handwriting." }
+        ],
+        "layouts": {
+          "cover": [{ "t": "GUESS", "text": "Huge lower-case headline filling most of the slide, one phrase underlined or circled by hand, small strap line and an arrow in the bottom corners." }],
+          "content": [{ "t": "GUESS", "text": "Full-bleed photo with the headline set over it in white, cream or lime, a small block of tiny text in a corner; or a photo cut-out with words scattered around it." }],
+          "quote": [{ "t": "GUESS", "text": "Centred statement in two voices (heavy plus serif italic) on a pale soft-gradient or paper background with small bulleted words in the corners." }],
+          "closing": [{ "t": "GUESS", "text": "Heading over a photo with a thin arrow and the brand strip along the bottom edge." }],
+          "grid": [{ "t": "MEASURED", "text": "Margins on the 10 flat slides: about 5% left, 7% right, 5% top, 9% bottom (medians). Empty space median 68%." }]
+        },
+        "graphics": [
+          { "t": "GUESS", "text": "Highlight bars behind words and phrases; underline and hand-drawn circle; halftone cut-outs; paper notes, torn labels, stamps and tape; dotted bullets; thin rules; one flower-shaped photo crop; a cut-out object that the text wraps around." }
+        ],
+        "rhythm": [
+          { "t": "GUESS", "text": "Photo-led and flat type slides alternate; warm paper colour for the quiet slides; the strap line and handle are the same on every slide." }
+        ],
+        "missingTools": [
+          "Serif italic, condensed and handwriting fonts (none bundled)",
+          "Photo text-over-image layouts need photos: only possible with real pictures supplied by the user",
+          "Halftone, grain and paper textures; torn-paper and tape stickers",
+          "Hand-drawn circles and underlines that look hand drawn (ours are tidy paths)",
+          "Different fonts or italics for single words inside one headline",
+          "Irregular photo masks (flower, blob); text wrapping around a cut-out (cutouts blocked)"
+        ]
+      }
+    },
+    {
+      "id": "dark-quiet",
+      "name": "Quiet dark minimal",
+      "images": ["1503c1de8dded2a7cbe333f061c7131a.jpg", "58d68b12ac74ce8cc0f8d2f9df45e6de.jpg"],
+      "why": [
+        "Near-black or off-white (sage, cream) backgrounds with a light regular sans and almost no colour at all.",
+        "Huge amounts of empty space, tiny body text, thin outlined pills, monochrome photography."
+      ],
+      "confidence": "medium. Two images, both clearly the same restrained mood, but one is dark and one is pale sage and white.",
+      "summary": "Quiet and expensive-feeling. Near-black or pale sage and white, one light sans heading, tiny body text, a lot of empty space, thin outlined buttons, monochrome photos. A serif-italic phrase is the only flourish. Nothing is loud. Would you say yes to that?",
+      "spec": {
+        "palette": [
+          { "t": "MEASURED", "text": "Near-black #1C1C1C (59% of one sheet) with cream #E3DAC9 / #F5ECE3; or sage #E1E5E2 with white #F8F8F8 and black #181818. There is no saturated colour (no hot colour was found in either image)." },
+          { "t": "MEASURED", "text": "Text against its own slide background: median 11.2:1, worst 2.8:1 (grey secondary text on dark). Dark backgrounds on half of the 18 slides." },
+          { "t": "GUESS", "text": "Role: the secondary text is a mid grey on purpose, which is why the worst contrast is low; it would fail our 4.5:1 rule." }
+        ],
+        "type": [
+          { "t": "GUESS", "text": "Weight: light or regular for the heading, regular for tiny body; one serif-italic phrase for emphasis. Case: sentence case, some small uppercase labels. Leading normal to tight." },
+          { "t": "MEASURED", "text": "Alignment on the 12 measurable slides: 0 left, 3 centred, 9 mixed (the heading is left and small text blocks sit at the bottom or in columns). Tallest ink band is about 15% of slide height." },
+          { "t": "GUESS", "text": "Rough sizes: heading about 3 to 4 times the body text; body text is tiny (on our 1080 px slide it would be about 20 px, below our 32 px minimum)." },
+          { "t": "GUESS", "text": "Nearest bundled font: Instrument Sans 400 or 500 (a good match). No bundled serif italic." }
+        ],
+        "layouts": {
+          "cover": [{ "t": "GUESS", "text": "Heading top-left in sentence case over dark photography or plain colour, a thin outlined button bottom centre, a small mark and a round arrow button in the top corners." }],
+          "content": [{ "t": "GUESS", "text": "Heading at the top, three short columns of tiny text near the bottom with a strip of three photos under them, or a single block of tiny text and a thin rule at the foot." }],
+          "stat": [{ "t": "GUESS", "text": "A huge faded numeral (01) cropped by the slide edge behind a left-aligned heading." }],
+          "closing": [{ "t": "GUESS", "text": "A big asterisk or logo mark, one short sentence with a serif-italic phrase and a small outlined button." }],
+          "grid": [{ "t": "MEASURED", "text": "Margins on flat slides: about 6.9% left, 7.5% right, 9% top and bottom. Empty space median 89% (range 77% to 94%)." }]
+        },
+        "graphics": [
+          { "t": "GUESS", "text": "Thin outlined pills and round arrow buttons; a thin horizontal rule; a large asterisk; one big faded numeral; photo strips of three; soft grey gradient bands." }
+        ],
+        "rhythm": [
+          { "t": "GUESS", "text": "Almost no change in tone slide to slide: dark and light slides alternate, the layout stays the same and only the amount of text changes." }
+        ],
+        "missingTools": [
+          "Serif italic font (none bundled)",
+          "Soft grey gradient bands and blurred shading (our gradients are straight linear only)",
+          "Small outlined pill button and round arrow button (cheap to add)",
+          "Strip of three photos; monochrome photo treatment",
+          "A text-size floor conflict: the tiny body text in these references is below our 32 px rule"
+        ]
+      }
+    },
+    {
+      "id": "object-neon",
+      "name": "3D object with a neon accent",
+      "images": ["2f6d16ce07d65271ba43f1d75f54c5d0.jpg", "9885e1020f38cd3f6c18df82813e7699.jpg", "download.png", "e1071ec22dc051d04dd8e8e099c48a02.jpg"],
+      "why": [
+        "Black and white slides alternate; the headline's last line or key words are in one neon accent (lime, mint or violet).",
+        "Almost every slide has one glossy 3D object or a UI-card illustration, a small button, and tidy symmetrical placement."
+      ],
+      "confidence": "medium to high. Four images share structure strongly; the neon hue differs per deck and one deck is square, one is 4:5.",
+      "summary": "Polished tech and SaaS look. Black and white slides alternate. The headline is bold and its last line or a few words are in one neon colour (lime, mint or violet). Each slide has one glossy 3D object or a UI card, a small button and a page number. Tidy and symmetrical. Would you say yes to that?",
+      "spec": {
+        "palette": [
+          { "t": "MEASURED", "text": "Near-black about #111614 / #101917 / #04020B (40% to 49% of the sheets) and near-white #F1EEE7 / #EBECEC / #E8E5EB; accent mint #45C9A0, lime #AFC62B or violet #593F95 / #775CB8 depending on the deck. Small accents below about 1% of the slide area are often missed by the pixel count, so the violet of one deck was found only on some slides." },
+          { "t": "MEASURED", "text": "Text against its own slide background: median 12.9:1, worst 4.5:1. Mint #45C9A0 on black 9.1:1 but only 2.1:1 on white; violet #593F95 on white 8.1:1 but 2.3:1 on black (the lighter violet #775CB8 is 3.6:1 on black), so violet text on black would fail; the lime-green samples (#7E8A48 and #92A057, taken from the 3D objects) are 5.0 to 6.6:1 on black. The bright lime of the headline words covers too little area to be picked up by the pixel count." },
+          { "t": "GUESS", "text": "Role: accent for emphasised words, buttons and glow; near-black and near-white for alternating slides." }
+        ],
+        "type": [
+          { "t": "GUESS", "text": "Weight: bold to extra-bold grotesk, tight leading. Case: uppercase condensed in the lime deck, sentence case or title case in the others. Left aligned (or centred in one deck). Body in regular weight." },
+          { "t": "MEASURED", "text": "Alignment on 16 measurable slides: 9 left, 1 centred, 5 mixed. Tallest ink band about 48% of slide height (usually the object). Margins about 6.9% left, 5.6% right, 6.7% top, 4.5% bottom." },
+          { "t": "GUESS", "text": "Rough sizes: headline 3 to 4 times the body; labels about half the body size." },
+          { "t": "GUESS", "text": "Nearest bundled fonts: Schibsted Grotesk 700 or 800 for the heading, Instrument Sans 400 for body (a good match for the sentence-case decks)." }
+        ],
+        "layouts": {
+          "cover": [{ "t": "GUESS", "text": "Heading top-left (about a third of the slide height), two or three short lines of body under it, the 3D object filling the lower half and bleeding off the edge, a round or pill button bottom-left." }],
+          "content": [{ "t": "GUESS", "text": "Same layout with a UI card, laptop or phone illustration instead of the object; icon rows (four small icons with captions) in a band along the bottom." }],
+          "stat": [{ "t": "GUESS", "text": "Three cards in a row, each with a small icon, a big number and a one-line caption." }],
+          "checklist": [{ "t": "GUESS", "text": "Heading, then a list of rows each with a small cross or tick icon, beside a device illustration." }],
+          "closing": [{ "t": "GUESS", "text": "Heading, one short line and a bright pill button, a glowing curved line down one side; a rocket or similar object." }],
+          "grid": [{ "t": "MEASURED", "text": "Empty space median 82% on the 16 flat slides (range 60% to 89%)." }]
+        },
+        "graphics": [
+          { "t": "GUESS", "text": "Glossy 3D objects and glass shapes; UI cards and callout cards (white and mint, slightly rotated); small square or round markers; a glowing curved line; hand-drawn loop arrows; icon rows with captions; page number bottom right; a brand mark top-left." }
+        ],
+        "rhythm": [
+          { "t": "GUESS", "text": "Strict alternation of black and white slides with the same layout grid; the cover has the biggest object, the last slide a pill button and a glow." }
+        ],
+        "missingTools": [
+          "3D rendered objects and glass shapes. We cannot make these (no AI image generation, no 3D renderer); a flat shape would be a worse substitute and is not faked",
+          "Glow and soft shadow effects (no blur on shapes, only on photos)",
+          "UI card illustrations: simple ones (a card with lines and a chart) are possible but not built yet",
+          "Callout cards that are slightly rotated (rotation is supported for shapes; text rotation is not)",
+          "Hand-drawn loop arrows (curved path arrows are possible, not built yet)",
+          "Icon row and page-number components (cheap to add); more icons (globe, heart, comment, send, shield)"
+        ]
+      }
+    }
+  ],
+  "unplaced": [
+    {
+      "file": "bf7d6a6e42c4742031644ad3118f8eb1.jpg",
+      "reason": "Blurred gradient glass with light type is its own look. It sits between the quiet dark minimal group (thin light type, lots of space) and the 3D-object group (soft glowing shapes), and I did not want to force it into either.",
+      "between": ["dark-quiet", "object-neon"]
+    }
+  ]
+}
