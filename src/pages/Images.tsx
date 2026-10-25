@@ -6,6 +6,7 @@ import { Tabs, tabPanelProps } from '../components/Tabs';
 import { UploadProgress } from '../components/UploadProgress';
 import * as engine from '../engine';
 import { grad } from '../format';
+import { mockCarousel } from '../carousel/flags';
 import { useDocumentTitle } from '../useDocumentTitle';
 
 const TABS = [
@@ -214,6 +215,12 @@ export default function Images() {
           <h1 className="page-title">Images</h1>
           <p className="lead">Thumbnails, carousels and quote cards from your videos, plus anything you make on its own.</p>
         </div>
+        <div className="row-actions">
+          {mockCarousel() ? (
+            <button type="button" className="btn btn-outline btn-lg" onClick={() => setCreating(true)}>Make a carousel (mock)</button>
+          ) : (
+            <Link to="/images/carousel" className="btn btn-outline btn-lg">Make a carousel</Link>
+          )}
         <button
           type="button"
           className="btn btn-primary btn-lg"
@@ -224,6 +231,7 @@ export default function Images() {
           <Icon name={creating ? 'close' : 'plus'} size={18} strokeWidth={2.2} />
           {creating ? 'Close' : 'Create image'}
         </button>
+        </div>
       </header>
 
       <p className="visually-hidden" role="status" aria-live="polite">{added}</p>

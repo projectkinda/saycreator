@@ -1,0 +1,237 @@
+/* Images > Make a carousel. Uses the app's tokens and existing classes; only the layout of this page lives here. */
+.cr-styles {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  margin-top: 8px;
+}
+.cr-style {
+  align-items: stretch;
+  gap: 4px;
+}
+.cr-style-pic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border-radius: var(--radius-thumb);
+  overflow: hidden;
+  min-height: 120px;
+}
+.cr-style-pic img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.cr-prompt,
+.cr-paste {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-thumb);
+  padding: 12px 14px;
+  background: var(--surface-tint);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  resize: vertical;
+}
+.cr-issues {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.cr-issues code {
+  background: var(--surface);
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.cr-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--page);
+  padding: 10px 0;
+}
+.cr-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cr-card {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 20px;
+  padding: 16px;
+}
+@media (max-width: 760px) {
+  .cr-card {
+    grid-template-columns: 1fr;
+  }
+}
+.cr-pic {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  /* The slide stays in view while you edit its fields. */
+  position: sticky;
+  top: 76px;
+  align-self: start;
+}
+@media (max-width: 760px) {
+  .cr-pic {
+    position: static;
+  }
+}
+.cr-pic-btn {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-thumb);
+  padding: 0;
+  background: var(--surface);
+  overflow: hidden;
+  display: block;
+  width: 100%;
+  min-height: 160px;
+}
+.cr-pic-btn img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.cr-pic-wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+}
+.cr-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.cr-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.cr-field {
+  gap: 4px;
+}
+.cr-input,
+.cr-field textarea {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-thumb);
+  padding: 10px 14px;
+  background: var(--surface-tint);
+  min-height: 44px;
+}
+.cr-input-sm {
+  max-width: 100px;
+}
+.cr-input:focus-visible,
+.cr-field textarea:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+.cr-problem {
+  color: var(--error);
+  font-weight: 600;
+}
+.cr-tags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cr-x {
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+  min-width: 24px;
+  min-height: 24px;
+}
+.cr-tag-add {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cr-tag-add .cr-input {
+  flex: 1 1 200px;
+}
+.cr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.cr-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cr-select {
+  min-height: 36px;
+  max-width: 260px;
+}
+.cr-el-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cr-el-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+.cr-lint-fail {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.cr-lint-all {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+}
+.cr-dialog {
+  max-width: min(96vw, 760px);
+  max-height: 96vh;
+  border: 0;
+  border-radius: var(--radius-card);
+  padding: 12px;
+}
+.cr-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+.cr-dialog-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.cr-dialog-bar .small {
+  margin-right: auto;
+}
+.cr-dialog-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(96vh - 90px);
+  margin: 0 auto;
+}
