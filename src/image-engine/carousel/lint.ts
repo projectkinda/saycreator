@@ -1,9 +1,11 @@
 // Phone-size checks for one carousel slide. Every check is pass or fail with a plain sentence.
 // Geometry comes from the plan (text is measured with the real loaded fonts); contrast is measured on rendered pixels.
 // All limits are working guesses, not measured facts about what performs well. Change them here.
+import { elementById } from '../assets/library';
 import { layoutText } from '../draw/text';
 import { contrast, luminance, parseColor } from '../lint/color';
 import type { Pixels } from '../lint/metrics';
+import { isMeaningful, linkScore } from '../styles/tags';
 import type { Layer, Plan, TextLayer } from '../types';
 
 export const CAROUSEL_LIMITS = {
@@ -20,7 +22,7 @@ export const CAROUSEL_LIMITS = {
   slackPx: 2,
 };
 
-export type CarouselLintId = 'fit' | 'size' | 'contrast' | 'orphan' | 'margins' | 'edges' | 'overlap';
+export type CarouselLintId = 'fit' | 'size' | 'contrast' | 'orphan' | 'margins' | 'edges' | 'overlap' | 'related';
 
 export interface CarouselLintResult {
   id: CarouselLintId;
@@ -39,6 +41,7 @@ export const CAROUSEL_CHECK_LABELS: Record<CarouselLintId, string> = {
   margins: 'Consistent margins',
   edges: 'Nothing near the edge',
   overlap: 'No overlapping elements',
+  related: 'Elements match the slide',
 };
 
 export interface Box {
@@ -237,6 +240,20 @@ export function lintSlide(input: CarouselLintInput): CarouselLintResult[] {
       } else clashes.push(`${p.id} overlaps ${q.id}.`);
     }
   res('overlap', clashes.length === 0, clashes.length === 0 ? 'No two elements overlap.' : clashes.slice(0, 3).join(' ') + (clashes.length > 3 ? ` (${clashes.length - 3} more)` : ''), clashes.length, 0);
+
+  // 8. related: only judged when the slide says what it is about (meta.elementTags). A picture of a thing needs a link to those
+  // tags; pure decoration (arrows, squiggles, tape) says nothing, so it is never "unrelated".
+  const slideTags = plan.meta?.elementTags;
+  if (slideTags && slideTags.length > 0) {
+    const unrelated: string[] = [];
+    for (const l of layers) {
+      if (l.kind !== 'element') continue;
+      const info = elementById(l.element);
+      if (!info || !isMeaningful(info)) continue;
+      if (linkScore(slideTags, info.tags) === 0) unrelated.push(`${l.element} (${info.tags.slice(0, 3).join(', ')})`);
+    }
+    res('related', unrelated.length === 0, unrelated.length === 0 ? `Every picture links to this slide's tags (${slideTags.join(', ')}), or is plain decoration.` : `Unrelated element: ${unrelated.join('; ')} has no link to this slide's tags (${slideTags.join(', ')}).`, unrelated.length, 0);
+  }
 
   return out;
 }

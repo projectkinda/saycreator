@@ -66,8 +66,12 @@ export interface ElementRule {
   rotate?: [number, number];
   /** Restrict to icons, coloured objects, or elements drawn in code. */
   kinds?: ('icon' | 'object' | 'code')[];
+  /** "slide": pick by what the slide is about (its element_tags): only elements linked to those tags, or none. Without it the pick is among the rule's own tags. */
+  match?: 'slide';
   /** Swap one palette role for another when colouring, for example {"accent": "marker"}. */
   recolour?: Record<string, string>;
+  /** Like recolour, but for one palette, by its name: {"hot": {"accent": "bg"}}. Wins over recolour for that palette. */
+  recolourBy?: Record<string, Record<string, string>>;
   /** "original" keeps the element's own colours; "palette" recolours it to the style. Default: original for coloured objects, palette for everything else. */
   colour?: 'original' | 'palette';
   /** Make it one flat colour: a palette role name. */
@@ -301,6 +305,11 @@ export function validateStyle(raw: unknown, folder: string, knownTags?: Set<stri
           if (r.tint !== undefined && !roles.includes(r.tint as string)) err(`${w}.tint "${String(r.tint)}" is not a palette role (${roles.join(', ')}).`);
           if (r.recolour !== undefined) {
             if (!isObj(r.recolour) || !Object.entries(r.recolour).every(([k, v]) => roles.includes(k) && roles.includes(v as string))) err(`${w}.recolour must swap palette roles, for example {"accent": "marker"}.`);
+          }
+          if (r.match !== undefined && r.match !== 'slide') err(`${w}.match must be "slide" (or left out).`);
+          if (r.recolourBy !== undefined) {
+            const ok = isObj(r.recolourBy) && Object.entries(r.recolourBy).every(([pn, m]) => palNames.includes(pn) && isObj(m) && Object.entries(m).every(([k, v]) => roles.includes(k) && roles.includes(v as string)));
+            if (!ok) err(`${w}.recolourBy must map a palette name to role swaps, for example {"hot": {"accent": "bg"}}.`);
           }
           if (r.opacity !== undefined && (!num(r.opacity) || r.opacity < 0.05 || r.opacity > 1)) err(`${w}.opacity must be from 0.05 to 1.`);
         });

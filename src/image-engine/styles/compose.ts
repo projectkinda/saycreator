@@ -46,6 +46,10 @@ export interface StyledSlide extends ComposedSlide {
   because: string;
   /** Library element ids, or test asset names, placed on this slide. */
   elementsUsed: string[];
+  /** The slide's element_tags, if the script has them. */
+  elementTags?: string[];
+  /** For each placed element, whether it links to those tags. */
+  elementLinks?: { id: string; related: boolean | null; score: number }[];
 }
 
 const wordCount = (s?: string) => (s ?? '').split(/\s+/).filter(Boolean).length;
@@ -120,6 +124,8 @@ export interface StyledOptions {
   /** Place illustrative elements as the style asks: from the shippable library, or from the private test assets (test renders only). */
   elements?: 'shippable' | 'test';
   testAssets?: TestAsset[];
+  /** "ignore": place as if no slide had element_tags (the old random way), to compare. The tags are still recorded in the plan. */
+  elementMatching?: 'tags' | 'ignore';
 }
 
 function chromeArea(chrome: StyleSpec['chrome'], M: number, H: number) {
@@ -164,14 +170,16 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
     }
     add(c, ...layers);
     let elementsUsed: string[] = [];
+    let elementLinks: StyledSlide['elementLinks'];
     if (opts.elements && style.elements) {
       const id = `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`;
-      const placed = placeElements({ spec: style.elements, pal, layers: c.layers, width: W, height: H, type: s.type, seed: id, mode: opts.elements, testAssets: opts.testAssets });
+      const placed = placeElements({ spec: style.elements, pal, layers: c.layers, width: W, height: H, type: s.type, seed: id, mode: opts.elements, testAssets: opts.testAssets, paletteName: palName, slideTags: s.element_tags, ignoreTags: opts.elementMatching === 'ignore' });
       add(c, ...placed.layers);
       c.notes.push(...placed.notes);
       elementsUsed = placed.used;
+      elementLinks = placed.links;
     }
-    const plan: Plan = { schema: 1, revision: 1, canvas: { width: W, height: H, background: solidOf(pal.bg) }, layers: c.layers };
-    return { id: `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`, type: s.type, plan, notes: c.notes, style: style.name, layout: rule.use, rule: at, palette: palName, because, elementsUsed };
+    const plan: Plan = { schema: 1, revision: 1, canvas: { width: W, height: H, background: solidOf(pal.bg) }, layers: c.layers, ...(s.element_tags ? { meta: { elementTags: s.element_tags } } : {}) };
+    return { id: `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`, type: s.type, plan, notes: c.notes, style: style.name, layout: rule.use, rule: at, palette: palName, because, elementsUsed, ...(s.element_tags ? { elementTags: s.element_tags } : {}), ...(elementLinks ? { elementLinks } : {}) };
   });
 }

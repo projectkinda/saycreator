@@ -6,7 +6,8 @@ export interface CarouselBrand {
   handle: string;
 }
 
-export type SlideScript =
+/** Every slide may carry the tags of the pictures that suit it (2 to 4 words), chosen by hand now and by a planner later. */
+export type SlideScript = (
   | { type: 'cover'; kicker?: string; headline: string; sub?: string; highlight?: string }
   | { type: 'content'; headline: string; body: string; highlight?: string }
   | { type: 'step'; number: number; headline: string; body: string; highlight?: string }
@@ -14,7 +15,8 @@ export type SlideScript =
   | { type: 'checklist'; headline: string; items: string[]; highlight?: string }
   | { type: 'beforeafter'; beforeLabel: string; before: string; afterLabel: string; after: string }
   | { type: 'quote'; quote: string; by: string; highlight?: string }
-  | { type: 'closing'; headline: string; cta: string; highlight?: string };
+  | { type: 'closing'; headline: string; cta: string; highlight?: string }
+) & { element_tags?: string[] };
 
 export interface CarouselScript {
   id: string;

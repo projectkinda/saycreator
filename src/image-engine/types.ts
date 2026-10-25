@@ -158,6 +158,8 @@ export interface Plan {
   canvas: Canvas;
   /** Back to front. */
   layers: Layer[];
+  /** What the slide is about, for checking that pictures fit it. Optional; old plans do not have it. */
+  meta?: { elementTags?: string[] };
 }
 
 export type Op =

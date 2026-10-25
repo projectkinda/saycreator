@@ -63,7 +63,7 @@
     "sticker": { "color": "line", "width": 6 },
     "rules": [
       { "tags": ["arrow"], "kinds": ["code"], "zone": "near-headline", "count": [0, 1], "size": [150, 250], "rotate": [-18, 12] },
-      { "tags": ["burst", "sparkle", "star"], "kinds": ["code"], "zone": "corner-tr", "count": [0, 1], "size": [130, 210], "rotate": [-15, 15], "shadow": true },
+      { "tags": ["burst"], "kinds": ["code"], "zone": "corner-tr", "count": [0, 1], "size": [130, 210], "rotate": [-15, 15], "shadow": true, "recolourBy": { "hot": { "accent": "bg" }, "dark": { "accent": "marker" }, "light": { "accent": "marker" } } },
       { "tags": ["squiggle", "zigzag", "brush"], "kinds": ["code"], "zone": "free", "count": [0, 1], "size": [220, 340], "rotate": [-10, 10] },
       { "tags": ["plus", "asterisk"], "kinds": ["code"], "zone": "free", "count": [1, 2], "size": [70, 130], "rotate": [0, 45] },
       { "tags": ["halftone"], "zone": "texture", "count": [0, 1], "size": [420, 560], "opacity": 0.3 }

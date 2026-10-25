@@ -171,6 +171,30 @@ function labEndpoints(): Plugin {
         const cf = path.join(root, 'Reference carousels likes/clusters.json');
         json(res, { slides, styles, testSkipped: fs.existsSync(skipFile) ? JSON.parse(fs.readFileSync(skipFile, 'utf8')) : null, clusters: fs.existsSync(cf) ? JSON.parse(fs.readFileSync(cf, 'utf8')) : null, lastRun: newest(base) });
       });
+      // Smart element placement: every slide, smart / old random / TEST / before-starburst, each its own file.
+      server.middlewares.use('/__lab/smart', (_req, res) => {
+        const base = path.join(outDir, 'smart-placement');
+        const slides: unknown[] = [];
+        if (fs.existsSync(base))
+          for (const style of fs.readdirSync(base)) {
+            const sd = path.join(base, style);
+            if (!fs.statSync(sd).isDirectory()) continue;
+            for (const mode of fs.readdirSync(sd)) {
+              const md = path.join(sd, mode);
+              if (!fs.statSync(md).isDirectory()) continue;
+              for (const script of fs.readdirSync(md)) {
+                const dd = path.join(md, script);
+                if (!fs.statSync(dd).isDirectory()) continue;
+                for (const f of fs.readdirSync(dd).filter((x) => x.endsWith('.lint.json'))) {
+                  const rel = `/out/image-engine/smart-placement/${style}/${mode}/${script}/${f.replace('.lint.json', '')}`;
+                  slides.push({ ...JSON.parse(fs.readFileSync(path.join(dd, f), 'utf8')), pngUrl: `${rel}.png`, phoneUrl: `${rel}-phone.png` });
+                }
+              }
+            }
+          }
+        const read = (f: string) => (fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null);
+        json(res, { slides, summary: read(path.join(base, 'placement-summary.json')), testSkipped: read(path.join(base, 'test-assets-skipped.json')), lastRun: newest(base) });
+      });
       server.middlewares.use('/__lab/clusters', (req, res) => {
         if (req.method !== 'POST') {
           res.statusCode = 405;

@@ -5,12 +5,12 @@
   "aspect": "4:5",
   "brand": { "handle": "@maya.builds" },
   "slides": [
-    { "type": "cover", "kicker": "Build in public", "headline": "I sent four emails to nobody. Then this happened", "sub": "How a tiny newsletter found its first 100 readers.", "highlight": "nobody" },
-    { "type": "content", "headline": "Week one was silence", "body": "I wrote every Sunday for a month. Two subscribers, both related to me. I almost deleted the whole thing.", "highlight": "silence" },
-    { "type": "step", "number": 1, "headline": "I asked one reader what they wanted", "body": "A single reply changed my topic list. I stopped writing for everyone and wrote for one person." },
-    { "type": "step", "number": 2, "headline": "I made it easy to forward", "body": "Every issue ended with one line: know someone stuck on this? Send it on. Forwards doubled in two weeks." },
-    { "type": "quote", "quote": "Write for one reader and the rest will find you.", "by": "What I wish I had known in week one", "highlight": "one reader" },
-    { "type": "stat", "kicker": "Month three", "value": "112", "label": "readers, and every one of them has replied at least once", "note": "Slow, but real people." },
-    { "type": "closing", "headline": "Starting something small?", "cta": "Follow along", "highlight": "small" }
+    { "type": "cover", "kicker": "Build in public", "headline": "I sent four emails to nobody. Then this happened", "sub": "How a tiny newsletter found its first 100 readers.", "highlight": "nobody", "element_tags": ["message","growth"] },
+    { "type": "content", "headline": "Week one was silence", "body": "I wrote every Sunday for a month. Two subscribers, both related to me. I almost deleted the whole thing.", "highlight": "silence", "element_tags": ["message","time"] },
+    { "type": "step", "number": 1, "headline": "I asked one reader what they wanted", "body": "A single reply changed my topic list. I stopped writing for everyone and wrote for one person.", "element_tags": ["people","message","idea"] },
+    { "type": "step", "number": 2, "headline": "I made it easy to forward", "body": "Every issue ended with one line: know someone stuck on this? Send it on. Forwards doubled in two weeks.", "element_tags": ["message","people","growth"] },
+    { "type": "quote", "quote": "Write for one reader and the rest will find you.", "by": "What I wish I had known in week one", "highlight": "one reader", "element_tags": ["people","write"] },
+    { "type": "stat", "kicker": "Month three", "value": "112", "label": "readers, and every one of them has replied at least once", "note": "Slow, but real people.", "element_tags": ["growth","people"] },
+    { "type": "closing", "headline": "Starting something small?", "cta": "Follow along", "highlight": "small", "element_tags": ["launch","idea"] }
   ]
 }

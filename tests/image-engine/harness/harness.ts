@@ -504,6 +504,9 @@ interface StyleRunOpts {
   anyCount?: boolean;
   elements?: 'shippable' | 'test';
   testAssets?: { name: string; url: string; width: number; height: number; tags: string[] }[];
+  elementMatching?: 'tags' | 'ignore';
+  /** "before-starbursts": hot-flat as it was before the starburst colour fix, to show before and after. */
+  variant?: 'before-starbursts';
 }
 
 /** Size of each picture (test assets are only given as URLs). */
@@ -517,16 +520,21 @@ function styleList() {
   return { styles: styles.map((s) => ({ spec: s.spec, warnings: s.warnings, assets: Object.keys(s.assets) })), problems };
 }
 
-const styleByName = (name: string) => {
+const styleByName = (name: string, variant?: StyleRunOpts['variant']) => {
   const s = loadStyles().styles.find((x) => x.spec.name === name);
   if (!s) throw new Error(`No style called "${name}" was loaded.`);
+  if (variant === 'before-starbursts' && s.spec.elements) {
+    const spec = structuredClone(s.spec);
+    for (const r of spec.elements!.rules) if (r.tags.includes('burst')) { delete r.recolourBy; r.tags = ['burst', 'sparkle', 'star']; }
+    return { ...s, spec };
+  }
   return s;
 };
 
 /** Composes, draws and checks every slide of a script in a style. Each slide comes back on its own. */
 async function styleRun(script: CarouselScript, styleName: string, opts: StyleRunOpts = {}) {
   await loadFonts();
-  const style = styleByName(styleName);
+  const style = styleByName(styleName, opts.variant);
   const slides = composeStyled(script, style, opts, !!opts.anyCount);
   const a = new FabricAdapter();
   await a.mount(null);
@@ -534,7 +542,7 @@ async function styleRun(script: CarouselScript, styleName: string, opts: StyleRu
   try {
     for (const s of slides) {
       const c = await checkSlidePlan(a, s, style.spec.spacing.margin);
-      out.push({ id: s.id, type: s.type, layout: s.layout, rule: s.rule, palette: s.palette, because: s.because, elementsUsed: s.elementsUsed, notes: s.notes, plan: s.plan, lint: c.lint, warnings: c.render.warnings, png: await toBase64(c.png), phone: await toBase64(c.phonePng) });
+      out.push({ id: s.id, type: s.type, layout: s.layout, rule: s.rule, palette: s.palette, because: s.because, elementsUsed: s.elementsUsed, elementTags: s.elementTags ?? null, elementLinks: s.elementLinks ?? [], notes: s.notes, plan: s.plan, lint: c.lint, warnings: c.render.warnings, png: await toBase64(c.png), phone: await toBase64(c.phonePng) });
     }
   } finally {
     a.dispose();

@@ -713,3 +713,11 @@
 .res-el-swatch { display: inline-flex; width: 58px; height: 58px; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.1); }
 .res-mode-label { font-weight: 700; }
 .res-mode-test .res-rec-card { outline: 3px dashed #c2410c; }
+
+/* Step 7: smart placement */
+.res-smart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 8px 0; }
+.res-smart-row figure { margin: 0; }
+.res-smart-els { margin: 4px 0; padding-left: 18px; }
+.res-smart-test { outline: 3px dashed #c2410c; padding: 4px; }
+.res-smart-table { border-collapse: collapse; margin: 8px 0 12px; }
+.res-smart-table th, .res-smart-table td { border: 1px solid rgba(0, 0, 0, 0.15); padding: 4px 8px; text-align: left; }

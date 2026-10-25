@@ -5,6 +5,7 @@ import { layerBox, textInk, type Box } from '../carousel/lint';
 import type { Palette } from '../carousel/types';
 import { findElements, type ElementInfo } from '../assets/library';
 import { shade } from '../assets/svg-prepare';
+import { expandTags, isMeaningful, linkScore } from './tags';
 import type { ElementLayer, ImageLayer, Layer, TextLayer } from '../types';
 import type { ElementSpec } from './format';
 
@@ -52,6 +53,12 @@ export interface PlaceInput {
   height: number;
   /** Slide type, so a style can leave some types alone. */
   type: string;
+  /** The palette's name, so a rule can recolour differently per palette. */
+  paletteName?: string;
+  /** What the slide is about (2 to 4 tags). Rules with match "slide" use only elements linked to these. */
+  slideTags?: string[];
+  /** Place as if the slide had no tags (the old, random way). Only used to compare. */
+  ignoreTags?: boolean;
   /** Any text that identifies the slide (its id), so placement is repeatable. */
   seed: string;
   mode: 'shippable' | 'test';
@@ -63,6 +70,8 @@ export interface Placed {
   notes: string[];
   /** The ids of library elements, or names of test assets, that were used. */
   used: string[];
+  /** For each used element: whether it links to the slide's tags (null when it is plain decoration or the slide has no tags). */
+  links?: { id: string; related: boolean | null; score: number }[];
 }
 
 export function placeElements(inp: PlaceInput): Placed {
@@ -70,6 +79,8 @@ export function placeElements(inp: PlaceInput): Placed {
   const notes: string[] = [];
   const used: string[] = [];
   const out: Layer[] = [];
+  const links: NonNullable<Placed['links']> = [];
+  const slideTags = inp.ignoreTags ? undefined : inp.slideTags;
   if (spec.types && !spec.types.includes(inp.type as never)) return { layers: out, notes: [`No elements on ${inp.type} slides in this style.`], used };
   const r = rng(hash(inp.seed));
   const between = (lo: number, hi: number) => lo + r() * (hi - lo);
@@ -97,11 +108,15 @@ export function placeElements(inp: PlaceInput): Placed {
 
   const target = Math.round(between(spec.density.min, spec.density.max + 0.999));
   const placed: Box[] = [];
-  const room = (b: Box, bleed: boolean) => {
+  // A shadow or a sticker outline spreads past the element's box, so that space must be free too.
+  const room = (b: Box, bleed: boolean, pad = 0) => {
     const vis: Box = bleed ? { x: Math.max(0, b.x), y: Math.max(0, b.y), width: Math.min(W, b.x + b.width) - Math.max(0, b.x), height: Math.min(H, b.y + b.height) - Math.max(0, b.y) } : b;
-    if (!bleed && (b.x < 8 || b.y < 8 || b.x + b.width > W - 8 || b.y + b.height > H - 8)) return false;
+    // The sticker outline and shadow grow the picture, so keep the grown shape inside the slide too.
+    const grow = Math.min(pad, 24);
+    if (!bleed && (b.x - grow < 8 || b.y - grow < 8 || b.x + b.width + grow > W - 8 || b.y + b.height + grow > H - 8)) return false;
     if (vis.width <= 0 || vis.height <= 0) return false;
-    return !occupied.some((o) => overlaps(vis, o)) && !placed.some((p) => overlaps(vis, inflate(p, 10)));
+    const probe = pad ? inflate(vis, pad) : vis;
+    return !occupied.some((o) => overlaps(probe, o)) && !placed.some((p) => overlaps(vis, inflate(p, 10)));
   };
 
   const candidatesFor = (zone: string, w: number, h: number): [number, number][] => {
@@ -133,23 +148,52 @@ export function placeElements(inp: PlaceInput): Placed {
       let test: TestAsset | null = null;
       if (inp.mode === 'test') {
         const pool = inp.testAssets ?? [];
-        const tagged = pool.filter((t) => t.tags.some((x) => rule.tags.includes(x)));
+        const want = rule.match === 'slide' && slideTags ? expandTags(slideTags) : new Set(rule.tags);
+        const tagged = pool.filter((t) => t.tags.some((x) => want.has(x)));
+        if (rule.match === 'slide' && slideTags && tagged.length === 0) {
+          notes.push(`No test picture is named for this slide's tags (${slideTags.join(', ')}), so none was placed.`);
+          continue;
+        }
         const from = tagged.length ? tagged : pool;
         if (!from.length) continue;
         test = from[Math.floor(r() * from.length)];
       } else {
-        const found = findElements({ tags: rule.tags, kinds: rule.kinds, texture: rule.zone === 'texture' || rule.tags.some((t) => ['halftone', 'grain', 'texture'].includes(t)) ? true : false });
+        const bySlide = rule.match === 'slide' && !!slideTags;
+        const found = findElements({ tags: bySlide ? [...expandTags(slideTags!)] : rule.tags, kinds: rule.kinds, texture: rule.zone === 'texture' || rule.tags.some((t) => ['halftone', 'grain', 'texture'].includes(t)) ? true : false });
         if (!found.length) {
-          notes.push(`No element in the library has any of the tags ${rule.tags.join(', ')}.`);
+          notes.push(bySlide ? `No element in the library links to this slide's tags (${slideTags!.join(', ')}), so none was placed instead of a random one.` : `No element in the library has any of the tags ${rule.tags.join(', ')}.`);
           continue;
         }
-        info = found[Math.floor(r() * found.length)];
+        // By slide: keep the best-linked ones, then pick among them (repeatably). Unrelated ones are never picked.
+        // Never the same picture twice on one slide, so the second pick is the next best, not a repeat.
+        const left = found.filter((e) => !used.includes(e.id));
+        if (!left.length) {
+          notes.push(`Every matching picture was already used on this slide, so none was repeated.`);
+          continue;
+        }
+        let pool = left;
+        if (bySlide) {
+          const best = Math.max(...left.map((e) => linkScore(slideTags!, e.tags)));
+          pool = left.filter((e) => linkScore(slideTags!, e.tags) === best);
+        } else if (slideTags) {
+          // A rule that picks among its own tags: when the slide has tags, take a linked one if there is one, else plain decoration.
+          // A picture of a thing that has no link to the slide is never picked.
+          const linked = left.filter((e) => isMeaningful(e) && linkScore(slideTags, e.tags) > 0);
+          const plain = left.filter((e) => !isMeaningful(e));
+          pool = linked.length ? linked : plain;
+          if (!pool.length) {
+            notes.push(`Every candidate for ${rule.tags.join(', ')} is a picture with no link to this slide's tags (${slideTags.join(', ')}), so none was placed.`);
+            continue;
+          }
+        }
+        info = pool[Math.floor(r() * pool.length)];
       }
       const size = between(rule.size[0], rule.size[1]);
       const aspect = test ? test.width / test.height : info!.width / info!.height;
       const w = aspect >= 1 ? size : size * aspect;
       const h = aspect >= 1 ? size / aspect : size;
-      const spot = candidatesFor(rule.zone, w, h).find(([x, y]) => room({ x, y, width: w, height: h }, bleed));
+      const pad = (rule.shadow ? 64 : 0) + (rule.sticker && spec.sticker ? spec.sticker.width : 0);
+      const spot = candidatesFor(rule.zone, w, h).find(([x, y]) => room({ x, y, width: w, height: h }, bleed, pad));
       if (!spot) {
         notes.push(`No free space for ${test ? test.name : info!.id} (zone ${rule.zone}).`);
         continue;
@@ -162,17 +206,19 @@ export function placeElements(inp: PlaceInput): Placed {
         used.push(test.name);
       } else {
         const colors: Record<string, string> = {};
+        const swaps = (inp.paletteName && rule.recolourBy?.[inp.paletteName]) || rule.recolour;
         // Coloured objects (emoji-style pictures) keep their own colours unless the rule says "palette"; icons and drawn shapes take the palette.
         const own = rule.colour === 'original' || (rule.colour === undefined && info!.kind === 'object');
-        if (!own) for (const [src, token] of Object.entries(info!.recolour)) colors[src] = tokenColour(pal, token, rule.recolour);
-        const layer: ElementLayer = { ...common, name: `Element: ${info!.id}`, kind: 'element', element: info!.id, ...(rule.tint ? { tint: tokenColour(pal, rule.tint, rule.recolour) } : Object.keys(colors).length ? { colors } : {}) };
+        if (!own) for (const [src, token] of Object.entries(info!.recolour)) colors[src] = tokenColour(pal, token, swaps);
+        const layer: ElementLayer = { ...common, name: `Element: ${info!.id}`, kind: 'element', element: info!.id, ...(rule.tint ? { tint: tokenColour(pal, rule.tint, swaps) } : Object.keys(colors).length ? { colors } : {}) };
         if (rule.sticker && spec.sticker) layer.sticker = { color: tokenColour(pal, spec.sticker.color), width: spec.sticker.width };
         if (rule.shadow) layer.shadow = { color: 'rgba(0,0,0,0.35)', blur: 14, offsetX: 6, offsetY: 10 };
         out.push(layer);
         used.push(info!.id);
+        links.push({ id: info!.id, related: inp.slideTags && isMeaningful(info!) ? linkScore(inp.slideTags, info!.tags) > 0 : null, score: inp.slideTags ? linkScore(inp.slideTags, info!.tags) : 0 });
       }
     }
   }
   if (out.length < spec.density.min) notes.push(`Only ${out.length} elements fit; the style asks for at least ${spec.density.min}.`);
-  return { layers: out, notes, used };
+  return { layers: out, notes, used, links };
 }

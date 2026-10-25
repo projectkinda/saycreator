@@ -27,3 +27,4 @@ export { parseSvg, assetLayers } from './styles/svg';
 export { listElements, listPacks, findElements, elementById, getElementSvg, CODE_PACK, type ElementInfo, type PackInfo } from './assets/library';
 export { recolourSvg, prepareElement, shade, coloursOf } from './assets/svg-prepare';
 export { CODE_ELEMENTS } from './assets/code-elements';
+export { CONCEPTS, VOCABULARY, NEUTRAL_TAGS, expandTags, linkScore, isMeaningful, checkElementTags, briefOf, plannerPrompt, planTags, scriptPlanner, applyTagPatch, type ElementPlanner, type SlideBrief, type TagPatch } from './styles/tags';

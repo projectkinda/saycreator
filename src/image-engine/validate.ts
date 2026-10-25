@@ -171,6 +171,10 @@ export function validatePlan(plan: unknown): string[] {
     }
     if (!isColor(c.background)) errors.push(`The background "${String(c.background)}" is not a colour.`);
   }
+  if (p.meta !== undefined) {
+    const t = (p.meta as { elementTags?: unknown } | null)?.elementTags;
+    if (typeof p.meta !== 'object' || p.meta === null || (t !== undefined && !(Array.isArray(t) && t.every((x) => typeof x === 'string')))) errors.push('meta.elementTags must be a list of words.');
+  }
   if (!Array.isArray(p.layers)) {
     errors.push('The plan has no list of layers.');
     return errors;

@@ -303,3 +303,25 @@ Covered: all of these except photo cutouts and true 3D renders. Photo cutouts ne
 - Real 3D renders (glossy objects, chrome shapes, glass): need user-supplied or licensed renders, or a generated set in a later step. A code-drawn sphere is a worse substitute.
 - Photographic objects and cutouts: need photos with cutouts (Step 4 cutout model is parked), user-supplied or from a licensed pack.
 - Hand-drawn illustration sets (Open Doodles style): need a pack with a pinnable archive and a clear licence.
+
+
+## Step 7: Smart element placement
+
+### What it does
+- **Tags per slide.** Each slide in a script may carry `element_tags` (2 to 4 words). For the four sample decks they are **written by hand**: no model is called anywhere in the code. The interface a real model call would fill is `ElementPlanner` / `briefOf` / `plannerPrompt` / `planTags` in `src/image-engine/styles/tags.ts`: it gets the slide's copy and role (hook, step, proof number, call to action...) and the concept words, and must answer with 2 to 4 tags, which are checked.
+- **Reviewable.** The tags are stored in the script, copied into the plan (`meta.elementTags`), and shown on each Results card with the elements used and whether each links to them. `applyTagPatch` changes a slide's tags with plain-word checks and returns the inverse patch, so undo is another patch; recomposing the slide then picks different elements.
+- **Lint.** A new check, "Elements match the slide", flags an *unrelated element*: a picture of a thing (icon, emoji-style object, or a code shape named after a concept) whose tags have no link to the slide's tags. Pure decoration is never flagged. It only runs when the plan has tags.
+- **Placement.** Style rules with `"match": "slide"` pick the best-linked element, or place none. Rules that pick among their own tags take a linked element if there is one, otherwise plain decoration, never an unrelated picture. The style's density and zones still apply. The link table (which element tags a concept reaches) is hand-written and small: it is a guess, not a measured thing.
+- **Starbursts (hot-flat).** The burst took the heavy dark accent. It now takes the style's lime with a hard outline (`recolourBy`: on the lime slide the slide's own colour with the black outline; on dark and light slides the marker lime).
+
+### Results (3 styles x 4 decks x 7 slides; hand-tagged sample, not proof that it generalises)
+- editorial-collage: 40 unrelated pictures with the old random pick (23 of 28 slides flagged), 0 after; 40 pictures placed that link to their slide.
+- object-neon: 10 unrelated before (11 of 28 slides flagged), 0 after; 12 linked pictures (most neon pictures are code-drawn objects, which are decoration).
+- hot-flat: no pictures of things, so nothing to relate; only the starburst colour changed.
+- No new phone-size failures compared with Step 6.
+- TEST version: not rendered because test-assets/ is empty. Test mode uses file names as tags (for example `coin.png` is "coin"), and places none when no test picture is named for the slide's tags. Not tested with real pictures.
+
+### Not done or not tested
+- Tags are hand-written for 4 decks, so how well a model would choose them is unknown, and the concept table has not been tried on other topics.
+- Quote cards have no element_tags yet.
+- Some matched pictures are still poor: Fluent's plain check mark with a sticker outline looks like a blob; the stat slide's pill outline is empty (an older layout problem, not changed here).

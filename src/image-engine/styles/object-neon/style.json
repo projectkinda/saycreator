@@ -60,7 +60,7 @@
     "gap": 34,
     "rules": [
       { "tags": ["sphere", "cube", "coin", "cards", "phone"], "kinds": ["code"], "zone": "corner-br", "count": [1, 1], "size": [230, 380], "rotate": [-10, 10], "shadow": true },
-      { "tags": ["rocket", "trophy", "lightbulb", "megaphone", "money", "chart", "laptop", "shield"], "kinds": ["object"], "colour": "palette", "zone": "free", "count": [0, 1], "size": [170, 300], "rotate": [-12, 12], "shadow": true },
+      { "tags": ["rocket", "trophy", "lightbulb", "megaphone", "money", "chart", "laptop", "shield"], "kinds": ["object"], "colour": "palette", "match": "slide", "zone": "free", "count": [0, 1], "size": [170, 300], "rotate": [-12, 12], "shadow": true },
       { "tags": ["arrow"], "kinds": ["code"], "zone": "near-headline", "count": [0, 1], "size": [130, 220], "rotate": [-10, 10], "tint": "muted" },
       { "tags": ["sparkle", "plus"], "kinds": ["code"], "zone": "free", "count": [1, 2], "size": [60, 110], "rotate": [0, 30] }
     ]
