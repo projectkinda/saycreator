@@ -8,6 +8,19 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const OUT = path.join(ROOT, 'out/image-engine/results-screen');
 const CLUSTERS = path.join(ROOT, 'Reference carousels likes/clusters.json');
 
+/** Reads clusters.json, trying again if it is caught while being replaced. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const readClusters = (): any => {
+  for (let i = 0; i < 30; i++) {
+    try {
+      return JSON.parse(fs.readFileSync(CLUSTERS, "utf8"));
+    } catch {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+  throw new Error('clusters.json could not be read');
+};
+
 test.describe.configure({ mode: 'serial' });
 test.use({ viewport: { width: 1500, height: 1000 } });
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
@@ -22,7 +35,7 @@ const open = async (page: Page) => {
 test('Style reading shows every cluster with its pictures, swatches, summary, measurements and missing tools', async ({ page }) => {
   await open(page);
   const s = page.locator('#style-reading');
-  const saved = JSON.parse(fs.readFileSync(CLUSTERS, 'utf8'));
+  const saved = readClusters();
   await expect(s.locator('article[aria-label^="Cluster"]')).toHaveCount(saved.clusters.length);
   await expect(s.getByText(/Last run /)).toBeVisible();
   await expect(s.getByRole('button', { name: /^Refresh/ })).toBeVisible();
@@ -56,16 +69,16 @@ test('a picture can be moved to another cluster, is saved to clusters.json, and 
     const target = before.clusters[1];
     const card = page.locator('#style-reading .res-mosaic').filter({ has: page.getByLabel(`Move ${file} to another cluster`) });
     await card.getByLabel(`Move ${file} to another cluster`).selectOption(target.id);
-    await expect.poll(() => JSON.parse(fs.readFileSync(CLUSTERS, 'utf8')).clusters[1].images).toContain(file);
-    const after = JSON.parse(fs.readFileSync(CLUSTERS, 'utf8'));
+    await expect.poll(() => readClusters().clusters[1].images).toContain(file);
+    const after = readClusters();
     expect(after.clusters[0].images).not.toContain(file);
     expect(after.clusters[0].summary).toBe(before.clusters[0].summary); // my text is untouched
     await expect(page.locator(`#style-reading article[aria-label="Cluster ${target.name}"] .res-mosaic`)).toHaveCount(target.images.length + 1);
     // Unplaced works too, and keeps every picture exactly once.
     await page.getByLabel(`Move ${file} to another cluster`).selectOption('unplaced');
-    await expect.poll(() => JSON.parse(fs.readFileSync(CLUSTERS, 'utf8')).unplaced.map((u: { file: string }) => u.file)).toContain(file);
+    await expect.poll(() => readClusters().unplaced.map((u: { file: string }) => u.file)).toContain(file);
     const all = (() => {
-      const c = JSON.parse(fs.readFileSync(CLUSTERS, 'utf8'));
+      const c = readClusters();
       return [...c.clusters.flatMap((x: { images: string[] }) => x.images), ...c.unplaced.map((u: { file: string }) => u.file)];
     })();
     expect(new Set(all).size).toBe(all.length);

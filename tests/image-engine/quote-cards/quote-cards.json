@@ -1,0 +1,12 @@
+{
+  "id": "quote-cards",
+  "title": "Three quote cards (1:1)",
+  "note": "Our own sample lines, written for layout.",
+  "aspect": "1:1",
+  "brand": { "handle": "@maya.builds" },
+  "slides": [
+    { "type": "quote", "quote": "Ship the small thing today and the big thing will follow.", "by": "A note to myself", "highlight": "small thing" },
+    { "type": "quote", "quote": "Clear beats clever, every single time.", "by": "Said at every review", "highlight": "Clear" },
+    { "type": "quote", "quote": "Good process is just kindness written down.", "by": "Team handbook, page one", "highlight": "kindness" }
+  ]
+}

@@ -26,6 +26,10 @@ import {
   checkCarousel,
   checkSlidePlan,
   composeCarousel,
+  composeStyled,
+  loadStyles,
+  validateStyle,
+  parseSvg,
   type RenderReport,
   type TextLayer,
   type ThumbnailOption,
@@ -488,7 +492,69 @@ async function makeCarouselSheet(rows: { label: string; lines?: string[]; slides
   return toBase64(blob);
 }
 
+// ---- Step 5 Phase 2: learned styles ----
+
+/** The styles found in src/image-engine/styles/, with anything that was rejected and why. */
+function styleList() {
+  const { styles, problems } = loadStyles();
+  return { styles: styles.map((s) => ({ spec: s.spec, warnings: s.warnings, assets: Object.keys(s.assets) })), problems };
+}
+
+const styleByName = (name: string) => {
+  const s = loadStyles().styles.find((x) => x.spec.name === name);
+  if (!s) throw new Error(`No style called "${name}" was loaded.`);
+  return s;
+};
+
+/** Composes, draws and checks every slide of a script in a style. Each slide comes back on its own. */
+async function styleRun(script: CarouselScript, styleName: string, opts: { width?: number; height?: number; chrome?: 'none' | 'dots-swipe' | 'page-number' | 'strip'; anyCount?: boolean } = {}) {
+  await loadFonts();
+  const style = styleByName(styleName);
+  const slides = composeStyled(script, style, opts, !!opts.anyCount);
+  const a = new FabricAdapter();
+  await a.mount(null);
+  const out = [];
+  try {
+    for (const s of slides) {
+      const c = await checkSlidePlan(a, s, style.spec.spacing.margin);
+      out.push({ id: s.id, type: s.type, layout: s.layout, rule: s.rule, palette: s.palette, because: s.because, notes: s.notes, plan: s.plan, lint: c.lint, warnings: c.render.warnings, png: await toBase64(c.png), phone: await toBase64(c.phonePng) });
+    }
+  } finally {
+    a.dispose();
+  }
+  return out;
+}
+
+/** Plans only, no drawing. */
+function styleCompose(script: CarouselScript, styleName: string, opts: { width?: number; height?: number; chrome?: 'none' | 'dots-swipe' | 'page-number' | 'strip'; anyCount?: boolean } = {}) {
+  const style = styleByName(styleName);
+  return composeStyled(script, style, opts, !!opts.anyCount);
+}
+
+/** Checks a plan that was edited by hand or by patches, with the margin of the named style. */
+async function styleCheckPlan(plan: Plan, styleName: string) {
+  await loadFonts();
+  const style = styleByName(styleName);
+  const a = new FabricAdapter();
+  await a.mount(null);
+  try {
+    const c = await checkSlidePlan(a, { id: 'x', type: 'content', plan, notes: [] }, style.spec.spacing.margin);
+    return { lint: c.lint, png: await toBase64(c.png), phone: await toBase64(c.phonePng) };
+  } finally {
+    a.dispose();
+  }
+}
+
+const svgCheck = (name: string, text: string) => parseSvg(name, text);
+const styleValidate = (raw: unknown, folder: string) => validateStyle(raw, folder);
+
 (window as unknown as { __ie: unknown }).__ie = {
+  styleList,
+  styleRun,
+  styleCompose,
+  styleCheckPlan,
+  svgCheck,
+  styleValidate,
   themes: () => THEMES,
   validate: validatePlan,
   orphanWidth,
