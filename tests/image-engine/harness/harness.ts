@@ -39,6 +39,34 @@ import {
   type ThumbnailRequest,
 } from '../../../src/image-engine';
 
+import { layerBox, textInk } from '../../../src/image-engine/carousel/lint';
+
+/** Which picture layers sit on top of which text (their boxes overlap). Frames (a ring, an underline) are meant to touch their text. */
+function elementTextOverlaps(plan: Plan) {
+  const out: { element: string; layer: string; text: string }[] = [];
+  const texts = plan.layers.filter((l): l is TextLayer => l.kind === 'text' && l.role !== 'decor' && l.visible !== false);
+  for (const l of plan.layers) {
+    if (l.kind !== 'element') continue;
+    const b = layerBox(l);
+    for (const t of texts) {
+      const k = textInk(t).box;
+      if (b.x < k.x + k.width && b.x + b.width > k.x && b.y < k.y + k.height && b.y + b.height > k.y) out.push({ element: l.element, layer: l.id, text: t.id });
+    }
+  }
+  return out;
+}
+
+/** How many separate highlight bars each highlighted text layer draws, and on how many lines. */
+function highlightMarks(plan: Plan) {
+  return plan.layers
+    .filter((l): l is TextLayer => l.kind === 'text' && !!l.highlight && (l.highlight.words.length > 0 || (l.highlight.lines ?? []).length > 0))
+    .map((l) => {
+      const b = layoutText(l);
+      const perLine = b.lines.map((x) => x.marks.length);
+      return { id: l.id, text: l.text.replace(/ /g, '_'), bars: perLine.reduce((n, x) => n + x, 0), lines: perLine.filter((x) => x > 0).length, perLine };
+    });
+}
+
 async function toBase64(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let s = '';
@@ -506,7 +534,7 @@ interface StyleRunOpts {
   testAssets?: { name: string; url: string; width: number; height: number; tags: string[] }[];
   elementMatching?: 'tags' | 'ignore';
   /** "before-starbursts": hot-flat as it was before the starburst colour fix, to show before and after. */
-  variant?: 'before-starbursts' | 'before-quiet-label' | 'before-quiet-clean';
+  variant?: 'before-starbursts' | 'before-quiet-label' | 'before-quiet-clean' | 'always-frames';
 }
 
 /** Size of each picture (test assets are only given as URLs). */
@@ -526,6 +554,13 @@ const styleByName = (name: string, variant?: StyleRunOpts['variant']) => {
   if (variant === 'before-starbursts' && s.spec.elements) {
     const spec = structuredClone(s.spec);
     for (const r of spec.elements!.rules) if (r.tags.includes('burst')) { delete r.recolourBy; r.tags = ['burst', 'sparkle', 'star']; }
+    return { ...s, spec };
+  }
+  if (variant === 'always-frames' && s.spec.elements) {
+    // Every frame and point rule is asked for on every slide, to see them (normally they appear only now and then).
+    const spec = structuredClone(s.spec);
+    for (const r of spec.elements!.rules) if (r.role === 'frame' || r.role === 'point') r.count = [1, 1];
+    spec.elements!.density = { min: 0, max: 8 };
     return { ...s, spec };
   }
   if (variant === 'before-quiet-clean') {
@@ -598,6 +633,8 @@ const styleValidate = (raw: unknown, folder: string) => validateStyle(raw, folde
   styleValidate,
   themes: () => THEMES,
   validate: validatePlan,
+  elementTextOverlaps,
+  highlightMarks,
   orphanWidth,
   carouselRun,
   carouselCheckPlan,

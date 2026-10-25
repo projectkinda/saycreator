@@ -106,6 +106,56 @@ test('REAL: three generations on the sample texts, through the real Generate but
   for (const r of runs) expect(r.error ?? '', `${r.id} failed`).toBe('');
 });
 
+test('REAL: one quote card set (3 cards) from a text with named speakers', async ({ page }) => {
+  test.skip(process.env.REAL_GENERATE !== '1', 'Real generations are opt-in (REAL_GENERATE=1).');
+  test.setTimeout(300_000);
+  const out = path.join(ROOT, 'out/image-engine/step10');
+  fs.mkdirSync(out, { recursive: true });
+  const text = fs.readFileSync(path.join(ROOT, 'sample-inputs/quotes.txt'), 'utf8');
+  await page.goto('/images/carousel');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.getByTestId('writer-label')).toContainText(/Claude Code|Claude API/);
+  await page.getByLabel('Your text, idea or article').fill(text);
+  await page.getByRole('button', { name: /^Quote card/ }).click();
+  const calls: { ms: number; status: number }[] = [];
+  const t0 = Date.now();
+  page.on('response', (r) => {
+    if (/\/(__carousel|api\/carousel)\/write$/.test(r.url())) calls.push({ ms: Date.now() - t0, status: r.status() });
+  });
+  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await expect(page.getByTestId('progress')).toContainText(/Done:|Drawing slide/, { timeout: 240_000 });
+  const errBox = page.getByRole('alert').filter({ hasText: /Your text is kept/ });
+  const error = (await errBox.count()) > 0 ? await errBox.first().innerText() : '';
+  let run: Record<string, unknown> = { error, calls };
+  if (!error) {
+    await expect(page.getByTestId('progress')).toContainText('Done:', { timeout: 120_000 });
+    const n = await page.locator('.cr-card').count();
+    await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(n, { timeout: 60_000 });
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('creator.carousel.project.v1') ?? '{}').project.doc);
+    const imgs = await page.locator('.cr-card .cr-pic img').evaluateAll(async (els) =>
+      Promise.all(els.map(async (e) => {
+        const blob = await (await fetch((e as HTMLImageElement).src)).blob();
+        return await new Promise<string>((res) => {
+          const fr = new FileReader();
+          fr.onload = () => res(String(fr.result).split(',')[1]);
+          fr.readAsDataURL(blob);
+        });
+      })),
+    );
+    const files = imgs.map((b64, i) => {
+      const f = path.join(out, 'real-quote-' + String(i + 1).padStart(2, '0') + '.png');
+      fs.writeFileSync(f, Buffer.from(b64, 'base64'));
+      return path.relative(ROOT, f).split(path.sep).join('/');
+    });
+    const failures = await page.locator('.cr-card').evaluateAll((cards) => cards.flatMap((c, k) => [...c.querySelectorAll('.cr-lint-fail li')].map((x) => 'Slide ' + (k + 1) + ': ' + x.textContent)));
+    const v = validateScriptText(JSON.stringify(saved.script), 'quote');
+    run = { error: '', calls, ms: Date.now() - t0, format: saved.format, style: saved.style, quotes: saved.script.slides.map((s: { quote: string; by: string }) => ({ quote: s.quote, by: s.by })), warnings: v.warnings.map((w) => w.message), failures, files, message: (await page.getByTestId('progress').innerText()).trim() };
+  }
+  fs.writeFileSync(path.join(out, 'real-quote.json'), JSON.stringify(run, null, 2));
+  expect(run.error).toBe('');
+});
+
 test('Step 9 Results section: the saved real runs and my findings', async () => {
   const f = path.join(OUT, 'runs.json');
   test.skip(!fs.existsSync(f), 'No saved real runs yet (run with REAL_GENERATE=1).');
