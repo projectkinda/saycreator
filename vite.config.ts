@@ -109,6 +109,33 @@ function labEndpoints(): Plugin {
           folder: 'Reference carousels likes',
         });
       });
+      // Style recreation: every slide file written by the tests, with the styles and the readings they came from.
+      server.middlewares.use('/__lab/recreation', (_req, res) => {
+        const base = path.join(outDir, 'style-recreation');
+        const slides: unknown[] = [];
+        if (fs.existsSync(base))
+          for (const style of fs.readdirSync(base)) {
+            const sd = path.join(base, style);
+            if (!fs.statSync(sd).isDirectory()) continue;
+            for (const script of fs.readdirSync(sd)) {
+              const dd = path.join(sd, script);
+              if (!fs.statSync(dd).isDirectory()) continue;
+              for (const f of fs.readdirSync(dd).filter((x) => x.endsWith('.lint.json'))) {
+                const stem = f.replace('.lint.json', '');
+                const rel = `/out/image-engine/style-recreation/${style}/${script}/${stem}`;
+                slides.push({ ...JSON.parse(fs.readFileSync(path.join(dd, f), 'utf8')), pngUrl: `${rel}.png`, phoneUrl: `${rel}-phone.png`, planUrl: `${rel}.plan.json` });
+              }
+            }
+          }
+        const styles: unknown[] = [];
+        const sroot = path.join(root, 'src/image-engine/styles');
+        for (const n of fs.readdirSync(sroot)) {
+          const f = path.join(sroot, n, 'style.json');
+          if (fs.existsSync(f)) styles.push(JSON.parse(fs.readFileSync(f, 'utf8')));
+        }
+        const cf = path.join(root, 'Reference carousels likes/clusters.json');
+        json(res, { slides, styles, clusters: fs.existsSync(cf) ? JSON.parse(fs.readFileSync(cf, 'utf8')) : null, lastRun: newest(base), folder: 'Reference carousels likes' });
+      });
       server.middlewares.use('/__lab/clusters', (req, res) => {
         if (req.method !== 'POST') {
           res.statusCode = 405;
@@ -126,7 +153,8 @@ function labEndpoints(): Plugin {
             if (bad.length || placed.length !== names.length) throw new Error('Every picture must be in exactly one cluster or in "unplaced". Problem with: ' + (bad.join(', ') || 'the picture count') + '.');
             // Only the placement may change here; the words I wrote stay as they are.
             const merged = { ...cur, clusters: cur.clusters.map((c: { id: string; images: string[] }) => ({ ...c, images: next.clusters.find((n: { id: string }) => n.id === c.id)?.images ?? [] })), unplaced: next.unplaced };
-            fs.writeFileSync(clustersFile, JSON.stringify(merged, null, 2) + '\n');
+            fs.writeFileSync(clustersFile + '.tmp', JSON.stringify(merged, null, 2) + '\n');
+            fs.renameSync(clustersFile + '.tmp', clustersFile); // replaced in one step, so nobody reads half a file
             json(res, { ok: true });
           } catch (e) {
             res.statusCode = 400;
@@ -147,7 +175,8 @@ function labEndpoints(): Plugin {
             const cur: { records: Record<string, { updatedAt?: string }> } = !inc.clear && fs.existsSync(verdictsFile) ? JSON.parse(fs.readFileSync(verdictsFile, 'utf8')) : { records: {} };
             for (const [k, r] of Object.entries(inc.records ?? {})) if (!cur.records[k] || (r.updatedAt ?? '') >= (cur.records[k].updatedAt ?? '')) cur.records[k] = r;
             fs.mkdirSync(outDir, { recursive: true });
-            fs.writeFileSync(verdictsFile, JSON.stringify({ savedAt: new Date().toISOString(), records: cur.records }, null, 2));
+            fs.writeFileSync(verdictsFile + '.tmp', JSON.stringify({ savedAt: new Date().toISOString(), records: cur.records }, null, 2));
+            fs.renameSync(verdictsFile + '.tmp', verdictsFile);
             json(res, { ok: true, count: Object.keys(cur.records).length });
           } catch (e) {
             res.statusCode = 400;
