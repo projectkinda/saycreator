@@ -1,0 +1,13 @@
+{
+  "title": "Batch a week of videos in one afternoon",
+  "brand": { "handle": "@yourchannel" },
+  "slides": [
+    { "type": "cover", "kicker": "For creators", "headline": "Film a week of videos in one afternoon", "sub": "A simple order of work that stops the daily scramble.", "highlight": "one afternoon", "element_tags": ["time", "launch"] },
+    { "type": "step", "number": 1, "headline": "Pick five ideas first", "body": "Write the five titles before you touch the camera. Deciding while filming is what eats the hours.", "highlight": "five ideas", "element_tags": ["idea", "write"] },
+    { "type": "step", "number": 2, "headline": "Film everything in one setup", "body": "Same light, same shirt, same background. Change the topic, not the room.", "highlight": "one setup", "element_tags": ["profile", "time"] },
+    { "type": "step", "number": 3, "headline": "Edit in a second block", "body": "Cut all five back to back while the scripts are fresh. Do not mix filming and editing.", "highlight": "second block", "element_tags": ["write", "target"] },
+    { "type": "checklist", "headline": "Before you hit record", "items": ["Five titles written", "Battery charged and card empty", "Phone on do not disturb", "Water within reach"], "highlight": "record", "element_tags": ["proof", "time"] },
+    { "type": "beforeafter", "beforeLabel": "Myth", "before": "Batching makes videos feel stale.", "afterLabel": "Fact", "after": "Viewers only see the finished video. Posting on time matters more than filming on time.", "element_tags": ["warning", "idea"] },
+    { "type": "closing", "headline": "Save this for your next filming day", "cta": "Follow for a new workflow each week", "highlight": "filming day", "element_tags": ["launch", "love"] }
+  ]
+}

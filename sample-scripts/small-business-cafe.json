@@ -1,0 +1,13 @@
+{
+  "title": "Fix these before you change the menu",
+  "brand": { "handle": "@yourcafe" },
+  "slides": [
+    { "type": "cover", "kicker": "For small cafes", "headline": "Fix these three things before changing your menu", "sub": "Most regulars leave over small friction, not the food.", "highlight": "three things", "element_tags": ["work", "warning"] },
+    { "type": "content", "headline": "Your queue is the first impression", "body": "If the line is slow, nobody tastes the coffee. Time one busy hour and count the steps per order.", "highlight": "queue", "element_tags": ["time", "people"] },
+    { "type": "content", "headline": "Say what is sold out, early", "body": "A sign at the door beats a sorry at the till. People forgive a missing item, not a surprise.", "highlight": "early", "element_tags": ["warning", "message"] },
+    { "type": "step", "number": 1, "headline": "Ask five regulars one question", "body": "What almost made you go somewhere else this month? Write the answers down without arguing.", "highlight": "five regulars", "element_tags": ["people", "search"] },
+    { "type": "stat", "kicker": "A good test", "value": "5 min", "label": "is the longest anyone should wait for a simple order", "note": "Placeholder: use your own target", "element_tags": ["time", "target"] },
+    { "type": "beforeafter", "beforeLabel": "Common worry", "before": "We need more items to bring people in.", "afterLabel": "More often true", "after": "A shorter menu served faster brings people back.", "element_tags": ["idea", "work"] },
+    { "type": "closing", "headline": "Fix the small things first", "cta": "Save this and send it to your team", "highlight": "small things", "element_tags": ["launch", "people"] }
+  ]
+}

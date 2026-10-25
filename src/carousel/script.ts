@@ -168,6 +168,7 @@ export function validateScript(raw: unknown, format: Format): ScriptResult {
         if (v.length > max) warn(at(f.key), `${n} "${f.key}" is ${v.length} characters. Over ${Math.round(max)} usually shrinks the text below phone size: shorten it.`);
       }
     }
+    if (type === 'stat' && typeof s.value === 'string' && s.value.length > 8) warn(at('value'), `${n} number "${s.value}" is long. Big numbers are best at 8 characters or fewer (like 3x, 42%, 5 min); longer ones wrap onto two lines and fail the one-word-last-line check.`);
     const known = new Set(['type', 'element_tags', ...FIELDS[type].map((f) => f.key)]);
     for (const k of Object.keys(s)) if (!known.has(k)) warn(at(k), `${n} has "${k}", which a ${type} slide does not use. It is ignored.`);
     const hl = s.highlight;

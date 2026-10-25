@@ -1,0 +1,13 @@
+{
+  "title": "What a good client brief contains",
+  "brand": { "handle": "@youragency" },
+  "slides": [
+    { "type": "cover", "kicker": "For agencies", "headline": "The client brief that saves two rounds of revisions", "sub": "Six answers to get before any work starts.", "highlight": "saves two rounds", "element_tags": ["work", "proof"] },
+    { "type": "step", "number": 1, "headline": "Ask what success looks like", "body": "Get one sentence the client would be happy to read in three months. If they cannot write it, the brief is not ready.", "highlight": "success", "element_tags": ["target", "message"] },
+    { "type": "step", "number": 2, "headline": "Name the one decision maker", "body": "Feedback from five people is five briefs. Agree who has the final word before the first draft.", "highlight": "one decision maker", "element_tags": ["people", "trust"] },
+    { "type": "checklist", "headline": "A brief is ready when it has", "items": ["A goal in one sentence", "A single decision maker", "A budget range", "A real deadline and why", "Two examples they like"], "highlight": "ready", "element_tags": ["proof", "write"] },
+    { "type": "beforeafter", "beforeLabel": "What clients say", "before": "We will know it when we see it.", "afterLabel": "What it means", "after": "The goal is not decided yet. Pause and decide it together.", "element_tags": ["warning", "idea"] },
+    { "type": "stat", "kicker": "The rule of thumb", "value": "1 page", "label": "is enough for a brief. If it needs more, the goal is too vague.", "note": "A guideline, not a statistic", "element_tags": ["write", "target"] },
+    { "type": "closing", "headline": "Send this to your next new client", "cta": "Follow for more agency habits", "highlight": "next new client", "element_tags": ["message", "launch"] }
+  ]
+}
