@@ -1,6 +1,6 @@
 # Image engine status
 
-Last updated: after Step 5 Phase 1 (style reading). Cutouts are blocked. Contract: `IMAGE_CONTRACT.md`. Licences: `LICENSES-MODELS.md`.
+Last updated: after Step 5 Phase 2 (style recreation). Cutouts are blocked. Contract: `IMAGE_CONTRACT.md`. Licences: `LICENSES-MODELS.md`.
 
 ## Read this first
 
@@ -16,7 +16,7 @@ Last updated: after Step 5 Phase 1 (style reading). Cutouts are blocked. Contrac
 | 2 | Thumbnail composer and phone-size checker | **Done, see "Step 2" below** |
 | 3 | Text-first carousels (8 slide types, 3 themes, phone-size checker) | **Done, see "Step 3" below. No photos, no cutouts** |
 | 4 | Background removal (ISNet, BiRefNet_lite), `/lab` page | **Cutouts are BLOCKED, parked.** The lab page and pipeline exist; no real model produced a cutout. See "Cutouts: blocked, and why" |
-| 5 | Style learning. Phase 1 read and sorted the references; Phase 2 stores and recreates the styles | **Phase 1 done, see "Step 5" below. Phase 2 waits for your go** |
+| 5 | Style learning. Phase 1 read and sorted the references; Phase 2 stores and recreates the styles | **Phase 1 and Phase 2 done, see "Step 5" below** |
 | 6 | Hook into the app behind the mock engine's names | Not started |
 | 7 | Frame mining from video | **Deferred, not tested.** Waits until you say the video engine can supply clips |
 
@@ -113,9 +113,41 @@ Time to compose, draw, check and export all options for one picture: about 0.4 t
 
 **Missing tools, across all clusters:** fonts we do not bundle (heavy condensed, extended, serif italic, monospace, handwriting); photo treatments (black and white, halftone, blur) and irregular masks; 3D objects (cannot be made, not faked); glow and soft shadows; tape banners; per-word fonts inside one headline; per-line highlight bars; hard offset shadows under cards; hand-drawn loops; cut-outs of people (blocked). Cheap ones to build in Phase 2: icon row, page number, small outlined pill and round arrow button, more icons.
 
+### Step 5, Phase 2: store and recreate
+
+Ran on your go, with the four clusters as they were, the blurred-gradient deck left unplaced and no pictures moved.
+
+**Output rule kept:** every slide and every quote card is its own full-size PNG (1080 x 1350, or 1080 x 1080 for quote cards) with its own plan JSON, its own lint JSON and a 320 px phone copy: `out/image-engine/style-recreation/<style>/<script>/slide-01.png` and `.../quote-cards/card-01.png`. 124 files (4 styles x 4 decks x 7 slides + 4 x 3 cards). Nothing is a contact sheet; a test checks that every PNG is exactly one slide's size. Each plan can be patched and re-checked on its own (tested).
+
+**Stored styles:** `src/image-engine/styles/<name>/style.json` plus `assets/*.svg` for `hot-flat`, `editorial-collage`, `dark-quiet`, `object-neon`. `STYLE_FORMAT.md` explains every field. A schema (hand-written, plain-language messages) rejects bad files; 17 kinds of mistake and 10 kinds of bad SVG are tested. **A new style is a new folder, no code changes** (tested: a copied folder with another colour is picked up and drawn; a broken folder is reported and not loaded). SVG assets take their colours from the palette, so one graphic works in every palette.
+
+**Layouts:** a catalogue of 19 layout variants (3 for cover, content and step; 2 for stat, checklist, before/after, quote, closing). Each style lists at least 2 rules per slide type and picks by the slide's content (headline length, body length, list length, number length, quote length) and its position (first or second of its type, place in the deck). Every style uses at least 2 different layouts per slide type across the sample decks (tested, see `variants-used.json`). Palettes follow a per-style rhythm.
+**Honest limit:** all four styles draw from the same 19 layouts. For cover, content and step the styles choose different pairs out of 3, so their compositions differ. For stat, checklist, before/after, quote and closing the catalogue has only 2 variants, so every style uses the same two and the difference between styles there comes from colour, type, shape, spacing, chrome and parameters, not from composition. More variants are the main way to get the styles further apart.
+
+**Tools built (cheap and reusable):** outlined pill and round arrow button; page number and a top strip; tape banner (rotated repeating text); soft glow (stacked circles); a flat UI card (bars or line); per-line highlight bars that hug each line; highlights that mark only the first occurrence of a word or a whole line; SVG asset loader. Plan additions needed: `hugLine`, `lines` and `onlyFirst` on a highlight. Checker changes: decorative text is exempt; centred slides may have symmetric margins instead of a left edge on the margin; overflow of the space a text was given is now visible to the "fit" check.
+**Not built, with reasons:** photo treatments (black and white and halftone) and photo-led layouts (no photos in the sample scripts); cut-outs (blocked); 3D objects and glass shapes (cannot be made here, a flat shape would be a worse substitute); serif italic, condensed, extended, monospace and handwriting fonts (not bundled; a lighter sans would be a worse substitute); per-word fonts and italics inside a headline; hand-drawn marks that look hand drawn; icon rows with captions (no layout needs them yet); the tape banner exists but no layout uses it yet.
+
+**Results (self-checked, phone-size lint per slide):**
+| style | slides passing | notes |
+|---|---|---|
+| hot-flat | 30 of 31 | The one failure is the deliberately awkward 27-word cover (does not fit even at the 84 px floor; one-word last line). |
+| editorial-collage | 31 of 31 | |
+| object-neon | 30 of 31 | The awkward cover again: it does not fit next to the corner graphic. |
+| dark-quiet | 0 of 31 | **By design.** The style keeps the references' tiny type (body 28 px, labels 26 px), which breaks our 32 px minimum, so every slide fails the "size" check. Written in the style's `knownLintConflicts`; the style was not changed to hide it. |
+A pass means none of the seven measures failed. It does not mean the slide matches the reference.
+
+**What I think, after opening the slides:**
+- **Close: hot-flat.** Colour, weight of the type, bars behind words, hard offset shadows, big numerals and the strip header are recognisably the references. Weak points: Schibsted Grotesk is wider and softer than the condensed or extended faces used; roughly half of the reference slides are photographs, which are not reproduced; no tape banners are used yet.
+- **Close in spirit, fails our rule: dark-quiet.** The space, the thin outlined pills, the light sans, the sage and near-black rhythm and the underlined word are right. It fails the size check on every slide on purpose; no photos or serif italic.
+- **Partly: object-neon.** Colours, sentence-case bold headlines, tidy placement, mint highlight boxes and a flat interface card on the cover are there. The glossy 3D objects are the look and they are missing, so most slides read as text on a dark or light panel. Weak. One deliberate change from the reference: darker green for text accents on the light palette (mint on white would be about 2:1).
+- **Weak: editorial-collage.** The flat type slides in butter yellow, cream and dark are fine, but the references' character is photographs, cut-outs, stickers and the serif-italic word, none of which is here. The hand-drawn circle and the flower are tidy shapes floating on their own and look arbitrary without the photos they belong with.
+- Cross-cutting: stat and checklist slides are similar from style to style (see "Honest limit"); orphan fixes sometimes shrink a headline a little to avoid a one-word last line (listed in each slide's notes).
+
+**Not tested:** real phones; other fonts; the slides' performance with any audience; photo layouts (not built); the lime hue was used for hot-flat, the yellow and orange-red decks of the same cluster are one palette edit away but not drawn.
+
 ## The Results screen (where to look at everything)
 
-Run `npm run dev` and open **http://localhost:5173/lab**, or click **Results** in the left menu (it only exists on the dev server, never in a production build). Sections, newest first: Step 5 Style reading, Step 3 Carousels, Step 4 Cutouts, Step 2 Thumbnails and checks, Step 1 Plan and patch proof. Each shows a "last run" time and a Refresh button. Every item has good / meh / bad and a one-line reason, autosaved in the browser (key `ie-lab-v1`), and **Export verdicts JSON** at the top. "Add pictures" lets you try your own picture: thumbnails and the checker (Step 2) and cutouts (Step 4) run live in the browser; those pictures are not saved between visits.
+Run `npm run dev` and open **http://localhost:5173/lab**, or click **Results** in the left menu (it only exists on the dev server, never in a production build). Sections, newest first: Step 5 Style recreation (every slide its own card, compare with the references, verdict matches / close / off / wrong), Step 5 Style reading, Step 3 Carousels, Step 4 Cutouts, Step 2 Thumbnails and checks, Step 1 Plan and patch proof. Each shows a "last run" time and a Refresh button. Every item has good / meh / bad and a one-line reason, autosaved in the browser (key `ie-lab-v1`), and **Export verdicts JSON** at the top. "Add pictures" lets you try your own picture: thumbnails and the checker (Step 2) and cutouts (Step 4) run live in the browser; those pictures are not saved between visits.
 
 **RULE for every new step:** its tests finish by calling `writeStepResults()` from `tests/image-engine/results.ts`. That writes `out/image-engine/results/<step>.json`, and the Results screen shows it on its own, newest first, with pictures, the checker's PASS or FAIL and reasons, facts (model, backend, times), a TOY or REAL tag, a failure if there was one, and verdict boxes. No page edits are needed (a test proves it). The folders under `out/` are backup only.
 
