@@ -41,7 +41,7 @@ test('the starburst fix is shown as before and after pairs', async ({ page }) =>
   const s = page.locator('#smart-placement');
   const art = s.getByRole('article', { name: 'hot-flat starbursts, before and after' });
   await expect(art).toBeVisible();
-  expect(await art.locator('.res-smart-row').count()).toBeGreaterThanOrEqual(6);
+  expect(await art.locator('.res-smart-row').count()).toBeGreaterThanOrEqual(1); // fewer bursts since Step 10: they only go where there is room
   await expect(art.getByText(/^Before/).first()).toBeVisible();
   await art.scrollIntoViewIfNeeded();
   await page.waitForTimeout(600);

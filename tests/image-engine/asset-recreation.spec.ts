@@ -86,7 +86,8 @@ test('SHIPPABLE: every element-rich style, every deck, every slide as its own fi
   for (const style of STYLES) {
     const rows = (summary as { style: string; elements: number }[]).filter((r) => r.style === style);
     const avg = rows.reduce((n, r) => n + r.elements, 0) / rows.length;
-    expect(avg, `${style} average elements per slide`).toBeGreaterThan(1.5);
+    // Since Step 10 decoration needs a job, hot-flat (made mostly of decoration) has fewer pictures: a lower bar there.
+    expect(avg, `${style} average elements per slide`).toBeGreaterThan(style === 'hot-flat' ? 0.5 : 1.5);
   }
 });
 

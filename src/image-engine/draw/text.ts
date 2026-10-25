@@ -113,7 +113,7 @@ export function fitText(opts: {
     const w = wrapText(opts.text, opts.width, opts.font, opts.weight, size);
     const lineStep = size * opts.lineHeight;
     const height = w.lines.length * lineStep;
-    const fits = height <= opts.height && !w.wordTooWide;
+    const fits = height <= opts.height + 0.01 && !w.wordTooWide; // a hundredth of a pixel of slack: heights are rounded up when boxes are made
     last = { size, lines: w.lines, lineStep, height, fits, why: fits ? undefined : w.wordTooWide ? 'word-too-wide' : 'too-tall' };
     if (fits) return last;
   }
@@ -156,7 +156,7 @@ export function layoutText(layer: TextLayer): TextBlock {
         const w = wrapText(layer.text, layer.width, s.font, s.weight, s.size);
         const lineStep = s.size * s.lineHeight;
         const height = w.lines.length * lineStep;
-        const fits = height <= layer.height && !w.wordTooWide;
+        const fits = height <= layer.height + 0.01 && !w.wordTooWide;
         return { size: s.size, lines: w.lines, lineStep, height, fits, why: fits ? undefined : w.wordTooWide ? 'word-too-wide' : 'too-tall' } as Fit;
       })();
 
