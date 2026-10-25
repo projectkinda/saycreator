@@ -19,6 +19,8 @@ Only the bundled fonts can be used (Schibsted Grotesk 600, 700, 800 and Instrume
   "schema": 1,
   "name": "hot-flat",              // must equal the folder name
   "title": "Hot flat colour, heavy type",
+  "description": "Loud and high-energy: bold claims and short punchy tips.",   // one line (10 to 140 characters): what the style is for. Shown to the writer.
+  "suits": { "tones": ["bold"], "keywords": ["launch", "growth"], "slideTypes": ["step"] },   // optional: what "Pick for me" looks for (tones: clear, bold, friendly, expert)
   "version": "1.0.0",
   "basedOn": { "cluster": "hot-flat", "note": "Which reading this came from, in a sentence." },
 
@@ -121,6 +123,10 @@ A style with no `elements` block never gets any. With one, the engine places lib
 ```
 
 Rule fields: `tags` (any of these; the library's tags are listed on the Results screen), `kinds` (`icon`, `object`, `code`), `zone` (`free`, `near-headline`, `corner-tl`, `corner-tr`, `corner-bl`, `corner-br`, `bleed-top`, `bleed-bottom`, `bleed-right`, `texture`), `count` [fewest, most] from 0 to 4, `size` [smallest, largest] in px, `rotate` [from, to] degrees, `opacity`, `match` (`"slide"`: pick only elements linked to the slide's `element_tags`, or none; see below), `tint` (one palette role: flat colour), `recolour` (swap palette roles), `recolourBy` (the same, per palette name, for example `{"hot": {"accent": "bg"}}`; it wins over `recolour` for that palette), `colour` (`original` keeps the element's own colours, `palette` recolours it; default: original for coloured objects, palette for everything else), `sticker` (outline from the `sticker` block), `shadow`.
+
+**Decoration needs a job.** A rule whose tags are all plain decoration (blob, doodle, squiggle, zigzag, brush, loop, circle, underline, halftone, tape, arrow, plus, asterisk, sparkle, burst...) must say what it is for with `"role"`, or the style is refused: `"frame"` (a ring round the big number of a stat slide, or a line under the headline), `"point"` (an arrow in the real gap under the headline, turned to point down at what follows), `"gap"` (fills real empty space: only on a slide that is not already full, with extra clear space around it). Decoration is never placed on text, except a frame on the text it frames. If a rule cannot find its job on a slide (no big number, no gap), nothing is placed and a note says why. A ring round a number is supported but no stat layout leaves room for one, so no style uses it.
+
+**Keeping the split clear.** A layout that splits the slide in two (myth and fact) tells the placer where: `plan.meta.keepClear` lists a band across the split and a box round its arrow button. No picture is placed there, and the phone-size check "Elements stay off the split" fails if one is. This is built into the two myth and fact layouts, not set per style.
 
 **Following the slide.** A slide in a script can carry `"element_tags": ["money", "growth"]` (2 to 4 lower-case words; the concept words are listed in `src/image-engine/styles/tags.ts`). Rules with `"match": "slide"` then use only elements whose tags link to those tags, best link first, never the same picture twice, and place nothing when none links. Other rules that pick among their own tags also skip any picture of a thing that does not link to the slide. Plain decoration (arrows, squiggles, tape, blobs) is never judged. The plan records the tags in `meta.elementTags`, and the phone-size checks gain an eighth check, "Elements match the slide", which flags an "unrelated element". A script with no `element_tags` behaves as before.
 

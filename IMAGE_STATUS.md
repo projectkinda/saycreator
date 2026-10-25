@@ -397,3 +397,20 @@ Covered: all of these except photo cutouts and true 3D renders. Photo cutouts ne
 - The page's behaviour in a production build (no writer, Generate off) was reasoned about and covered by the "no writer" test, not by a built-and-served run.
 - Whether Claude Code can be started this way on another computer (different install location, not signed in) is untested; the error message for "not found" is tested with a stand-in.
 - There is no production server in the repository yet; the API route is a handler ready to mount.
+
+
+## Step 10: Polish
+
+### What changed
+1. **Split rule (myth and fact slides).** The two split layouts now declare a keep-clear band across the split and a box round the arrow button (`plan.meta.keepClear`); the placer never puts a picture there, and a new phone-size check, "Elements stay off the split", fails if one is. Checked on all 12 split slides in the sample set (3 styles x 4 decks); a deliberately bad plan with a picture across the line, and one beside the arrow, fail with "Element crosses the split: ...".
+2. **Decoration with a job.** A decoration rule must have a `role` (frame, point, gap) or the style is refused. A line under a headline (frame) works; an arrow must sit in a real gap under the headline pointing down (point); blobs, squiggles, tape and halftone only go on a slide that is not full, with extra clear space (gap). The editorial blob and circle marks were taken off the covers. A ring round a big number is supported but never fits, so no style uses it.
+3. **One highlight bar.** A highlighted phrase that fits on a line (92% of its width) is kept on one line with no-break spaces, so it is drawn as one bar. A phrase longer than a line still wraps into one bar per line.
+4. **"Pick for me".** Each style has a one-line `description` and a `suits` list (tones, words, slide types) in its style.json. The page scores every style from the tone, the words of the text and the slide types, with the writer's own suggestion worth one point, breaks ties from the text itself, and tells the person why ("Warm editorial collage: it suits a clear tone; the text has words it suits (i, my, week)..."). On 8 different texts it picked editorial-collage 3 times, object-neon 3, dark-quiet 1 and hot-flat 1. I wrote both the keyword lists and those 8 texts, so this shows it is not stuck on one style, not that it picks well; first-person words push toward editorial.
+5. **Formats and sizes, fake writer.** Quote cards (3, square), a 3-slide and a 10-slide carousel, and a text of about 11,990 characters (one character more is refused) all go through Generate and draw with no phone-check failure.
+6. **One real quote card generation** (the dev writer, sample-inputs/quotes.txt): three cards in about 11 seconds, quotes word for word from the text, no validator warnings, no phone-check failures; the style picked was editorial-collage.
+
+### Still weak (details in the Results screen under Step 10)
+Some split slides are now bare; arrows that point at something almost never fit (1 of the 48 sample slides); blobs and squiggles are still decoration; the lower-case style changes the case inside a quotation; pictures are not checked against the background colour (a brown heart on a dark slide); only one real generation per format was run.
+
+### Not tested
+The ring round a number, a highlight phrase longer than a line, real writers on 3- and 10-slide carousels, and other topics.
