@@ -18,3 +18,10 @@ public/ort/
 Reference carousels likes/*
 !Reference carousels likes/clusters.json
 !Reference carousels likes/grids.json
+
+# Asset packs are fetched by npm run fetch:assets (never committed)
+src/image-engine/assets/packs/
+
+# Your private test assets: never committed, never bundled
+test-assets/*
+!test-assets/README.txt

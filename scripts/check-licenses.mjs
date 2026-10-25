@@ -90,6 +90,38 @@ notes.push(`npm: ${count} packages checked, ${Object.entries(byLicence).sort((a,
 const ortPkg = readJson(path.join(root, 'node_modules/onnxruntime-web/package.json'));
 if (manifest.runtime?.version && ortPkg.version !== manifest.runtime.version) fail(`onnxruntime-web ${ortPkg.version} installed but the manifest pins ${manifest.runtime.version}`);
 
+// ---- asset packs (scripts/assets.manifest.json, LICENSES-ASSETS.md)
+{
+  const am = readJson(path.join(root, 'scripts/assets.manifest.json'));
+  const adocs = fs.readFileSync(path.join(root, 'LICENSES-ASSETS.md'), 'utf8');
+  const packsDir = path.join(root, 'src/image-engine/assets/packs');
+  const ASSET_ALLOWED = ['MIT', 'ISC', 'Apache-2.0', 'CC0-1.0', 'BSD-2-Clause', 'BSD-3-Clause', '0BSD', 'Unlicense'];
+  for (const s of am.sources) {
+    if (!ASSET_ALLOWED.includes(s.licence)) fail(`asset source ${s.id}: licence "${s.licence}" is not on the permissive list (${ASSET_ALLOWED.join(', ')}). Remove it, or ask the project owner.`);
+    if (!/^https:\/\/github\.com\//.test(s.licenceUrl ?? '')) fail(`asset source ${s.id}: the licence was not read at an upstream repository (licenceUrl must point at the upstream's own LICENSE).`);
+    if (!/^sha512-/.test(s.npm?.integrity ?? '')) fail(`asset source ${s.id}: no pinned sha512 integrity.`);
+    if (!/^\d+\.\d+\.\d+$/.test(s.npm?.version ?? '')) fail(`asset source ${s.id}: the version is not pinned exactly.`);
+    if (!adocs.includes(s.npm.version) || !adocs.includes(s.upstream.replace('https://github.com/', ''))) fail(`asset source ${s.id}: LICENSES-ASSETS.md does not describe version ${s.npm.version} and ${s.upstream}.`);
+    if (!s.attribution) fail(`asset source ${s.id}: no attribution note.`);
+    notes.push(`asset source ${s.id} ${s.npm.version}: ${s.licence}`);
+  }
+  for (const p of am.packs) if (!adocs.includes('`' + p.id + '`')) fail(`asset pack ${p.id}: not described in LICENSES-ASSETS.md.`);
+  if (fs.existsSync(path.join(packsDir, 'index.json'))) {
+    const idx = readJson(path.join(packsDir, 'index.json'));
+    const lock = readJson(path.join(packsDir, 'assets.lock.json'));
+    const known = new Map(am.sources.map((s) => [s.id, s]));
+    for (const l of lock.sources) {
+      const s = known.get(l.id);
+      if (!s) fail(`fetched source ${l.id} is not in the manifest, so its licence was never checked. Delete src/image-engine/assets/packs and run npm run fetch:assets.`);
+      else if (s.npm.integrity !== l.integrity || !ASSET_ALLOWED.includes(l.licence)) fail(`fetched source ${l.id} does not match the manifest (version or integrity changed). Run npm run fetch:assets again.`);
+      if (!fs.existsSync(path.join(packsDir, `LICENSE-${l.id}.txt`))) fail(`fetched source ${l.id}: the licence text is missing next to the files.`);
+    }
+    for (const p of idx.packs) if (!ASSET_ALLOWED.includes(p.licence)) fail(`fetched pack ${p.id} has licence "${p.licence}", which is not allowed.`);
+    for (const f of fs.readdirSync(packsDir).filter((x) => x.endsWith('.svgs.json'))) if (!am.packs.some((p) => `${p.id}.svgs.json` === f)) fail(`${f} is in the packs folder but not in the manifest.`);
+    notes.push(`fetched packs: ${idx.packs.map((p) => `${p.id} ${p.count}`).join(', ')}`);
+  } else notes.push('asset packs not fetched here (npm run fetch:assets); the manifest and LICENSES-ASSETS.md were checked');
+}
+
 // ---- fonts
 const fontsDir = path.join(root, 'src/image-engine/fonts');
 for (const d of fs.readdirSync(fontsDir, { withFileTypes: true }).filter((e) => e.isDirectory())) {

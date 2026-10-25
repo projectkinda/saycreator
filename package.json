@@ -12,7 +12,8 @@
     "fetch:models": "node scripts/fetch-models.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
     "style:read": "node scripts/style-read.mjs",
-    "style:aggregate": "node scripts/style-aggregate.mjs"
+    "style:aggregate": "node scripts/style-aggregate.mjs",
+    "fetch:assets": "node scripts/fetch-assets.mjs"
   },
   "dependencies": {
     "fabric": "^7.4.0",

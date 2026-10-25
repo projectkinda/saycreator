@@ -1,0 +1,43 @@
+{
+  "_comment": "Single source of truth for fetched asset packs. Each source is an npm package at a pinned version with its pinned sha512 integrity (the registry's own value). A pack is a set of elements taken from a source. Licences were read at the UPSTREAM repositories (see licenceUrl), not from a mirror's claim. Nothing is fetched at run time; `npm run fetch:assets` is the only network use. See LICENSES-ASSETS.md.",
+  "sources": [
+    {
+      "id": "lucide-static",
+      "npm": { "name": "lucide-static", "version": "1.61.0", "integrity": "sha512-yLAiQB3MWUJEstsEDAwenSA3m7vr1tdLvgnC16Q/XMxRRma0DWwMs8M2bWlvgShrIs1m2mWMJ+0AiahqQO4GrA==" },
+      "upstream": "https://github.com/lucide-icons/lucide",
+      "licence": "ISC",
+      "licenceUrl": "https://github.com/lucide-icons/lucide/blob/main/LICENSE",
+      "licenceFile": "package/LICENSE",
+      "attribution": "Keep the copyright and permission notice (ISC) with copies. A few icons derive from Feather (MIT); the same file carries that notice too. The fetch script copies it next to the files."
+    },
+    {
+      "id": "phosphor-core",
+      "npm": { "name": "@phosphor-icons/core", "version": "2.1.1", "integrity": "sha512-v4ARvrip4qBCImOE5rmPUylOEK4iiED9ZyKjcvzuezqMaiRASCHKcRIuvvxL/twvLpkfnEODCOJp5dM4eZilxQ==" },
+      "upstream": "https://github.com/phosphor-icons/core",
+      "licence": "MIT",
+      "licenceUrl": "https://github.com/phosphor-icons/core/blob/main/LICENSE",
+      "licenceFile": "package/LICENSE",
+      "attribution": "Keep the copyright and permission notice (MIT) with copies. The fetch script copies it next to the files."
+    },
+    {
+      "id": "fluent-emoji-flat",
+      "npm": { "name": "@iconify-json/fluent-emoji-flat", "version": "1.2.6", "integrity": "sha512-RY47RgPb47fYUiyrA64sIOL0+UU02s29sXpNBbIQRBUlPlfNFTKUmZDERGuxDs/7yNGWqQYvuaSYM1M4fRXlUw==" },
+      "upstream": "https://github.com/microsoft/fluentui-emoji",
+      "licence": "MIT",
+      "licenceUrl": "https://github.com/microsoft/fluentui-emoji/blob/main/LICENSE",
+      "licenceFile": "scripts/licences/fluentui-emoji-LICENSE.txt",
+      "attribution": "Keep the copyright and permission notice (MIT, Microsoft Corporation) with copies. The npm package is Iconify's repackaging of the upstream SVGs; the licence text kept here is the upstream's own."
+    }
+  ],
+  "packs": [
+    { "id": "lucide", "label": "Lucide icons (outline)", "source": "lucide-static", "kind": "icon", "dir": "package/icons/", "mono": true },
+    { "id": "phosphor-bold", "label": "Phosphor icons (bold)", "source": "phosphor-core", "kind": "icon", "dir": "package/assets/bold/", "suffix": "-bold", "mono": true },
+    { "id": "phosphor-fill", "label": "Phosphor icons (filled)", "source": "phosphor-core", "kind": "icon", "dir": "package/assets/fill/", "suffix": "-fill", "mono": true },
+    { "id": "fluent", "label": "Fluent Emoji (flat, coloured objects)", "source": "fluent-emoji-flat", "kind": "object", "iconify": "package/icons.json" }
+  ],
+  "excludeNames": ["skin-tone", "^flag-", "^regional-indicator", "^keycap-"],
+  "noteOnNotUsed": [
+    "Open Doodles (CC0): the official source is a website download and a Figma file with no pinned, checkable archive, so it is not used.",
+    "Twemoji (CC BY 4.0), OpenMoji (CC BY-SA 4.0), Noto emoji (mixed licences across the repository): attribution or share-alike conditions, or unclear conditions, so not used. Flagged in LICENSES-ASSETS.md."
+  ]
+}
