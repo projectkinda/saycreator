@@ -24,7 +24,7 @@ export function composeDoc(doc: Doc): { slides: StyledSlide[]; margin: number } 
   if (!doc.script) return { slides: [], margin: style.spec.spacing.margin };
   const f = formatOf(doc.format);
   const overrides = Object.fromEntries(Object.entries(doc.choices).map(([k, v]) => [Number(k), v]));
-  const slides = composeStyled(doc.script, style, { width: f.width, height: f.height, chrome: doc.format === 'quote' ? 'none' : undefined, handle: doc.script.brand.handle, elements: 'shippable', overrides }, doc.format === 'quote');
+  const slides = composeStyled(doc.script, style, { width: f.width, height: f.height, chrome: doc.format === 'quote' ? 'none' : undefined, handle: doc.script.brand.handle, elements: 'shippable', overrides }, true);
   return { slides, margin: style.spec.spacing.margin };
 }
 

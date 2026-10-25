@@ -33,7 +33,13 @@ const open = async (page: Page) => {
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
 };
+/** The copy-prompt, paste and example tools live in the Advanced fold since Step 9. */
+const openAdvanced = async (page: Page) => {
+  const d = page.locator('details.cr-advanced');
+  if (!(await d.evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByText('Advanced: write the script yourself').click();
+};
 const paste = async (page: Page, text: string) => {
+  await openAdvanced(page);
   const box = page.getByLabel('Paste the script Claude wrote (JSON)');
   await box.fill(text);
 };
@@ -47,6 +53,7 @@ const allDrawn = async (page: Page, count = 7) => {
 const srcs = (page: Page) => page.locator('.cr-card .cr-pic img').evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src));
 const loadExample = async (page: Page) => {
   await open(page);
+  await openAdvanced(page);
   await page.getByRole('button', { name: 'Try an example script' }).click();
   await allDrawn(page);
 };
@@ -58,29 +65,33 @@ test.beforeEach(async ({ page, context }) => {
   page.on('pageerror', (e) => console.log('[pageerror]', e.message.slice(0, 300)));
 });
 
-test('the Images screen has a Make a carousel action that opens the editor, with format, style and script steps', async ({ page }) => {
+test('the Images screen has a Make a carousel action that opens the editor, with the text box, format, style and Generate', async ({ page }) => {
   await page.goto('/images');
   await shot(page, 'images-screen', 'The Images screen', 'A new "Make a carousel" button sits beside "Create image". Nothing else on the screen changed.');
   await page.getByRole('link', { name: 'Make a carousel' }).click();
   await expect(page).toHaveURL(/\/images\/carousel$/);
-  await expect(page.getByRole('heading', { name: '1. Format' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Make it from your text' })).toBeVisible();
+  await expect(page.getByLabel('Your text, idea or article')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Generate', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Carousel/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: /^Quote card/ })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByRole('heading', { name: '2. Style' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '3. Script' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Style', exact: true })).toBeVisible();
+  await expect(page.getByText('Advanced: write the script yourself')).toBeVisible();
   await expect(page.getByText('No script yet')).toBeVisible();
   // Every stored style is in the picker with a small preview that really drew.
   const styles = page.getByRole('list', { name: 'Styles' }).getByRole('listitem');
-  expect(await styles.count()).toBeGreaterThanOrEqual(4);
-  await expect(page.getByRole('list', { name: 'Styles' }).locator('img')).toHaveCount(await styles.count(), { timeout: 30_000 });
+  expect(await styles.count()).toBeGreaterThanOrEqual(5); // "Pick for me" and every stored style
+  await expect(page.getByRole('button', { name: /^Pick for me/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('list', { name: 'Styles' }).locator('img')).toHaveCount((await styles.count()) - 1, { timeout: 30_000 });
   const ok = await page.getByRole('list', { name: 'Styles' }).locator('img').evaluateAll((els) => els.every((e) => (e as HTMLImageElement).naturalWidth > 0));
   expect(ok).toBe(true);
   await shot(page, 'start', 'Start: format, style, script', 'Pick a format, pick a style (each has a small preview), then get a script.');
 });
 
-test('Copy prompt for Claude puts the topic, the format and the rules on the clipboard; "Write it for me" is disabled and says coming soon', async ({ page }) => {
+test('Advanced: Copy prompt for Claude puts the topic, the format and the rules on the clipboard', async ({ page }) => {
   await open(page);
-  await page.getByLabel('What is it about?').fill('Why small teams should write down decisions');
+  await page.getByLabel('Your text, idea or article').fill('Why small teams should write down decisions');
+  await openAdvanced(page);
   await page.getByRole('button', { name: 'Copy prompt for Claude' }).click();
   await expect(page.getByText(/Prompt copied/)).toBeVisible();
   const text = await page.evaluate(() => navigator.clipboard.readText());
@@ -90,9 +101,6 @@ test('Copy prompt for Claude puts the topic, the format and the rules on the cli
   expect(text).toContain('one idea per slide'.replace('one', 'One'));
   expect(text).toMatch(/Do not invent figures/);
   expect(text).toMatch(/"type": "stat"/);
-  const writer = page.getByRole('button', { name: 'Write it for me' });
-  await expect(writer).toBeDisabled();
-  await expect(page.getByText(/Coming soon/).first()).toBeVisible();
   await page.getByText('Show the prompt').click();
   const norm = (s: string) => s.replace(/\r/g, ''); // Windows clipboards turn line ends into CRLF
   expect(norm(await page.getByLabel('The prompt to paste into Claude').inputValue())).toBe(norm(text));
@@ -100,11 +108,12 @@ test('Copy prompt for Claude puts the topic, the format and the rules on the cli
   await page.getByRole('button', { name: /^Quote card/ }).click();
   await page.getByRole('button', { name: 'Copy prompt for Claude' }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('quote cards');
-  await shot(page, 'prompt', 'Copy the prompt', 'The prompt holds the topic, the JSON format, and the rules. "Write it for me" is disabled: coming soon.');
+  await shot(page, 'prompt', 'Copy the prompt', 'In the Advanced fold: the prompt holds the text, the JSON format, and the rules, for anyone who wants to write the script in a chat.');
 });
 
 test('pasting a bad script says what is wrong and where, in plain words, and will not use it', async ({ page }) => {
   await open(page);
+  await openAdvanced(page);
   const use = page.getByRole('button', { name: 'Use this script' });
   await expect(use).toBeDisabled();
   // 1. Not JSON at all: a missing comma.
@@ -115,14 +124,14 @@ test('pasting a bad script says what is wrong and where, in plain words, and wil
   await expect(use).toBeDisabled();
   // 2. JSON, but the script is wrong in several places.
   const bad = JSON.parse(EXAMPLE);
-  bad.slides.pop();
+  bad.slides = [...bad.slides, ...bad.slides]; // 14 slides: too many
   bad.slides[1].type = 'banner';
   delete bad.slides[2].headline;
   bad.slides[3].element_tags = ['one'];
   bad.slides[4].items = 'not a list';
   await paste(page, JSON.stringify(bad, null, 2));
   await expect(alert).toContainText('problems to fix');
-  await expect(alert).toContainText('A carousel needs exactly 7 slides. This script has 6.');
+  await expect(alert).toContainText('A carousel needs 3 to 10 slides (7 is usual). This script has 14.');
   await expect(alert).toContainText('Slide 2 has the type "banner". Use one of: cover, content, step');
   await expect(alert).toContainText('Slide 3 "headline" is missing');
   await expect(alert).toContainText('element_tags must have 2 to 4 tags');
@@ -141,8 +150,7 @@ test('pasting a good script (even inside a chat code block) loads it: seven slid
   await page.getByRole('button', { name: 'Use this script' }).click();
   await allDrawn(page);
   await expect(page.getByText(/Script loaded: 7 slides/)).toBeAttached();
-  await expect(page.getByLabel('Paste the script Claude wrote (JSON)')).toHaveCount(0); // the form folds away once a script is in use
-  await expect(page.getByText('Fix your profile in 15 minutes: 7 slides')).toBeVisible();
+  await expect(page.getByLabel('Paste the script Claude wrote (JSON)')).toBeHidden(); // the Advanced fold closes once a script is in use
   const first = slideCard(page, 1);
   await expect(first.getByLabel('Headline')).toHaveValue('Fix your profile in 15 minutes');
   await expect(first.getByRole('list', { name: 'Picture tags (2 to 4)' }).getByText('profile')).toBeVisible();
@@ -206,7 +214,8 @@ test('changing the style restyles the same script; undo goes back', async ({ pag
   const pressed = await buttons.evaluateAll((els) => els.findIndex((e) => e.getAttribute('aria-pressed') === 'true'));
   const current = buttons.nth(pressed);
   const currentName = await current.innerText();
-  const other = buttons.nth((pressed + 1) % (await buttons.count()));
+  const count = await buttons.count();
+  const other = buttons.nth(pressed + 1 < count ? pressed + 1 : 1); // index 0 is "Pick for me"
   const otherName = await other.innerText();
   await other.click();
   await expect(other).toHaveAttribute('aria-pressed', 'true');
@@ -315,7 +324,7 @@ test('refresh and recover: the script, the edits, the style and the undo history
   const card = slideCard(page, 2);
   await card.getByLabel('Headline').fill('Say who you help');
   await expect(undoBtn(page)).toContainText('Edit headline on slide 2');
-  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { pressed: false }).first().click();
+  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { pressed: false }).filter({ hasNotText: 'Pick for me' }).first().click();
   await allDrawn(page);
   const styleName = await page.getByRole('list', { name: 'Styles' }).getByRole('button', { pressed: true }).innerText();
   await expect(page.getByText(/Saved in this browser/)).toBeVisible();
@@ -329,18 +338,17 @@ test('refresh and recover: the script, the edits, the style and the undo history
   await expect(slideCard(page, 2).getByLabel('Headline')).toHaveValue('Rewrite your headline');
   await shot(page, 'recovered', 'After a refresh', 'The project is back as it was, including the undo history.');
   // Pasted text that was not used yet is kept too.
-  await page.getByRole('button', { name: 'Use a different script' }).click();
   await paste(page, '{ "slides": [');
   await expect(page.getByText(/not valid JSON/)).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Use a different script' }).click();
+  await openAdvanced(page);
   await expect(page.getByLabel('Paste the script Claude wrote (JSON)')).toHaveValue('{ "slides": [');
 });
 
 test('a broken or unknown saved project never crashes the page', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('creator.carousel.project.v1', JSON.stringify({ project: { doc: { version: 1, format: 'carousel', style: 'gone', topic: 'kept', script: { slides: [1, 2] }, choices: {} }, past: [], future: [] } })));
   await open(page);
-  await expect(page.getByLabel('What is it about?')).toHaveValue('kept');
+  await expect(page.getByLabel('Your text, idea or article')).toHaveValue('kept');
   await expect(page.getByText('No script yet')).toBeVisible();
   await page.addInitScript(() => localStorage.setItem('creator.carousel.project.v1', '{not json'));
   await page.reload();
@@ -355,6 +363,7 @@ test('quote cards: a different format, square, with its own example; changing fo
   await undoBtn(page).click();
   await allDrawn(page);
   await page.getByRole('button', { name: /^Quote card/ }).click();
+  await openAdvanced(page);
   await page.getByRole('button', { name: 'Try an example script' }).click();
   await allDrawn(page, 3);
   const dims = await page.locator('.cr-card .cr-pic img').evaluateAll((els) => els.map((e) => `${(e as HTMLImageElement).naturalWidth}x${(e as HTMLImageElement).naturalHeight}`));
@@ -369,11 +378,13 @@ test('keyboard and screen readers: the whole flow works without a mouse, and con
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: /^Quote card/ })).toBeFocused();
   await page.keyboard.press('Tab');
-  const firstStyle = page.getByRole('list', { name: 'Styles' }).getByRole('button').first();
-  await expect(firstStyle).toBeFocused();
+  await expect(page.getByRole('combobox', { name: /^Slides/ })).toBeFocused();
+  const firstStyle = page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasNotText: 'Pick for me' }).first().getByRole('button');
+  await firstStyle.focus();
   await page.keyboard.press('Enter');
   await expect(firstStyle).toHaveAttribute('aria-pressed', 'true');
   // The example loads with the keyboard, and fields are reachable by their labels.
+  await openAdvanced(page);
   await page.getByRole('button', { name: 'Try an example script' }).focus();
   await page.keyboard.press('Enter');
   await allDrawn(page);
@@ -413,7 +424,11 @@ test('only shippable pictures: no private test asset is ever asked for, and the 
   expect(asked.filter((u) => !u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:') && !new URL(u).hostname.match(/^fonts\.(googleapis|gstatic)\.com$/))).toEqual([]);
   const src = fs.readdirSync(path.join(ROOT, 'src/carousel')).map((f) => fs.readFileSync(path.join(ROOT, 'src/carousel', f), 'utf8')).join('\n');
   expect(src).not.toMatch(/test-assets/);
-  expect(src).not.toMatch(/fetch\(|XMLHttpRequest|api[_-]?key|Authorization/i);
+  expect(src).not.toMatch(/api[_-]?key|Authorization/i);
+  const noWriter = fs.readdirSync(path.join(ROOT, 'src/carousel')).filter((f) => f !== 'writer.ts').map((f) => fs.readFileSync(path.join(ROOT, 'src/carousel', f), 'utf8')).join('\n');
+  expect(noWriter).not.toMatch(/fetch\(|XMLHttpRequest/); // only writer.ts talks to the network, and only to this app's own endpoints
+  const writerSrc = fs.readFileSync(path.join(ROOT, 'src/carousel/writer.ts'), 'utf8');
+  expect(writerSrc).not.toMatch(/anthropic\.com|https?:\/\//);
 });
 
 test('the old mock carousel path is still there behind a flag', async ({ page }) => {
@@ -449,6 +464,7 @@ test('MEASURE: drawing and exporting 7 slides keeps the page responsive (what wa
     };
     requestAnimationFrame(tick);
   });
+  await openAdvanced(page);
   const t0 = Date.now();
   await page.getByRole('button', { name: 'Try an example script' }).click();
   await allDrawn(page);
@@ -504,7 +520,7 @@ test.afterAll(() => {
     "tag": "FIXED",
     "images": [],
     "facts": [
-      "After loading, the paste box and prompt filled a screen above the slides. It now folds into one line with \"Use a different script\"."
+      "After loading, the paste box and prompt filled a screen above the slides. In Step 9 the old script tools moved into a closed \"Advanced\" fold."
     ]
   },
   {

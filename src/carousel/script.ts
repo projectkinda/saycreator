@@ -5,8 +5,10 @@ import type { CarouselScript, SlideScript } from '../image-engine/carousel/types
 import { VOCABULARY, checkElementTags } from '../image-engine/styles/tags';
 
 export type Format = 'carousel' | 'quote';
+/** How many slides a script may have. A carousel is usually 7; fewer or more is fine within these limits. */
+export const SLIDE_RANGE: Record<Format, [number, number]> = { carousel: [3, 10], quote: [1, 7] };
 export const FORMATS: { id: Format; label: string; note: string; ratio: string; width: number; height: number }[] = [
-  { id: 'carousel', label: 'Carousel', note: '7 slides, 4:5', ratio: '4:5', width: 1080, height: 1350 },
+  { id: 'carousel', label: 'Carousel', note: '3 to 10 slides, usually 7, 4:5', ratio: '4:5', width: 1080, height: 1350 },
   { id: 'quote', label: 'Quote card', note: '1 to 7 square cards, 1:1', ratio: '1:1', width: 1080, height: 1080 },
 ];
 export const formatOf = (f: Format) => FORMATS.find((x) => x.id === f)!;
@@ -138,8 +140,8 @@ export function validateScript(raw: unknown, format: Format): ScriptResult {
     err('slides', 'The script has no "slides" list. It needs "slides": [ ... ].');
     return finish(issues);
   }
-  if (format === 'carousel' && slides.length !== 7) err('slides', `A carousel needs exactly 7 slides. This script has ${slides.length}.`);
-  if (format === 'quote' && (slides.length < 1 || slides.length > 7)) err('slides', `Quote cards come in sets of 1 to 7. This script has ${slides.length}.`);
+  const [lo, hi] = SLIDE_RANGE[format];
+  if (slides.length < lo || slides.length > hi) err('slides', format === 'carousel' ? `A carousel needs ${lo} to ${hi} slides (7 is usual). This script has ${slides.length}.` : `Quote cards come in sets of ${lo} to ${hi}. This script has ${slides.length}.`);
   slides.forEach((s, i) => {
     const at = (k: string) => `slides[${i}]${k ? '.' + k : ''}`;
     const n = `Slide ${i + 1}`;
@@ -188,7 +190,7 @@ export const issuesFor = (issues: Issue[], prefix: string) => issues.filter((i) 
 
 // ---- the prompt people copy into a Claude chat ----
 
-const EXAMPLE = {
+export const EXAMPLE = {
   title: 'Short name of this carousel',
   brand: { handle: '@yourname' },
   slides: [
@@ -201,7 +203,7 @@ const EXAMPLE = {
     { type: 'closing', headline: 'Save this for later', cta: 'Follow for more', element_tags: ['launch', 'love'] },
   ],
 };
-const EXAMPLE_QUOTE = { title: 'Short name of this set', brand: { handle: '@yourname' }, slides: [{ type: 'quote', quote: 'One sentence worth remembering.', by: 'Who said it', highlight: 'worth remembering', element_tags: ['idea', 'write'] }] };
+export const EXAMPLE_QUOTE = { title: 'Short name of this set', brand: { handle: '@yourname' }, slides: [{ type: 'quote', quote: 'One sentence worth remembering.', by: 'Who said it', highlight: 'worth remembering', element_tags: ['idea', 'write'] }] };
 
 export function scriptPrompt(topic: string, format: Format): string {
   const t = topic.trim() || '(write your topic here)';
@@ -226,22 +228,7 @@ export function scriptPrompt(topic: string, format: Format): string {
   ].join('\n');
 }
 
-// ---- the place a future "Write it for me" backend plugs in ----
-
-export interface ScriptWriter {
-  /** False until a backend exists. The button stays disabled and says "coming soon". */
-  available: boolean;
-  label: string;
-  /** Returns script JSON text, which goes through the same validation as a pasted script. */
-  write(topic: string, format: Format): Promise<string>;
-}
-export const comingSoonWriter: ScriptWriter = {
-  available: false,
-  label: 'Write it for me',
-  async write() {
-    throw new Error('Writing the script for you is not available yet. Copy the prompt and paste the answer instead.');
-  },
-};
+// The writers (where a script comes from when the person presses Generate) are in writer.ts.
 
 /** A small example so the editor can be tried without writing anything. */
 export function exampleScript(format: Format): string {

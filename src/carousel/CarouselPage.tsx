@@ -5,8 +5,10 @@ import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { composeStyled, type StyledSlide } from '../image-engine/styles/compose';
 import { useDocumentTitle } from '../useDocumentTitle';
-import { validateScript, validateScriptText, comingSoonWriter, exampleScript, FORMATS, formatOf, scriptPrompt, type Format, type ScriptResult } from './script';
-import { patches } from './doc';
+import { validateScript, validateScriptText, exampleScript, formatOf, scriptPrompt, SLIDE_RANGE, type Format, type ScriptResult } from './script';
+import { DEFAULT_OPTIONS, patches } from './doc';
+import { MakeIt, runGenerate, styleForTone, useWriters, type GenState } from './MakeIt';
+import { type WriteRequest } from './writerPrompt';
 import { downloadBlob, exportAllAsZip, slideFileName, zipFileName } from './export';
 import { composeDoc, getStyles, renderer, styleByName, type Rendered } from './render';
 import { SlideCard, type SlideView } from './SlideCard';
@@ -17,7 +19,7 @@ const DEFAULT_STYLE = 'editorial-collage';
 
 // ---------- style picker with a small preview of each style ----------
 
-function StylePicker({ format, value, onPick }: { format: Format; value: string; onPick: (name: string, title: string) => void }) {
+function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; value: string; auto: boolean; onAuto: () => void; onPick: (name: string, title: string) => void }) {
   const { styles, problems } = getStyles();
   const [previews, setPreviews] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -45,14 +47,21 @@ function StylePicker({ format, value, onPick }: { format: Format; value: string;
   return (
     <>
       <ul className="grid cr-styles" aria-label="Styles">
+        <li>
+          <button type="button" className="card start-opt cr-style cr-auto" aria-pressed={auto} onClick={onAuto}>
+            <strong>Pick for me</strong>
+            <span className="small muted">The writer chooses the style that suits your text and tone.</span>
+          </button>
+        </li>
         {styles.map((st) => {
           const img = previews[`${format}:${st.spec.name}`];
           return (
             <li key={st.spec.name}>
-              <button type="button" className="card start-opt cr-style" aria-pressed={value === st.spec.name} onClick={() => onPick(st.spec.name, st.spec.title)}>
+              <button type="button" className="card start-opt cr-style" aria-pressed={!auto && value === st.spec.name} onClick={() => onPick(st.spec.name, st.spec.title)}>
                 <span className={`cr-style-pic r${format === 'quote' ? '1-1' : '4-5'}`}>{img ? <img src={img} alt={`Preview of the ${st.spec.title} style`} /> : <span className="small muted" role="status">Drawing…</span>}</span>
                 <strong>{st.spec.title}</strong>
                 <span className="small muted">{st.spec.name}</span>
+                {auto && value === st.spec.name && <span className="chip chip-tag">In use</span>}
                 {st.warnings.some((w) => /phone-size checker needs at least 32 px/.test(w)) && <span className="chip chip-warn">Some text is below phone size</span>}
               </button>
             </li>
@@ -108,8 +117,9 @@ function FullSize({ items, at, onClose, onMove }: { items: { url: string; alt: s
 export default function CarouselPage() {
   useDocumentTitle('Make a carousel');
   const proj = useProject(styleByName(DEFAULT_STYLE) ? DEFAULT_STYLE : getStyles().styles[0]?.spec.name ?? DEFAULT_STYLE);
-  const { project, apply, undo, redo, setTopic, startOver } = proj;
+  const { project, apply, undo, redo, setTopic, setOptions, startOver } = proj;
   const { doc, past, future } = project;
+  const options = { ...DEFAULT_OPTIONS, ...doc.options };
   const style = styleByName(doc.style);
 
   // pasted text (kept across refreshes) and its live check
@@ -121,7 +131,12 @@ export default function CarouselPage() {
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState('');
   const [open, setOpen] = useState<number | null>(null);
-  const [replacing, setReplacing] = useState(false);
+  const [gen, setGen] = useState<GenState>({ phase: 'idle' });
+  const providers = useWriters();
+  const provider = providers?.[0] ?? null;
+  const abort = useRef<AbortController | null>(null);
+  const busy = gen.phase === 'writing' || gen.phase === 'retrying' || gen.phase === 'drawing';
+  const [advanced, setAdvanced] = useState(false);
 
   useEffect(() => {
     writeStore(PASTE_KEY, pasted || null);
@@ -140,7 +155,8 @@ export default function CarouselPage() {
     if (!done.ok) return false;
     setPasted('');
     setCheck(null);
-    setReplacing(false);
+    setOptions({ autoStyle: false });
+    setAdvanced(false);
     setNotice(`Script loaded: ${r.script.slides.length} ${doc.format === 'quote' ? 'quote card' : 'slide'}${r.script.slides.length === 1 ? '' : 's'}${r.warnings.length ? `, with ${r.warnings.length} suggestion${r.warnings.length > 1 ? 's' : ''} to review` : ''}. Edit any slide below.`);
     return true;
   };
@@ -242,6 +258,53 @@ export default function CarouselPage() {
     setNotice(clear ? 'Changed the format. The script was for the other format, so it was cleared: Undo brings it back.' : '');
   };
 
+  const GEN_LABEL = 'Generate from your text';
+  const generate = async () => {
+    if (!provider || busy) return;
+    const ctl = new AbortController();
+    abort.current = ctl;
+    const [lo, hi] = SLIDE_RANGE[doc.format];
+    const req: WriteRequest = {
+      text: doc.topic,
+      slides: Math.min(hi, Math.max(lo, options.slides)),
+      tone: options.tone,
+      format: doc.format,
+      styleChoice: options.autoStyle ? 'auto' : doc.style,
+      styles: getStyles().styles.map((x) => ({ name: x.spec.name, title: x.spec.title })),
+    };
+    setGen({ phase: 'writing' });
+    setNotice('');
+    const r = await runGenerate(req, provider, ctl.signal, (phase) => setGen({ phase }));
+    abort.current = null;
+    if (!r.ok) return setGen(r.state);
+    const { result } = r;
+    const known = getStyles().styles.map((x) => x.spec.name);
+    const style = options.autoStyle ? (result.style && known.includes(result.style) ? result.style : styleForTone(options.tone)) : null;
+    const done = apply(patches.generate(result.script, style, GEN_LABEL));
+    if (!done.ok) return setGen({ phase: 'error', message: 'The script could not be used: ' + done.reasons[0] + ' Your text is kept.' });
+    setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…` });
+  };
+  const cancel = () => {
+    if (gen.phase === 'drawing') {
+      if (past[past.length - 1]?.label === GEN_LABEL) undo();
+      setGen({ phase: 'idle', message: 'Cancelled. Your text is kept and the previous slides are back.' });
+      return;
+    }
+    abort.current?.abort();
+  };
+
+  // Progress while the slides are drawn, then the summary line.
+  const drawnCount = slides.filter((_, i) => views[i]?.rendered && views[i].status === 'ready').length;
+  useEffect(() => {
+    if (gen.phase !== 'drawing' || slides.length === 0) return;
+    if (drawnCount >= slides.length) {
+      const note = gen.note ? ` Note from the writer: ${gen.note}` : '';
+      const retry = gen.attempts === 2 ? ' It needed a second try.' : '';
+      setGen((g) => ({ ...g, phase: 'done', message: `Done: ${slides.length} ${doc.format === 'quote' ? 'cards' : 'slides'} in ${((gen.ms ?? 0) / 1000).toFixed(0)} s of writing.${retry}${note} Edit anything below.` }));
+    } else setGen((g) => (g.phase === 'drawing' ? { ...g, message: `Drawing slide ${drawnCount + 1} of ${slides.length}…` } : g));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawnCount, slides.length, gen.phase]);
+
   const lastLabel = past[past.length - 1]?.label;
   const nextLabel = future[0]?.label;
   const openItems = slides.map((s, i) => ({ url: views[i]?.url ?? '', alt: `${deck}, slide ${i + 1}: ${s.type}` }));
@@ -253,55 +316,43 @@ export default function CarouselPage() {
         <div className="page-header-text">
           <p className="small"><Link to="/images">← Back to Images</Link></p>
           <h1 className="page-title">Make a carousel</h1>
-          <p className="lead">Pick a format and a style, get a script from Claude, then edit it. Everything is drawn in your browser. Nothing is sent anywhere.</p>
+          <p className="lead">Paste your text, press Generate, then edit anything. The slides are drawn in your browser; your text goes to the writer only when you press Generate.</p>
         </div>
       </header>
       <p className="visually-hidden" role="status" aria-live="polite">{notice}</p>
 
-      <section className="card ws-card" aria-labelledby="cr-format-h">
-        <h2 id="cr-format-h" className="h3">1. Format</h2>
-        <div className="chip-group" role="group" aria-label="Format">
-          {FORMATS.map((f) => (
-            <button key={f.id} type="button" className="chip-btn" aria-pressed={doc.format === f.id} onClick={() => pickFormat(f.id)}>
-              {f.label} <span className="small">({f.note})</span>
-            </button>
-          ))}
-        </div>
-      </section>
+      <MakeIt
+        doc={doc}
+        options={options}
+        setTopic={setTopic}
+        setOptions={(o) => setOptions(o)}
+        onFormat={(f) => {
+          pickFormat(f);
+          const [lo, hi] = SLIDE_RANGE[f];
+          setOptions({ slides: f === 'quote' ? 3 : 7 > hi ? hi : 7 < lo ? lo : 7 });
+        }}
+        busy={busy}
+        gen={gen}
+        onGenerate={generate}
+        onCancel={cancel}
+        provider={provider}
+        providers={providers}
+        styles={<StylePicker format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} />}
+      />
 
-      <section className="card ws-card" aria-labelledby="cr-style-h">
-        <h2 id="cr-style-h" className="h3">2. Style</h2>
-        <p className="small muted">The same script, drawn in each style. Change it any time.</p>
-        <StylePicker format={doc.format} value={doc.style} onPick={(name, title) => apply(patches.style(name, title))} />
-      </section>
-
-      <section className="card ws-card" aria-labelledby="cr-script-h">
-        <h2 id="cr-script-h" className="h3">3. Script</h2>
-        {doc.script && !replacing && (
-          <div className="row-actions">
-            <p className="small">
-              <strong>{doc.script.title}</strong>: {doc.script.slides.length} {doc.format === 'quote' ? 'cards' : 'slides'}, edit them below.
-            </p>
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setReplacing(true)}>Use a different script</button>
-          </div>
-        )}
-        {(!doc.script || replacing) && (
+      <details className="card ws-card cr-advanced" open={advanced} onToggle={(e) => setAdvanced((e.target as HTMLDetailsElement).open)}>
+        <summary className="h4">Advanced: write the script yourself</summary>
         <div className="create-form">
-          <label className="field">
-            <span className="field-label">What is it about?</span>
-            <textarea rows={3} value={doc.topic} onChange={(e) => setTopic(e.target.value)} placeholder="For example: three edits that fix a LinkedIn profile in 15 minutes" />
-          </label>
+          <p className="small muted">Copy a prompt for Claude, paste it in any Claude chat, then paste the JSON it returns here. Or try the example script.</p>
           <div className="row-actions">
             <button type="button" className="btn btn-dark btn-lg" onClick={copyPrompt}>Copy prompt for Claude</button>
-            <button type="button" className="btn btn-outline btn-lg" disabled aria-describedby="cr-soon" title="Coming soon">{comingSoonWriter.label}</button>
-            <span id="cr-soon" className="small muted">Coming soon. For now Claude writes it in a chat you already have.</span>
+            <button type="button" className="btn btn-outline btn-lg" onClick={() => useScript(exampleScript(doc.format))}>Try an example script</button>
           </div>
           <p className="small" role="status" aria-live="polite">{copied}</p>
           <details open={showPrompt} onToggle={(e) => setShowPrompt((e.target as HTMLDetailsElement).open)}>
             <summary className="small">Show the prompt</summary>
             <textarea className="cr-prompt" readOnly rows={10} value={prompt} aria-label="The prompt to paste into Claude" onFocus={(e) => e.currentTarget.select()} />
           </details>
-
           <label className="field">
             <span className="field-label">Paste the script Claude wrote (JSON)</span>
             <textarea className="cr-paste" rows={8} value={pasted} onChange={(e) => setPasted(e.target.value)} spellCheck={false} placeholder='{ "title": "…", "slides": [ … ] }' aria-describedby="cr-check" />
@@ -336,12 +387,9 @@ export default function CarouselPage() {
           </div>
           <div className="row-actions">
             <button type="button" className="btn btn-dark btn-lg" disabled={!check || check.errors.length > 0} onClick={() => useScript(pasted)}>Use this script</button>
-            <button type="button" className="btn btn-outline btn-lg" onClick={() => useScript(exampleScript(doc.format))}>Try an example script</button>
-            {replacing && <button type="button" className="btn btn-outline btn-lg" onClick={() => setReplacing(false)}>Cancel</button>}
           </div>
         </div>
-        )}
-      </section>
+      </details>
 
       {error && (
         <div className="notice notice-error" role="alert">

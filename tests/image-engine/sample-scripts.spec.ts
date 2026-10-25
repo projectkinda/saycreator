@@ -28,12 +28,14 @@ test('each sample script loads in the app and draws in every style; phone-check 
     await page.goto('/images/carousel');
     await page.evaluate(() => localStorage.clear());
     await page.reload();
+    await page.getByText('Advanced: write the script yourself').click();
     await page.getByLabel('Paste the script Claude wrote (JSON)').fill(fs.readFileSync(path.join(DIR, f), 'utf8'));
     await page.getByRole('button', { name: 'Use this script' }).click();
-    const names = await page.getByRole('list', { name: 'Styles' }).getByRole('button').evaluateAll((els) => els.map((e) => e.querySelector('span.small')?.textContent ?? ''));
+    const real = page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasNotText: 'Pick for me' }).getByRole('button');
+    const names = await real.evaluateAll((els) => els.map((e) => e.querySelector('span.small')?.textContent ?? ''));
     expect(names.length).toBeGreaterThanOrEqual(4);
     for (let i = 0; i < names.length; i++) {
-      await page.getByRole('list', { name: 'Styles' }).getByRole('button').nth(i).click();
+      await real.nth(i).click();
       await expect(page.locator('.cr-card')).toHaveCount(7);
       await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(7, { timeout: 30_000 });
       await page.waitForTimeout(300);

@@ -1,6 +1,6 @@
 // The project in React: current doc, undo and redo, and autosave in this browser. A refresh never loses the script.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { commit, newProject, redo as redoP, undo as undoP, type DocPatch, type Project } from './doc';
+import { DEFAULT_OPTIONS, commit, newProject, redo as redoP, undo as undoP, type DocPatch, type GenerateOptions, type Project } from './doc';
 import { validateScript } from './script';
 import { styleByName } from './render';
 
@@ -55,6 +55,8 @@ export interface ProjectApi {
   redo(): void;
   /** The topic is a note for the prompt, not part of the history. */
   setTopic(topic: string): void;
+  /** Generate options (slides, tone, style choice): saved, but not part of the undo history. */
+  setOptions(o: Partial<GenerateOptions>): void;
   /** A fresh project (kept: nothing). The old one is gone, so ask first. */
   startOver(style: string): void;
   saved: string;
@@ -107,7 +109,8 @@ export function useProject(defaultStyle: string): ProjectApi {
   const undo = useCallback(() => set(undoP(ref.current)), [set]);
   const redo = useCallback(() => set(redoP(ref.current)), [set]);
   const setTopic = useCallback((topic: string) => set({ ...ref.current, doc: { ...ref.current.doc, topic } }), [set]);
+  const setOptions = useCallback((o: Partial<GenerateOptions>) => set({ ...ref.current, doc: { ...ref.current.doc, options: { ...DEFAULT_OPTIONS, ...ref.current.doc.options, ...o } } }), [set]);
   const startOver = useCallback((style: string) => set(newProject(style)), [set]);
 
-  return { project, apply, undo, redo, setTopic, startOver, saved, saveFailed };
+  return { project, apply, undo, redo, setTopic, setOptions, startOver, saved, saveFailed };
 }

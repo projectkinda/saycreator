@@ -8,12 +8,24 @@ export interface SlideChoice {
   salt?: string;
   swaps?: Record<string, string>;
 }
+export type Tone = 'clear' | 'bold' | 'friendly' | 'expert';
+export interface GenerateOptions {
+  slides: number;
+  tone: Tone;
+  /** true: the writer picks a style when it generates. */
+  autoStyle: boolean;
+}
+export const DEFAULT_OPTIONS: GenerateOptions = { slides: 7, tone: 'clear', autoStyle: true };
+
 export interface Doc {
   version: 1;
   format: Format;
   /** A style folder name. */
   style: string;
+  /** What the person pasted: a paragraph, a rough idea or an article. Kept as typed, not part of the undo history. */
   topic: string;
+  /** Generate options (not part of the undo history). */
+  options?: GenerateOptions;
   script: CarouselScript | null;
   /** By slide number, "0" for the first slide. */
   choices: Record<string, SlideChoice>;
@@ -149,6 +161,8 @@ export const patches = {
   regenerate: (i: number): DocPatch => ({ label: `Regenerate slide ${i + 1} from the plan`, ops: [{ path: ['choices', String(i)], value: undefined }] }),
   style: (name: string, title: string): DocPatch => ({ label: `Change style to ${title}`, ops: [{ path: ['style'], value: name }] }),
   topic: (topic: string): DocPatch => ({ label: 'Edit topic', coalesce: 'topic', ops: [{ path: ['topic'], value: topic }] }),
+  /** The whole result of one Generate, so one Undo takes it back. */
+  generate: (script: CarouselScript, style: string | null, title: string): DocPatch => ({ label: title, ops: [{ path: ['script'], value: script }, { path: ['choices'], value: {} }, ...(style ? [{ path: ['style'] as Path, value: style }] : [])] }),
   format: (format: Format, clearScript: boolean): DocPatch => ({ label: `Change format to ${format === 'carousel' ? 'carousel' : 'quote card'}`, ops: [{ path: ['format'], value: format }, ...(clearScript ? [{ path: ['script'] as Path, value: null }, { path: ['choices'] as Path, value: {} }] : [])] }),
   useScript: (script: CarouselScript): DocPatch => ({ label: 'Load the script', ops: [{ path: ['script'], value: script }, { path: ['choices'], value: {} }] }),
 };
