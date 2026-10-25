@@ -118,7 +118,7 @@ export function placeElements(inp: PlaceInput): Placed {
     if (!bleed && (b.x - grow < 8 || b.y - grow < 8 || b.x + b.width + grow > W - 8 || b.y + b.height + grow > H - 8)) return false;
     if (vis.width <= 0 || vis.height <= 0) return false;
     const probe = pad ? inflate(vis, pad) : vis;
-    return !occupied.some((o) => overlaps(probe, o)) && !placed.some((p) => overlaps(vis, inflate(p, 10)));
+    return !occupied.some((o) => overlaps(probe, o)) && !placed.some((p) => overlaps(vis, p));
   };
 
   const candidatesFor = (zone: string, w: number, h: number): [number, number][] => {
@@ -196,13 +196,15 @@ export function placeElements(inp: PlaceInput): Placed {
       const aspect = test ? test.width / test.height : info!.width / info!.height;
       const w = aspect >= 1 ? size : size * aspect;
       const h = aspect >= 1 ? size / aspect : size;
-      const pad = (rule.shadow ? 64 : 0) + (rule.sticker && spec.sticker ? spec.sticker.width : 0);
+      // A shadow spreads about a third of the picture's size, so big stickers need more clear space than small ones.
+      const pad = (rule.shadow ? 40 + 0.3 * Math.max(w, h) : 0) + (rule.sticker && spec.sticker ? spec.sticker.width : 0);
       const spot = candidatesFor(rule.zone, w, h).find(([x, y]) => room({ x, y, width: w, height: h }, bleed, pad));
       if (!spot) {
         notes.push(`No free space for ${test ? test.name : info!.id} (zone ${rule.zone}).`);
         continue;
       }
-      placed.push({ x: spot[0], y: spot[1], width: w, height: h });
+      // What is kept clear around this one for the next ones: its own box plus most of its shadow and sticker outline.
+      placed.push(inflate({ x: spot[0], y: spot[1], width: w, height: h }, 10 + pad * 0.75));
       const common = { id: `el-${out.length + 1}`, role: 'decor' as const, x: Math.round(spot[0]), y: Math.round(spot[1]), width: Math.round(w), height: Math.round(h), rotation: rule.rotate ? Math.round(between(rule.rotate[0], rule.rotate[1])) : 0, opacity: rule.opacity ?? 1 };
       if (test) {
         const layer: ImageLayer = { ...common, name: `TEST ASSET: ${test.name}`, kind: 'image', src: test.url, fit: 'contain' };

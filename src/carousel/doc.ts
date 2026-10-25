@@ -14,8 +14,10 @@ export interface GenerateOptions {
   tone: Tone;
   /** true: the writer picks a style when it generates. */
   autoStyle: boolean;
+  /** Shown on the last slide, for example "@maya.builds". Empty: a placeholder is used and the person is told. */
+  handle: string;
 }
-export const DEFAULT_OPTIONS: GenerateOptions = { slides: 7, tone: 'clear', autoStyle: true };
+export const DEFAULT_OPTIONS: GenerateOptions = { slides: 7, tone: 'clear', autoStyle: true, handle: '' };
 
 export interface Doc {
   version: 1;
@@ -161,6 +163,7 @@ export const patches = {
   regenerate: (i: number): DocPatch => ({ label: `Regenerate slide ${i + 1} from the plan`, ops: [{ path: ['choices', String(i)], value: undefined }] }),
   style: (name: string, title: string): DocPatch => ({ label: `Change style to ${title}`, ops: [{ path: ['style'], value: name }] }),
   topic: (topic: string): DocPatch => ({ label: 'Edit topic', coalesce: 'topic', ops: [{ path: ['topic'], value: topic }] }),
+  handle: (handle: string): DocPatch => ({ label: 'Change the handle', coalesce: 'handle', ops: [{ path: ['script', 'brand', 'handle'], value: handle }] }),
   /** The whole result of one Generate, so one Undo takes it back. */
   generate: (script: CarouselScript, style: string | null, title: string): DocPatch => ({ label: title, ops: [{ path: ['script'], value: script }, { path: ['choices'], value: {} }, ...(style ? [{ path: ['style'] as Path, value: style }] : [])] }),
   format: (format: Format, clearScript: boolean): DocPatch => ({ label: `Change format to ${format === 'carousel' ? 'carousel' : 'quote card'}`, ops: [{ path: ['format'], value: format }, ...(clearScript ? [{ path: ['script'] as Path, value: null }, { path: ['choices'] as Path, value: {} }] : [])] }),

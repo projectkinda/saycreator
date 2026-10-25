@@ -280,7 +280,8 @@ export default function CarouselPage() {
     const { result } = r;
     const known = getStyles().styles.map((x) => x.spec.name);
     const style = options.autoStyle ? (result.style && known.includes(result.style) ? result.style : styleForTone(options.tone)) : null;
-    const done = apply(patches.generate(result.script, style, GEN_LABEL));
+    const withHandle = { ...result.script, brand: { ...result.script.brand, handle: options.handle.trim() || '@yourname' } };
+    const done = apply(patches.generate(withHandle, style, GEN_LABEL));
     if (!done.ok) return setGen({ phase: 'error', message: 'The script could not be used: ' + done.reasons[0] + ' Your text is kept.' });
     setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…` });
   };
@@ -300,7 +301,8 @@ export default function CarouselPage() {
     if (drawnCount >= slides.length) {
       const note = gen.note ? ` Note from the writer: ${gen.note}` : '';
       const retry = gen.attempts === 2 ? ' It needed a second try.' : '';
-      setGen((g) => ({ ...g, phase: 'done', message: `Done: ${slides.length} ${doc.format === 'quote' ? 'cards' : 'slides'} in ${((gen.ms ?? 0) / 1000).toFixed(0)} s of writing.${retry}${note} Edit anything below.` }));
+      const handle = options.handle.trim() ? '' : ' The last slide shows the placeholder @yourname: type your handle above to replace it.';
+      setGen((g) => ({ ...g, phase: 'done', message: `Done: ${slides.length} ${doc.format === 'quote' ? 'cards' : 'slides'} in ${((gen.ms ?? 0) / 1000).toFixed(0)} s of writing.${retry}${note}${handle} Edit anything below.` }));
     } else setGen((g) => (g.phase === 'drawing' ? { ...g, message: `Drawing slide ${drawnCount + 1} of ${slides.length}…` } : g));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawnCount, slides.length, gen.phase]);
@@ -330,6 +332,10 @@ export default function CarouselPage() {
           pickFormat(f);
           const [lo, hi] = SLIDE_RANGE[f];
           setOptions({ slides: f === 'quote' ? 3 : 7 > hi ? hi : 7 < lo ? lo : 7 });
+        }}
+        onHandle={(h) => {
+          setOptions({ handle: h });
+          if (doc.script) apply(patches.handle(h.trim() || '@yourname'));
         }}
         busy={busy}
         gen={gen}

@@ -363,3 +363,37 @@ Covered: all of these except photo cutouts and true 3D renders. Photo cutouts ne
 - Body, small text, the stat note and the quote byline are now all 32 px in the Quiet dark style (they were 28, 30, 24 and 22); the body line height went from 1.3 to 1.5 so it stays airy. Colours, weights and spacing are unchanged. The text is a little bigger than the references (about 28 px), which is written in the style's `knownLintConflicts`.
 - The stat note and byline are now style settings (`type.note`, `type.byline`, default body - 4 and body - 6) and `bodyLineHeight` is a style setting (default 1.3). The validator checks every text size, including the defaults. See STYLE_FORMAT.md.
 - All four sample decks (28 slides) pass every phone-size check in Quiet dark, and the three sample scripts pass in all four styles (see the result of the full run below).
+
+
+## Step 9: One-shot carousel
+
+### What exists
+- **Images > Make a carousel** now starts with one text box (a paragraph, a rough idea or an article, up to 12,000 characters) and optional chips: format (carousel or quote card), number of slides (3 to 10, usual 7; quote cards 1 to 7), tone (clear, bold, friendly, expert), style (any stored style or "Pick for me"), and the handle shown on the last slide. One **Generate** button shows real progress ("Writing the script…", "The first answer needed fixing. Asking again…", "Drawing slide 3 of 7…") and a **Cancel**. The result opens in the same editor as before (edit text and tags, layout, swap, shuffle, undo and redo, export). One Undo takes back a whole generation.
+- The old "Copy prompt for Claude", "Paste script JSON" and "Try an example script" are in a closed **Advanced** fold. Carousels may now have 3 to 10 slides (they had to have exactly 7).
+- **Writers** (details in ENGINE_CONTRACT.md): a dev-only provider that runs the Claude Code command line on this computer, and an API provider that needs ANTHROPIC_API_KEY on the server and is off without it. No key is in client code; `npm run check:secrets` guards that.
+
+### What happened on this machine
+- Claude Code command line 2.1.308 is installed only inside the Claude desktop app (not on the PATH); the dev writer finds it there by itself. It works and is signed in.
+- Three real generations through the real Generate button (texts in `sample-inputs/`, one run each, AMD Ryzen 9 5900X 12-Core Processor, 24 logical cores, 32 GB, win32 10.0.19045):
+
+| Text | Characters | Slides | Style picked | Script ready | All drawn | Writer calls | Validator warnings | Phone-check failures |
+|---|---|---|---|---|---|---|---|---|
+| A creator (batching videos) | 1221 | 7 | editorial-collage | 11 s | 12 s | 1 | 0 | 0 |
+| A small business (a cafe) | 1130 | 7 | editorial-collage | 7 s | 8 s | 1 | 0 | 0 |
+| An agency (client briefs) | 1202 | 7 | editorial-collage | 11 s | 12 s | 1 | 0 | 0 |
+
+- A plain call to the command line costs about 6 to 7 seconds of start-up even for a one-word answer; the three scripts took 7 to 11 seconds. Each call is billed to the signed-in Claude account at list price (about 1 cent for the tiny test; the real ones were not measured).
+- Scripts and slides are in the Results screen under "Step 9", with what is weak. Short version: all three scripts were valid first time and stayed inside the text; "Pick for me" chose editorial-collage all three times; pictures on myth and fact slides can sit across the split line; the decoration that comes from the style says nothing.
+- Two things the real runs exposed and I fixed: stickers overlapping each other and a large sticker's shadow dimming the page number (spacing now grows with the picture's size), and the placeholder @yourname on the closing slide (there is now a handle box).
+
+### Tested
+- Fake-writer Playwright tests (no real call; the page's writer routes are answered by the test): generate, progress, options reaching the prompt, "Pick for me", a bad answer then an automatic retry that works, a bad answer twice (plain errors, text kept, can retry), writer not found, cancel while writing, cancel while drawing, text too long or too short, fewer slides with a note, refresh and recover (text, options, slides, history), no writer available, the API writer preferred when offered, the Advanced fold.
+- Server tests with a stand-in program and a fake fetch: stdin prompt, failure messages, timeout, cancel (the program is stopped), missing command line, key only in a header and never in an answer, 401 text without the key, routes. Secrets guard tests on temporary folders.
+- The real writer was run only through the opt-in `carousel-real` spec (`REAL_GENERATE=1`), not in the normal suite.
+
+### Not done or not tested
+- The API provider has never made a real call (no key here). It was tested only against a fake fetch.
+- Quote cards, other slide counts, texts near the limit and other topics were not run with a real writer.
+- The page's behaviour in a production build (no writer, Generate off) was reasoned about and covered by the "no writer" test, not by a built-and-served run.
+- Whether Claude Code can be started this way on another computer (different install location, not signed in) is untested; the error message for "not found" is tested with a stand-in.
+- There is no production server in the repository yet; the API route is a handler ready to mount.

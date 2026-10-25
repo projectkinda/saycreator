@@ -53,12 +53,13 @@ export async function runGenerate(req: WriteRequest, provider: WriteProvider, si
   }
 }
 
-export function MakeIt({ doc, options, setTopic, setOptions, onFormat, busy, gen, onGenerate, onCancel, provider, providers, styles }: {
+export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onCancel, provider, providers, styles }: {
   doc: Doc;
   options: GenerateOptions;
   setTopic: (t: string) => void;
   setOptions: (o: Partial<GenerateOptions>) => void;
   onFormat: (f: Format) => void;
+  onHandle: (h: string) => void;
   busy: boolean;
   gen: GenState;
   onGenerate: () => void;
@@ -101,6 +102,10 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, busy, gen
                 <option key={c} value={c}>{c}{c === DEFAULT_OPTIONS.slides && doc.format === 'carousel' ? ' (usual)' : ''}</option>
               ))}
             </select>
+          </label>
+          <label className="cr-inline">
+            <span className="field-label">Your handle (optional)</span>
+            <input type="text" className="cr-input cr-handle" value={options.handle} placeholder="@yourname" maxLength={40} onChange={(e) => onHandle(e.target.value)} />
           </label>
           <div className="cr-inline">
             <span className="field-label" id="cr-tone-l">Tone</span>

@@ -133,6 +133,9 @@
   background: var(--surface-tint);
   min-height: 44px;
 }
+.cr-handle {
+  max-width: 200px;
+}
 .cr-input-sm {
   max-width: 100px;
 }

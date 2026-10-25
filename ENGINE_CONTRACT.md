@@ -179,14 +179,29 @@ This part does **not** go through `src/engine/index.ts`. The page `/images/carou
 |---|---|
 | Script (input) | JSON: `{ title, brand: {handle}, slides: [...] }`. A carousel has exactly 7 slides, quote cards 1 to 7 slides of type `quote`. Slide types: cover, content, step, stat, checklist, beforeafter, quote, closing; fields per type are in `src/carousel/script.ts` (`FIELDS`). Every slide may carry `element_tags` (2 to 4 lower-case words). `validateScriptText(text, format)` returns plain-language errors with the place in the JSON, and warnings (long copy, a highlight that is not in the headline, no tags). A pasted chat answer with a ```json fence or text around it is cleaned first. |
 | Prompt | `scriptPrompt(topic, format)`: topic, the JSON format with an example of every slide type, and the rules (7 slides, short copy, one idea per slide, tags from the planner vocabulary, no invented figures). Copied to the clipboard; pasted into any Claude chat by the person. |
-| Writer (future) | `ScriptWriter { available, label, write(topic, format): Promise<string> }`. `comingSoonWriter` is the only one; the "Write it for me" button is disabled and says coming soon. A backend would return script JSON text, which goes through the same validation as a pasted script. |
+| Writer | Replaced in Step 9 by the providers below (`WriteProvider` in `src/carousel/writer.ts`); "Write it for me" is now the Generate button. |
 | Project | `Doc { version, format, style, topic, script, choices }`, saved in `localStorage` key `creator.carousel.project.v1` together with the undo and redo history (80 steps). An unsent pasted text is kept under `creator.carousel.paste.v1`. Anything saved that no longer validates is dropped instead of crashing. |
 | Changes | Every change is a `DocPatch { label, coalesce?, ops: [{path, value}] }` with an inverse, so Undo and Redo cover everything: edit a field, edit tags, change layout, swap an element, shuffle elements, regenerate a slide from the plan, change style, change format, load a script. A change that would make the script invalid is refused with reasons. Typing in one field within 1.5 s is one undo step. |
 | Styles | `loadStyles()`: every folder under `src/image-engine/styles/` with a valid `style.json`. A new folder appears in the picker with a small preview by itself. |
 | Drawing | `composeDoc(doc)` makes the plans (shippable library only, never test assets); `renderer.render(slide, margin)` draws and checks one slide (8 phone-size checks) and caches by plan, so editing one slide redraws only that slide. |
 | Export | One PNG per slide (`<deck>-NN.png`, 1080 x 1350 or 1080 x 1080) or a zip of those files, written in the browser (`src/carousel/export.ts`). |
 
-Not in the contract yet: saving a finished carousel to the Images list or to a video project, more than one project at a time, brand colours and fonts from the Branding screen, server-side rendering, sharing for review, and a real "Write it for me" backend.
+### One-shot writer (Step 9)
+
+The main flow is now: paste text, optional chips (format, slide count 3 to 10, tone, style or "Pick for me", handle), **Generate**. The writer is chosen by the page from what the server offers; the browser holds no key and only calls this app's own routes (`src/carousel/writer.ts`).
+
+| Route | Provider | Notes |
+|---|---|---|
+| `GET /__carousel/status`, `POST /__carousel/write` | `dev-cli`: runs the Claude Code command line (`claude -p`, no tools, no saved session, empty temp folder) on this computer | Mounted only by the Vite dev server (`vite.config.ts`), so it does not exist in a production build. The command is found from `CLAUDE_BIN`, the PATH, or the copy inside the Claude desktop app. Uses the signed-in Claude account on that computer. |
+| `GET /api/carousel/status`, `POST /api/carousel/write` | `api`: Anthropic Messages API | Reads `ANTHROPIC_API_KEY` from the server's environment (or an untracked `.env`); off when it is missing. Optional `CAROUSEL_MODEL` (default claude-sonnet-5-5). The repository has no production server yet: `server/carousel-writer.ts` exports `carouselHandler('api')`, a Connect-style handler, to mount in one. |
+
+Request `{ prompt }`, answer `{ text, ms }` or `{ error, kind }` with a plain-words message (`unavailable`, `failed`, `timeout`, `cancelled`). The page prefers `api` over `dev-cli`, shows which one is active in a small dev-only label, and disables Generate (pointing at the Advanced fold) when neither is available.
+
+The prompt (`src/carousel/writerPrompt.ts`) carries the person's text, the script format, the rules (only facts from the text, no invented statistics, a marked placeholder when a number is missing, one idea per slide, short copy limits, a strong cover and a closing call to action, 2 to 4 `element_tags` from the library vocabulary, fewer slides plus a "note" when the text is thin) and, for "Pick for me", the list of styles. The answer is checked with the same validator as a pasted script; if it fails, the writer is asked once more with the problems; if that fails too, plain errors are shown and the text is kept. Text over 12,000 characters is refused with a message, never cut. Cancelling while writing aborts the request (the server stops the program); cancelling while drawing undoes the generation.
+
+`.env.example` lists the variables. `npm run check:secrets` (part of `npm run build`) fails if a key-shaped string, the name of the key variable or the `x-api-key` header appears in `src/`, `public/`, `dist/` or `index.html`, if a key appears in `server/` or `.env.example`, or if an env file is tracked by git.
+
+Not in the contract yet: saving a finished carousel to the Images list or to a video project, more than one project at a time, brand colours and fonts from the Branding screen, server-side rendering, sharing for review, and a production server for the API writer.
 
 ## Test switches (mock only)
 
