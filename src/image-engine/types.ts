@@ -88,6 +88,12 @@ export interface Highlight {
   paddingX: number;
   paddingY: number;
   radius: number;
+  /** Make the box about one line tall (never less than the letters), so boxes on tightly spaced lines do not cover the lines next to them. */
+  hugLine?: boolean;
+  /** Mark whole lines (counted from 0) whatever the words are. `words` may then be empty. */
+  lines?: number[];
+  /** Mark only the first time each word appears, so "the small thing ... the big thing" marks one "thing". */
+  onlyFirst?: boolean;
 }
 
 export interface TextLayer extends LayerBase {

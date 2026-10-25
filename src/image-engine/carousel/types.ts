@@ -60,7 +60,7 @@ export interface Theme {
   hero: Palette;
   fonts: { headline: FontFamily; headlineWeight: number; body: FontFamily; bodyWeight: number; strong: number };
   /** Font sizes in px on the 1080 wide slide. */
-  type: { cover: number; headline: number; body: number; small: number; stat: number; quote: number };
+  type: { cover: number; headline: number; body: number; small: number; stat: number; quote: number; label?: number };
   shape: {
     /** Card, sticker and button corner radius. */
     radius: number;

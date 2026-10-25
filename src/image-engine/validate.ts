@@ -95,7 +95,7 @@ function validateLayer(l: Layer, errors: string[]) {
       }
       if (l.highlight) {
         const h = l.highlight;
-        if (!Array.isArray(h.words) || h.words.length === 0) errors.push(`${who}: highlight needs at least one word.`);
+        if (!Array.isArray(h.words) || (h.words.length === 0 && !(Array.isArray(h.lines) && h.lines.length > 0))) errors.push(`${who}: highlight needs at least one word or one line.`);
         else {
           const present = new Set(l.text.toLowerCase().replace(/[^\p{L}\p{N}'\s-]/gu, ' ').split(/\s+/));
           for (const w of h.words) if (!present.has(w.toLowerCase())) errors.push(`${who}: the highlighted word "${w}" is not in the text.`);
@@ -105,6 +105,7 @@ function validateLayer(l: Layer, errors: string[]) {
         range(errors, who, 'highlight padding', h.paddingX, 0, 100);
         range(errors, who, 'highlight padding', h.paddingY, 0, 100);
         range(errors, who, 'highlight corner radius', h.radius, 0, 100);
+        if (h.hugLine !== undefined && typeof h.hugLine !== 'boolean') errors.push(`${who}: hugLine must be true or false.`);
       }
       break;
     }

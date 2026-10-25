@@ -157,40 +157,51 @@ export function buildText(s: TextSpec): Built {
   const lh = s.lineHeight ?? 1.1;
   let text = s.upper ? s.text.toUpperCase() : s.text;
   const notes: string[] = [];
-  const f = fitText({ text, font: s.font, weight: s.weight, maxSize: s.size, minSize: s.minSize ?? s.size, lineHeight: lh, width: s.width, height: s.maxHeight ?? 10000 });
+  const f = fitText({ text, font: s.font, weight: s.weight, maxSize: s.size, minSize: Math.min(s.minSize ?? s.size, s.size), lineHeight: lh, width: s.width, height: s.maxHeight ?? 10000 });
   if (f.size < s.size) notes.push(`"${text.slice(0, 28)}" was shrunk from ${s.size} to ${f.size} px to fit.`);
   if (!f.fits) notes.push(`"${text.slice(0, 28)}" does not fit even at ${f.size} px.`);
   let width = s.width;
   let lines = f.lines;
-  if (s.balance !== false && lastIsOrphan(lines)) {
-    for (let k = 1; k <= 14; k++) {
-      const w = Math.floor(s.width * (1 - 0.03 * k));
-      const t = wrapText(text, w, s.font, s.weight, f.size);
-      if (t.wordTooWide) break;
-      if (!lastIsOrphan(t.lines) && t.lines.length <= lines.length + 1 && t.lines.length * f.size * lh <= (s.maxHeight ?? 10000)) {
-        width = w;
-        lines = t.lines;
-        notes.push(`"${text.slice(0, 28)}": the box was narrowed to ${w} px so the last line is not a single word.`);
+  let size = f.size;
+  const maxH = s.maxHeight ?? 10000;
+  if (s.balance !== false && f.fits && lastIsOrphan(lines)) {
+    // Try the fitted size first, then smaller sizes, until the last line has more than one word: narrower box, then hand-set breaks.
+    const minS = Math.min(s.minSize ?? s.size, s.size);
+    for (let sz = f.size; sz >= minS; sz -= 2) {
+      const base = wrapText(text, s.width, s.font, s.weight, sz);
+      if (base.wordTooWide || base.lines.length * sz * lh > maxH) continue;
+      let hit: { width: number; lines: string[]; text?: string; how: string } | null = null;
+      if (!lastIsOrphan(base.lines)) hit = { width: s.width, lines: base.lines, how: '' };
+      for (let k = 1; !hit && k <= 12; k++) {
+        const w = Math.floor(s.width * (1 - 0.03 * k));
+        const t2 = wrapText(text, w, s.font, s.weight, sz);
+        if (t2.wordTooWide) break;
+        if (!lastIsOrphan(t2.lines) && t2.lines.length <= base.lines.length + 1 && t2.lines.length * sz * lh <= maxH) hit = { width: w, lines: t2.lines, how: 'the box was narrowed' };
+      }
+      if (!hit && !text.includes('\n')) {
+        const by = balancedLines(text, s.width, s.font, s.weight, sz, base.lines.length);
+        if (by && by.length * sz * lh <= maxH) hit = { width: s.width, lines: by, text: by.join('\n'), how: 'line breaks were set by hand' };
+      }
+      if (hit) {
+        width = hit.width;
+        lines = hit.lines;
+        size = sz;
+        if (hit.text) text = hit.text;
+        notes.push(`"${s.text.slice(0, 28)}": ${[hit.how, sz < f.size ? `size went from ${f.size} to ${sz} px` : ''].filter(Boolean).join(' and ') || 'wrapped'} so the last line is not a single word.`);
         break;
       }
     }
-    // Narrowing cannot always do it ("Rewrite your headline" only ever breaks as "Rewrite your / headline"), so choose the breaks by hand.
-    if (lastIsOrphan(lines) && !text.includes('\n')) {
-      const by = balancedLines(text, s.width, s.font, s.weight, f.size, lines.length);
-      if (by && by.length * f.size * lh <= (s.maxHeight ?? 10000)) {
-        text = by.join('\n');
-        lines = by;
-        notes.push(`"${by[0].slice(0, 28)}": line breaks were set by hand so the last line is not a single word.`);
-      }
-    }
   }
-  const height = Math.ceil(lines.length * f.size * lh);
+  const dx = (s.align ?? 'left') === 'center' ? (s.width - width) / 2 : s.align === 'right' ? s.width - width : 0;
+  const height = Math.ceil(lines.length * size * lh);
+  // If the text cannot fit the space it was given even at its smallest size, the box is only as tall as the space, so the checker sees the overflow.
+  const boxH = f.fits ? height : Math.min(height, Math.ceil(maxH));
   const layer: TextLayer = {
-    id: s.id, kind: 'text', role: s.role ?? 'content', x: r1(s.x), y: r1(s.y), width: Math.ceil(width), height, rotation: 0, opacity: 1, text,
-    style: { font: s.font, weight: s.weight, size: f.size, color: s.color, align: s.align ?? 'left', lineHeight: lh },
+    id: s.id, kind: 'text', role: s.role ?? 'content', x: r1(s.x + dx), y: r1(s.y), width: Math.ceil(width), height: boxH, rotation: 0, opacity: 1, text,
+    style: { font: s.font, weight: s.weight, size, color: s.color, align: s.align ?? 'left', lineHeight: lh },
     ...(s.highlight ? { highlight: s.highlight } : {}),
   };
-  return { layer, size: f.size, lines, height, width: Math.ceil(width), notes };
+  return { layer, size, lines, height, width: Math.ceil(width), notes };
 }
 
 /** Width of the widest line of a built text, for sizing a container around it. */
@@ -208,10 +219,10 @@ export function marker(theme: Theme, pal: Palette, layer: TextLayer, words: stri
   // For underline and brush the highlight itself is invisible; it only switches the word's colour.
   const highlight: Highlight =
     style === 'box'
-      ? { words, color: pal.marker, textColor: pal.onMarker, paddingX: 4, paddingY: 2, radius: Math.round(theme.shape.radius / 3) }
+      ? { words, color: pal.marker, textColor: pal.onMarker, paddingX: 4, paddingY: 2, radius: Math.round(theme.shape.radius / 3), onlyFirst: true }
       : style === 'underline'
-        ? { words, color: TRANSPARENT, textColor: pal.accent, paddingX: 0, paddingY: 0, radius: 0 }
-        : { words, color: TRANSPARENT, textColor: pal.onMarker, paddingX: 0, paddingY: 0, radius: 0 };
+        ? { words, color: TRANSPARENT, textColor: pal.accent, paddingX: 0, paddingY: 0, radius: 0, onlyFirst: true }
+        : { words, color: TRANSPARENT, textColor: pal.onMarker, paddingX: 0, paddingY: 0, radius: 0, onlyFirst: true };
   if (style === 'box') return { highlight, behind: [] };
   const block = layoutText({ ...layer, highlight });
   const behind: Layer[] = [];

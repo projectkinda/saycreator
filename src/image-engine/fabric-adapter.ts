@@ -337,7 +337,7 @@ export class FabricAdapter implements CanvasAdapter {
       const top = pad + line.y + (block.lineStep - probe.height) / 2;
       if (hl) {
         for (const m of line.marks) {
-          const mh = block.size * 1.2 + 2 * hl.paddingY;
+          const mh = hl.hugLine ? Math.max(block.lineStep, block.size * 1.02) : block.size * 1.2 + 2 * hl.paddingY;
           out.push(
             new Rect({
               left: pad + m.x - hl.paddingX,

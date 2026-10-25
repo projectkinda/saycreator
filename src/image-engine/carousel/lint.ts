@@ -48,6 +48,8 @@ interface Box {
   height: number;
 }
 interface Item {
+  /** The layer id, so page chrome can be told apart. */
+  lid: string;
   id: string;
   role: 'content' | 'container';
   box: Box;
@@ -96,7 +98,8 @@ export function lintSlide(input: CarouselLintInput): CarouselLintResult[] {
   const { plan, margin } = input;
   const { width: W, height: H } = plan.canvas;
   const layers = plan.layers.filter((l) => l.visible !== false);
-  const texts = layers.filter((l): l is TextLayer => l.kind === 'text');
+  // Decorative text (a repeated tape strip) is exempt from every check: it is not meant to be read.
+  const texts = layers.filter((l): l is TextLayer => l.kind === 'text' && l.role !== 'decor');
   const out: CarouselLintResult[] = [];
   const res = (id: CarouselLintId, pass: boolean, reason: string, measured?: number, limit?: number) =>
     out.push({ id, label: CAROUSEL_CHECK_LABELS[id], pass, reason, ...(measured === undefined ? {} : { measured }), ...(limit === undefined ? {} : { limit }) });
@@ -177,12 +180,12 @@ export function lintSlide(input: CarouselLintInput): CarouselLintResult[] {
 
   // Items that must be kept clear of each other and of the edges.
   const items: Item[] = [];
-  for (const i of inks) items.push({ id: nameOf(i.layer), role: 'content', box: i.box });
+  for (const i of inks) items.push({ lid: i.layer.id, id: nameOf(i.layer), role: 'content', box: i.box });
   for (const l of layers) {
     if (l.kind === 'text') continue;
     const role = l.role ?? (l.id === 'bg' ? 'decor' : 'content');
     if (role === 'decor') continue;
-    items.push({ id: nameOf(l), role, box: layerBox(l) });
+    items.push({ lid: l.id, id: nameOf(l), role, box: layerBox(l) });
   }
 
   // 5. margins
@@ -193,7 +196,13 @@ export function lintSlide(input: CarouselLintInput): CarouselLintResult[] {
   const problems: string[] = [];
   if (items.length === 0) problems.push('Nothing is on the slide.');
   else {
-    if (Math.abs(left - margin) > tol) problems.push(`The content starts ${Math.round(left)} px from the left edge; the theme's margin is ${margin} px.`);
+    // Centred slides have no left edge to sit on the margin; they pass when the left and right gaps match and are at least the margin.
+    // Page chrome (dots, page number, top strip) is left out when asking whether the rest is centred.
+    const core = items.filter((x) => !/^(page|strip|swipe|dots)/.test(x.lid));
+    const cl = Math.min(...core.map((x) => x.box.x));
+    const cr = Math.max(...core.map((x) => x.box.x + x.box.width));
+    const centred = core.length > 0 && cl >= margin - tol && Math.abs(cl - (W - cr)) <= 2 * tol;
+    if (Math.abs(left - margin) > tol && !centred) problems.push(`The content starts ${Math.round(left)} px from the left edge; the theme's margin is ${margin} px.`);
     if (right > W - margin + tol) problems.push(`The content reaches ${Math.round(W - right)} px from the right edge; the theme's margin is ${margin} px.`);
     if (top < margin - tol) problems.push(`The content starts ${Math.round(top)} px from the top; the theme's margin is ${margin} px.`);
   }

@@ -127,6 +127,9 @@ export function layoutText(layer: TextLayer): TextBlock {
       })();
 
   const marked = new Set((layer.highlight?.words ?? []).map((w) => w.toLowerCase()));
+  const wholeLines = new Set(layer.highlight?.lines ?? []);
+  const firstOnly = !!layer.highlight?.onlyFirst;
+  const used = new Set<string>();
   const top = s.valign === 'middle' ? (layer.height - fit.height) / 2 : s.valign === 'bottom' ? layer.height - fit.height : 0;
 
   const lines: LaidLine[] = fit.lines.map((text, i) => {
@@ -141,7 +144,7 @@ export function layoutText(layer: TextLayer): TextBlock {
         text: m[0],
         x: x0 + before,
         width: measureWidth(m[0], s.font, s.weight, fit.size),
-        highlighted: marked.has(clean(m[0])),
+        highlighted: wholeLines.has(i) || (marked.has(clean(m[0])) && (!firstOnly || !used.has(clean(m[0])) ? (used.add(clean(m[0])), true) : false)),
       });
       cursor = start + m[0].length;
     }
