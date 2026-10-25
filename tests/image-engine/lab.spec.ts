@@ -29,7 +29,7 @@ test('Results is in the left menu in the dev server, looks like the app, and lis
   await expect(page.locator('aside#sidebar')).toBeVisible();
   await expect(page.locator('.page-header .page-title')).toHaveText('Results');
   const titles = await page.locator('section.res-section h2').allTextContents();
-  expect(titles).toEqual(['Step 5: Style recreation', 'Step 5: Style reading', 'Step 3: Carousels', 'Step 4: Cutouts', 'Step 2: Thumbnails and checks', 'Step 1: Plan and patch proof']);
+  expect(titles).toEqual(['Step 6: Asset library', 'Step 5: Style recreation', 'Step 5: Style reading', 'Step 3: Carousels', 'Step 4: Cutouts', 'Step 2: Thumbnails and checks', 'Step 1: Plan and patch proof']);
   // Every section says when it was last run and has a refresh button.
   for (const s of await page.locator('section.res-section').all()) {
     await expect(s.getByText(/Last run /)).toBeVisible();

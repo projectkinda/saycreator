@@ -136,6 +136,41 @@ function labEndpoints(): Plugin {
         const cf = path.join(root, 'Reference carousels likes/clusters.json');
         json(res, { slides, styles, clusters: fs.existsSync(cf) ? JSON.parse(fs.readFileSync(cf, 'utf8')) : null, lastRun: newest(base), folder: 'Reference carousels likes' });
       });
+      // Step 6: asset-library recreations (SHIPPABLE and TEST), every slide its own file.
+      server.middlewares.use('/__lab/assets', (_req, res) => {
+        const base = path.join(outDir, 'asset-recreation');
+        const slides: unknown[] = [];
+        if (fs.existsSync(base))
+          for (const style of fs.readdirSync(base)) {
+            const sd = path.join(base, style);
+            if (!fs.statSync(sd).isDirectory()) continue;
+            for (const mode of fs.readdirSync(sd)) {
+              const md = path.join(sd, mode);
+              if (!fs.statSync(md).isDirectory()) continue;
+              for (const script of fs.readdirSync(md)) {
+                const dd = path.join(md, script);
+                if (!fs.statSync(dd).isDirectory()) continue;
+                for (const f of fs.readdirSync(dd).filter((x) => x.endsWith('.lint.json'))) {
+                  const stem = f.replace('.lint.json', '');
+                  const rel = `/out/image-engine/asset-recreation/${style}/${mode}/${script}/${stem}`;
+                  slides.push({ ...JSON.parse(fs.readFileSync(path.join(dd, f), 'utf8')), pngUrl: `${rel}.png`, phoneUrl: `${rel}-phone.png`, planUrl: `${rel}.plan.json` });
+                }
+              }
+            }
+          }
+        const skipFile = path.join(base, 'test-assets-skipped.json');
+        const styles: unknown[] = [];
+        const sroot = path.join(root, 'src/image-engine/styles');
+        for (const n of fs.readdirSync(sroot)) {
+          const f = path.join(sroot, n, 'style.json');
+          if (fs.existsSync(f)) {
+            const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+            if (j.elements) styles.push(j);
+          }
+        }
+        const cf = path.join(root, 'Reference carousels likes/clusters.json');
+        json(res, { slides, styles, testSkipped: fs.existsSync(skipFile) ? JSON.parse(fs.readFileSync(skipFile, 'utf8')) : null, clusters: fs.existsSync(cf) ? JSON.parse(fs.readFileSync(cf, 'utf8')) : null, lastRun: newest(base) });
+      });
       server.middlewares.use('/__lab/clusters', (req, res) => {
         if (req.method !== 'POST') {
           res.statusCode = 405;

@@ -272,3 +272,34 @@ Timings in this run (one machine, not a benchmark): carousel slide 160 ms, quote
 ## Next (waiting for your decision)
 
 Your call on the next step. Cutouts need a decision (approve ISNet, another permissive model, or keep working on BiRefNet_lite), or we move on without them.
+
+
+## Step 6: Asset library (element-rich styles)
+
+### Element types the references need
+From the cluster readings and style specs: **icons** (line and filled), **hand-drawn arrows** (straight, curved, looping), **stickers and starbursts** (with outline and drop shadow), **tape and torn paper**, **doodles** (squiggles, zigzags, circles, underlines, brush strokes), **badges and labels**, **simple objects** (spheres, cubes, coins, cards, phones, UI cards), **coloured emoji-style objects** (rocket, heart, lightbulb, money), **textures** (halftone, grain, noise), **blobs and shapes**, and **photo cutouts**.
+
+Covered: all of these except photo cutouts and true 3D renders. Photo cutouts need Step 4's cutout model, which is still parked.
+
+### What was built
+- Library: 6,826 elements (6,774 fetched + 52 drawn), all recolourable. 3 fetched packs (Lucide ISC, Phosphor MIT, Fluent Emoji Flat MIT; pinned versions and sha512, fetched only by `npm run fetch:assets`) plus 52 variants of 24 shapes drawn in code. `LICENSES-ASSETS.md` has source, licence, version, attribution and what was not used. `check:licenses` covers assets.
+- Plan format: a new `element` layer (id, tint, colour swaps, flip, sticker outline, shadow) that works with patches and undo. Old plans load unchanged. A missing element is a warning, not a crash.
+- Style format: an optional `elements` block (see `STYLE_FORMAT.md`), validated in plain words. Placement is repeatable and only uses free space.
+- Test assets: `test-assets/` is private and gitignored. `npm run check:test-assets` (first step of `npm run build`) fails if anything in src, public, dist or the SHIPPABLE outputs mentions it or copies a file from it. TEST renders are labelled "TEST ASSETS: not shippable".
+- Results screen: "Step 6: Asset library" with the element browser (pack, tag, licence, three recolour previews) and every recreated slide as its own card with the references beside it and a matches/close/off/wrong verdict.
+
+### Results (SHIPPABLE, 3 styles x 4 decks x 7 slides = 84 slides)
+- hot-flat 27 of 28 pass the phone-size checks (1 fit, 1 orphan; the same slide failed before elements: no new failures anywhere), editorial-collage 28 of 28, object-neon 27 of 28. About 3 elements per slide.
+- TEST version: **not rendered, test-assets/ is empty.** The path is tested with temporary pictures only.
+
+### Where it is still weak
+- Objects are flat emoji-style art, not the glossy 3D renders some references show. object-neon relies on code-drawn spheres and cards plus plus-signs, which read as filler.
+- hot-flat starbursts come out as solid dark shapes; the reference uses coloured ones with a printed look.
+- Sticker outline and shadow are convincing for emoji; code-drawn blobs are plain.
+- Placement picks by free space, not by meaning: a heart can land on a slide that is not about love. Tags are not matched to the slide's words.
+- Not tested: Safari and Firefox, large-pack load time, any performance claim.
+
+### What needs assets we do not have
+- Real 3D renders (glossy objects, chrome shapes, glass): need user-supplied or licensed renders, or a generated set in a later step. A code-drawn sphere is a worse substitute.
+- Photographic objects and cutouts: need photos with cutouts (Step 4 cutout model is parked), user-supplied or from a licensed pack.
+- Hand-drawn illustration sets (Open Doodles style): need a pack with a pinnable archive and a clear licence.

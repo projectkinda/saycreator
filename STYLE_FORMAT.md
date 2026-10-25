@@ -100,6 +100,28 @@ The first rule whose `when` holds is used. `when` can use: `indexMin`, `indexMax
 
 **Params** (all optional): `bar` (`last`, `all`, `none`: solid bars behind the last line or every line of the headline), `asset` (an asset name), `assetSize` (px), `kicker` (`sticker`, `pill` or `label`), `prefix` (text before a label, for example `"// "`), `visual` (`ui-card`, `glow`, `asset`, `none`; cover-top), `chart` (`bars` or `line`), `button` (true: a round arrow button), `headlineShare` (0 to 1: how much of the room the cover-top headline may use), `numeralSize`, `ghost` (true: the step number in the muted colour), `badgeSize`, `ruleWidth`, `pill` (true: an outlined arrow pill on the stat), `alt` (the palette used for the second half of a split).
 
+## elements (optional): illustrative elements
+
+A style with no `elements` block never gets any. With one, the engine places library elements (icons, doodles, stickers, tape, objects, textures) on finished slides, in free space only: never over text, content or the style's own decoration. The same slide always gets the same placement.
+
+```jsonc
+"elements": {
+  "density": { "min": 2, "max": 4 },            // elements per slide
+  "gap": 30,                                    // px kept clear around text and content
+  "types": ["cover", "content", "step"],        // optional: slide types that get elements (others get none)
+  "sticker": { "color": "bg", "width": 8 },     // optional: the outline used by rules with "sticker": true (a palette role)
+  "rules": [
+    { "tags": ["arrow"], "kinds": ["code"], "zone": "near-headline", "count": [0, 1], "size": [150, 250], "rotate": [-18, 12] },
+    { "tags": ["star", "heart"], "kinds": ["object"], "colour": "original", "zone": "free", "count": [1, 2], "size": [120, 210], "sticker": true, "shadow": true },
+    { "tags": ["halftone"], "zone": "texture", "count": [0, 1], "size": [420, 560], "opacity": 0.3 }
+  ]
+}
+```
+
+Rule fields: `tags` (any of these; the library's tags are listed on the Results screen), `kinds` (`icon`, `object`, `code`), `zone` (`free`, `near-headline`, `corner-tl`, `corner-tr`, `corner-bl`, `corner-br`, `bleed-top`, `bleed-bottom`, `bleed-right`, `texture`), `count` [fewest, most] from 0 to 4, `size` [smallest, largest] in px, `rotate` [from, to] degrees, `opacity`, `tint` (one palette role: flat colour), `recolour` (swap palette roles), `colour` (`original` keeps the element's own colours, `palette` recolours it; default: original for coloured objects, palette for everything else), `sticker` (outline from the `sticker` block), `shadow`.
+
+Plain-language problems: a bad zone, count, tint or colour is an error that says what is allowed. A rule whose tags match nothing in the library is a warning ("places nothing"), not an error.
+
 ## assets/*.svg
 
 Small SVG files, drawn with a limited set of shapes so the engine can turn them into the same layers as everything else (and so they take the style's colours):

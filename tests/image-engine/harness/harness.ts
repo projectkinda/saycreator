@@ -563,7 +563,7 @@ async function styleCheckPlan(plan: Plan, styleName: string) {
 }
 
 const svgCheck = (name: string, text: string) => parseSvg(name, text);
-const styleValidate = (raw: unknown, folder: string) => validateStyle(raw, folder);
+const styleValidate = (raw: unknown, folder: string) => validateStyle(raw, folder, new Set(listElements().flatMap((e) => e.tags.map((t) => t.toLowerCase()))));
 
 (window as unknown as { __ie: unknown }).__ie = {
   probeImages,
