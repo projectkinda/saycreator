@@ -134,6 +134,27 @@ function labEndpoints(): Plugin {
           }
         });
       });
+      // Verdicts are also copied to disk (backup, and so they can be read without exporting). Newest wins per item; nothing is
+      // deleted except by an explicit "clear".
+      const verdictsFile = path.join(outDir, 'verdicts.json');
+      server.middlewares.use('/__lab/verdicts', (req, res) => {
+        if (req.method === 'GET') return json(res, fs.existsSync(verdictsFile) ? JSON.parse(fs.readFileSync(verdictsFile, 'utf8')) : { records: {} });
+        let body = '';
+        req.on('data', (c) => (body += c));
+        req.on('end', () => {
+          try {
+            const inc = JSON.parse(body) as { records?: Record<string, { updatedAt?: string }>; clear?: boolean };
+            const cur: { records: Record<string, { updatedAt?: string }> } = !inc.clear && fs.existsSync(verdictsFile) ? JSON.parse(fs.readFileSync(verdictsFile, 'utf8')) : { records: {} };
+            for (const [k, r] of Object.entries(inc.records ?? {})) if (!cur.records[k] || (r.updatedAt ?? '') >= (cur.records[k].updatedAt ?? '')) cur.records[k] = r;
+            fs.mkdirSync(outDir, { recursive: true });
+            fs.writeFileSync(verdictsFile, JSON.stringify({ savedAt: new Date().toISOString(), records: cur.records }, null, 2));
+            json(res, { ok: true, count: Object.keys(cur.records).length });
+          } catch (e) {
+            res.statusCode = 400;
+            json(res, { error: e instanceof Error ? e.message : String(e) });
+          }
+        });
+      });
       // Results written by later steps: out/image-engine/results/<step>.json, shown on the Results screen with no page changes.
       server.middlewares.use('/__lab/steps', (_req, res) => {
         const rd = path.join(outDir, 'results');

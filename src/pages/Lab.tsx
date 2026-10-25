@@ -62,6 +62,11 @@ export default function Lab() {
     } catch {
       setSaved('Could not save in this browser. Export your verdicts now.');
     }
+    // Also copy to disk (out/image-engine/verdicts.json) so they never depend on this one browser. Skipped in automated tests.
+    if (!navigator.webdriver) {
+      const records = Object.fromEntries(Object.entries(state.records).filter(([, r]) => r.verdict || r.reason));
+      if (Object.keys(records).length) fetch('/__lab/verdicts', { method: 'POST', body: JSON.stringify({ records }) }).catch(() => undefined);
+    }
   }, [state]);
 
   const setRecord = useCallback((base: RecordBase, verdict: Verdict | null, reason: string) => {
@@ -120,7 +125,7 @@ export default function Lab() {
             </label>
             <button type="button" className="btn btn-outline btn-sm" onClick={() => setRefreshKey((k) => k + 1)}>Refresh all</button>
             <button type="button" className="btn btn-dark btn-sm" onClick={exportJson}>Export verdicts JSON</button>
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => window.confirm('Delete every verdict saved in this browser?') && setState({ records: {}, picks: {} })}>Clear all</button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => window.confirm('Delete every verdict, in this browser and the copy on disk?') && (fetch('/__lab/verdicts', { method: 'POST', body: JSON.stringify({ clear: true }) }).catch(() => undefined), setState({ records: {}, picks: {} }))}>Clear all</button>
           </div>
           {uploads.length > 0 && <p className="small muted res-uploads">Your pictures (kept only while this tab is open): {uploads.map((u) => u.name).join(', ')}</p>}
         </div>

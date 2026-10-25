@@ -93,3 +93,21 @@ test('a verdict on a cluster is saved, survives a reload and is exported with th
   expect(data.styleReading.clusters.length).toBeGreaterThan(0);
   expect(data.styleReading.unplaced.length).toBe(1);
 });
+
+test('verdicts have a copy on disk: newest wins per item, and nothing is lost by a second save', async ({ request }) => {
+  const file = path.join(ROOT, 'out/image-engine/verdicts.json');
+  const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  try {
+    const rec = (verdict: string, at: string) => ({ key: 'test|a', step: 'test', kind: 'x', image: 'a', option: 'a', verdict, reason: '', updatedAt: at });
+    await request.post('/__lab/verdicts', { data: { clear: true } });
+    await request.post('/__lab/verdicts', { data: { records: { 'test|a': rec('good', '2026-01-02T00:00:00Z'), 'test|b': { ...rec('bad', '2026-01-01T00:00:00Z'), key: 'test|b' } } } });
+    await request.post('/__lab/verdicts', { data: { records: { 'test|a': rec('bad', '2026-01-01T00:00:00Z') } } }); // older: must not win
+    const got = await (await request.get('/__lab/verdicts')).json();
+    expect(got.records['test|a'].verdict).toBe('good');
+    expect(Object.keys(got.records).sort()).toEqual(['test|a', 'test|b']);
+    expect(JSON.parse(fs.readFileSync(file, 'utf8')).records['test|b'].verdict).toBe('bad');
+  } finally {
+    if (before === null) fs.rmSync(file, { force: true });
+    else fs.writeFileSync(file, before);
+  }
+});
