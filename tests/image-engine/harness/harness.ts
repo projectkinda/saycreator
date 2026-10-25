@@ -30,6 +30,9 @@ import {
   loadStyles,
   validateStyle,
   parseSvg,
+  listElements,
+  listPacks,
+  findElements,
   type RenderReport,
   type TextLayer,
   type ThumbnailOption,
@@ -549,6 +552,8 @@ const svgCheck = (name: string, text: string) => parseSvg(name, text);
 const styleValidate = (raw: unknown, folder: string) => validateStyle(raw, folder);
 
 (window as unknown as { __ie: unknown }).__ie = {
+  elementList: () => ({ packs: listPacks(), elements: listElements() }),
+  elementFind: findElements,
   styleList,
   styleRun,
   styleCompose,

@@ -125,7 +125,25 @@ export interface PathLayer extends LayerBase {
   stroke?: { color: string; width: number; cap?: 'round' | 'butt'; join?: 'round' | 'miter' };
 }
 
-export type Layer = ImageLayer | TextLayer | ShapeLayer | PathLayer;
+/**
+ * An element from the asset library (an icon, an emoji-style object, a doodle, tape, a blob...), placed in the layer's box.
+ * `element` is the library id, for example "lucide:arrow-right" or "code:squiggle:2". The element is fitted inside the box
+ * (never stretched). Colours: `tint` makes it a flat one-colour shape; `colors` swaps specific source colours.
+ */
+export interface ElementLayer extends LayerBase {
+  kind: 'element';
+  element: string;
+  /** Replace every colour of the element with this one. */
+  tint?: string;
+  /** Swap specific source colours (keys are the element's own colours or colour tokens) for new ones. */
+  colors?: Record<string, string>;
+  flipX?: boolean;
+  /** A solid outline around the whole shape, like a die-cut sticker. */
+  sticker?: { color: string; width: number };
+  shadow?: { color: string; blur: number; offsetX: number; offsetY: number };
+}
+
+export type Layer = ImageLayer | TextLayer | ShapeLayer | PathLayer | ElementLayer;
 
 export interface Canvas {
   width: number;
@@ -168,7 +186,7 @@ export interface HistoryEntry {
 
 export interface RenderWarning {
   layerId: string;
-  code: 'text-overflow' | 'image-failed' | 'font-missing';
+  code: 'text-overflow' | 'image-failed' | 'font-missing' | 'element-missing';
   message: string;
 }
 

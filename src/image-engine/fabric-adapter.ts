@@ -14,14 +14,18 @@ import {
   Shadow,
   StaticCanvas,
   filters,
+  loadSVGFromString,
+  util,
   type FabricObject,
 } from 'fabric';
 import type { CanvasAdapter, ExportOptions } from './adapter';
+import { getElementSvg } from './assets/library';
+import { prepareElement } from './assets/svg-prepare';
 import { clampRadius, containFit, coverCrop } from './draw/geometry';
 import { layoutText } from './draw/text';
 import { FONT_WEIGHTS, loadFonts, nearestWeight } from './fonts';
 import { applyPatch } from './patcher';
-import type { Fill, ImageLayer, Layer, PathLayer, Patch, PatchResult, Plan, RenderReport, RenderWarning, ShapeLayer, TextLayer } from './types';
+import type { ElementLayer, Fill, ImageLayer, Layer, PathLayer, Patch, PatchResult, Plan, RenderReport, RenderWarning, ShapeLayer, TextLayer } from './types';
 import { validatePlan } from './validate';
 
 interface Meta {
@@ -201,6 +205,7 @@ export class FabricAdapter implements CanvasAdapter {
       if (part) parts.push(part);
     } else if (layer.kind === 'shape') parts.push(this.buildShape(layer, pad));
     else if (layer.kind === 'path') parts.push(this.buildPath(layer, pad));
+    else if (layer.kind === 'element') parts.push(...(await this.buildElement(layer, pad, warnings)));
     else parts.push(...this.buildText(layer, pad, warnings));
 
     // Fixed size: the group is exactly the box (plus pad), so children can never move its centre.
@@ -271,6 +276,36 @@ export class FabricAdapter implements CanvasAdapter {
     if (layer.shape === 'ellipse') return new Ellipse({ ...common, rx: (layer.width - sw) / 2, ry: (layer.height - sw) / 2 });
     const r = clampRadius(layer.radius, layer.width, layer.height);
     return new Rect({ ...common, width: layer.width - sw, height: layer.height - sw, rx: r, ry: r });
+  }
+
+  /** An element from the library: recoloured SVG, fitted inside the box, with an optional sticker outline and shadow. */
+  private async buildElement(layer: ElementLayer, pad: number, warnings: RenderWarning[]): Promise<FabricObject[]> {
+    const svg = await getElementSvg(layer.element);
+    if (!svg) {
+      warnings.push({ layerId: layer.id, code: 'element-missing', message: `The element "${layer.element}" is not in the library. Run npm run fetch:assets if it comes from a pack.` });
+      return [];
+    }
+    const prepared = prepareElement(svg, { colors: layer.colors, tint: layer.tint, sticker: layer.sticker });
+    const fit = async (text: string): Promise<FabricObject> => {
+      const parsed = await loadSVGFromString(text);
+      const obj = util.groupSVGElements(parsed.objects.filter(Boolean) as FabricObject[], parsed.options) as FabricObject;
+      const w = obj.width || 1;
+      const h = obj.height || 1;
+      const k = Math.min(layer.width / w, layer.height / h);
+      obj.set({ originX: 'left', originY: 'top', scaleX: k * (layer.flipX ? -1 : 1), scaleY: k, left: pad + (layer.width - w * k) / 2 + (layer.flipX ? w * k : 0), top: pad + (layer.height - h * k) / 2 });
+      return obj;
+    };
+    const out: FabricObject[] = [];
+    const sh = layer.shadow ? new Shadow({ color: layer.shadow.color, blur: layer.shadow.blur, offsetX: layer.shadow.offsetX, offsetY: layer.shadow.offsetY }) : undefined;
+    if (prepared.under) {
+      const under = await fit(prepared.under);
+      if (sh) under.shadow = sh;
+      out.push(under);
+    }
+    const main = await fit(prepared.main);
+    if (sh && !prepared.under) main.shadow = sh;
+    out.push(main);
+    return out;
   }
 
   private buildPath(layer: PathLayer, pad: number): FabricObject {

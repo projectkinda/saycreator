@@ -7,6 +7,8 @@ const MAX_SIDE = 4096;
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const RGBA = /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(?:,\s*(?:0|1|0?\.\d+)\s*)?\)$/i;
 
+const ELEMENT_ID = /^[a-z0-9-]+:[A-Za-z0-9._-]+(:[0-9]+)?$/;
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const PATH_OK = /^[MLCQHVZ0-9eE.,\s+-]+$/;
 const ROLES = ['decor', 'content', 'container'];
 
@@ -127,8 +129,27 @@ function validateLayer(l: Layer, errors: string[]) {
       }
       if (l.fill === undefined && !l.stroke) errors.push(`${who}: a path needs a fill or a stroke, or nothing would be drawn.`);
       break;
+    case 'element': {
+      if (typeof l.element !== 'string' || !ELEMENT_ID.test(l.element)) errors.push(`${who}: the element id "${String(l.element)}" is not an id like "lucide:arrow-right" or "code:squiggle:2".`);
+      if (l.tint !== undefined && !isColor(l.tint)) errors.push(`${who}: the tint "${String(l.tint)}" is not a colour.`);
+      if (l.colors !== undefined) {
+        if (!isObj(l.colors)) errors.push(`${who}: colors must be an object of source colour to new colour.`);
+        else for (const [k, v] of Object.entries(l.colors)) if (!k || k.length > 40 || !isColor(v)) errors.push(`${who}: the colour swap for "${k}" is not a colour.`);
+      }
+      if (l.sticker) {
+        if (!isColor(l.sticker.color)) errors.push(`${who}: the sticker outline colour is not a colour.`);
+        range(errors, who, 'sticker outline width', l.sticker.width, 0, 60);
+      }
+      if (l.shadow) {
+        if (!isColor(l.shadow.color)) errors.push(`${who}: the shadow colour is not a colour.`);
+        range(errors, who, 'shadow blur', l.shadow.blur, 0, 100);
+        range(errors, who, 'shadow offset', l.shadow.offsetX, -200, 200);
+        range(errors, who, 'shadow offset', l.shadow.offsetY, -200, 200);
+      }
+      break;
+    }
     default:
-      errors.push(`${who}: "${String((l as { kind?: unknown }).kind)}" is not a layer type. Use image, text, shape or path.`);
+      errors.push(`${who}: "${String((l as { kind?: unknown }).kind)}" is not a layer type. Use image, text, shape, path or element.`);
   }
   if ('filters' in l && l.kind !== 'image' && (l as { filters?: unknown }).filters)
     errors.push(`${who}: filters only work on image layers.`);

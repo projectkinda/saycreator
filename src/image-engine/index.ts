@@ -24,3 +24,6 @@ export { loadStyles, type LoadedStyle, type StyleProblem } from './styles/load';
 export { validateStyle, LAYOUT_IDS, SLIDE_TYPES, type StyleSpec } from './styles/format';
 export { composeStyled, pickRule, matches, LAYOUTS, type StyledSlide } from './styles/compose';
 export { parseSvg, assetLayers } from './styles/svg';
+export { listElements, listPacks, findElements, elementById, getElementSvg, CODE_PACK, type ElementInfo, type PackInfo } from './assets/library';
+export { recolourSvg, prepareElement, shade, coloursOf } from './assets/svg-prepare';
+export { CODE_ELEMENTS } from './assets/code-elements';
