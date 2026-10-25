@@ -497,6 +497,20 @@ async function makeCarouselSheet(rows: { label: string; lines?: string[]; slides
 
 // ---- Step 5 Phase 2: learned styles ----
 
+interface StyleRunOpts {
+  width?: number;
+  height?: number;
+  chrome?: 'none' | 'dots-swipe' | 'page-number' | 'strip';
+  anyCount?: boolean;
+  elements?: 'shippable' | 'test';
+  testAssets?: { name: string; url: string; width: number; height: number; tags: string[] }[];
+}
+
+/** Size of each picture (test assets are only given as URLs). */
+async function probeImages(urls: string[]) {
+  return Promise.all(urls.map((url) => new Promise<{ url: string; width: number; height: number }>((res, rej) => { const i = new Image(); i.onload = () => res({ url, width: i.naturalWidth, height: i.naturalHeight }); i.onerror = () => rej(new Error(`Could not load ${url}`)); i.src = url; })));
+}
+
 /** The styles found in src/image-engine/styles/, with anything that was rejected and why. */
 function styleList() {
   const { styles, problems } = loadStyles();
@@ -510,7 +524,7 @@ const styleByName = (name: string) => {
 };
 
 /** Composes, draws and checks every slide of a script in a style. Each slide comes back on its own. */
-async function styleRun(script: CarouselScript, styleName: string, opts: { width?: number; height?: number; chrome?: 'none' | 'dots-swipe' | 'page-number' | 'strip'; anyCount?: boolean } = {}) {
+async function styleRun(script: CarouselScript, styleName: string, opts: StyleRunOpts = {}) {
   await loadFonts();
   const style = styleByName(styleName);
   const slides = composeStyled(script, style, opts, !!opts.anyCount);
@@ -520,7 +534,7 @@ async function styleRun(script: CarouselScript, styleName: string, opts: { width
   try {
     for (const s of slides) {
       const c = await checkSlidePlan(a, s, style.spec.spacing.margin);
-      out.push({ id: s.id, type: s.type, layout: s.layout, rule: s.rule, palette: s.palette, because: s.because, notes: s.notes, plan: s.plan, lint: c.lint, warnings: c.render.warnings, png: await toBase64(c.png), phone: await toBase64(c.phonePng) });
+      out.push({ id: s.id, type: s.type, layout: s.layout, rule: s.rule, palette: s.palette, because: s.because, elementsUsed: s.elementsUsed, notes: s.notes, plan: s.plan, lint: c.lint, warnings: c.render.warnings, png: await toBase64(c.png), phone: await toBase64(c.phonePng) });
     }
   } finally {
     a.dispose();
@@ -529,7 +543,7 @@ async function styleRun(script: CarouselScript, styleName: string, opts: { width
 }
 
 /** Plans only, no drawing. */
-function styleCompose(script: CarouselScript, styleName: string, opts: { width?: number; height?: number; chrome?: 'none' | 'dots-swipe' | 'page-number' | 'strip'; anyCount?: boolean } = {}) {
+function styleCompose(script: CarouselScript, styleName: string, opts: StyleRunOpts = {}) {
   const style = styleByName(styleName);
   return composeStyled(script, style, opts, !!opts.anyCount);
 }
@@ -552,6 +566,7 @@ const svgCheck = (name: string, text: string) => parseSvg(name, text);
 const styleValidate = (raw: unknown, folder: string) => validateStyle(raw, folder);
 
 (window as unknown as { __ie: unknown }).__ie = {
+  probeImages,
   elementList: () => ({ packs: listPacks(), elements: listElements() }),
   elementFind: findElements,
   styleList,

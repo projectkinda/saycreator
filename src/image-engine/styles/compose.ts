@@ -8,6 +8,7 @@ import { add, type LCtx } from './kit';
 import type { LoadedStyle } from './load';
 import * as A from './layouts-a';
 import * as B from './layouts-b';
+import { placeElements, type TestAsset } from './elements';
 import { labelText, pageNumber } from './tools';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,6 +44,8 @@ export interface StyledSlide extends ComposedSlide {
   palette: string;
   /** Why this rule matched, in plain words. */
   because: string;
+  /** Library element ids, or test asset names, placed on this slide. */
+  elementsUsed: string[];
 }
 
 const wordCount = (s?: string) => (s ?? '').split(/\s+/).filter(Boolean).length;
@@ -114,6 +117,9 @@ export interface StyledOptions {
   chrome?: StyleSpec['chrome'];
   /** The account name for closing slides. */
   handle?: string;
+  /** Place illustrative elements as the style asks: from the shippable library, or from the private test assets (test renders only). */
+  elements?: 'shippable' | 'test';
+  testAssets?: TestAsset[];
 }
 
 function chromeArea(chrome: StyleSpec['chrome'], M: number, H: number) {
@@ -157,7 +163,15 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
       layers.push(t.layer, ...pageNumber(theme, cp, 'page', W - M, M, i, script.slides.length));
     }
     add(c, ...layers);
+    let elementsUsed: string[] = [];
+    if (opts.elements && style.elements) {
+      const id = `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`;
+      const placed = placeElements({ spec: style.elements, pal, layers: c.layers, width: W, height: H, type: s.type, seed: id, mode: opts.elements, testAssets: opts.testAssets });
+      add(c, ...placed.layers);
+      c.notes.push(...placed.notes);
+      elementsUsed = placed.used;
+    }
     const plan: Plan = { schema: 1, revision: 1, canvas: { width: W, height: H, background: solidOf(pal.bg) }, layers: c.layers };
-    return { id: `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`, type: s.type, plan, notes: c.notes, style: style.name, layout: rule.use, rule: at, palette: palName, because };
+    return { id: `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`, type: s.type, plan, notes: c.notes, style: style.name, layout: rule.use, rule: at, palette: palName, because, elementsUsed };
   });
 }

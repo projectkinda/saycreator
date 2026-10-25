@@ -55,6 +55,16 @@
     ]
   },
   "assets": { "glow-line": "assets/glow-line.svg", "loop-arrow": "assets/loop-arrow.svg" },
+  "elements": {
+    "density": { "min": 2, "max": 4 },
+    "gap": 34,
+    "rules": [
+      { "tags": ["sphere", "cube", "coin", "cards", "phone"], "kinds": ["code"], "zone": "corner-br", "count": [1, 1], "size": [230, 380], "rotate": [-10, 10], "shadow": true },
+      { "tags": ["rocket", "trophy", "lightbulb", "megaphone", "money", "chart", "laptop", "shield"], "kinds": ["object"], "colour": "palette", "zone": "free", "count": [0, 1], "size": [170, 300], "rotate": [-12, 12], "shadow": true },
+      { "tags": ["arrow"], "kinds": ["code"], "zone": "near-headline", "count": [0, 1], "size": [130, 220], "rotate": [-10, 10], "tint": "muted" },
+      { "tags": ["sparkle", "plus"], "kinds": ["code"], "zone": "free", "count": [1, 2], "size": [60, 110], "rotate": [0, 30] }
+    ]
+  },
   "knownLintConflicts": [
     "The references colour some words mint on a white slide, which is only about 2.1:1. On the light palette this style uses a darker green (#0F6B4F, about 6:1) for accent text and keeps mint for fills and highlight boxes. That is a deliberate change from the reference, not an exact match.",
     "Violet-on-black, which one reference deck uses, would fail contrast (about 2.3:1), so this style uses mint."

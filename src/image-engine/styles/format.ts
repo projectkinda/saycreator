@@ -50,6 +50,45 @@ export interface LayoutRule {
   params?: Record<string, string | number | boolean>;
 }
 
+export const ELEMENT_ZONES = ['free', 'near-headline', 'corner-tl', 'corner-tr', 'corner-bl', 'corner-br', 'bleed-top', 'bleed-bottom', 'bleed-right', 'texture'] as const;
+export type ElementZone = (typeof ELEMENT_ZONES)[number];
+
+/** One kind of element a style likes: which tags, where, how many, how big, how coloured. */
+export interface ElementRule {
+  /** The element is picked from library elements that have any of these tags (for example "arrow", "star"). */
+  tags: string[];
+  zone: ElementZone;
+  /** How many of this kind, as [fewest, most]. */
+  count: [number, number];
+  /** Longest side in px on the 1080 wide slide, as [smallest, biggest]. */
+  size: [number, number];
+  /** Tilt in degrees, as [least, most]. */
+  rotate?: [number, number];
+  /** Restrict to icons, coloured objects, or elements drawn in code. */
+  kinds?: ('icon' | 'object' | 'code')[];
+  /** Swap one palette role for another when colouring, for example {"accent": "marker"}. */
+  recolour?: Record<string, string>;
+  /** "original" keeps the element's own colours; "palette" recolours it to the style. Default: original for coloured objects, palette for everything else. */
+  colour?: 'original' | 'palette';
+  /** Make it one flat colour: a palette role name. */
+  tint?: string;
+  sticker?: boolean;
+  shadow?: boolean;
+  opacity?: number;
+}
+/** What a style does with illustrative elements. A style with no "elements" never gets any. */
+export interface ElementSpec {
+  /** Elements per slide, as fewest and most. */
+  density: { min: number; max: number };
+  /** Clear space kept around text and other content, px. */
+  gap?: number;
+  /** Slide types that get elements. All of them if left out. */
+  types?: SlideType[];
+  /** The die-cut outline used by rules with "sticker": true. */
+  sticker?: { color: string; width: number };
+  rules: ElementRule[];
+}
+
 export interface StyleSpec {
   schema: 1;
   /** Must equal the folder name. */
@@ -72,6 +111,8 @@ export interface StyleSpec {
   layouts: Record<SlideType, LayoutRule[]>;
   /** Asset name -> file inside this style's assets/ folder. */
   assets: Record<string, string>;
+  /** Illustrative elements (arrows, stickers, doodles...) this style uses, where, and how many. Optional. */
+  elements?: ElementSpec;
   /** Places where this style's own look breaks our phone-size rules, written down instead of changed. */
   knownLintConflicts?: string[];
   /** What the reference had that this style does not reproduce, and why. */
@@ -87,7 +128,7 @@ export interface StyleCheck {
 }
 
 /** Checks a style.json (already parsed). `folder` is the folder name the file was found in. */
-export function validateStyle(raw: unknown, folder: string): StyleCheck {
+export function validateStyle(raw: unknown, folder: string, knownTags?: Set<string>): StyleCheck {
   const errors: string[] = [];
   const warnings: string[] = [];
   const err = (m: string) => errors.push(`Style "${folder}": ${m}`);
@@ -226,6 +267,45 @@ export function validateStyle(raw: unknown, folder: string): StyleCheck {
       if (used.size < 2) err(`layouts.${type} uses only ${used.size} different layout. A style needs at least 2 distinct layouts for every slide type.`);
       if (rules.length && isObj(rules[rules.length - 1]) && (rules[rules.length - 1] as Record<string, unknown>).when !== undefined) err(`The last rule of layouts.${type} has a "when", so a slide that matches no rule would have no layout. Remove the "when" from the last rule.`);
     }
+  // elements
+  if (s.elements !== undefined) {
+    const el = s.elements;
+    const roles = PALETTE_ROLES as readonly string[];
+    const pair = (v: unknown, lo: number, hi: number): v is [number, number] => Array.isArray(v) && v.length === 2 && v.every((x) => num(x) && x >= lo && x <= hi) && v[0] <= v[1];
+    if (!isObj(el)) err('"elements" must be an object with "density" and "rules".');
+    else {
+      const d = el.density as { min?: unknown; max?: unknown } | undefined;
+      if (!d || !num(d.min) || !num(d.max) || d.min < 0 || d.max > 8 || d.min > d.max) err('elements.density must be {"min": n, "max": m} with 0 <= min <= max <= 8, elements per slide.');
+      if (el.gap !== undefined && (!num(el.gap) || el.gap < 0 || el.gap > 200)) err('elements.gap must be a number from 0 to 200 (px of clear space around text).');
+      if (el.types !== undefined && !(Array.isArray(el.types) && el.types.every((t) => (SLIDE_TYPES as string[]).includes(t as string)))) err(`elements.types must be a list of slide types (${SLIDE_TYPES.join(', ')}).`);
+      if (el.sticker !== undefined) {
+        const st = el.sticker as { color?: unknown; width?: unknown };
+        if (!isObj(st) || !roles.includes(st.color as string) || !num(st.width) || st.width < 0 || st.width > 60) err('elements.sticker must be {"color": a palette role, "width": 0 to 60}.');
+      }
+      if (!Array.isArray(el.rules) || el.rules.length === 0) err('elements.rules needs at least one rule, for example {"tags": ["arrow"], "zone": "near-headline", "count": [0, 1], "size": [140, 260]}.');
+      else
+        el.rules.forEach((r: unknown, i: number) => {
+          const w = `elements.rules[${i}]`;
+          if (!isObj(r)) return err(`${w} must be an object.`);
+          if (!Array.isArray(r.tags) || r.tags.length === 0 || !r.tags.every((t) => typeof t === 'string' && t.trim() !== '')) err(`${w}.tags must be a list of tag words, for example ["arrow", "star"].`);
+          else if (knownTags) {
+            const none = (r.tags as string[]).filter((t) => !knownTags.has(t.toLowerCase()));
+            if (none.length === r.tags.length) warnings.push(`${w}: none of the tags ${(r.tags as string[]).join(', ')} match any element in the library, so this rule places nothing.`);
+          }
+          if (!(ELEMENT_ZONES as readonly string[]).includes(r.zone as string)) err(`${w}.zone is "${String(r.zone)}". Zones: ${ELEMENT_ZONES.join(', ')}.`);
+          if (!pair(r.count, 0, 4)) err(`${w}.count must be [fewest, most] with both from 0 to 4.`);
+          if (!pair(r.size, 40, 900)) err(`${w}.size must be [smallest, biggest] px, from 40 to 900.`);
+          if (r.rotate !== undefined && !pair(r.rotate, -90, 90)) err(`${w}.rotate must be [least, most] degrees, from -90 to 90.`);
+          if (r.kinds !== undefined && !(Array.isArray(r.kinds) && r.kinds.every((k) => ['icon', 'object', 'code'].includes(k as string)))) err(`${w}.kinds must be a list of icon, object, code.`);
+          if (r.colour !== undefined && r.colour !== 'original' && r.colour !== 'palette') err(`${w}.colour must be "original" or "palette".`);
+          if (r.tint !== undefined && !roles.includes(r.tint as string)) err(`${w}.tint "${String(r.tint)}" is not a palette role (${roles.join(', ')}).`);
+          if (r.recolour !== undefined) {
+            if (!isObj(r.recolour) || !Object.entries(r.recolour).every(([k, v]) => roles.includes(k) && roles.includes(v as string))) err(`${w}.recolour must swap palette roles, for example {"accent": "marker"}.`);
+          }
+          if (r.opacity !== undefined && (!num(r.opacity) || r.opacity < 0.05 || r.opacity > 1)) err(`${w}.opacity must be from 0.05 to 1.`);
+        });
+    }
+  }
   if (s.knownLintConflicts !== undefined && !(Array.isArray(s.knownLintConflicts) && s.knownLintConflicts.every((x) => typeof x === 'string'))) err('"knownLintConflicts" must be a list of sentences.');
   if (s.notReproduced !== undefined && !(Array.isArray(s.notReproduced) && s.notReproduced.every((x) => typeof x === 'string'))) err('"notReproduced" must be a list of sentences.');
   return { errors, warnings };

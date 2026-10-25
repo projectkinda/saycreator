@@ -56,6 +56,18 @@
     ]
   },
   "assets": { "flower": "assets/flower.svg", "circle-hand": "assets/circle-hand.svg", "underline-hand": "assets/underline-hand.svg", "arrow-thin": "assets/arrow-thin.svg" },
+  "elements": {
+    "density": { "min": 3, "max": 5 },
+    "gap": 28,
+    "sticker": { "color": "bg", "width": 8 },
+    "rules": [
+      { "tags": ["tape"], "kinds": ["code"], "zone": "corner-tl", "count": [0, 1], "size": [210, 300], "rotate": [-24, -8] },
+      { "tags": ["doodle", "squiggle", "loop", "circle", "underline"], "kinds": ["code"], "zone": "near-headline", "count": [1, 1], "size": [180, 300], "rotate": [-12, 12] },
+      { "tags": ["star", "sparkle", "heart", "fire", "rocket", "lightbulb"], "kinds": ["object"], "zone": "free", "count": [1, 2], "size": [120, 210], "rotate": [-18, 18], "colour": "original", "sticker": true, "shadow": true },
+      { "tags": ["blob"], "kinds": ["code"], "zone": "bleed-right", "count": [0, 1], "size": [380, 520], "opacity": 0.45 },
+      { "tags": ["halftone"], "zone": "texture", "count": [0, 1], "size": [400, 520], "opacity": 0.3 }
+    ]
+  },
   "knownLintConflicts": [
     "Headline lines are set at a line height of 0.92, so lines touch. The checker looks at text boxes, not ink, and does not flag touching lines.",
     "The references set headlines straight over photographs. Text over a photograph cannot be contrast-checked by our method without the photograph, so photo-led layouts are not built."

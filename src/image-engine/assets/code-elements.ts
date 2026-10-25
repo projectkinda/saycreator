@@ -142,7 +142,7 @@ const tape = (seed: number) => {
   const zig = (x: number, dir: number): [number, number][] => [1, 2, 3, 4].map((i) => [x + (i % 2 ? dir * (4 + r() * 3) : 0), 8 + i * 8.8]);
   const pts: [number, number][] = [[10, 8], [150, 8], ...zig(150, 1), [150, 52], [10, 52], ...zig(10, -1).reverse()];
   const d = pts.map(([x, y], i) => `${i ? "L" : "M"} ${f(x)} ${f(y)}`).join(" ") + " Z";
-  return svg(160, 60, `<path d="${d}" fill="marker" fill-opacity="0.85" stroke="line" stroke-opacity="0.25" stroke-width="1"/>`);
+  return svg(160, 60, `<path d="${d}" fill="surface" fill-opacity="0.88" stroke="line" stroke-opacity="0.35" stroke-width="1.5"/>`);
 };
 
 const tornPaper = (seed: number) => {
@@ -195,7 +195,7 @@ export const CODE_ELEMENTS: CodeElementDef[] = [
   { name: 'halftone', tags: ['halftone', 'texture', 'dots'], seeds: 3, width: 200, height: 200, slots: ['accent'], texture: true, make: halftone },
   { name: 'grain', tags: ['grain', 'texture', 'noise'], seeds: 2, width: 200, height: 200, slots: ['text'], texture: true, make: grain },
   { name: 'brush', tags: ['brush', 'stroke', 'highlight'], seeds: 3, width: 200, height: 70, slots: ['marker'], make: brush },
-  { name: 'tape', tags: ['tape', 'sticker', 'paper'], seeds: 3, width: 160, height: 60, slots: ['marker', 'line'], make: tape },
+  { name: 'tape', tags: ['tape', 'sticker', 'paper'], seeds: 3, width: 160, height: 60, slots: ['surface', 'line'], make: tape },
   { name: 'torn-paper', tags: ['torn-paper', 'paper', 'label'], seeds: 3, width: 200, height: 80, slots: ['surface', 'line'], make: tornPaper },
   { name: 'label-sticker', tags: ['label', 'sticker', 'tag'], seeds: 3, width: 160, height: 70, slots: ['accent', 'line'], make: labelSticker },
   { name: 'sphere', tags: ['sphere', 'ball', 'object', '3d'], seeds: 1, width: 100, height: 100, slots: ['accent', 'accent-dark', 'accent-light', 'text'], make: sphere },

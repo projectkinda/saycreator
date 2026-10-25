@@ -56,6 +56,19 @@
     ]
   },
   "assets": { "asterisk": "assets/asterisk.svg", "plus": "assets/plus.svg", "arrow-ne": "assets/arrow-ne.svg", "squiggle": "assets/squiggle.svg" },
+  "elements": {
+    "density": { "min": 2, "max": 4 },
+    "gap": 30,
+    "types": ["cover", "content", "step", "stat", "checklist", "beforeafter", "closing"],
+    "sticker": { "color": "line", "width": 6 },
+    "rules": [
+      { "tags": ["arrow"], "kinds": ["code"], "zone": "near-headline", "count": [0, 1], "size": [150, 250], "rotate": [-18, 12] },
+      { "tags": ["burst", "sparkle", "star"], "kinds": ["code"], "zone": "corner-tr", "count": [0, 1], "size": [130, 210], "rotate": [-15, 15], "shadow": true },
+      { "tags": ["squiggle", "zigzag", "brush"], "kinds": ["code"], "zone": "free", "count": [0, 1], "size": [220, 340], "rotate": [-10, 10] },
+      { "tags": ["plus", "asterisk"], "kinds": ["code"], "zone": "free", "count": [1, 2], "size": [70, 130], "rotate": [0, 45] },
+      { "tags": ["halftone"], "zone": "texture", "count": [0, 1], "size": [420, 560], "opacity": 0.3 }
+    ]
+  },
   "knownLintConflicts": [
     "Headline lines are set at a line height of 0.95, so lines touch. The checker looks at text boxes, not ink, and does not flag touching lines.",
     "Yellow or lime text only works on the dark palette (about 16:1). On white it would be about 1.2:1, so the light palette uses black for text and lime only for bars."

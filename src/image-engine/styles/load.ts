@@ -2,6 +2,7 @@
 // A new style is added by adding a folder. A folder that fails validation is reported, not loaded.
 import { parseSvg, type SvgAsset } from './svg';
 import { validateStyle, type StyleSpec } from './format';
+import { listElements } from '../assets/library';
 
 const jsons = import.meta.glob('./*/style.json', { eager: true, import: 'default' }) as Record<string, unknown>;
 const svgs = import.meta.glob('./*/assets/*.svg', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>;
@@ -17,11 +18,12 @@ export interface StyleProblem {
 }
 
 export function loadStyles(): { styles: LoadedStyle[]; problems: StyleProblem[] } {
+  const knownTags = new Set(listElements().flatMap((e) => e.tags.map((t) => t.toLowerCase())));
   const styles: LoadedStyle[] = [];
   const problems: StyleProblem[] = [];
   for (const [file, raw] of Object.entries(jsons)) {
     const folder = file.split('/')[1];
-    const { errors, warnings } = validateStyle(raw, folder);
+    const { errors, warnings } = validateStyle(raw, folder, knownTags);
     const spec = raw as StyleSpec;
     const assets: Record<string, SvgAsset> = {};
     if (errors.length === 0) {

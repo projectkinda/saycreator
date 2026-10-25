@@ -41,7 +41,7 @@ export const CAROUSEL_CHECK_LABELS: Record<CarouselLintId, string> = {
   overlap: 'No overlapping elements',
 };
 
-interface Box {
+export interface Box {
   x: number;
   y: number;
   width: number;
@@ -63,7 +63,7 @@ const contains = (outer: Box, inner: Box, slack: number) =>
   inner.x >= outer.x - slack && inner.y >= outer.y - slack && inner.x + inner.width <= outer.x + outer.width + slack && inner.y + inner.height <= outer.y + outer.height + slack;
 
 /** The box a layer really occupies, including rotation. */
-function layerBox(l: Layer): Box {
+export function layerBox(l: Layer): Box {
   if (!l.rotation) return { x: l.x, y: l.y, width: l.width, height: l.height };
   const a = (l.rotation * Math.PI) / 180;
   const w = Math.abs(l.width * Math.cos(a)) + Math.abs(l.height * Math.sin(a));
@@ -72,7 +72,7 @@ function layerBox(l: Layer): Box {
 }
 
 /** Where the text really is: the lines' widest extent and the block's height. */
-function textInk(l: TextLayer) {
+export function textInk(l: TextLayer) {
   const block = layoutText(l);
   const lines = block.lines.filter((x) => x.text);
   const x0 = Math.min(...lines.map((x) => x.x));
