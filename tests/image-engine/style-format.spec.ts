@@ -26,10 +26,16 @@ test('the shipped styles pass; a style that breaks our phone-size rules loads wi
     const r = await check(page, readStyle(n), n);
     expect(r.errors, n).toEqual([]);
   }
-  const quiet = await check(page, readStyle('dark-quiet'), 'dark-quiet');
+  // Quiet dark now meets the minimum; its old, tiny sizes are used here as the example of a style that does not.
+  const tiny = readStyle('dark-quiet');
+  tiny.type.body = 28;
+  tiny.type.small = 30;
+  tiny.type.label = 26;
+  const quiet = await check(page, tiny, 'dark-quiet');
   expect(quiet.warnings.join(' ')).toMatch(/type\.body is 28 px.*at least 32 px/);
   expect(quiet.warnings.join(' ')).toMatch(/type.small is 30 px/);
-  expect(quiet.warnings.join(' ')).not.toMatch(/type.label/); // labels and page numbers were raised to 32 px
+  expect(quiet.warnings.join(' ')).toMatch(/type.label is 26 px/);
+  expect((await check(page, readStyle('dark-quiet'), 'dark-quiet')).warnings.filter((w) => /32 px/.test(w))).toEqual([]); // the shipped Quiet dark is clean
 });
 
 test('every kind of mistake in style.json is refused with a sentence that says what to change', async ({ page }) => {

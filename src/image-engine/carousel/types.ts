@@ -62,7 +62,9 @@ export interface Theme {
   hero: Palette;
   fonts: { headline: FontFamily; headlineWeight: number; body: FontFamily; bodyWeight: number; strong: number };
   /** Font sizes in px on the 1080 wide slide. */
-  type: { cover: number; headline: number; body: number; small: number; stat: number; quote: number; label?: number };
+  type: { cover: number; headline: number; body: number; small: number; stat: number; quote: number; label?: number; /** The line under a big number. Default: body - 4. */ note?: number; /** Who said a quote. Default: body - 6. */ byline?: number };
+  /** Line height of body text. Default 1.3. */
+  bodyLineHeight?: number;
   shape: {
     /** Card, sticker and button corner radius. */
     radius: number;

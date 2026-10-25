@@ -1,5 +1,5 @@
-// Fix: the Quiet dark style's page number was 26 px against the 32 px minimum, so every slide failed the phone-size check.
-// Also: the style validator now warns, when a style is loaded, about any text size under the minimum.
+// Fix: the Quiet dark style met the phone-size minimum only for labels. Now every text in it is 32 px or more, the stat note and
+// quote byline are style settings (type.note, type.byline) that the validator checks, and the body line height is opened up.
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,7 +8,7 @@ import { outUrl, writeStepResults, type ResultsItem } from './results';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'out/image-engine/quiet-fix');
-const DECK = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/image-engine/carousels/howto-linkedin.json'), 'utf8'));
+const DECKS = fs.readdirSync(path.join(ROOT, 'tests/image-engine/carousels')).filter((f) => f.endsWith('.json')).sort().map((f) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/image-engine/carousels', f), 'utf8')));
 const readStyle = (n: string) => JSON.parse(fs.readFileSync(path.join(ROOT, 'src/image-engine/styles', n, 'style.json'), 'utf8'));
 
 interface Lint { id: string; pass: boolean; reason: string }
@@ -22,41 +22,49 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => (window as unknown as { __ie?: { ready: boolean } }).__ie?.ready === true);
 });
 
-test('the validator warns, in plain words, about every text size under the phone minimum, and stays quiet when there is none', async ({ page }) => {
-  const check = (raw: unknown) => call<{ errors: string[]; warnings: string[] }>(page, 'styleValidate', raw, 'dark-quiet');
-  const base = readStyle('hot-flat');
-  expect((await check(base)).warnings.filter((w) => /32 px/.test(w))).toEqual([]);
-  const low = structuredClone(base);
-  low.type.headline = 30;
-  low.type.small = 24;
-  low.type.label = 20;
-  const w = (await check(low)).warnings.join('\n');
-  expect(w).toMatch(/type\.headline is 30 px\. The phone-size checker needs at least 32 px, so headlines will fail/);
-  expect(w).toMatch(/type\.small is 24 px.*small text will fail/);
-  expect(w).toMatch(/type\.label is 20 px.*labels and page numbers will fail/);
-  expect(w).toMatch(/knownLintConflicts/);
-  // The shipped Quiet dark style: labels and page numbers now pass; body and small text still warn (kept for its look, listed as known).
-  const quiet = readStyle('dark-quiet');
-  expect(quiet.type.label).toBeGreaterThanOrEqual(32);
-  const qw = (await check(quiet)).warnings.join('\n');
-  expect(qw).not.toMatch(/type\.label/);
-  expect(qw).toMatch(/type\.body is 28 px/);
-  expect(qw).toMatch(/type\.small is 30 px/);
+test('the validator checks every text size, including the note and the byline (even when they are left to default), and every shipped style is clean', async ({ page }) => {
+  const check = (raw: unknown, name = 'x') => call<{ errors: string[]; warnings: string[] }>(page, 'styleValidate', raw, name);
+  const size = (r: { warnings: string[] }) => r.warnings.filter((w) => /32 px/.test(w)).join('\n');
+  for (const n of ['hot-flat', 'editorial-collage', 'dark-quiet', 'object-neon']) {
+    const r = await check(readStyle(n), n);
+    expect(r.errors, n).toEqual([]);
+    expect(size(r), `${n} has text under 32 px`).toBe('');
+  }
+  // Left out, note and byline are body - 4 and body - 6: a body of 32 would give 28 and 26, which the validator now sees.
+  const q = readStyle('dark-quiet');
+  delete q.type.note;
+  delete q.type.byline;
+  const w1 = size(await check(q));
+  expect(w1).toMatch(/type\.note is 28 px\..*the line under a big number will fail/);
+  expect(w1).toMatch(/type\.byline is 26 px\..*the name under a quote will fail/);
+  // Set explicitly, a note under 32 is caught, and a value out of range is an error in words.
+  q.type.note = 24;
+  expect(size(await check(q))).toMatch(/type\.note is 24 px/);
+  q.type.note = 3;
+  expect((await check(q)).errors.join(' ')).toMatch(/type\.note must be a number from 10 to 400/);
+  const lh = readStyle('dark-quiet');
+  lh.bodyLineHeight = 3;
+  expect((await check(lh)).errors.join(' ')).toMatch(/bodyLineHeight.*1\.0 to 2\.0/);
 });
 
-test('before and after: page numbers and labels pass the size check; what still fails is written down', async ({ page }) => {
-  test.setTimeout(120_000);
+test('Quiet dark is clean: every slide of every sample deck passes every phone-size check; before and after for three slides', async ({ page }) => {
+  test.setTimeout(240_000);
   fs.rmSync(OUT, { recursive: true, force: true });
   fs.mkdirSync(OUT, { recursive: true });
-  const before = await call<Slide[]>(page, 'styleRun', DECK, 'dark-quiet', { variant: 'before-quiet-label' });
-  const after = await call<Slide[]>(page, 'styleRun', DECK, 'dark-quiet');
   const size = (s: Slide) => s.lint.find((l) => l.id === 'size')!;
-  const pageNumberFails = (s: Slide) => /\d\d \/ \d\d/.test(size(s).reason) && !size(s).pass;
-  expect(before.filter(pageNumberFails).length).toBeGreaterThan(0);
-  expect(before.every((s) => !size(s).pass)).toBe(true); // every slide failed before
-  expect(after.filter(pageNumberFails)).toHaveLength(0);
-  const failsAfter = after.map((s, i) => ({ slide: i + 1, ...size(s) })).filter((x) => !x.pass);
-  fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify({ slidesFailingSizeBefore: before.filter((s) => !size(s).pass).length, slidesFailingSizeAfter: failsAfter.length, afterReasons: failsAfter.map((f) => `Slide ${f.slide}: ${f.reason}`), otherFailsAfter: after.flatMap((s, i) => s.lint.filter((l) => !l.pass && l.id !== 'size').map((l) => `Slide ${i + 1}: ${l.id}: ${l.reason}`)) }, null, 2));
+  const summary: Record<string, unknown> = {};
+  let first: { before: Slide[]; after: Slide[] } | null = null;
+  for (const deck of DECKS) {
+    const before = await call<Slide[]>(page, 'styleRun', deck, 'dark-quiet', { variant: 'before-quiet-clean' });
+    const after = await call<Slide[]>(page, 'styleRun', deck, 'dark-quiet');
+    const failsAfter = after.flatMap((s, i) => s.lint.filter((l) => !l.pass).map((l) => `Slide ${i + 1}: ${l.id}: ${l.reason}`));
+    summary[deck.id] = { slidesFailingBefore: before.filter((s) => s.lint.some((l) => !l.pass)).length, slidesFailingAfter: after.filter((s) => s.lint.some((l) => !l.pass)).length, failsAfter };
+    expect(failsAfter, deck.id).toEqual([]);
+    if (deck.id === 'howto-linkedin') first = { before, after };
+  }
+  fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 2));
+  const { before, after } = first!;
+  expect(before.filter((s) => !size(s).pass).length).toBeGreaterThan(0);
   const items: ResultsItem[] = [];
   for (const i of [0, 1, 5]) {
     fs.writeFileSync(path.join(OUT, `before-${i + 1}.png`), Buffer.from(before[i].png, 'base64'));
@@ -64,17 +72,17 @@ test('before and after: page numbers and labels pass the size check; what still 
     items.push({
       id: `slide-${i + 1}`,
       title: `Slide ${i + 1}, before and after`,
-      images: [{ url: outUrl(path.join(OUT, `before-${i + 1}.png`)), label: 'Before: label 26 px' }, { url: outUrl(path.join(OUT, `after-${i + 1}.png`)), label: 'After: label 32 px' }],
-      checker: { pass: size(after[i]).pass, reasons: size(after[i]).pass ? [] : [size(after[i]).reason] },
-      facts: [`size check before: ${size(before[i]).pass ? 'pass' : 'fail'}: ${size(before[i]).reason}`, `size check after: ${size(after[i]).pass ? 'pass' : 'fail'}: ${size(after[i]).reason}`],
+      images: [{ url: outUrl(path.join(OUT, `before-${i + 1}.png`)), label: 'Before: body 28, small 30, note 24, line height 1.3' }, { url: outUrl(path.join(OUT, `after-${i + 1}.png`)), label: 'After: all 32, line height 1.5' }],
+      checker: { pass: after[i].lint.every((l) => l.pass), reasons: after[i].lint.filter((l) => !l.pass).map((l) => l.reason) },
+      facts: [`size check before: ${size(before[i]).pass ? 'pass' : 'fail'}: ${size(before[i]).reason}`, `size check after: ${size(after[i]).pass ? 'pass' : 'fail'}`],
       tag: 'REAL',
     });
   }
   writeStepResults({
     id: 'step8-quiet-fix',
-    title: 'Step 8 fix: Quiet dark page number',
+    title: 'Step 8 fix: Quiet dark style',
     order: 8.5,
-    intro: `The page number and labels in the Quiet dark style went from 26 px to 32 px (same muted grey, same weight, same place). Before: ${before.filter((s) => !size(s).pass).length} of 7 slides failed the size check. After: ${failsAfter.length} of 7 still fail, because body text (28 px) and small text (30 px) are still below 32 px on purpose. The style validator now warns about any text size under the minimum when a style is loaded.`,
+    intro: 'Quiet dark now passes every phone-size check. Body, small text, the stat note and the quote byline are all 32 px (they were 28, 30, 24 and 22). Colours, weights and spacing are unchanged; the body line height went from 1.3 to 1.5 so the text stays airy. The note and byline are now style settings (type.note, type.byline), so the style validator sees them.',
     groups: [{ title: 'Quiet dark, "How-to list" deck', items }],
   });
 });

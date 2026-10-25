@@ -32,9 +32,11 @@ Only the bundled fonts can be used (Schibsted Grotesk 600, 700, 800 and Instrume
 
   "fonts": { "headline": "Schibsted Grotesk", "headlineWeight": 800,
              "body": "Instrument Sans", "bodyWeight": 500, "strong": 600 },
-  "type": { "cover": 150, "headline": 104, "body": 44, "small": 34, "stat": 340, "quote": 80, "label": 32 },
+  "type": { "cover": 150, "headline": 104, "body": 44, "small": 34, "stat": 340, "quote": 80, "label": 32,
+            "note": 40, "byline": 38 },   // note and byline are optional: the line under a big number (default body - 4) and the name under a quote (default body - 6)
   "caseStyle": "upper",            // upper, lower or sentence
   "headlineLineHeight": 0.95,      // 0.8 to 1.6. Under 1.1 the highlight bars hug each line
+  "bodyLineHeight": 1.3,           // optional, 1.0 to 2.0 (default 1.3). Open it up to keep small type airy
   "shape": { "radius": 0, "outline": 4, "stroke": 8, "badge": "square", "marker": "box",
              "sticker": "burst", "hardShadow": 10, "decor": "blocks" },
   "spacing": { "margin": 80, "gap": 24, "section": 52 },
@@ -65,7 +67,7 @@ If a pair is under 4.5:1 (text on background, muted on background, text on accen
 
 ### Sizes (px on the 1080 wide slide)
 
-`type.body` and `type.label` under 32 load with a warning: the phone-size checker needs at least 32 px, so those slides will fail the "size" check. That is how the quiet minimal style is kept faithful to its references. The conflict is written in that style's `knownLintConflicts`.
+Every text size is checked against the phone minimum of 32 px when the style is loaded: `type.cover`, `headline`, `body`, `small`, `stat`, `quote`, `label`, `note` and `byline`. When `note` or `byline` are left out, the value that will really be used (body - 4, body - 6) is the one checked. A size under 32 loads with a warning in plain words that names what will fail (for example "body text will fail the size check on every slide that has them"), and the carousel style picker marks the style. Raise the size, or keep it on purpose and say so under `knownLintConflicts`. If a style needs small type to stay airy, open `bodyLineHeight` instead of going under 32 (the Quiet dark style does this: everything is 32 px and body text is set at 1.5).
 
 ### shape
 

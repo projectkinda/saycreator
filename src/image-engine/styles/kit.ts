@@ -114,7 +114,7 @@ export function body(c: LCtx, id: string, text: string, o: BodyOpts): Built {
   const pal = o.pal ?? c.pal;
   const b = buildText({
     id, x: o.x ?? c.M, y: o.y, width: o.width ?? c.W - 2 * c.M, text: o.asWritten === false ? cased(c, text) : text, font: o.font === 'headline' ? t.fonts.headline : t.fonts.body,
-    weight: o.font === 'headline' ? t.fonts.headlineWeight : t.fonts.bodyWeight, size: o.size ?? t.type.body, minSize: o.min ?? Math.min(o.size ?? t.type.body, 32), maxHeight: o.maxH, color: o.color ?? pal.text, lineHeight: 1.3, align: o.align ?? 'left',
+    weight: o.font === 'headline' ? t.fonts.headlineWeight : t.fonts.bodyWeight, size: o.size ?? t.type.body, minSize: o.min ?? Math.min(o.size ?? t.type.body, 32), maxHeight: o.maxH, color: o.color ?? pal.text, lineHeight: t.bodyLineHeight ?? 1.3, align: o.align ?? 'left',
   });
   c.notes.push(...b.notes);
   if (!o.dry) add(c, b.layer);

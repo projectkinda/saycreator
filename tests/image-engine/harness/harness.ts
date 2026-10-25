@@ -506,7 +506,7 @@ interface StyleRunOpts {
   testAssets?: { name: string; url: string; width: number; height: number; tags: string[] }[];
   elementMatching?: 'tags' | 'ignore';
   /** "before-starbursts": hot-flat as it was before the starburst colour fix, to show before and after. */
-  variant?: 'before-starbursts' | 'before-quiet-label';
+  variant?: 'before-starbursts' | 'before-quiet-label' | 'before-quiet-clean';
 }
 
 /** Size of each picture (test assets are only given as URLs). */
@@ -526,6 +526,14 @@ const styleByName = (name: string, variant?: StyleRunOpts['variant']) => {
   if (variant === 'before-starbursts' && s.spec.elements) {
     const spec = structuredClone(s.spec);
     for (const r of spec.elements!.rules) if (r.tags.includes('burst')) { delete r.recolourBy; r.tags = ['burst', 'sparkle', 'star']; }
+    return { ...s, spec };
+  }
+  if (variant === 'before-quiet-clean') {
+    const spec = structuredClone(s.spec);
+    spec.type = { ...spec.type, body: 28, small: 30, label: 32 };
+    delete spec.type.note;
+    delete spec.type.byline;
+    delete spec.bodyLineHeight;
     return { ...s, spec };
   }
   if (variant === 'before-quiet-label') {

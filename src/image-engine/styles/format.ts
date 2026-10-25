@@ -109,6 +109,8 @@ export interface StyleSpec {
   type: Theme['type'] & { label: number };
   caseStyle: (typeof CASE_STYLES)[number];
   headlineLineHeight: number;
+  /** Line height of body text, 1.0 to 2.0. Default 1.3. */
+  bodyLineHeight?: number;
   shape: Theme['shape'];
   spacing: Theme['spacing'];
   chrome: (typeof CHROME_KINDS)[number];
@@ -210,15 +212,21 @@ export function validateStyle(raw: unknown, folder: string, knownTags?: Set<stri
   }
   const t = isObj(s.type) ? s.type : null;
   if (!t) err('"type" is missing. It holds the font sizes in px on the 1080 wide slide.');
-  else for (const k of ['cover', 'headline', 'body', 'small', 'stat', 'quote', 'label']) if (!num(t[k]) || (t[k] as number) < 10 || (t[k] as number) > 400) err(`type.${k} must be a number from 10 to 400.`);
+  else {
+    for (const k of ['cover', 'headline', 'body', 'small', 'stat', 'quote', 'label']) if (!num(t[k]) || (t[k] as number) < 10 || (t[k] as number) > 400) err(`type.${k} must be a number from 10 to 400.`);
+    for (const k of ['note', 'byline']) if (t[k] !== undefined && (!num(t[k]) || (t[k] as number) < 10 || (t[k] as number) > 400)) err(`type.${k} must be a number from 10 to 400 (or left out).`);
+  }
   // Any text size under the checker's minimum is caught here, when the style is added, not when someone previews it.
-  const WHERE: Record<string, string> = { cover: 'cover headlines', headline: 'headlines', body: 'body text', small: 'small text', stat: 'big numbers', quote: 'quotes', label: 'labels and page numbers' };
+  const WHERE: Record<string, string> = { cover: 'cover headlines', headline: 'headlines', body: 'body text', small: 'small text', stat: 'big numbers', quote: 'quotes', label: 'labels and page numbers', note: 'the line under a big number', byline: 'the name under a quote' };
+  // note and byline may be left out: then they are body - 4 and body - 6, and that is what is checked.
+  const effective: Record<string, unknown> = { ...t, note: t?.note ?? (num(t?.body) ? t.body - 4 : undefined), byline: t?.byline ?? (num(t?.body) ? t.body - 6 : undefined) };
   for (const [k, where] of Object.entries(WHERE)) {
-    const v = t?.[k];
+    const v = effective[k];
     if (num(v) && v < 32) warnings.push(`type.${k} is ${v} px. The phone-size checker needs at least 32 px, so ${where} will fail the "size" check on every slide that has them. Raise it, or keep it on purpose and say so under "knownLintConflicts".`);
   }
   if (!(CASE_STYLES as readonly string[]).includes(s.caseStyle as string)) err(`"caseStyle" must be one of ${CASE_STYLES.join(', ')}.`);
   if (!num(s.headlineLineHeight) || s.headlineLineHeight < 0.8 || s.headlineLineHeight > 1.6) err('"headlineLineHeight" must be a number from 0.8 to 1.6.');
+  if (s.bodyLineHeight !== undefined && (!num(s.bodyLineHeight) || s.bodyLineHeight < 1 || s.bodyLineHeight > 2)) err('"bodyLineHeight" must be a number from 1.0 to 2.0 (or left out for 1.3).');
 
   const sh = isObj(s.shape) ? s.shape : null;
   if (!sh) err('"shape" is missing.');

@@ -18,7 +18,7 @@ export function statGiant(c: LCtx, s: S<'stat'>) {
   const kick = s.kicker ? labelText(t, c.pal, 'kicker', M, 0, s.kicker, { width: cw }) : null;
   const val = buildText({ id: 'value', x: M, y: 0, width: cw, text: s.value, font: t.fonts.headline, weight: t.fonts.headlineWeight, size: t.type.stat, minSize: 140, maxHeight: t.type.stat * 1.3, color: c.pal.accent, lineHeight: 1, balance: false });
   const lab = head(c, 'label', s.label, { region: [0, 360], size: 66, min: 48, asWritten: true, dry: true });
-  const note = s.note ? body(c, 'note', s.note, { y: 0, size: t.type.body - 4, min: 32, maxH: 220, color: c.pal.muted, dry: true }) : null;
+  const note = s.note ? body(c, 'note', s.note, { y: 0, size: t.type.note ?? t.type.body - 4, min: 32, maxH: 220, color: c.pal.muted, dry: true }) : null;
   const pill = c.params.pill ? 86 : 0;
   const total = (kick ? kick.height + gap : 0) + val.height + gap + lab.height + (pill ? gap + pill : 0) + (note ? sec + note.height : 0);
   let y = Math.round(c.top + Math.max(0, (c.bottom - c.top - total) * 0.42));
@@ -56,7 +56,7 @@ export function statCard(c: LCtx, s: S<'stat'>) {
   const iw = cw - 2 * pad;
   const val = buildText({ id: 'value', x: M + pad, y: 0, width: iw, text: s.value, font: t.fonts.headline, weight: t.fonts.headlineWeight, size: t.type.stat * 0.9, minSize: 120, maxHeight: t.type.stat * 1.2, color: c.pal.accent, lineHeight: 1, balance: false });
   const lab = head(c, 'label', s.label, { region: [0, 300], x: M + pad, width: iw, size: 60, min: 44, asWritten: true, pal: c.pal, color: c.pal.onSurface, dry: true });
-  const note = s.note ? body(c, 'note', s.note, { y: 0, size: t.type.body - 4, min: 32, maxH: 220, color: c.pal.muted, dry: true }) : null;
+  const note = s.note ? body(c, 'note', s.note, { y: 0, size: t.type.note ?? t.type.body - 4, min: 32, maxH: 220, color: c.pal.muted, dry: true }) : null;
   const cardH = pad + val.height + gap + lab.height + pad;
   const total = cardH + (note ? sec + note.height : 0);
   const y0 = Math.round(c.top + Math.max(0, (c.bottom - c.top - total) * 0.4));
@@ -200,7 +200,7 @@ export function quoteMarks_(c: LCtx, s: S<'quote'>) {
   const gap = t.spacing.gap;
   const qm = num(c, 'markSize', c.H < 1200 ? 90 : 120);
   const hq = head(c, 'quote', s.quote, { region: [0, 620], size: t.type.quote, min: 56, dry: true });
-  const by = body(c, 'by', s.by, { y: 0, size: t.type.body - 6, min: 32, maxH: 140, color: c.pal.muted, dry: true });
+  const by = body(c, 'by', s.by, { y: 0, size: t.type.byline ?? t.type.body - 6, min: 32, maxH: 140, color: c.pal.muted, dry: true });
   const total = qm * 1.2 + gap + hq.height + sec + by.height;
   const y0 = Math.round(c.top + Math.max(0, (c.bottom - c.top - total) * 0.4));
   add(c, ...quoteMarks('qmark', c.M, y0, qm, c.pal.accent));
@@ -219,7 +219,7 @@ export function quoteCentre(c: LCtx, s: S<'quote'>) {
   const gap = t.spacing.gap;
   const qm = c.H < 1200 ? 70 : 90;
   const hq = head(c, 'quote', s.quote, { region: [0, 640], size: t.type.quote, min: 56, align: 'center', dry: true });
-  const by = body(c, 'by', s.by, { y: 0, size: t.type.body - 6, min: 32, maxH: 140, color: c.pal.muted, align: 'center', dry: true });
+  const by = body(c, 'by', s.by, { y: 0, size: t.type.byline ?? t.type.body - 6, min: 32, maxH: 140, color: c.pal.muted, align: 'center', dry: true });
   const total = qm * 1.2 + gap + hq.height + sec + by.height;
   const y0 = Math.round(c.top + Math.max(0, (c.bottom - c.top - total) * 0.45));
   add(c, ...quoteMarks('qmark', Math.round((W - qm * 2.3) / 2), y0, qm, c.pal.accent));

@@ -48,5 +48,6 @@ test('each sample script loads in the app and draws in every style; phone-check 
   }
   fs.mkdirSync(path.join(ROOT, 'out/image-engine/app-flow'), { recursive: true });
   fs.writeFileSync(path.join(ROOT, 'out/image-engine/app-flow/sample-scripts.json'), JSON.stringify(report, null, 2));
+  expect(report.filter((r) => r.failing.length > 0).map((r) => `${r.script} in ${r.style}: slides ${r.failing.map((f) => f.slide).join(', ')}`)).toEqual([]);
   console.log(JSON.stringify(report.map((r) => ({ s: r.script, st: r.style, failing: r.failing.map((x) => x.slide) }))));
 });

@@ -113,7 +113,7 @@ export function pickRule(style: StyleSpec, type: SlideType, slide: SlideScript, 
 }
 
 export function asTheme(style: StyleSpec, pal: Palette): Theme {
-  return { id: style.name, name: style.title, mood: '', base: pal, hero: pal, fonts: style.fonts, type: style.type, shape: style.shape, spacing: style.spacing };
+  return { id: style.name, name: style.title, mood: '', base: pal, hero: pal, fonts: style.fonts, type: style.type, shape: style.shape, spacing: style.spacing, ...(style.bodyLineHeight ? { bodyLineHeight: style.bodyLineHeight } : {}) };
 }
 
 export interface StyledOptions {

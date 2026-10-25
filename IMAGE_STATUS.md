@@ -357,3 +357,9 @@ Covered: all of these except photo cutouts and true 3D renders. Photo cutouts ne
 - The style validator now warns, when any style is loaded, about every `type` size under 32 px (cover, headline, body, small, stat, quote, label), in plain words, naming what will fail. The carousel style picker shows "Some text is below phone size" on such a style.
 - The 24 px stat note is not a `type` value of the style, so the validator cannot see it; it is fixed in the stat layout code, not in the style file. Not changed here.
 - Three sample scripts in all four styles: no failures in editorial-collage, hot-flat or object-neon; Quiet dark fails on 4 to 5 slides per script.
+
+
+### Fix: Quiet dark is clean
+- Body, small text, the stat note and the quote byline are now all 32 px in the Quiet dark style (they were 28, 30, 24 and 22); the body line height went from 1.3 to 1.5 so it stays airy. Colours, weights and spacing are unchanged. The text is a little bigger than the references (about 28 px), which is written in the style's `knownLintConflicts`.
+- The stat note and byline are now style settings (`type.note`, `type.byline`, default body - 4 and body - 6) and `bodyLineHeight` is a style setting (default 1.3). The validator checks every text size, including the defaults. See STYLE_FORMAT.md.
+- All four sample decks (28 slides) pass every phone-size check in Quiet dark, and the three sample scripts pass in all four styles (see the result of the full run below).
