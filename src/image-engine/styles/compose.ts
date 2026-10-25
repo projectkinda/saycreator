@@ -50,6 +50,8 @@ export interface StyledSlide extends ComposedSlide {
   elementTags?: string[];
   /** For each placed element, whether it links to those tags. */
   elementLinks?: { id: string; related: boolean | null; score: number }[];
+  /** The layout variants this style has for this kind of slide (the one in use is `layout`). */
+  layoutChoices: string[];
 }
 
 const wordCount = (s?: string) => (s ?? '').split(/\s+/).filter(Boolean).length;
@@ -126,6 +128,14 @@ export interface StyledOptions {
   testAssets?: TestAsset[];
   /** "ignore": place as if no slide had element_tags (the old random way), to compare. The tags are still recorded in the plan. */
   elementMatching?: 'tags' | 'ignore';
+  /** Per slide (0-based index): a layout variant chosen by hand, a salt that reshuffles the elements, and element swaps (old id to new id). */
+  overrides?: Record<number, SlideOverride>;
+}
+
+export interface SlideOverride {
+  layout?: string;
+  salt?: string;
+  swaps?: Record<string, string>;
 }
 
 function chromeArea(chrome: StyleSpec['chrome'], M: number, H: number) {
@@ -146,7 +156,17 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
   const seen: Record<string, number> = {};
   return script.slides.map((s, i) => {
     seen[s.type] = (seen[s.type] ?? 0) + 1;
-    const { rule, at, because } = pickRule(style, s.type, s, i, seen[s.type]);
+    let { rule, at, because } = pickRule(style, s.type, s, i, seen[s.type]);
+    const ov = opts.overrides?.[i];
+    const choices = [...new Set(style.layouts[s.type].map((r) => r.use))];
+    if (ov?.layout && ov.layout !== rule.use) {
+      const j = style.layouts[s.type].findIndex((r) => r.use === ov.layout);
+      if (j >= 0) {
+        rule = style.layouts[s.type][j];
+        at = j;
+        because = 'you chose this layout';
+      }
+    }
     const palName = rule.palette ?? style.byType?.[s.type] ?? style.rhythm[i % style.rhythm.length];
     const pal = style.palettes[palName];
     const area = chromeArea(chrome, M, H);
@@ -172,14 +192,14 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
     let elementsUsed: string[] = [];
     let elementLinks: StyledSlide['elementLinks'];
     if (opts.elements && style.elements) {
-      const id = `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`;
-      const placed = placeElements({ spec: style.elements, pal, layers: c.layers, width: W, height: H, type: s.type, seed: id, mode: opts.elements, testAssets: opts.testAssets, paletteName: palName, slideTags: s.element_tags, ignoreTags: opts.elementMatching === 'ignore' });
+      const id = `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}${ov?.salt ? '#' + ov.salt : ''}`;
+      const placed = placeElements({ spec: style.elements, pal, layers: c.layers, width: W, height: H, type: s.type, seed: id, mode: opts.elements, testAssets: opts.testAssets, paletteName: palName, slideTags: s.element_tags, ignoreTags: opts.elementMatching === 'ignore', swaps: ov?.swaps });
       add(c, ...placed.layers);
       c.notes.push(...placed.notes);
       elementsUsed = placed.used;
       elementLinks = placed.links;
     }
     const plan: Plan = { schema: 1, revision: 1, canvas: { width: W, height: H, background: solidOf(pal.bg) }, layers: c.layers, ...(s.element_tags ? { meta: { elementTags: s.element_tags } } : {}) };
-    return { id: `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`, type: s.type, plan, notes: c.notes, style: style.name, layout: rule.use, rule: at, palette: palName, because, elementsUsed, ...(s.element_tags ? { elementTags: s.element_tags } : {}), ...(elementLinks ? { elementLinks } : {}) };
+    return { id: `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`, type: s.type, plan, notes: c.notes, style: style.name, layout: rule.use, rule: at, palette: palName, because, elementsUsed, layoutChoices: choices, ...(s.element_tags ? { elementTags: s.element_tags } : {}), ...(elementLinks ? { elementLinks } : {}) };
   });
 }

@@ -3,7 +3,7 @@
 // space around what is already there. Everything is repeatable: the same slide id gives the same placement.
 import { layerBox, textInk, type Box } from '../carousel/lint';
 import type { Palette } from '../carousel/types';
-import { findElements, type ElementInfo } from '../assets/library';
+import { elementById, findElements, type ElementInfo } from '../assets/library';
 import { shade } from '../assets/svg-prepare';
 import { expandTags, isMeaningful, linkScore } from './tags';
 import type { ElementLayer, ImageLayer, Layer, TextLayer } from '../types';
@@ -59,6 +59,8 @@ export interface PlaceInput {
   slideTags?: string[];
   /** Place as if the slide had no tags (the old, random way). Only used to compare. */
   ignoreTags?: boolean;
+  /** Elements the user swapped: when the engine would pick the key, it uses the value instead. */
+  swaps?: Record<string, string>;
   /** Any text that identifies the slide (its id), so placement is repeatable. */
   seed: string;
   mode: 'shippable' | 'test';
@@ -187,6 +189,8 @@ export function placeElements(inp: PlaceInput): Placed {
           }
         }
         info = pool[Math.floor(r() * pool.length)];
+        const swapTo = inp.swaps?.[info.id] && elementById(inp.swaps[info.id]);
+        if (swapTo) info = swapTo;
       }
       const size = between(rule.size[0], rule.size[1]);
       const aspect = test ? test.width / test.height : info!.width / info!.height;
