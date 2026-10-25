@@ -144,6 +144,11 @@
   outline: 2px solid var(--text);
   outline-offset: 1px;
 }
+.cr-warn {
+  color: var(--warn-text);
+  font-weight: 600;
+  margin: 0;
+}
 .cr-problem {
   color: var(--error);
   font-weight: 600;

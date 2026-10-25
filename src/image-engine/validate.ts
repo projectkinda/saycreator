@@ -1,4 +1,5 @@
 // Plain-language validation. Every problem is a sentence a person can act on.
+import { findHighlight } from './draw/words';
 import { FONT_FAMILIES, type Layer, type Plan } from './types';
 
 const MAX_LAYERS = 60;
@@ -99,8 +100,8 @@ function validateLayer(l: Layer, errors: string[]) {
         const h = l.highlight;
         if (!Array.isArray(h.words) || (h.words.length === 0 && !(Array.isArray(h.lines) && h.lines.length > 0))) errors.push(`${who}: highlight needs at least one word or one line.`);
         else {
-          const present = new Set(l.text.toLowerCase().replace(/[^\p{L}\p{N}'\s-]/gu, ' ').split(/\s+/));
-          for (const w of h.words) if (!present.has(w.toLowerCase())) errors.push(`${who}: the highlighted word "${w}" is not in the text.`);
+          // Same comparison as the layout: punctuation and case do not matter, so "5,000" finds "$5,000,".
+          for (const w of findHighlight(l.text, h.words).missing) errors.push(`${who}: the highlighted word "${w}" is not in the text.`);
         }
         if (!isColor(h.color)) errors.push(`${who}: the highlight colour is not a colour.`);
         if (h.textColor !== undefined && !isColor(h.textColor)) errors.push(`${who}: the highlight text colour is not a colour.`);

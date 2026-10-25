@@ -1,5 +1,6 @@
 // The graphics toolbox. Everything is drawn in code as plain plan layers (shapes, paths, text): no external images.
 // Every function takes colours, sizes and shape style from the theme it is given. Nothing here hard-codes a look.
+import { wordKey } from '../draw/words';
 import { fitText, layoutText, measureWidth, wrapText } from '../draw/text';
 import type { Fill, FontFamily, Highlight, Layer, PathLayer, Role, ShapeLayer, TextLayer } from '../types';
 import type { Palette, Theme } from './types';
@@ -214,6 +215,8 @@ export const inkWidth = (b: Built) => Math.max(...b.lines.map((l) => measureWidt
  * Returns the highlight to put on the text layer and the layers to draw behind it.
  */
 export function marker(theme: Theme, pal: Palette, layer: TextLayer, words: string[] | undefined, idPrefix: string): { highlight?: Highlight; behind: Layer[] } {
+  // Words are compared the same way everywhere (draw/words.ts); a word that is only punctuation cannot be marked.
+  words = words?.filter((w) => wordKey(w) !== '');
   if (!words || words.length === 0) return { behind: [] };
   const style = theme.shape.marker;
   // For underline and brush the highlight itself is invisible; it only switches the word's colour.

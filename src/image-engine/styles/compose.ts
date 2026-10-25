@@ -1,5 +1,6 @@
 // Turns a script and a loaded style into slide plans. Each slide gets a layout chosen from the style's rules by the slide's
 // content and its position in the deck, and a palette chosen by the deck's rhythm. Needs the fonts loaded first.
+import { findHighlight, missingHighlightNote } from '../draw/words';
 import type { Layer, Plan } from '../types';
 import { progressDots, solidOf, swipeCue } from '../carousel/toolbox';
 import { SLIDE, type CarouselScript, type ComposedSlide, type Palette, type SlideScript, type Theme } from '../carousel/types';
@@ -175,6 +176,12 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
       occurrence: seen[s.type], handle: script.brand.handle, layers: [], notes: [], keepClear: [], params: rule.params ?? {},
     };
     LAYOUTS[rule.use](c, s);
+    // A highlight that is not in the slide's text never stops the slide. Whatever the layout does with it, the card says so.
+    {
+      const hl = (s as { highlight?: unknown }).highlight;
+      const src = (s as { headline?: unknown; quote?: unknown }).headline ?? (s as { quote?: unknown }).quote;
+      if (typeof hl === 'string' && hl.trim() && typeof src === 'string') for (const w of findHighlight(src, hl.split(/\s+/).filter(Boolean)).missing) if (!c.notes.includes(missingHighlightNote(w))) c.notes.push(missingHighlightNote(w));
+    }
     // Page chrome, drawn last so it sits on top.
     const cp = c.chromePal ?? pal;
     const theme = asTheme(style, cp);

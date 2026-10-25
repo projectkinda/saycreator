@@ -1,5 +1,6 @@
 // Shared helpers for the layout catalogue. A layout is a function that adds layers to a slide using the style's tokens.
 import { glueWords, layoutText } from '../draw/text';
+import { findHighlight, missingHighlightNote } from '../draw/words';
 import type { Highlight, Layer, Plan } from '../types';
 import { background, buildText, marker, sticker, type Built } from '../carousel/toolbox';
 import type { Palette, Theme } from '../carousel/types';
@@ -75,8 +76,12 @@ export function head(c: LCtx, id: string, text: string, o: HeadOpts): Built {
   const width = o.width ?? c.W - 2 * c.M;
   const written = o.asWritten ? text : cased(c, text);
   const size0 = o.size ?? t.type.headline;
+  // A highlight that is not in the text does not stop the slide: it is left out and a note says so (shown on the slide card).
+  const hl = o.words?.length ? findHighlight(written, o.words) : null;
+  for (const w of hl?.missing ?? []) c.notes.push(missingHighlightNote(w));
+  const words = hl ? hl.found : undefined;
   // A highlighted phrase stays on one line when it fits, so its bar is one block.
-  const glued = o.words?.length && (o.mark ?? 'words') === 'words' ? glueWords(written, o.words, width, t.fonts.headline, t.fonts.headlineWeight, size0) : written;
+  const glued = words?.length && (o.mark ?? 'words') === 'words' ? glueWords(written, words, width, t.fonts.headline, t.fonts.headlineWeight, size0) : written;
   const built = buildText({
     id, x, y: o.region[0], width, text: glued, font: t.fonts.headline, weight: t.fonts.headlineWeight,
     size: o.size ?? t.type.headline, minSize: o.min ?? 64, maxHeight: o.region[1] - o.region[0], color: o.color ?? pal.text, lineHeight: c.style.headlineLineHeight, align: o.align ?? 'left',
@@ -86,9 +91,9 @@ export function head(c: LCtx, id: string, text: string, o: HeadOpts): Built {
   const y = o.anchor === 'bottom' ? y1 - built.height : o.anchor === 'middle' ? y0 + (y1 - y0 - built.height) / 2 : y0;
   built.layer.y = Math.round(y * 10) / 10;
   if (o.dry) return built;
-  const mode = o.mark ?? (o.words?.length ? 'words' : 'none');
-  if (mode === 'words' && o.words?.length) {
-    const m = marker(t, pal, built.layer, o.words, `${id}-marker`);
+  const mode = o.mark === 'words' && !words?.length ? 'none' : o.mark ?? (words?.length ? 'words' : 'none');
+  if (mode === 'words' && words?.length) {
+    const m = marker(t, pal, built.layer, words, `${id}-marker`);
     add(c, ...m.behind, { ...built.layer, ...(m.highlight ? { highlight: { ...m.highlight, hugLine: c.style.headlineLineHeight < 1.1 } } : {}) });
   } else if (mode === 'last-line' || mode === 'all-lines') {
     const block = layoutText(built.layer);

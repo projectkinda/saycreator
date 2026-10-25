@@ -63,7 +63,8 @@ function highlightMarks(plan: Plan) {
     .map((l) => {
       const b = layoutText(l);
       const perLine = b.lines.map((x) => x.marks.length);
-      return { id: l.id, text: l.text.replace(/ /g, '_'), bars: perLine.reduce((n, x) => n + x, 0), lines: perLine.filter((x) => x > 0).length, perLine };
+      const highlightedWords = b.lines.flatMap((x) => x.words.filter((w) => w.highlighted).map((w) => w.text));
+      return { id: l.id, text: l.text.split(String.fromCharCode(160)).join('_'), bars: perLine.reduce((n, x) => n + x, 0), lines: perLine.filter((x) => x > 0).length, perLine, highlightedWords, highlightWords: l.highlight!.words };
     });
 }
 

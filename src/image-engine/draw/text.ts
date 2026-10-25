@@ -1,5 +1,6 @@
 // Text layout that measures the real, loaded font. Call loadFonts() first.
 import type { FontFamily, TextLayer } from '../types';
+import { wordKey } from './words';
 
 let ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null;
 function measureCtx() {
@@ -9,8 +10,6 @@ function measureCtx() {
       : document.createElement('canvas').getContext('2d')!;
   return ctx;
 }
-
-const clean = (w: string) => w.replace(/[^\p{L}\p{N}'-]/gu, '').toLowerCase();
 
 export const fontString = (font: FontFamily, weight: number, size: number) => `${weight} ${size}px "${font}"`;
 
@@ -26,7 +25,7 @@ export function measureWidth(text: string, font: FontFamily, weight: number, siz
  * that is wider than a line is left alone (it must wrap, and its bars then touch line to line).
  */
 export function glueWords(text: string, words: string[], width: number, font: FontFamily, weight: number, size: number): string {
-  const marked = new Set(words.map((w) => clean(w)).filter(Boolean));
+  const marked = new Set(words.map(wordKey).filter(Boolean));
   if (marked.size === 0 || !text.includes(' ')) return text;
   return text
     .split('\n')
@@ -40,7 +39,7 @@ export function glueWords(text: string, words: string[], width: number, font: Fo
         run = [];
       };
       for (const t of toks) {
-        if (marked.has(clean(t))) run.push(t);
+        if (marked.has(wordKey(t))) run.push(t);
         else {
           flush();
           out.push(t);
@@ -160,7 +159,7 @@ export function layoutText(layer: TextLayer): TextBlock {
         return { size: s.size, lines: w.lines, lineStep, height, fits, why: fits ? undefined : w.wordTooWide ? 'word-too-wide' : 'too-tall' } as Fit;
       })();
 
-  const marked = new Set((layer.highlight?.words ?? []).map((w) => w.toLowerCase()));
+  const marked = new Set((layer.highlight?.words ?? []).map(wordKey).filter(Boolean));
   const wholeLines = new Set(layer.highlight?.lines ?? []);
   const firstOnly = !!layer.highlight?.onlyFirst;
   const used = new Set<string>();
@@ -178,7 +177,7 @@ export function layoutText(layer: TextLayer): TextBlock {
         text: m[0],
         x: x0 + before,
         width: measureWidth(m[0], s.font, s.weight, fit.size),
-        highlighted: wholeLines.has(i) || (marked.has(clean(m[0])) && (!firstOnly || !used.has(clean(m[0])) ? (used.add(clean(m[0])), true) : false)),
+        highlighted: wholeLines.has(i) || (marked.has(wordKey(m[0])) && (!firstOnly || !used.has(wordKey(m[0])) ? (used.add(wordKey(m[0])), true) : false)),
       });
       cursor = start + m[0].length;
     }

@@ -1,5 +1,6 @@
 // Turns a script and a theme into seven slide plans. Every plan is ordinary layers, so patches can edit it.
 // Needs the fonts loaded first (call loadFonts()), because it measures real text.
+import { findHighlight, missingHighlightNote } from '../draw/words';
 import type { Layer, Plan } from '../types';
 import { DECOR_BAND, background, badge, button, buildText, decor, divider, icon, inkWidth, marker, progressDots, quoteMarks, rect, solidOf, sticker, swipeCue, ellipse, type Built } from './toolbox';
 import { SLIDE, type CarouselScript, type ComposedSlide, type Palette, type SlideScript, type Theme } from './types';
@@ -39,8 +40,14 @@ function headline(c: Ctx, pal: Palette, id: string, y: number, text: string, siz
     add(c, plain.layer);
     return plain;
   }
-  const words = mark.split(/\s+/).filter(Boolean);
-  const m = marker(t, pal, plain.layer, words, `${id}-marker`);
+  const all = mark.split(/\s+/).filter(Boolean);
+  const hl = findHighlight(text, all);
+  for (const w of hl.missing) c.notes.push(missingHighlightNote(w));
+  if (hl.found.length === 0) {
+    add(c, plain.layer);
+    return plain;
+  }
+  const m = marker(t, pal, plain.layer, hl.found, `${id}-marker`);
   add(c, ...m.behind, { ...plain.layer, ...(m.highlight ? { highlight: m.highlight } : {}) });
   return plain;
 }

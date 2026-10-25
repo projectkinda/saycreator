@@ -2,6 +2,7 @@
 // the prompt that asks Claude (in any chat) to write one, and the interface for a future "Write it for me" backend.
 // No network calls and no keys anywhere in this folder.
 import type { CarouselScript, SlideScript } from '../image-engine/carousel/types';
+import { findHighlight } from '../image-engine/draw/words';
 import { VOCABULARY, checkElementTags } from '../image-engine/styles/tags';
 
 export type Format = 'carousel' | 'quote';
@@ -175,7 +176,7 @@ export function validateScript(raw: unknown, format: Format): ScriptResult {
     for (const k of Object.keys(s)) if (!known.has(k)) warn(at(k), `${n} has "${k}", which a ${type} slide does not use. It is ignored.`);
     const hl = s.highlight;
     const src = (s.headline ?? s.quote) as unknown;
-    if (typeof hl === 'string' && hl && typeof src === 'string' && !src.toLowerCase().includes(hl.toLowerCase())) warn(at('highlight'), `${n} highlights "${hl}", which is not in its ${s.headline !== undefined ? 'headline' : 'quote'}, so nothing will be marked.`);
+    if (typeof hl === 'string' && hl && typeof src === 'string' && findHighlight(src, hl.split(/\s+/).filter(Boolean)).missing.length > 0) warn(at('highlight'), `${n} highlights "${hl}", which is not (all) in its ${s.headline !== undefined ? 'headline' : 'quote'}, so that part will be drawn without it. Punctuation and capital letters do not matter.`);
     if (s.element_tags === undefined) warn(at('element_tags'), `${n} has no "element_tags", so pictures cannot follow what it says. Add 2 to 4 words, for example ["money", "growth"].`);
     else for (const m of checkElementTags(s.element_tags)) err(at('element_tags'), `${n}: ${m}`);
   });

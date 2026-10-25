@@ -68,6 +68,14 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onO
           {view?.url ? <img src={view.url} alt={`${deckLabel}, slide ${index + 1}: ${slide.type}, ${slide.layout} layout`} width={216} height={216 * (slide.plan.canvas.height / slide.plan.canvas.width)} /> : <span className="cr-pic-wait small muted" role="status">{view?.status === 'error' ? 'Could not draw this slide' : 'Drawing…'}</span>}
         </button>
         <LintBadges lint={view?.rendered?.lint} />
+        {slide.notes
+          .filter((n) => n.startsWith("Highlight '"))
+          .map((n) => (
+            <p key={n} className="small cr-warn" role="status">
+              <span aria-hidden="true">⚠ </span>
+              {n}
+            </p>
+          ))}
         {view?.error && <p className="small cr-problem" role="alert">{view.error}</p>}
       </div>
       <div className="cr-edit">
