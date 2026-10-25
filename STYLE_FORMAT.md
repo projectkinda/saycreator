@@ -1,0 +1,125 @@
+# Style format
+
+A **style** is a folder under `src/image-engine/styles/<name>/`:
+
+```
+src/image-engine/styles/hot-flat/
+  style.json        the look: colours, fonts, sizes, shapes, spacing, and which layouts to use
+  assets/           small SVG graphics the style uses (an asterisk, an arrow, a flower...)
+```
+
+**Adding a style is adding a folder.** No code changes. The engine finds every `*/style.json` in that directory when it starts. A folder that does not pass the checks below is *not loaded*, and the reason is shown in plain words (in the test output and wherever styles are listed). Copy an existing folder, rename it, edit the JSON, done.
+
+Only the bundled fonts can be used (Schibsted Grotesk 600, 700, 800 and Instrument Sans 400, 500, 600). Nothing is loaded from the network.
+
+## style.json
+
+```jsonc
+{
+  "schema": 1,
+  "name": "hot-flat",              // must equal the folder name
+  "title": "Hot flat colour, heavy type",
+  "version": "1.0.0",
+  "basedOn": { "cluster": "hot-flat", "note": "Which reading this came from, in a sentence." },
+
+  "palettes": {                    // any names you like; every palette needs all 10 colours
+    "dark":  { "bg": "#141311", "text": "#FDFDF7", "muted": "#B9B8AE", "accent": "#DCF922",
+               "onAccent": "#141311", "marker": "#DCF922", "onMarker": "#141311",
+               "surface": "#262521", "onSurface": "#FDFDF7", "line": "#FDFDF7" }
+  },
+  "rhythm": ["hot", "dark", "light"],   // palette names, used in turn from slide to slide
+  "byType": { "cover": "hot" },         // optional: a palette for one slide type, whatever the rhythm says
+
+  "fonts": { "headline": "Schibsted Grotesk", "headlineWeight": 800,
+             "body": "Instrument Sans", "bodyWeight": 500, "strong": 600 },
+  "type": { "cover": 150, "headline": 104, "body": 44, "small": 34, "stat": 340, "quote": 80, "label": 32 },
+  "caseStyle": "upper",            // upper, lower or sentence
+  "headlineLineHeight": 0.95,      // 0.8 to 1.6. Under 1.1 the highlight bars hug each line
+  "shape": { "radius": 0, "outline": 4, "stroke": 8, "badge": "square", "marker": "box",
+             "sticker": "burst", "hardShadow": 10, "decor": "blocks" },
+  "spacing": { "margin": 80, "gap": 24, "section": 52 },
+  "chrome": "strip",               // dots-swipe, page-number, strip or none
+
+  "layouts": { ... },              // see below
+  "assets": { "asterisk": "assets/asterisk.svg" },
+
+  "knownLintConflicts": [ "Sentences about where this style breaks our phone-size rules." ],
+  "notReproduced": [ "Sentences about what the reference had that this style does not do." ]
+}
+```
+
+### Colours (palette roles)
+
+| role | used for |
+|---|---|
+| `bg` | the slide background. A colour (`#RRGGBB`) or a gradient `{"type":"linear","angle":160,"stops":[{"at":0,"color":"#..."},{"at":1,"color":"#..."}]}` |
+| `text` | headlines and body text |
+| `muted` | secondary text, small labels |
+| `accent` | numbers, buttons, icons. Also used as text, so it should reach 4.5:1 on `bg` |
+| `onAccent` | text on top of an `accent` shape |
+| `marker` / `onMarker` | the highlight bar behind a word, and the text on it |
+| `surface` / `onSurface` | cards and panels, and the text on them |
+| `line` | outlines and rules |
+
+If a pair is under 4.5:1 (text on background, muted on background, text on accent, text on marker) the style still loads, with a **warning**, because the checker will fail those words. Writing the number down is better than hiding it.
+
+### Sizes (px on the 1080 wide slide)
+
+`type.body` and `type.label` under 32 load with a warning: the phone-size checker needs at least 32 px, so those slides will fail the "size" check. That is how the quiet minimal style is kept faithful to its references. The conflict is written in that style's `knownLintConflicts`.
+
+### shape
+
+`badge`: circle, rounded, square. `marker`: box (a filled bar), underline, brush. `sticker`: pill, tag, burst. `decor`: rings, orbs, blocks. `radius`, `outline`, `stroke`, `hardShadow` are in px (`hardShadow` is the offset of a solid shadow under cards; 0 = none).
+
+### layouts
+
+For every slide type (`cover`, `content`, `step`, `stat`, `checklist`, `beforeafter`, `quote`, `closing`) give a list of rules. **At least 2 rules using at least 2 different layouts**, and the last rule has no `when`, so every slide gets a layout.
+
+```jsonc
+"cover": [
+  { "use": "cover-stack", "when": { "headlineWordsMax": 7 },
+    "params": { "bar": "last", "asset": "asterisk", "assetSize": 200, "kicker": "sticker" } },
+  { "use": "cover-top",   "params": { "bar": "all", "visual": "asset", "asset": "arrow-ne" } }
+]
+```
+
+The first rule whose `when` holds is used. `when` can use: `indexMin`, `indexMax` (position in the deck, counted from 0), `headlineWordsMin/Max`, `bodyWordsMin/Max`, `itemsMin/Max` (checklist), `valueCharsMax` (stat number), `quoteCharsMin`, and `occurrence` (`"odd"` or `"even"`: the 1st, 3rd... or 2nd, 4th... slide of that type). A rule may also set `"palette"` to use a different palette for that layout.
+
+**Layouts you can name:**
+
+| slide type | layouts |
+|---|---|
+| cover | `cover-stack` (headline fills the slide and sits low), `cover-top` (headline at the top, a visual below), `cover-centre` (centred, a mark above, a button below) |
+| content | `content-stack` (heading, rule, body), `content-bar` (heading on solid bars, body below), `content-columns` (heading on top, narrow body at the foot) |
+| step | `step-badge` (numbered badge), `step-numeral` (huge number), `step-pill` (outlined "STEP 01" pill) |
+| stat | `stat-giant` (huge number), `stat-card` (number in a card) |
+| checklist | `checklist-icons` (round ticks), `checklist-lines` (numbered rows between rules) |
+| beforeafter | `ba-split` (two halves), `ba-cards` (two cards) |
+| quote | `quote-marks` (big marks, text at the left), `quote-centre` (everything centred) |
+| closing | `closing-button` (button and handle), `closing-bar` (full-width bar at the foot) |
+
+**Params** (all optional): `bar` (`last`, `all`, `none`: solid bars behind the last line or every line of the headline), `asset` (an asset name), `assetSize` (px), `kicker` (`sticker`, `pill` or `label`), `prefix` (text before a label, for example `"// "`), `visual` (`ui-card`, `glow`, `asset`, `none`; cover-top), `chart` (`bars` or `line`), `button` (true: a round arrow button), `headlineShare` (0 to 1: how much of the room the cover-top headline may use), `numeralSize`, `ghost` (true: the step number in the muted colour), `badgeSize`, `ruleWidth`, `pill` (true: an outlined arrow pill on the stat), `alt` (the palette used for the second half of a split).
+
+## assets/*.svg
+
+Small SVG files, drawn with a limited set of shapes so the engine can turn them into the same layers as everything else (and so they take the style's colours):
+
+- `viewBox` is required and must start at `0 0` (for example `viewBox="0 0 100 100"`).
+- Allowed elements: `path` (**absolute** commands `M L C Q H V Z` only, no arcs, no lower-case), `line`, `polyline`, `polygon`, `rect` (no rounded corners), `circle`, `ellipse`.
+- `fill` and `stroke` are **palette role names** (`accent`, `text`, `muted`, `bg`, ...) or `none`. Never a hex colour. That is what lets one graphic work in every palette.
+- `stroke-width`, `stroke-linecap`, `stroke-linejoin`, `opacity` work. Nothing else (no gradients, filters, text, images, transforms).
+
+List each file in `"assets"` under a short name, and use that name in a layout rule's `params`.
+
+## What gets rejected, and what you will read
+
+Every message is a sentence. Examples: `Style "hot-flat": "name" is "hotflat" but the folder is called "hot-flat". They must match.` ·
+`palette "dark" has no "accent" colour.` · `fonts.headlineWeight is 900, but Schibsted Grotesk is bundled only in weights 600, 700, 800.` ·
+`layouts.step has 1 rule. A style needs at least 2 distinct layouts for every slide type.` ·
+`The last rule of layouts.cover has a "when", so a slide that matches no rule would have no layout.` ·
+`Asset "x": a <path> uses commands other than M L C Q H V Z in capital letters.` ·
+`Asset "x": a <circle> has fill="#FF0000". Use a colour name from the palette ... so the graphic takes the style's colours.`
+
+## Trying a style
+
+`npm run test:image` draws every style with every sample script (and three quote cards) into `out/image-engine/style-recreation/<style>/<script>/slide-01.png` ... one file per slide, each with its own `.plan.json` (the slide as a plan, editable by patches) and `.lint.json` (the phone-size result, which layout was used and why). The Results screen shows them.

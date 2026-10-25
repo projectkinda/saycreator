@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "name": "object-neon",
+  "title": "Tech polish with a neon accent",
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "object-neon",
+    "note": "Black and white slides alternate, bold sentence-case headlines with one neon accent (mint here), tidy symmetrical placement, small buttons, flat interface cards. The glossy 3D objects of the references are NOT reproduced."
+  },
+  "palettes": {
+    "dark": { "bg": { "type": "linear", "angle": 160, "stops": [{ "at": 0, "color": "#0B1210" }, { "at": 1, "color": "#14241E" }] }, "text": "#F4F7F5", "muted": "#A7B5AF", "accent": "#45C9A0", "onAccent": "#07201A", "marker": "#45C9A0", "onMarker": "#07201A", "surface": "#16221E", "onSurface": "#F4F7F5", "line": "#3B5A4F" },
+    "light": { "bg": "#F2F4F3", "text": "#0E1513", "muted": "#4B5753", "accent": "#0F6B4F", "onAccent": "#F2F4F3", "marker": "#45C9A0", "onMarker": "#07201A", "surface": "#FFFFFF", "onSurface": "#0E1513", "line": "#9AA7A2" }
+  },
+  "rhythm": ["dark", "light"],
+  "byType": { "closing": "dark" },
+  "fonts": { "headline": "Schibsted Grotesk", "headlineWeight": 700, "body": "Instrument Sans", "bodyWeight": 400, "strong": 600 },
+  "type": { "cover": 122, "headline": 88, "body": 44, "small": 34, "stat": 300, "quote": 76, "label": 32 },
+  "caseStyle": "sentence",
+  "headlineLineHeight": 1.04,
+  "shape": { "radius": 36, "outline": 0, "stroke": 6, "badge": "rounded", "marker": "box", "sticker": "pill", "hardShadow": 0, "decor": "orbs" },
+  "spacing": { "margin": 84, "gap": 28, "section": 60 },
+  "chrome": "page-number",
+  "layouts": {
+    "cover": [
+      { "use": "cover-top", "when": { "headlineWordsMax": 7 }, "params": { "visual": "ui-card", "chart": "bars", "kicker": "pill", "headlineShare": 0.5 } },
+      { "use": "cover-stack", "params": { "asset": "glow-line", "assetSize": 340, "kicker": "pill" } }
+    ],
+    "content": [
+      { "use": "content-stack", "when": { "bodyWordsMax": 17 }, "params": { "ruleWidth": 120 } },
+      { "use": "content-bar", "params": { "asset": "loop-arrow", "assetSize": 220 } }
+    ],
+    "step": [
+      { "use": "step-badge", "when": { "occurrence": "odd" }, "params": { "badgeSize": 160 } },
+      { "use": "step-numeral", "params": { "numeralSize": 300 } }
+    ],
+    "stat": [
+      { "use": "stat-card", "when": { "valueCharsMax": 3 } },
+      { "use": "stat-giant" }
+    ],
+    "checklist": [
+      { "use": "checklist-icons", "when": { "itemsMin": 4 } },
+      { "use": "checklist-lines" }
+    ],
+    "beforeafter": [
+      { "use": "ba-cards", "when": { "occurrence": "odd" } },
+      { "use": "ba-split", "params": { "alt": "dark" } }
+    ],
+    "quote": [
+      { "use": "quote-marks", "when": { "quoteCharsMin": 48 } },
+      { "use": "quote-centre" }
+    ],
+    "closing": [
+      { "use": "closing-bar", "when": { "headlineWordsMax": 4 } },
+      { "use": "closing-button" }
+    ]
+  },
+  "assets": { "glow-line": "assets/glow-line.svg", "loop-arrow": "assets/loop-arrow.svg" },
+  "knownLintConflicts": [
+    "The references colour some words mint on a white slide, which is only about 2.1:1. On the light palette this style uses a darker green (#0F6B4F, about 6:1) for accent text and keeps mint for fills and highlight boxes. That is a deliberate change from the reference, not an exact match.",
+    "Violet-on-black, which one reference deck uses, would fail contrast (about 2.3:1), so this style uses mint."
+  ],
+  "notReproduced": [
+    "The glossy 3D objects and glass shapes on almost every reference slide. They cannot be made here (no 3D renderer, no image generation) and a flat shape would be a worse substitute, so the object area is left to a flat interface card on the cover and empty elsewhere.",
+    "Glow around objects: only a soft stacked-circle glow exists, and it is not used on these layouts.",
+    "UI mock-ups of laptops and phones, icon rows with captions and callout cards that are slightly rotated."
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "name": "dark-quiet",
+  "title": "Quiet dark minimal",
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "dark-quiet",
+    "note": "Near-black or pale sage and white, one light sans heading, tiny body text, a great deal of empty space, thin outlined pills. The tiny body size is taken from the references on purpose; it breaks our phone-size rule and is listed under knownLintConflicts."
+  },
+  "palettes": {
+    "dark": { "bg": "#1B1B1B", "text": "#F2F1EC", "muted": "#A9A8A2", "accent": "#E3DAC9", "onAccent": "#1B1B1B", "marker": "#E3DAC9", "onMarker": "#1B1B1B", "surface": "#262626", "onSurface": "#F2F1EC", "line": "#8C8B85" },
+    "sage": { "bg": "#E1E5E2", "text": "#181818", "muted": "#5A5E5B", "accent": "#181818", "onAccent": "#E1E5E2", "marker": "#181818", "onMarker": "#E1E5E2", "surface": "#F8F8F8", "onSurface": "#181818", "line": "#181818" },
+    "white": { "bg": "#F8F8F8", "text": "#181818", "muted": "#5E5E5E", "accent": "#181818", "onAccent": "#F8F8F8", "marker": "#E1E5E2", "onMarker": "#181818", "surface": "#E1E5E2", "onSurface": "#181818", "line": "#181818" }
+  },
+  "rhythm": ["dark", "sage", "dark", "white"],
+  "byType": { "closing": "dark" },
+  "fonts": { "headline": "Instrument Sans", "headlineWeight": 500, "body": "Instrument Sans", "bodyWeight": 400, "strong": 500 },
+  "type": { "cover": 104, "headline": 80, "body": 28, "small": 30, "stat": 300, "quote": 66, "label": 26 },
+  "caseStyle": "sentence",
+  "headlineLineHeight": 1.08,
+  "shape": { "radius": 40, "outline": 2, "stroke": 4, "badge": "circle", "marker": "underline", "sticker": "pill", "hardShadow": 0, "decor": "rings" },
+  "spacing": { "margin": 96, "gap": 28, "section": 64 },
+  "chrome": "page-number",
+  "layouts": {
+    "cover": [
+      { "use": "cover-centre", "when": { "headlineWordsMax": 7 }, "params": { "asset": "asterisk-big", "assetSize": 170 } },
+      { "use": "cover-top", "params": { "visual": "none", "button": true, "kicker": "pill" } }
+    ],
+    "content": [
+      { "use": "content-columns", "when": { "bodyWordsMax": 17 } },
+      { "use": "content-stack", "params": { "ruleWidth": 80 } }
+    ],
+    "step": [
+      { "use": "step-pill", "when": { "occurrence": "odd" } },
+      { "use": "step-badge", "params": { "badgeSize": 140 } }
+    ],
+    "stat": [
+      { "use": "stat-giant", "when": { "valueCharsMax": 3 } },
+      { "use": "stat-card" }
+    ],
+    "checklist": [
+      { "use": "checklist-lines", "when": { "itemsMin": 4 } },
+      { "use": "checklist-icons" }
+    ],
+    "beforeafter": [
+      { "use": "ba-split", "when": { "occurrence": "odd" }, "params": { "alt": "dark" } },
+      { "use": "ba-cards" }
+    ],
+    "quote": [
+      { "use": "quote-centre", "when": { "quoteCharsMin": 48 } },
+      { "use": "quote-marks" }
+    ],
+    "closing": [
+      { "use": "closing-button", "when": { "headlineWordsMax": 4 } },
+      { "use": "closing-bar" }
+    ]
+  },
+  "assets": { "asterisk-big": "assets/asterisk-big.svg", "arrow-ne": "assets/arrow-ne.svg" },
+  "knownLintConflicts": [
+    "Body text is 28 px and labels are 26 px, because the references use tiny type. The phone-size checker needs at least 32 px, so the 'size' check fails on slides with body text or page numbers. Raising type.body and type.label to 32 fixes it and makes the look less quiet.",
+    "The secondary grey text (muted) is only 5 to 7:1 on the dark palette; it passes our contrast rule, but only just."
+  ],
+  "notReproduced": [
+    "Monochrome photographs, the strip of three photos, soft grey gradient bands: no photo treatments built and our gradients are straight linear only.",
+    "The serif-italic phrase inside a heading: serif italic is not bundled and a substitute would be worse, so it is not faked.",
+    "The reference's small logo mark and round arrow button in the top corners: the round arrow button exists as a tool but is not used in these layouts."
+  ]
+}

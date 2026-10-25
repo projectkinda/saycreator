@@ -20,3 +20,7 @@ export { lintSlide, CAROUSEL_LIMITS, CAROUSEL_CHECK_LABELS, type CarouselLintId,
 export { THEMES, paper, midnight, pop } from './carousel/themes';
 export * from './carousel/types';
 export * as toolbox from './carousel/toolbox';
+export { loadStyles, type LoadedStyle, type StyleProblem } from './styles/load';
+export { validateStyle, LAYOUT_IDS, SLIDE_TYPES, type StyleSpec } from './styles/format';
+export { composeStyled, pickRule, matches, LAYOUTS, type StyledSlide } from './styles/compose';
+export { parseSvg, assetLayers } from './styles/svg';

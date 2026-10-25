@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "name": "hot-flat",
+  "title": "Hot flat colour, heavy type",
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "hot-flat",
+    "note": "One saturated colour with near-black and cream, very heavy tight upper-case headlines, solid bars behind words, hard edges. This file uses the lime deck's hue; swap the three hex values marked accent in the palettes to get the yellow or orange-red deck."
+  },
+  "palettes": {
+    "dark": { "bg": "#141311", "text": "#FDFDF7", "muted": "#B9B8AE", "accent": "#DCF922", "onAccent": "#141311", "marker": "#DCF922", "onMarker": "#141311", "surface": "#262521", "onSurface": "#FDFDF7", "line": "#FDFDF7" },
+    "light": { "bg": "#FDFDF7", "text": "#141311", "muted": "#55534A", "accent": "#141311", "onAccent": "#DCF922", "marker": "#DCF922", "onMarker": "#141311", "surface": "#EFEFE2", "onSurface": "#141311", "line": "#141311" },
+    "hot": { "bg": "#DCF922", "text": "#141311", "muted": "#3A3E10", "accent": "#141311", "onAccent": "#DCF922", "marker": "#141311", "onMarker": "#DCF922", "surface": "#141311", "onSurface": "#DCF922", "line": "#141311" }
+  },
+  "rhythm": ["hot", "dark", "light"],
+  "byType": { "cover": "hot", "stat": "dark", "quote": "dark", "closing": "dark" },
+  "fonts": { "headline": "Schibsted Grotesk", "headlineWeight": 800, "body": "Instrument Sans", "bodyWeight": 500, "strong": 600 },
+  "type": { "cover": 150, "headline": 104, "body": 44, "small": 34, "stat": 340, "quote": 80, "label": 32 },
+  "caseStyle": "upper",
+  "headlineLineHeight": 0.95,
+  "shape": { "radius": 0, "outline": 4, "stroke": 8, "badge": "square", "marker": "box", "sticker": "burst", "hardShadow": 10, "decor": "blocks" },
+  "spacing": { "margin": 80, "gap": 24, "section": 52 },
+  "chrome": "strip",
+  "layouts": {
+    "cover": [
+      { "use": "cover-stack", "when": { "headlineWordsMax": 7 }, "params": { "bar": "last", "asset": "asterisk", "assetSize": 200, "kicker": "sticker" } },
+      { "use": "cover-top", "params": { "bar": "all", "visual": "asset", "asset": "arrow-ne", "assetSize": 400, "kicker": "label", "prefix": "// " } }
+    ],
+    "content": [
+      { "use": "content-bar", "when": { "bodyWordsMax": 17 }, "palette": "light", "params": { "asset": "plus", "assetSize": 140 } },
+      { "use": "content-stack", "params": { "ruleWidth": 200 } }
+    ],
+    "step": [
+      { "use": "step-numeral", "when": { "occurrence": "odd" }, "params": { "numeralSize": 380 } },
+      { "use": "step-badge", "params": { "badgeSize": 180 } }
+    ],
+    "stat": [
+      { "use": "stat-giant", "when": { "valueCharsMax": 3 }, "params": { "pill": true } },
+      { "use": "stat-card" }
+    ],
+    "checklist": [
+      { "use": "checklist-lines", "when": { "itemsMin": 4 } },
+      { "use": "checklist-icons" }
+    ],
+    "beforeafter": [
+      { "use": "ba-cards", "when": { "occurrence": "odd" } },
+      { "use": "ba-split", "params": { "alt": "hot" } }
+    ],
+    "quote": [
+      { "use": "quote-marks", "when": { "quoteCharsMin": 48 } },
+      { "use": "quote-centre" }
+    ],
+    "closing": [
+      { "use": "closing-bar", "when": { "headlineWordsMax": 4 } },
+      { "use": "closing-button" }
+    ]
+  },
+  "assets": { "asterisk": "assets/asterisk.svg", "plus": "assets/plus.svg", "arrow-ne": "assets/arrow-ne.svg", "squiggle": "assets/squiggle.svg" },
+  "knownLintConflicts": [
+    "Headline lines are set at a line height of 0.95, so lines touch. The checker looks at text boxes, not ink, and does not flag touching lines.",
+    "Yellow or lime text only works on the dark palette (about 16:1). On white it would be about 1.2:1, so the light palette uses black for text and lime only for bars."
+  ],
+  "notReproduced": [
+    "The references' heavy condensed or extended display faces and the monospace labels: only Schibsted Grotesk 800 and Instrument Sans are bundled, so letters are wider and softer.",
+    "Black-and-white and halftone photographs, oval photo masks, laptop and phone mock-ups: there are no photos in the sample scripts and no photo treatments are built.",
+    "Tape banners are built as a tool but not used in any layout yet.",
+    "Different fonts or italics for single words inside a headline."
+  ]
+}

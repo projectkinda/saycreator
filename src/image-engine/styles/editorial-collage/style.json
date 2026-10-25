@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "name": "editorial-collage",
+  "title": "Warm editorial collage",
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "editorial-collage",
+    "note": "Conversational lower-case headlines in a very heavy sans, butter yellow, cream and dark paper, bars behind phrases, hand-drawn marks. Photos are the other half of this look and are not reproduced."
+  },
+  "palettes": {
+    "cream": { "bg": "#F1ECDE", "text": "#1B1914", "muted": "#5C5749", "accent": "#7B2514", "onAccent": "#F1ECDE", "marker": "#EAE26D", "onMarker": "#1B1914", "surface": "#E4DDCB", "onSurface": "#1B1914", "line": "#1B1914" },
+    "yellow": { "bg": "#EAE26D", "text": "#1B1914", "muted": "#4C4A25", "accent": "#1B1914", "onAccent": "#EAE26D", "marker": "#1B1914", "onMarker": "#EAE26D", "surface": "#F1ECDE", "onSurface": "#1B1914", "line": "#1B1914" },
+    "dark": { "bg": "#181714", "text": "#F1ECDE", "muted": "#BDB8A8", "accent": "#EAE26D", "onAccent": "#181714", "marker": "#EAE26D", "onMarker": "#181714", "surface": "#2A2823", "onSurface": "#F1ECDE", "line": "#F1ECDE" }
+  },
+  "rhythm": ["yellow", "cream", "dark", "cream"],
+  "byType": { "cover": "yellow", "stat": "yellow", "closing": "dark" },
+  "fonts": { "headline": "Schibsted Grotesk", "headlineWeight": 800, "body": "Instrument Sans", "bodyWeight": 500, "strong": 600 },
+  "type": { "cover": 172, "headline": 110, "body": 46, "small": 34, "stat": 330, "quote": 88, "label": 32 },
+  "caseStyle": "lower",
+  "headlineLineHeight": 0.92,
+  "shape": { "radius": 18, "outline": 0, "stroke": 6, "badge": "circle", "marker": "box", "sticker": "tag", "hardShadow": 0, "decor": "rings" },
+  "spacing": { "margin": 76, "gap": 26, "section": 56 },
+  "chrome": "page-number",
+  "layouts": {
+    "cover": [
+      { "use": "cover-centre", "when": { "headlineWordsMax": 7 }, "params": { "asset": "flower", "assetSize": 170 } },
+      { "use": "cover-stack", "params": { "bar": "none", "asset": "circle-hand", "assetSize": 260, "kicker": "label", "prefix": "" } }
+    ],
+    "content": [
+      { "use": "content-stack", "when": { "bodyWordsMax": 17 }, "params": { "ruleWidth": 90 } },
+      { "use": "content-columns", "palette": "cream" }
+    ],
+    "step": [
+      { "use": "step-pill", "when": { "occurrence": "odd" } },
+      { "use": "step-numeral", "params": { "ghost": true, "numeralSize": 300 } }
+    ],
+    "stat": [
+      { "use": "stat-giant", "when": { "valueCharsMax": 3 } },
+      { "use": "stat-card" }
+    ],
+    "checklist": [
+      { "use": "checklist-icons", "when": { "itemsMin": 4 } },
+      { "use": "checklist-lines" }
+    ],
+    "beforeafter": [
+      { "use": "ba-split", "when": { "occurrence": "odd" }, "params": { "alt": "dark" } },
+      { "use": "ba-cards" }
+    ],
+    "quote": [
+      { "use": "quote-centre", "when": { "quoteCharsMin": 48 } },
+      { "use": "quote-marks" }
+    ],
+    "closing": [
+      { "use": "closing-button", "when": { "headlineWordsMax": 4 } },
+      { "use": "closing-bar" }
+    ]
+  },
+  "assets": { "flower": "assets/flower.svg", "circle-hand": "assets/circle-hand.svg", "underline-hand": "assets/underline-hand.svg", "arrow-thin": "assets/arrow-thin.svg" },
+  "knownLintConflicts": [
+    "Headline lines are set at a line height of 0.92, so lines touch. The checker looks at text boxes, not ink, and does not flag touching lines.",
+    "The references set headlines straight over photographs. Text over a photograph cannot be contrast-checked by our method without the photograph, so photo-led layouts are not built."
+  ],
+  "notReproduced": [
+    "Photographs, halftone and paper cut-outs, stickers made from photos, the flower-shaped photo crop: no photos in the sample scripts and no photo treatments built.",
+    "The serif italic word inside headlines, the condensed uppercase voice and the handwriting: those fonts are not bundled, and a lighter sans would be a worse substitute, so it is not faked.",
+    "Hand-drawn marks are drawn as clean paths, so they look tidier than real pen strokes."
+  ]
+}
