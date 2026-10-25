@@ -351,3 +351,9 @@ Covered: all of these except photo cutouts and true 3D renders. Photo cutouts ne
 - The clipboard fallback (when the browser blocks copying) is written but not run.
 - One project at a time; it does not appear in the Images list, and does not use Branding colours or fonts.
 - See the Step 8 section of the Results screen for the confusing things found by using it, which are fixed and which are not.
+
+### Fix after Step 8: Quiet dark page number
+- The Quiet dark style's labels and page numbers went from 26 px to 32 px (same muted grey, same weight, same place; the number is a little wider). Before: all 7 slides of the sample deck failed the "size" check. After: 5 of 7 still fail, for body text (28 px), small text such as the "Step 01" pill and "Myth" label (30 px), and the stat note (24 px). Those were left as they are to keep the style's quiet look; they are listed under `knownLintConflicts` in the style.
+- The style validator now warns, when any style is loaded, about every `type` size under 32 px (cover, headline, body, small, stat, quote, label), in plain words, naming what will fail. The carousel style picker shows "Some text is below phone size" on such a style.
+- The 24 px stat note is not a `type` value of the style, so the validator cannot see it; it is fixed in the stat layout code, not in the style file. Not changed here.
+- Three sample scripts in all four styles: no failures in editorial-collage, hot-flat or object-neon; Quiet dark fails on 4 to 5 slides per script.

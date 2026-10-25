@@ -53,6 +53,7 @@ function StylePicker({ format, value, onPick }: { format: Format; value: string;
                 <span className={`cr-style-pic r${format === 'quote' ? '1-1' : '4-5'}`}>{img ? <img src={img} alt={`Preview of the ${st.spec.title} style`} /> : <span className="small muted" role="status">Drawing…</span>}</span>
                 <strong>{st.spec.title}</strong>
                 <span className="small muted">{st.spec.name}</span>
+                {st.warnings.some((w) => /phone-size checker needs at least 32 px/.test(w)) && <span className="chip chip-warn">Some text is below phone size</span>}
               </button>
             </li>
           );

@@ -28,7 +28,8 @@ test('the shipped styles pass; a style that breaks our phone-size rules loads wi
   }
   const quiet = await check(page, readStyle('dark-quiet'), 'dark-quiet');
   expect(quiet.warnings.join(' ')).toMatch(/type\.body is 28 px.*at least 32 px/);
-  expect(quiet.warnings.join(' ')).toMatch(/type\.label is 26 px/);
+  expect(quiet.warnings.join(' ')).toMatch(/type.small is 30 px/);
+  expect(quiet.warnings.join(' ')).not.toMatch(/type.label/); // labels and page numbers were raised to 32 px
 });
 
 test('every kind of mistake in style.json is refused with a sentence that says what to change', async ({ page }) => {

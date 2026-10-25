@@ -211,8 +211,12 @@ export function validateStyle(raw: unknown, folder: string, knownTags?: Set<stri
   const t = isObj(s.type) ? s.type : null;
   if (!t) err('"type" is missing. It holds the font sizes in px on the 1080 wide slide.');
   else for (const k of ['cover', 'headline', 'body', 'small', 'stat', 'quote', 'label']) if (!num(t[k]) || (t[k] as number) < 10 || (t[k] as number) > 400) err(`type.${k} must be a number from 10 to 400.`);
-  if (t && num(t.body) && t.body < 32) warnings.push(`type.body is ${t.body} px. The phone-size checker needs at least 32 px, so body text will fail the "size" check. Kept as written because the reference is like this.`);
-  if (t && num(t.label) && t.label < 32) warnings.push(`type.label is ${t.label} px. The phone-size checker needs at least 32 px, so labels will fail the "size" check.`);
+  // Any text size under the checker's minimum is caught here, when the style is added, not when someone previews it.
+  const WHERE: Record<string, string> = { cover: 'cover headlines', headline: 'headlines', body: 'body text', small: 'small text', stat: 'big numbers', quote: 'quotes', label: 'labels and page numbers' };
+  for (const [k, where] of Object.entries(WHERE)) {
+    const v = t?.[k];
+    if (num(v) && v < 32) warnings.push(`type.${k} is ${v} px. The phone-size checker needs at least 32 px, so ${where} will fail the "size" check on every slide that has them. Raise it, or keep it on purpose and say so under "knownLintConflicts".`);
+  }
   if (!(CASE_STYLES as readonly string[]).includes(s.caseStyle as string)) err(`"caseStyle" must be one of ${CASE_STYLES.join(', ')}.`);
   if (!num(s.headlineLineHeight) || s.headlineLineHeight < 0.8 || s.headlineLineHeight > 1.6) err('"headlineLineHeight" must be a number from 0.8 to 1.6.');
 

@@ -15,7 +15,7 @@
   "rhythm": ["dark", "sage", "dark", "white"],
   "byType": { "closing": "dark" },
   "fonts": { "headline": "Instrument Sans", "headlineWeight": 500, "body": "Instrument Sans", "bodyWeight": 400, "strong": 500 },
-  "type": { "cover": 104, "headline": 80, "body": 28, "small": 30, "stat": 300, "quote": 66, "label": 26 },
+  "type": { "cover": 104, "headline": 80, "body": 28, "small": 30, "stat": 300, "quote": 66, "label": 32 },
   "caseStyle": "sentence",
   "headlineLineHeight": 1.08,
   "shape": { "radius": 40, "outline": 2, "stroke": 4, "badge": "circle", "marker": "underline", "sticker": "pill", "hardShadow": 0, "decor": "rings" },
@@ -57,7 +57,7 @@
   },
   "assets": { "asterisk-big": "assets/asterisk-big.svg", "arrow-ne": "assets/arrow-ne.svg" },
   "knownLintConflicts": [
-    "Body text is 28 px and labels are 26 px, because the references use tiny type. The phone-size checker needs at least 32 px, so the 'size' check fails on slides with body text or page numbers. Raising type.body and type.label to 32 fixes it and makes the look less quiet.",
+    "Body text is 28 px and small text 30 px, because the references use tiny type. The phone-size checker needs at least 32 px, so the 'size' check fails on slides with body or small text. Labels and page numbers were raised from 26 to 32 so they pass; they stay in the muted grey and the same weight, so the page number is the only change you will notice. Raising type.body and type.small to 32 would fix the rest and make the look less quiet.",
     "The secondary grey text (muted) is only 5 to 7:1 on the dark palette; it passes our contrast rule, but only just."
   ],
   "notReproduced": [
