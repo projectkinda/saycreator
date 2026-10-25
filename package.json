@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "node scripts/check-test-assets.mjs && tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "test:image": "playwright test -c tests/image-engine/playwright.config.ts",
@@ -13,7 +13,8 @@
     "check:licenses": "node scripts/check-licenses.mjs",
     "style:read": "node scripts/style-read.mjs",
     "style:aggregate": "node scripts/style-aggregate.mjs",
-    "fetch:assets": "node scripts/fetch-assets.mjs"
+    "fetch:assets": "node scripts/fetch-assets.mjs",
+    "check:test-assets": "node scripts/check-test-assets.mjs"
   },
   "dependencies": {
     "fabric": "^7.4.0",
