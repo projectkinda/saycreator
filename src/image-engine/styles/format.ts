@@ -54,6 +54,8 @@ export const ELEMENT_ZONES = ['free', 'near-headline', 'corner-tl', 'corner-tr',
 export type ElementZone = (typeof ELEMENT_ZONES)[number];
 
 /** One kind of element a style likes: which tags, where, how many, how big, how coloured. */
+/** Tags of pictures that mean nothing by themselves. A rule made only of these must say what the decoration is for. */
+export const DECOR_TAGS = new Set(['blob', 'doodle', 'squiggle', 'zigzag', 'brush', 'loop', 'circle', 'underline', 'scribble', 'halftone', 'texture', 'tape', 'arrow', 'plus', 'asterisk', 'sparkle', 'burst', 'shape', 'organic', 'stroke', 'grain', 'noise']);
 export interface ElementRule {
   /** The element is picked from library elements that have any of these tags (for example "arrow", "star"). */
   tags: string[];
@@ -66,6 +68,8 @@ export interface ElementRule {
   rotate?: [number, number];
   /** Restrict to icons, coloured objects, or elements drawn in code. */
   kinds?: ('icon' | 'object' | 'code')[];
+  /** What decoration is for (required when every tag is plain decoration): "frame" a ring round the big number or a line under the headline, "point" an arrow in the gap under the headline pointing down at what follows, "gap" fill real empty space (only on a slide that has room, with extra clear space around it). */
+  role?: 'frame' | 'point' | 'gap';
   /** "slide": pick by what the slide is about (its element_tags): only elements linked to those tags, or none. Without it the pick is among the rule's own tags. */
   match?: 'slide';
   /** Swap one palette role for another when colouring, for example {"accent": "marker"}. */
@@ -98,6 +102,10 @@ export interface StyleSpec {
   /** Must equal the folder name. */
   name: string;
   title: string;
+  /** One line saying what the style is for. Shown to the writer and used when "Pick for me" chooses a style. */
+  description?: string;
+  /** What the style suits, for "Pick for me": tones, words that show up in the text, slide types. */
+  suits?: { tones?: string[]; keywords?: string[]; slideTypes?: SlideType[] };
   version: string;
   basedOn: { cluster: string; note: string };
   palettes: Record<string, Palette>;
@@ -143,6 +151,13 @@ export function validateStyle(raw: unknown, folder: string, knownTags?: Set<stri
   if (s.schema !== 1) err('"schema" must be 1.');
   if (s.name !== folder) err(`"name" is "${String(s.name)}" but the folder is called "${folder}". They must match.`);
   if (typeof s.title !== 'string' || !s.title.trim()) err('"title" is missing. It is the name people see.');
+  if (s.description !== undefined && (typeof s.description !== 'string' || s.description.length < 10 || s.description.length > 140)) err('"description" must be one line of 10 to 140 characters saying what the style is for.');
+  if (s.description === undefined) warnings.push('"description" is missing. Without it "Pick for me" and the writer only have the title to go on.');
+  if (s.suits !== undefined) {
+    const su = s.suits as Record<string, unknown>;
+    const strs = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === 'string' && x.trim() !== '');
+    if (!isObj(su) || (su.tones !== undefined && !strs(su.tones)) || (su.keywords !== undefined && !strs(su.keywords)) || (su.slideTypes !== undefined && !(strs(su.slideTypes) && (su.slideTypes as string[]).every((t) => (SLIDE_TYPES as string[]).includes(t))))) err('"suits" must look like {"tones": ["bold"], "keywords": ["launch"], "slideTypes": ["stat"]}, with slide types from ' + SLIDE_TYPES.join(', ') + '.');
+  }
   if (typeof s.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(s.version)) err('"version" must look like 1.0.0.');
   if (!isObj(s.basedOn) || typeof s.basedOn.cluster !== 'string' || typeof s.basedOn.note !== 'string') err('"basedOn" needs a "cluster" and a "note" saying which reading this style comes from.');
 
@@ -318,6 +333,8 @@ export function validateStyle(raw: unknown, folder: string, knownTags?: Set<stri
           if (r.recolour !== undefined) {
             if (!isObj(r.recolour) || !Object.entries(r.recolour).every(([k, v]) => roles.includes(k) && roles.includes(v as string))) err(`${w}.recolour must swap palette roles, for example {"accent": "marker"}.`);
           }
+          if (r.role !== undefined && !['frame', 'point', 'gap'].includes(r.role as string)) err(`${w}.role must be "frame", "point" or "gap" (or left out for pictures of things).`);
+          if (r.role === undefined && Array.isArray(r.tags) && r.tags.length > 0 && (r.tags as unknown[]).every((t) => typeof t === 'string' && DECOR_TAGS.has(t.toLowerCase())) && !(Array.isArray(r.kinds) && r.kinds.includes('object'))) err(`${w} places plain decoration (${(r.tags as string[]).join(', ')}) without saying what it is for. Add "role": "frame" (a ring round a number, a line under the headline), "point" (an arrow pointing at what follows) or "gap" (fills real empty space).`);
           if (r.match !== undefined && r.match !== 'slide') err(`${w}.match must be "slide" (or left out).`);
           if (r.recolourBy !== undefined) {
             const ok = isObj(r.recolourBy) && Object.entries(r.recolourBy).every(([pn, m]) => palNames.includes(pn) && isObj(m) && Object.entries(m).every(([k, v]) => roles.includes(k) && roles.includes(v as string)));

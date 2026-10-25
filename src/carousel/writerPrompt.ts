@@ -22,16 +22,9 @@ export interface WriteRequest {
   format: Format;
   /** "auto": the writer also picks a style from `styles`. */
   styleChoice: 'auto' | string;
-  styles: { name: string; title: string }[];
+  /** `description` is the style's own one-line description (style.json). */
+  styles: { name: string; title: string; description?: string }[];
 }
-
-/** What each stored style is good for, so "Pick for me" can choose. A style not listed here is described by its title. */
-const STYLE_BLURB: Record<string, string> = {
-  'dark-quiet': 'calm, minimal, serious; a few words and a lot of space',
-  'hot-flat': 'loud, high-energy, bold claims and tips',
-  'editorial-collage': 'warm, personal, stories and how-tos',
-  'object-neon': 'tech, product, data and results',
-};
 
 /** Why a text cannot be sent yet, in plain words, or null when it can. */
 export function textProblem(text: string): string | null {
@@ -67,7 +60,7 @@ export function buildWritePrompt(req: WriteRequest): string {
     '- "highlight" is optional: 1 to 3 words copied exactly from that slide\'s headline (or quote).',
     '- Plain, specific language. No hashtags, no emoji, no links.',
     `- If the text is too short or thin to make ${n} different slides, write fewer (at least ${lo}) and add a top-level "note" saying so in one sentence. Never pad.`,
-    auto ? `- Also add a top-level "style" set to the one of these that suits the text and tone best: ${req.styles.map((s) => `"${s.name}" (${STYLE_BLURB[s.name] ?? s.title})`).join('; ')}. Do not always choose the same one: match the topic and tone.` : '',
+    auto ? `- Also add a top-level "style" set to the one of these that suits the text and tone best: ${req.styles.map((s) => `"${s.name}" (${s.description ?? s.title})`).join('; ')}. Do not always choose the same one: match the topic and tone.` : '',
     '- Include a short top-level "title" (at most 6 words) that names the topic.',
   ]
     .filter((l) => l !== '')

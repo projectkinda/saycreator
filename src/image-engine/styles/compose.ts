@@ -172,7 +172,7 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
     const area = chromeArea(chrome, M, H);
     const c: LCtx = {
       style, theme: asTheme(style, pal), assets: loaded.assets, pal, palName, W, H, M, top: area.top, bottom: area.bottom, index: i, count: script.slides.length,
-      occurrence: seen[s.type], handle: script.brand.handle, layers: [], notes: [], params: rule.params ?? {},
+      occurrence: seen[s.type], handle: script.brand.handle, layers: [], notes: [], keepClear: [], params: rule.params ?? {},
     };
     LAYOUTS[rule.use](c, s);
     // Page chrome, drawn last so it sits on top.
@@ -193,13 +193,13 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
     let elementLinks: StyledSlide['elementLinks'];
     if (opts.elements && style.elements) {
       const id = `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}${ov?.salt ? '#' + ov.salt : ''}`;
-      const placed = placeElements({ spec: style.elements, pal, layers: c.layers, width: W, height: H, type: s.type, seed: id, mode: opts.elements, testAssets: opts.testAssets, paletteName: palName, slideTags: s.element_tags, ignoreTags: opts.elementMatching === 'ignore', swaps: ov?.swaps });
+      const placed = placeElements({ spec: style.elements, pal, layers: c.layers, width: W, height: H, type: s.type, seed: id, mode: opts.elements, testAssets: opts.testAssets, paletteName: palName, keepClear: c.keepClear, slideTags: s.element_tags, ignoreTags: opts.elementMatching === 'ignore', swaps: ov?.swaps });
       add(c, ...placed.layers);
       c.notes.push(...placed.notes);
       elementsUsed = placed.used;
       elementLinks = placed.links;
     }
-    const plan: Plan = { schema: 1, revision: 1, canvas: { width: W, height: H, background: solidOf(pal.bg) }, layers: c.layers, ...(s.element_tags ? { meta: { elementTags: s.element_tags } } : {}) };
+    const plan: Plan = { schema: 1, revision: 1, canvas: { width: W, height: H, background: solidOf(pal.bg) }, layers: c.layers, ...(s.element_tags || c.keepClear.length ? { meta: { ...(s.element_tags ? { elementTags: s.element_tags } : {}), ...(c.keepClear.length ? { keepClear: c.keepClear } : {}) } } : {}) };
     return { id: `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`, type: s.type, plan, notes: c.notes, style: style.name, layout: rule.use, rule: at, palette: palName, because, elementsUsed, layoutChoices: choices, ...(s.element_tags ? { elementTags: s.element_tags } : {}), ...(elementLinks ? { elementLinks } : {}) };
   });
 }

@@ -2,6 +2,8 @@
   "schema": 1,
   "name": "hot-flat",
   "title": "Hot flat colour, heavy type",
+  "description": "Loud and high-energy: bold claims and short punchy tips, for growth and how-to topics.",
+  "suits": { "tones": ["bold"], "keywords": ["launch", "sale", "sales", "growth", "grow", "hack", "fast", "boost", "viral", "win", "money", "hustle", "free", "tips", "mistakes", "stop", "never", "secret", "results", "audience", "followers", "marketing", "revenue"], "slideTypes": ["step", "checklist", "stat"] },
   "version": "1.0.0",
   "basedOn": {
     "cluster": "hot-flat",
@@ -62,11 +64,11 @@
     "types": ["cover", "content", "step", "stat", "checklist", "beforeafter", "closing"],
     "sticker": { "color": "line", "width": 6 },
     "rules": [
-      { "tags": ["arrow"], "kinds": ["code"], "zone": "near-headline", "count": [0, 1], "size": [150, 250], "rotate": [-18, 12] },
-      { "tags": ["burst"], "kinds": ["code"], "zone": "corner-tr", "count": [0, 1], "size": [130, 210], "rotate": [-15, 15], "shadow": true, "recolourBy": { "hot": { "accent": "bg" }, "dark": { "accent": "marker" }, "light": { "accent": "marker" } } },
-      { "tags": ["squiggle", "zigzag", "brush"], "kinds": ["code"], "zone": "free", "count": [0, 1], "size": [220, 340], "rotate": [-10, 10] },
-      { "tags": ["plus", "asterisk"], "kinds": ["code"], "zone": "free", "count": [1, 2], "size": [70, 130], "rotate": [0, 45] },
-      { "tags": ["halftone"], "zone": "texture", "count": [0, 1], "size": [420, 560], "opacity": 0.3 }
+      { "tags": ["arrow"], "kinds": ["code"], "role": "point", "zone": "free", "count": [0, 1], "size": [150, 250] },
+      { "tags": ["burst"], "kinds": ["code"], "role": "gap", "zone": "corner-tr", "count": [0, 1], "size": [130, 210], "rotate": [-15, 15], "shadow": true, "recolourBy": { "hot": { "accent": "bg" }, "dark": { "accent": "marker" }, "light": { "accent": "marker" } } },
+      { "tags": ["squiggle", "zigzag", "brush"], "kinds": ["code"], "role": "gap", "zone": "free", "count": [0, 1], "size": [220, 340], "rotate": [-10, 10] },
+      { "tags": ["plus", "asterisk"], "kinds": ["code"], "role": "gap", "zone": "free", "count": [1, 2], "size": [70, 130], "rotate": [0, 45] },
+      { "tags": ["halftone"], "role": "gap", "zone": "texture", "count": [0, 1], "size": [420, 560], "opacity": 0.3 }
     ]
   },
   "knownLintConflicts": [

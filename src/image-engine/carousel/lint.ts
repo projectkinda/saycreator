@@ -22,7 +22,7 @@ export const CAROUSEL_LIMITS = {
   slackPx: 2,
 };
 
-export type CarouselLintId = 'fit' | 'size' | 'contrast' | 'orphan' | 'margins' | 'edges' | 'overlap' | 'related';
+export type CarouselLintId = 'fit' | 'size' | 'contrast' | 'orphan' | 'margins' | 'edges' | 'overlap' | 'related' | 'split';
 
 export interface CarouselLintResult {
   id: CarouselLintId;
@@ -42,6 +42,7 @@ export const CAROUSEL_CHECK_LABELS: Record<CarouselLintId, string> = {
   edges: 'Nothing near the edge',
   overlap: 'No overlapping elements',
   related: 'Elements match the slide',
+  split: 'Elements stay off the split',
 };
 
 export interface Box {
@@ -253,6 +254,21 @@ export function lintSlide(input: CarouselLintInput): CarouselLintResult[] {
       if (linkScore(slideTags, info.tags) === 0) unrelated.push(`${l.element} (${info.tags.slice(0, 3).join(', ')})`);
     }
     res('related', unrelated.length === 0, unrelated.length === 0 ? `Every picture links to this slide's tags (${slideTags.join(', ')}), or is plain decoration.` : `Unrelated element: ${unrelated.join('; ')} has no link to this slide's tags (${slideTags.join(', ')}).`, unrelated.length, 0);
+  }
+
+  // 9. split: on a slide that splits in two, no picture may cross the split line or sit near its arrow button.
+  const clear = plan.meta?.keepClear;
+  if (clear && clear.length > 0) {
+    const hits: string[] = [];
+    for (const l of layers) {
+      if (l.kind !== 'element') continue;
+      const b = layerBox(l);
+      for (const k of clear) {
+        if (b.x < k.x + k.width && b.x + b.width > k.x && b.y < k.y + k.height && b.y + b.height > k.y) hits.push(`${l.element} ${k.name === 'split' ? 'crosses the split' : 'sits too close to the arrow button'}`);
+      }
+    }
+    const uniq = [...new Set(hits)];
+    res('split', uniq.length === 0, uniq.length === 0 ? 'No picture crosses the split or sits near its arrow button.' : `Element crosses the split: ${uniq.join('; ')}.`, uniq.length, 0);
   }
 
   return out;

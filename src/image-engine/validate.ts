@@ -172,6 +172,8 @@ export function validatePlan(plan: unknown): string[] {
     if (!isColor(c.background)) errors.push(`The background "${String(c.background)}" is not a colour.`);
   }
   if (p.meta !== undefined) {
+    const kc = (p.meta as { keepClear?: unknown } | null)?.keepClear;
+    if (kc !== undefined && !(Array.isArray(kc) && kc.every((b) => b && ['split', 'arrow'].includes(b.name) && ['x', 'y', 'width', 'height'].every((k) => Number.isFinite(b[k]))))) errors.push('meta.keepClear must be a list of areas, each with a name (split or arrow), x, y, width and height.');
     const t = (p.meta as { elementTags?: unknown } | null)?.elementTags;
     if (typeof p.meta !== 'object' || p.meta === null || (t !== undefined && !(Array.isArray(t) && t.every((x) => typeof x === 'string')))) errors.push('meta.elementTags must be a list of words.');
   }

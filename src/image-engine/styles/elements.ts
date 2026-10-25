@@ -53,6 +53,8 @@ export interface PlaceInput {
   height: number;
   /** Slide type, so a style can leave some types alone. */
   type: string;
+  /** Areas the layout keeps free (the split line and its arrow button). */
+  keepClear?: Box[];
   /** The palette's name, so a rule can recolour differently per palette. */
   paletteName?: string;
   /** What the slide is about (2 to 4 tags). Rules with match "slide" use only elements linked to these. */
@@ -90,13 +92,20 @@ export function placeElements(inp: PlaceInput): Placed {
 
   // What is already on the slide: text ink and anything that is content or a container.
   const occupied: Box[] = [];
+  const owner = new Map<Box, string>();
+  const texts = new Map<string, { box: Box; lineStep: number; lastLine: { x: number; width: number } }>();
   let headline: Box | null = null;
   for (const l of inp.layers) {
     if (l.visible === false) continue;
     if (l.kind === 'text') {
       if (l.role === 'decor') continue;
-      const b = textInk(l as TextLayer).box;
-      occupied.push(inflate(b, gap));
+      const ink = textInk(l as TextLayer);
+      const b = ink.box;
+      const inf = inflate(b, gap);
+      occupied.push(inf);
+      owner.set(inf, l.id);
+      const last = ink.block.lines.filter((x) => x.text).pop();
+      texts.set(l.id, { box: b, lineStep: ink.block.lineStep, lastLine: { x: l.x + (last?.x ?? 0), width: last?.width ?? b.width } });
       if (!headline && /^(headline|quote|label|value)$/.test(l.id)) headline = b;
     } else if (l.role === 'content' || l.role === 'container' || l.role === undefined) {
       if (l.id === 'bg') continue;
@@ -108,17 +117,21 @@ export function placeElements(inp: PlaceInput): Placed {
     }
   }
 
+  const keep = new Set<Box>(inp.keepClear ?? []);
+  for (const k of keep) occupied.push(k);
+  const fullness = occupied.filter((o) => !(o.width >= W - 1)).reduce((n, o) => n + Math.max(0, Math.min(o.x + o.width, W) - Math.max(o.x, 0)) * Math.max(0, Math.min(o.y + o.height, H) - Math.max(o.y, 0)), 0) / (W * H);
   const target = Math.round(between(spec.density.min, spec.density.max + 0.999));
   const placed: Box[] = [];
   // A shadow or a sticker outline spreads past the element's box, so that space must be free too.
-  const room = (b: Box, bleed: boolean, pad = 0) => {
+  const room = (b: Box, bleed: boolean, pad = 0, ignoreOwner?: string, tight = false) => {
     const vis: Box = bleed ? { x: Math.max(0, b.x), y: Math.max(0, b.y), width: Math.min(W, b.x + b.width) - Math.max(0, b.x), height: Math.min(H, b.y + b.height) - Math.max(0, b.y) } : b;
     // The sticker outline and shadow grow the picture, so keep the grown shape inside the slide too.
     const grow = Math.min(pad, 24);
     if (!bleed && (b.x - grow < 8 || b.y - grow < 8 || b.x + b.width + grow > W - 8 || b.y + b.height + grow > H - 8)) return false;
     if (vis.width <= 0 || vis.height <= 0) return false;
     const probe = pad ? inflate(vis, pad) : vis;
-    return !occupied.some((o) => overlaps(probe, o)) && !placed.some((p) => overlaps(vis, p));
+    // A frame sits close to its text, so it is checked against the other text itself, not the clear space kept around it.
+    return !occupied.some((o) => !(ignoreOwner && owner.get(o) === ignoreOwner) && overlaps(probe, tight && !keep.has(o) ? inflate(o, -gap + 18) : o)) && !placed.some((p) => overlaps(vis, p));
   };
 
   const candidatesFor = (zone: string, w: number, h: number): [number, number][] => {
@@ -194,18 +207,65 @@ export function placeElements(inp: PlaceInput): Placed {
       }
       const size = between(rule.size[0], rule.size[1]);
       const aspect = test ? test.width / test.height : info!.width / info!.height;
-      const w = aspect >= 1 ? size : size * aspect;
-      const h = aspect >= 1 ? size / aspect : size;
+      let w = aspect >= 1 ? size : size * aspect;
+      let h = aspect >= 1 ? size / aspect : size;
+      // Decoration needs a job. frame: a ring round the big number, a line under the headline. point: an arrow in the real gap
+      // under the headline, pointing down at what follows. gap: only on a slide that has room, with extra clear space around it.
+      let fixed: { x: number; y: number; rot: number; ignore?: string } | null = null;
+      let rot: number | null = null;
+      if (rule.role === 'frame') {
+        const isRing = rule.tags.includes('circle') || (info?.tags ?? []).includes('circle');
+        const tgt = isRing ? texts.get('value') : texts.get('headline') ?? texts.get('quote');
+        if (!tgt) {
+          notes.push(`No ${isRing ? 'ring' : 'underline'}: there is no ${isRing ? 'big number' : 'headline'} on this slide to frame.`);
+          continue;
+        }
+        if (isRing) {
+          const needW = tgt.box.width + 60;
+          const needH = tgt.box.height + 30;
+          w = Math.max(needW, needH * aspect);
+          h = w / aspect;
+          fixed = { x: tgt.box.x + tgt.box.width / 2 - w / 2, y: tgt.box.y + tgt.box.height / 2 - h / 2, rot: 0, ignore: 'value' };
+        } else {
+          w = Math.min(Math.max(tgt.lastLine.width * 0.9, 160), Math.min(rule.size[1] * 1.6, W - 2 * 76));
+          h = w / aspect;
+          fixed = { x: tgt.lastLine.x, y: tgt.box.y + tgt.box.height + 2, rot: 0, ignore: texts.has('headline') ? 'headline' : 'quote' };
+        }
+      } else if (rule.role === 'point') {
+        const hb = texts.get('headline') ?? texts.get('quote');
+        const below = [...texts.entries()].filter(([id, t]) => id !== 'headline' && id !== 'quote' && t.box.y > (hb ? hb.box.y + hb.box.height : H)).sort((a, b) => a[1].box.y - b[1].box.y)[0];
+        if (!hb || !below) {
+          notes.push('No arrow: there is nothing under the headline for it to point at.');
+          continue;
+        }
+        const room0 = below[1].box.y - (hb.box.y + hb.box.height) - 2 * gap;
+        if (room0 < 110) {
+          notes.push('No arrow: the gap under the headline is too small.');
+          continue;
+        }
+        // Turned to point down: the picture's width runs along the gap.
+        w = Math.min(rule.size[1], room0);
+        h = w / aspect;
+        const vw = h;
+        const cx = hb.box.x + Math.max(vw / 2 + 10, 90);
+        const cy = hb.box.y + hb.box.height + gap + w / 2;
+        fixed = { x: cx - w / 2, y: cy - h / 2, rot: 90 };
+        rot = 90;
+      } else if (rule.role === 'gap' && fullness > 0.5) {
+        notes.push('No decoration: this slide is already full.');
+        continue;
+      }
       // A shadow spreads about a third of the picture's size, so big stickers need more clear space than small ones.
-      const pad = (rule.shadow ? 40 + 0.3 * Math.max(w, h) : 0) + (rule.sticker && spec.sticker ? spec.sticker.width : 0);
-      const spot = candidatesFor(rule.zone, w, h).find(([x, y]) => room({ x, y, width: w, height: h }, bleed, pad));
+      const pad = (rule.shadow ? 40 + 0.3 * Math.max(w, h) : 0) + (rule.sticker && spec.sticker ? spec.sticker.width : 0) + (rule.role === 'gap' ? gap * 1.5 : 0);
+      const visual = (x: number, y: number): Box => (rot === 90 ? { x: x + w / 2 - h / 2, y: y + h / 2 - w / 2, width: h, height: w } : { x, y, width: w, height: h });
+      const spot = fixed ? (room(visual(fixed.x, fixed.y), false, 0, fixed.ignore, true) ? ([fixed.x, fixed.y] as [number, number]) : undefined) : candidatesFor(rule.zone, w, h).find(([x, y]) => room({ x, y, width: w, height: h }, bleed, pad));
       if (!spot) {
         notes.push(`No free space for ${test ? test.name : info!.id} (zone ${rule.zone}).`);
         continue;
       }
       // What is kept clear around this one for the next ones: its own box plus most of its shadow and sticker outline.
-      placed.push(inflate({ x: spot[0], y: spot[1], width: w, height: h }, 10 + pad * 0.75));
-      const common = { id: `el-${out.length + 1}`, role: 'decor' as const, x: Math.round(spot[0]), y: Math.round(spot[1]), width: Math.round(w), height: Math.round(h), rotation: rule.rotate ? Math.round(between(rule.rotate[0], rule.rotate[1])) : 0, opacity: rule.opacity ?? 1 };
+      placed.push(inflate(visual(spot[0], spot[1]), 10 + pad * 0.75));
+      const common = { id: `el-${out.length + 1}`, role: 'decor' as const, x: Math.round(spot[0]), y: Math.round(spot[1]), width: Math.round(w), height: Math.round(h), rotation: fixed ? fixed.rot : rule.rotate ? Math.round(between(rule.rotate[0], rule.rotate[1])) : 0, opacity: rule.opacity ?? 1 };
       if (test) {
         const layer: ImageLayer = { ...common, name: `TEST ASSET: ${test.name}`, kind: 'image', src: test.url, fit: 'contain' };
         out.push(layer);

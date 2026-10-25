@@ -154,6 +154,10 @@ export function baSplit(c: LCtx, s: S<'beforeafter'>) {
   c.notes.push(...aft.notes);
   add(c, aft.layer);
   const bx = W - M - seam;
+  // No picture may sit across the line where the slide splits, or near the round arrow button on it.
+  const band = seam / 2 + gap + 28;
+  c.keepClear.push({ name: 'split', x: 0, y: half - band, width: W, height: 2 * band });
+  c.keepClear.push({ name: 'arrow', x: bx - 90, y: half - seam / 2 - 90, width: seam + 180, height: seam + 180 });
   add(c, ellipse('seam', 'container', bx, half - seam / 2, seam, seam, bot.accent, { stroke: t.shape.outline ? { color: bot.line, width: t.shape.outline } : undefined }));
   add(c, icon('arrow-down', 'seam-arrow', bx + seam * 0.25, half - seam * 0.25, seam * 0.5, bot.onAccent, t.shape.stroke));
 }
@@ -190,6 +194,8 @@ export function baCards(c: LCtx, s: S<'beforeafter'>) {
   const la = labelText(t, c.pal, 'after-label', M + pad, y2 + pad, s.afterLabel, { color: c.pal.onAccent });
   add(c, la.layer, { ...a.layer, y: y2 + pad + lab + 20 });
   add(c, icon('arrow-down', 'between', W - M - 90, y0 + h1 + (gap - 56) / 2, 56, c.pal.text, t.shape.stroke));
+  c.keepClear.push({ name: 'split', x: 0, y: y0 + h1 - 28, width: W, height: gap + 56 });
+  c.keepClear.push({ name: 'arrow', x: W - M - 90 - 90, y: y0 + h1 + (gap - 56) / 2 - 90, width: 56 + 180, height: 56 + 180 });
 }
 
 /** Quote: two big quote marks, the quote at the left, a short rule, the source. */

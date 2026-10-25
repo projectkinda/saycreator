@@ -25,6 +25,8 @@ export interface GenState {
   /** Plain-language problems, when the writer's answer could not be used. */
   problems?: string[];
   message?: string;
+  /** Why "Pick for me" chose the style it did. */
+  styleWhy?: string;
 }
 
 export function useWriters() {

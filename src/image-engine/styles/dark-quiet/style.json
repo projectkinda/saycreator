@@ -2,6 +2,8 @@
   "schema": 1,
   "name": "dark-quiet",
   "title": "Quiet dark minimal",
+  "description": "Calm, minimal and serious: few words, lots of space, for reflective or careful topics.",
+  "suits": { "tones": ["clear", "expert"], "keywords": ["calm", "quiet", "mindful", "focus", "slow", "design", "minimal", "wellbeing", "health", "sleep", "privacy", "research", "essay", "reflection", "philosophy", "thoughtful", "careful", "principle", "principles"], "slideTypes": ["content", "quote"] },
   "version": "1.0.0",
   "basedOn": {
     "cluster": "dark-quiet",

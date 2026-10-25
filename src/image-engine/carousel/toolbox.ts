@@ -106,7 +106,7 @@ const lastIsOrphan = (lines: string[]) => lines.length >= 2 && lines[lines.lengt
  * Returns null if no way exists at this width.
  */
 function balancedLines(text: string, maxWidth: number, font: FontFamily, weight: number, size: number, minLines: number): string[] | null {
-  const words = text.split(/\s+/).filter(Boolean);
+  const words = text.split(/[^\S\u00A0]+/).filter(Boolean);
   const m = words.length;
   if (m < 3) return null;
   const memo = new Map<string, number>();

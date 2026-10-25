@@ -7,7 +7,8 @@ import { composeStyled, type StyledSlide } from '../image-engine/styles/compose'
 import { useDocumentTitle } from '../useDocumentTitle';
 import { validateScript, validateScriptText, exampleScript, formatOf, scriptPrompt, SLIDE_RANGE, type Format, type ScriptResult } from './script';
 import { DEFAULT_OPTIONS, patches } from './doc';
-import { MakeIt, runGenerate, styleForTone, useWriters, type GenState } from './MakeIt';
+import { MakeIt, runGenerate, useWriters, type GenState } from './MakeIt';
+import { pickStyle } from './pickStyle';
 import { type WriteRequest } from './writerPrompt';
 import { downloadBlob, exportAllAsZip, slideFileName, zipFileName } from './export';
 import { composeDoc, getStyles, renderer, styleByName, type Rendered } from './render';
@@ -270,7 +271,7 @@ export default function CarouselPage() {
       tone: options.tone,
       format: doc.format,
       styleChoice: options.autoStyle ? 'auto' : doc.style,
-      styles: getStyles().styles.map((x) => ({ name: x.spec.name, title: x.spec.title })),
+      styles: getStyles().styles.map((x) => ({ name: x.spec.name, title: x.spec.title, description: x.spec.description })),
     };
     setGen({ phase: 'writing' });
     setNotice('');
@@ -279,11 +280,13 @@ export default function CarouselPage() {
     if (!r.ok) return setGen(r.state);
     const { result } = r;
     const known = getStyles().styles.map((x) => x.spec.name);
-    const style = options.autoStyle ? (result.style && known.includes(result.style) ? result.style : styleForTone(options.tone)) : null;
-    const withHandle = { ...result.script, brand: { ...result.script.brand, handle: options.handle.trim() || '@yourname' } };
+    // "Pick for me": scored from the tone, the words of the text and the slide types; the writer's own suggestion counts one point.
+    const pick = options.autoStyle ? pickStyle({ text: doc.topic, tone: options.tone, slideTypes: result.script.slides.map((x) => x.type), styles: getStyles().styles, writerSuggestion: result.style && known.includes(result.style) ? result.style : null }) : null;
+    const style = pick ? pick.name : null;
+    const withHandle = { ...result.script, brand: { ...result.script.brand, handle: options.handle.trim() || result.script.brand.handle } };
     const done = apply(patches.generate(withHandle, style, GEN_LABEL));
     if (!done.ok) return setGen({ phase: 'error', message: 'The script could not be used: ' + done.reasons[0] + ' Your text is kept.' });
-    setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…` });
+    setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…`, styleWhy: pick?.why });
   };
   const cancel = () => {
     if (gen.phase === 'drawing') {
@@ -301,8 +304,9 @@ export default function CarouselPage() {
     if (drawnCount >= slides.length) {
       const note = gen.note ? ` Note from the writer: ${gen.note}` : '';
       const retry = gen.attempts === 2 ? ' It needed a second try.' : '';
+      const why = gen.styleWhy ? ` Style: ${gen.styleWhy}` : '';
       const handle = options.handle.trim() ? '' : ' The last slide shows the placeholder @yourname: type your handle above to replace it.';
-      setGen((g) => ({ ...g, phase: 'done', message: `Done: ${slides.length} ${doc.format === 'quote' ? 'cards' : 'slides'} in ${((gen.ms ?? 0) / 1000).toFixed(0)} s of writing.${retry}${note}${handle} Edit anything below.` }));
+      setGen((g) => ({ ...g, phase: 'done', message: `Done: ${slides.length} ${doc.format === 'quote' ? 'cards' : 'slides'} in ${((gen.ms ?? 0) / 1000).toFixed(0)} s of writing.${retry}${why}${note}${handle} Edit anything below.` }));
     } else setGen((g) => (g.phase === 'drawing' ? { ...g, message: `Drawing slide ${drawnCount + 1} of ${slides.length}…` } : g));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawnCount, slides.length, gen.phase]);

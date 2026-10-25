@@ -159,7 +159,11 @@ export interface Plan {
   /** Back to front. */
   layers: Layer[];
   /** What the slide is about, for checking that pictures fit it. Optional; old plans do not have it. */
-  meta?: { elementTags?: string[] };
+  meta?: {
+    elementTags?: string[];
+    /** Areas a layout wants kept free of pictures: the line where a slide splits in two, and the arrow button on it. */
+    keepClear?: { name: 'split' | 'arrow'; x: number; y: number; width: number; height: number }[];
+  };
 }
 
 export type Op =

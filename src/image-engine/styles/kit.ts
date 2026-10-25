@@ -1,6 +1,6 @@
 // Shared helpers for the layout catalogue. A layout is a function that adds layers to a slide using the style's tokens.
-import { layoutText } from '../draw/text';
-import type { Highlight, Layer } from '../types';
+import { glueWords, layoutText } from '../draw/text';
+import type { Highlight, Layer, Plan } from '../types';
 import { background, buildText, marker, sticker, type Built } from '../carousel/toolbox';
 import type { Palette, Theme } from '../carousel/types';
 import type { StyleSpec } from './format';
@@ -30,6 +30,8 @@ export interface LCtx {
   occurrence: number;
   layers: Layer[];
   notes: string[];
+  /** Areas a layout wants kept free of pictures (a split line and its arrow button). Pictures are never placed there, and the check fails if one is. */
+  keepClear: NonNullable<NonNullable<Plan['meta']>['keepClear']>;
   params: Record<string, string | number | boolean>;
 }
 
@@ -71,8 +73,12 @@ export function head(c: LCtx, id: string, text: string, o: HeadOpts): Built {
   const pal = o.pal ?? c.pal;
   const x = o.x ?? c.M;
   const width = o.width ?? c.W - 2 * c.M;
+  const written = o.asWritten ? text : cased(c, text);
+  const size0 = o.size ?? t.type.headline;
+  // A highlighted phrase stays on one line when it fits, so its bar is one block.
+  const glued = o.words?.length && (o.mark ?? 'words') === 'words' ? glueWords(written, o.words, width, t.fonts.headline, t.fonts.headlineWeight, size0) : written;
   const built = buildText({
-    id, x, y: o.region[0], width, text: o.asWritten ? text : cased(c, text), font: t.fonts.headline, weight: t.fonts.headlineWeight,
+    id, x, y: o.region[0], width, text: glued, font: t.fonts.headline, weight: t.fonts.headlineWeight,
     size: o.size ?? t.type.headline, minSize: o.min ?? 64, maxHeight: o.region[1] - o.region[0], color: o.color ?? pal.text, lineHeight: c.style.headlineLineHeight, align: o.align ?? 'left',
   });
   c.notes.push(...built.notes);

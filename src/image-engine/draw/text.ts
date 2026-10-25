@@ -10,12 +10,46 @@ function measureCtx() {
   return ctx;
 }
 
+const clean = (w: string) => w.replace(/[^\p{L}\p{N}'-]/gu, '').toLowerCase();
+
 export const fontString = (font: FontFamily, weight: number, size: number) => `${weight} ${size}px "${font}"`;
 
 export function measureWidth(text: string, font: FontFamily, weight: number, size: number): number {
   const c = measureCtx();
   c.font = fontString(font, weight, size);
   return c.measureText(text).width;
+}
+
+/**
+ * Keeps a highlighted phrase on one line, so its bar is one continuous block and never two blocks on two lines.
+ * Consecutive marked words are joined with no-break spaces, if the whole phrase fits in 92% of the width. A phrase
+ * that is wider than a line is left alone (it must wrap, and its bars then touch line to line).
+ */
+export function glueWords(text: string, words: string[], width: number, font: FontFamily, weight: number, size: number): string {
+  const marked = new Set(words.map((w) => clean(w)).filter(Boolean));
+  if (marked.size === 0 || !text.includes(' ')) return text;
+  return text
+    .split('\n')
+    .map((para) => {
+      const toks = para.split(/[^\S\u00A0]+/).filter(Boolean);
+      const out: string[] = [];
+      let run: string[] = [];
+      const flush = () => {
+        if (run.length >= 2 && measureWidth(run.join(' '), font, weight, size) <= width * 0.92) out.push(run.join('\u00A0'));
+        else out.push(...run);
+        run = [];
+      };
+      for (const t of toks) {
+        if (marked.has(clean(t))) run.push(t);
+        else {
+          flush();
+          out.push(t);
+        }
+      }
+      flush();
+      return out.join(' ');
+    })
+    .join('\n');
 }
 
 export interface Wrapped {
@@ -29,7 +63,8 @@ export function wrapText(text: string, maxWidth: number, font: FontFamily, weigh
   const lines: string[] = [];
   let wordTooWide = false;
   for (const para of text.split('\n')) {
-    const words = para.split(/\s+/).filter(Boolean);
+    // Only ordinary white space breaks a line: a no-break space (U+00A0) keeps two words together.
+    const words = para.split(/[^\S\u00A0]+/).filter(Boolean);
     if (words.length === 0) {
       lines.push('');
       continue;
@@ -111,7 +146,6 @@ export interface TextBlock {
   why?: Fit['why'];
 }
 
-const clean = (w: string) => w.replace(/[^\p{L}\p{N}'-]/gu, '').toLowerCase();
 
 /** Everything the renderer needs to draw a text layer: size, lines, word positions, highlight runs. */
 export function layoutText(layer: TextLayer): TextBlock {
