@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import react from '@vitejs/plugin-react';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { carouselHandler } from './server/carousel-writer';
 
 /** Dev-only JSON endpoints for the /lab page: the test pictures and the Step 2 thumbnail outputs with their checks. */
 function labEndpoints(): Plugin {
@@ -254,8 +255,26 @@ function labEndpoints(): Plugin {
   };
 }
 
+/**
+ * The one-shot carousel writers (see server/carousel-writer.ts). Only the dev server mounts them, so a production build has neither.
+ *   /__carousel  runs the Claude Code command line on this computer (dev only)
+ *   /api/carousel  uses ANTHROPIC_API_KEY from the server's environment or an untracked .env file; off when there is none
+ * The key is read here, on the server, and never reaches client code.
+ */
+function carouselWriters(): Plugin {
+  return {
+    name: 'carousel-writers',
+    apply: 'serve',
+    configureServer(server) {
+      const env = { ...process.env, ...loadEnv('development', process.cwd(), ['ANTHROPIC_', 'CLAUDE_', 'CAROUSEL_']) };
+      server.middlewares.use('/__carousel', carouselHandler('dev-cli', { env }));
+      server.middlewares.use('/api/carousel', carouselHandler('api', { env }));
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), labEndpoints()],
+  plugins: [react(), labEndpoints(), carouselWriters()],
   optimizeDeps: { include: ['onnxruntime-web/webgpu'] },
   worker: { format: 'es' },
   // Cross-origin isolation lets the WASM backend use several threads. 'credentialless' keeps

@@ -25,3 +25,8 @@ src/image-engine/assets/packs/
 # Your private test assets: never committed, never bundled
 test-assets/*
 !test-assets/README.txt
+
+# Local secrets and settings (see .env.example)
+.env
+.env.*
+!.env.example
