@@ -27,6 +27,8 @@ export interface ResultsItem {
   facts?: string[];
   /** For example "TOY: plumbing test only" or "REAL". */
   tag?: string;
+  /** Words for the verdict buttons, in place of good / meh / bad. */
+  verdictWords?: string[];
   /** A failure to show instead of hiding. */
   error?: string;
 }

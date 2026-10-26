@@ -1,0 +1,16 @@
+{
+  "id": "photo-travel-lessons",
+  "title": "Photo deck: what a month of slow travel taught me",
+  "note": "Step 11 photo deck. Two content slides and a step, a stat and a quote.",
+  "aspect": "4:5",
+  "brand": { "handle": "@slow.miles" },
+  "slides": [
+    { "type": "cover", "kicker": "Slow travel", "headline": "Collect moments, not things", "sub": "What a month away taught me.", "highlight": "moments", "element_tags": ["idea", "time"], "photo_hint": "a figure on a beach at sunset" },
+    { "type": "content", "headline": "Leave the plan loose", "body": "Book the first night and the last. Fill the rest as you go.", "highlight": "loose", "element_tags": ["time", "target"], "photo_hint": "an empty road" },
+    { "type": "step", "number": 1, "headline": "Walk before you ride", "body": "The best places are between the sights.", "element_tags": ["people", "idea"] },
+    { "type": "content", "headline": "Talk to one local a day", "body": "A short chat beats a long guidebook.", "element_tags": ["people", "message"], "photo_hint": "two people talking at a market" },
+    { "type": "stat", "kicker": "On the road", "value": "30", "label": "days with one small bag", "note": "Placeholder: use your own number", "element_tags": ["time", "money"], "photo_hint": "a small bag by a window" },
+    { "type": "quote", "quote": "The best photos happen when you stop trying to take them.", "by": "A travel friend", "highlight": "stop trying", "element_tags": ["idea", "write"], "photo_hint": "an out of focus lit street" },
+    { "type": "closing", "headline": "Plan less, notice more", "cta": "Save this for your next trip", "highlight": "notice more", "element_tags": ["launch", "love"] }
+  ]
+}

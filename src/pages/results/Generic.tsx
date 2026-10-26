@@ -22,6 +22,8 @@ export interface StepManifest {
       facts?: string[];
       /** A label such as "TOY: plumbing test only" or "REAL". */
       tag?: string;
+      /** Words for the verdict buttons, in place of good / meh / bad (for example matches, close, off, wrong). */
+      verdictWords?: string[];
       error?: string;
     }[];
   }[];
@@ -55,7 +57,7 @@ export default function Generic({ manifest, lastRun, onRefresh, busy }: { manife
                   {it.facts && it.facts.length > 0 && <p className="small muted">{it.facts.join(' · ')}</p>}
                   {it.error && <p className="lab-err" role="alert">{it.error}</p>}
                   {it.checker && <CheckLine failed={failed} />}
-                  <VerdictBox label={`${it.title} (${g.title})`} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} />
+                  <VerdictBox label={`${it.title} (${g.title})`} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} {...(it.verdictWords ? { options: it.verdictWords.map((w) => ({ value: w, label: w })) } : {})} />
                 </div>
               );
             })}

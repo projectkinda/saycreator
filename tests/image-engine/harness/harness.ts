@@ -25,6 +25,9 @@ import {
   validatePlan,
   checkCarousel,
   checkSlidePlan,
+  analysePhoto,
+  checkWithRepair,
+  type PhotoInput,
   composeCarousel,
   composeStyled,
   loadStyles,
@@ -532,6 +535,10 @@ interface StyleRunOpts {
   chrome?: 'none' | 'dots-swipe' | 'page-number' | 'strip';
   anyCount?: boolean;
   elements?: 'shippable' | 'test';
+  /** Photos with their numbers (see analysePhotos). */
+  photos?: PhotoInput[];
+  /** Add an overlay or plate when words on a photo still fail contrast. */
+  repair?: boolean;
   testAssets?: { name: string; url: string; width: number; height: number; tags: string[] }[];
   elementMatching?: 'tags' | 'ignore';
   /** "before-starbursts": hot-flat as it was before the starburst colour fix, to show before and after. */
@@ -590,13 +597,48 @@ async function styleRun(script: CarouselScript, styleName: string, opts: StyleRu
   const out = [];
   try {
     for (const s of slides) {
-      const c = await checkSlidePlan(a, s, style.spec.spacing.margin);
-      out.push({ id: s.id, type: s.type, layout: s.layout, rule: s.rule, palette: s.palette, because: s.because, elementsUsed: s.elementsUsed, elementTags: s.elementTags ?? null, elementLinks: s.elementLinks ?? [], notes: s.notes, plan: s.plan, lint: c.lint, warnings: c.render.warnings, png: await toBase64(c.png), phone: await toBase64(c.phonePng) });
+      const c = opts.repair ? await checkWithRepair(a, s, style.spec.spacing.margin) : await checkSlidePlan(a, s, style.spec.spacing.margin);
+      const used = (c as { slide: typeof s }).slide;
+      out.push({ repairs: (c as { repairs?: string[] }).repairs ?? [], photoSlots: used.plan.meta?.photoSlots ?? [], id: s.id, type: s.type, layout: s.layout, rule: s.rule, palette: s.palette, because: s.because, elementsUsed: s.elementsUsed, elementTags: s.elementTags ?? null, elementLinks: s.elementLinks ?? [], notes: used.notes, plan: used.plan, lint: c.lint, warnings: c.render.warnings, png: await toBase64(c.png), phone: await toBase64(c.phonePng) });
     }
   } finally {
     a.dispose();
   }
   return out;
+}
+
+/** Reads each photo into the grid the text placement uses. */
+async function analysePhotos(items: { id: string; url: string; label?: string; focal?: { x: number; y: number }; synthetic?: boolean }[]): Promise<PhotoInput[]> {
+  return Promise.all(items.map((i) => analysePhoto(i.url, i.id, { label: i.label, focal: i.focal, synthetic: i.synthetic })));
+}
+
+/** A glossy object on a transparent background, drawn in code. A STAND-IN for the 3D objects the person has not supplied yet: it is labelled as synthetic wherever it is shown. */
+async function syntheticObject() {
+  const S = 700;
+  const c = document.createElement('canvas');
+  c.width = S;
+  c.height = S;
+  const g = c.getContext('2d')!;
+  const sphere = g.createRadialGradient(S * 0.38, S * 0.32, S * 0.04, S * 0.5, S * 0.5, S * 0.34);
+  sphere.addColorStop(0, '#fff3ff');
+  sphere.addColorStop(0.18, '#c9a2ff');
+  sphere.addColorStop(0.62, '#6a35d6');
+  sphere.addColorStop(1, '#24104f');
+  g.fillStyle = sphere;
+  g.beginPath();
+  g.arc(S * 0.5, S * 0.5, S * 0.34, 0, Math.PI * 2);
+  g.fill();
+  g.lineWidth = S * 0.05;
+  const ring = g.createLinearGradient(0, S * 0.3, S, S * 0.7);
+  ring.addColorStop(0, '#ffe9fb');
+  ring.addColorStop(0.5, '#ff7ad9');
+  ring.addColorStop(1, '#7b2d9e');
+  g.strokeStyle = ring;
+  g.beginPath();
+  g.ellipse(S * 0.5, S * 0.52, S * 0.46, S * 0.13, -0.35, 0, Math.PI * 2);
+  g.stroke();
+  const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), 'image/png'));
+  return { b64: await toBase64(blob), width: S, height: S };
 }
 
 /** Plans only, no drawing. */
@@ -628,6 +670,8 @@ const styleValidate = (raw: unknown, folder: string) => validateStyle(raw, folde
   elementFind: findElements,
   styleList,
   styleRun,
+  analysePhotos,
+  syntheticObject,
   styleCompose,
   styleCheckPlan,
   svgCheck,

@@ -1,0 +1,16 @@
+{
+  "id": "photo-creator-habits",
+  "title": "Photo deck: small habits that grow a following",
+  "note": "Step 11 photo deck. Three content slides, a stat and a quote, so every photo layout gets used.",
+  "aspect": "4:5",
+  "brand": { "handle": "@maya.makes" },
+  "slides": [
+    { "type": "cover", "kicker": "Creator habits", "headline": "Small habits that grow a following", "sub": "Seven minutes a day is enough.", "highlight": "grow", "element_tags": ["growth", "time"], "photo_hint": "a city street at dusk" },
+    { "type": "content", "headline": "Show up before you feel ready", "body": "Post the rough version. Ten rough posts teach more than one perfect plan.", "highlight": "rough", "element_tags": ["write", "time"], "photo_hint": "a person starting something, morning light" },
+    { "type": "content", "headline": "One idea per post", "body": "People remember a single point. Cut the rest.", "highlight": "One idea", "element_tags": ["idea", "target"], "photo_hint": "one object on a plain table" },
+    { "type": "content", "headline": "Look at what people save", "body": "Saves show what is useful. Make more of it.", "element_tags": ["proof", "search"], "photo_hint": "a notebook and a phone" },
+    { "type": "stat", "kicker": "After 90 days", "value": "3x", "label": "more reach for people who post every week", "note": "Placeholder: use your own number", "element_tags": ["growth", "money"], "photo_hint": "a wide, calm landscape" },
+    { "type": "quote", "quote": "Consistency beats intensity every single time.", "by": "A creator you admire", "highlight": "Consistency", "element_tags": ["idea", "write"], "photo_hint": "a quiet street, out of focus" },
+    { "type": "closing", "headline": "Start with one post today", "cta": "Follow for more", "highlight": "one post", "element_tags": ["launch", "love"] }
+  ]
+}

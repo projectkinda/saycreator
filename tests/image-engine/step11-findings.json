@@ -1,0 +1,97 @@
+{
+  "styles": {
+    "mono-poster": {
+      "verdict": "close",
+      "reason": "Huge upper-case caps, black-and-white photo posters, one red-orange and a solid colour slide between them read as the same family as the Los Angeles poster deck. The subject matter and the hand-lettered accent word are what is missing.",
+      "close": [
+        "Cover, stat and quote slides: a black-and-white photo fills the slide with huge caps and a red-orange bar behind the key words.",
+        "The rhythm of near-black, off-white and red-orange slides, and the small label strip at the top."
+      ],
+      "weak": [
+        "Your test photos are mostly dark, moody street and landscape scenes. Crushed to black and white with an overlay under the words, the cover and the stat slide are very dark and the photo is hard to make out.",
+        "The strip, the offset red block behind a photo and the polaroid-like frames are not in the reference; they were used here to show the frame kit.",
+        "Words sit over or beside a photo, never layered behind a subject as in the reference."
+      ],
+      "couldNot": [
+        "The brush-script accent word over the caps: no script font is bundled, and drawing letters as paths would not be editable text.",
+        "The reference subjects (a skyline at night, a skateboarder, palm trees): none of your photos has them."
+      ],
+      "cutouts": [
+        "The palm-tree silhouette standing on the red slide, and any figure with type tucked behind it, need a transparent cutout. None was supplied, so they were not faked."
+      ]
+    },
+    "film-paper": {
+      "verdict": "off",
+      "reason": "The mood is there (warm film tone, grain, lime type, a polaroid, a ticket, a flower-shaped crop), but the layered paper notes, tape, stickers, hand lettering and tall serif that make the reference a collage are not, so it reads as a tidy cousin, not the same deck.",
+      "close": [
+        "The full-bleed film-toned cover and stat with lime bars behind the key words, the dark, cream and lime rhythm, and the polaroid slide.",
+        "The flower-shaped photo crop on a cream cover."
+      ],
+      "weak": [
+        "The film look is one recipe (a little tint, grain, vignette); it looks the same on every photo, which a real film stock would not.",
+        "The 3-up strip reads as a gallery, not the reference's collage.",
+        "The ticket frame has the cut-outs and a tear line but only the words ADMIT ONE: no barcode, route or text like the reference's boarding pass."
+      ],
+      "couldNot": [
+        "The tall serif, condensed and handwriting fonts of the reference: only Schibsted Grotesk and Instrument Sans are bundled.",
+        "The ruled paper note, the torn poster with tear-off tabs, tape, stickers and the airplane-window crop. No torn-paper or tape drawing was built, and there is no window-shaped mask."
+      ],
+      "cutouts": [
+        "Nearly every reference photo has a person with type partly behind them. That needs a cutout of the person; none was supplied."
+      ]
+    },
+    "glass-gradient": {
+      "verdict": "close",
+      "reason": "The soft peach and dark gradient fields, the glass card over a blurred photo, pill labels and light type are close to the reference deck. The glossy 3D object, the very thin type and the hairline header are not there.",
+      "close": [
+        "Gradient field slides on light and dark, the glass card (over a photo, blurred) with the words in it, the pill kicker and the swipe cue.",
+        "A phone frame with a photo on a gradient field, as a teaching slide."
+      ],
+      "weak": [
+        "The lightest bundled headline weight is 600, so the type is heavier than the reference's thin type.",
+        "On the dark slides the colour field had to be kept very faint (blob strength 12 to 24 per cent): at full strength bright orange sat under orange words and failed the 4.5:1 check. They look browner and flatter than the glowing reference.",
+        "The glass card is a plain rounded box; the reference also has a folder-shaped one.",
+        "The reference is mostly gradients and one object. Your photos replace the object, so the decks look more photographic than the reference."
+      ],
+      "couldNot": [
+        "The glossy orange 3D spiral and the glass folder icon.",
+        "The thin light type and the hairline header with the author's name and an arrow."
+      ],
+      "cutouts": [
+        "The 3D object that sits behind the glass card needs a transparent picture of an object. None was supplied; the gallery shows the shadow, reflection and glow effects on a stand-in drawn in code."
+      ]
+    }
+  },
+  "general": [
+    {
+      "title": "Which reference decks the four stored styles did not cover",
+      "tag": "REPORT",
+      "note": "The four stored styles (hot-flat, editorial-collage, object-neon, dark-quiet) cover the colour, type and layout side of 15 of the 16 pictures; none covers the photo side. Uncovered, grouped by what they do: (1) black-and-white poster photography with huge caps and one hot colour: the Los Angeles deck, the halftone portrait deck, the blurred portrait scene, the crimson testimonial deck and the grey-photo percentage deck became Mono photo poster; (2) dark film-look photography with type over it, paper objects and a flower crop: the lime film deck, the cream and brick deck and the butter-yellow collage became Film photo and paper; (3) soft blurred colour fields with a glass card and a leaf photo: the orange gradient deck (the one picture left out of every cluster) and the quiet monochrome deck became Soft gradient and glass. The four glossy 3D-object decks need transparent object pictures, so that fourth style was not built."
+    },
+    {
+      "title": "No transparent pictures were supplied, so there is no 3D-object style and no cutout look",
+      "tag": "WAITING ON CUTOUTS",
+      "note": "test-assets/ holds 20 photographs (JPEG) and no transparent PNG objects. The object effects (soft contact shadow, floor reflection, glow, scale and rotation) work and are shown on a stand-in drawn in code, labelled SYNTHETIC. To build the fourth style, add 6 to 10 transparent PNGs of single glossy objects, and to build the cutout looks, add portrait photos of one person on a plain background (the app's cutout tool can make the transparent version)."
+    },
+    {
+      "title": "Where the test photos fall short of the references",
+      "tag": "WHAT TO ADD",
+      "note": "Your 20 photos are landscapes, streets, a car, a dog and a few small figures. Almost every reference puts a person large in the photo. Add 8 to 10 portrait-orientation photos with a person in them, and 4 to 6 desk, laptop or workspace photos (the references use them), so the people-led looks can be judged. Nothing here shows how a face under a headline behaves."
+    },
+    {
+      "title": "Photo-aware text uses brightness and detail only",
+      "tag": "LIMIT",
+      "note": "Where words go on a photo is chosen from a 12 by 15 grid of how bright and how busy each part is. There is no face or subject finding, so words can land on a person's face. An overlay is worked out from the grid; the phone-size check then decides, and when it still fails the overlay is made stronger and, last, a plate is put behind the words. In this run 4 of 33 photo slides needed that second step, and none ended failing."
+    },
+    {
+      "title": "Empty photo slots",
+      "tag": "TESTED",
+      "note": "With no photos at all, the slides that asked for one (a photo hint) draw a plain panel with a small picture symbol (or a labelled frame) and carry a note on the slide card saying the slot is empty. None fails a check. The warning is a note on the card and in the plan's meta (photoSlots), not one of the eight phone checks."
+    },
+    {
+      "title": "Not tested",
+      "tag": "NOT TESTED",
+      "note": "Only Chrome was used. Treatments use the canvas blur filter, which some other browsers have only recently supported. The photo_hint line was added to the writer prompt, but no real writer (Claude Code or the API) was run with it, so I do not know what hints it writes. Photos are not uploaded in the app yet (the Images screen is untouched), so in the app a photo style shows placeholders on slides that carry a hint and its non-photo layouts everywhere else. The three new styles now appear in the app's style picker and in Pick for me; their effect on Pick for me was not measured. No performance measurement was made."
+    }
+  ]
+}
