@@ -191,7 +191,7 @@ const TEXTS: { id: string; tone: 'clear' | 'bold' | 'friendly' | 'expert'; text:
 
 test('"Pick for me": 8 different texts, which style each picks and why; it does not always pick the same one', async ({ page }) => {
   const styles = (await call<{ styles: { spec: unknown }[] }>(page, 'styleList')).styles as { spec: { name: string; title: string; suits?: unknown } }[];
-  expect(styles.length).toBe(4);
+  expect(styles.length).toBe(7); // four stored styles and the three photo styles of Step 11
   for (const st of styles) expect(st.spec.suits, `${st.spec.name} says what it suits`).toBeDefined();
   const rows = TEXTS.map((t) => {
     const p = pickStyle({ text: t.text, tone: t.tone, slideTypes: t.types, styles: styles as never });
