@@ -6,7 +6,11 @@ export interface CarouselBrand {
   handle: string;
 }
 
-/** Every slide may carry the tags of the pictures that suit it (2 to 4 words), chosen by hand now and by a planner later. */
+/**
+ * Every slide may carry the tags of the pictures that suit it (2 to 4 words), chosen by hand now and by a planner later.
+ * A slide may also name a photo slot: `photo` (the id of a photo the person added) and a short `photo_hint` saying what picture it wants.
+ * With no photo the slot is drawn as a clean placeholder and the slide card carries a warning; it is never an error.
+ */
 export type SlideScript = (
   | { type: 'cover'; kicker?: string; headline: string; sub?: string; highlight?: string }
   | { type: 'content'; headline: string; body: string; highlight?: string }
@@ -16,7 +20,7 @@ export type SlideScript = (
   | { type: 'beforeafter'; beforeLabel: string; before: string; afterLabel: string; after: string }
   | { type: 'quote'; quote: string; by: string; highlight?: string }
   | { type: 'closing'; headline: string; cta: string; highlight?: string }
-) & { element_tags?: string[] };
+) & { element_tags?: string[]; photo?: string; photo_hint?: string };
 
 export interface CarouselScript {
   id: string;

@@ -28,3 +28,9 @@ export { listElements, listPacks, findElements, elementById, getElementSvg, CODE
 export { recolourSvg, prepareElement, shade, coloursOf } from './assets/svg-prepare';
 export { CODE_ELEMENTS } from './assets/code-elements';
 export { CONCEPTS, VOCABULARY, NEUTRAL_TAGS, expandTags, linkScore, isMeaningful, checkElementTags, briefOf, plannerPrompt, planTags, scriptPlanner, applyTagPatch, type ElementPlanner, type SlideBrief, type TagPatch } from './styles/tags';
+export { analysePhoto, analyseImage, loadPicture } from './photo/analyse';
+export { bandOf, pickBand, overlayAlpha, textBackdrop, type PhotoStats, type PhotoInput } from './photo/zones';
+export { checkWithRepair, type RepairedSlide } from './photo/repair';
+export * as frames from './photo/frames';
+export { SHAPE_PATHS } from './draw/shapes';
+export { renderPhoto, renderObject, renderField } from './draw/treat';

@@ -172,11 +172,13 @@ export function validateScript(raw: unknown, format: Format): ScriptResult {
       }
     }
     if (type === 'stat' && typeof s.value === 'string' && s.value.length > 8) warn(at('value'), `${n} number "${s.value}" is long. Big numbers are best at 8 characters or fewer (like 3x, 42%, 5 min); longer ones wrap onto two lines and fail the one-word-last-line check.`);
-    const known = new Set(['type', 'element_tags', ...FIELDS[type].map((f) => f.key)]);
+    const known = new Set(['type', 'element_tags', 'photo', 'photo_hint', ...FIELDS[type].map((f) => f.key)]);
     for (const k of Object.keys(s)) if (!known.has(k)) warn(at(k), `${n} has "${k}", which a ${type} slide does not use. It is ignored.`);
     const hl = s.highlight;
     const src = (s.headline ?? s.quote) as unknown;
     if (typeof hl === 'string' && hl && typeof src === 'string' && findHighlight(src, hl.split(/\s+/).filter(Boolean)).missing.length > 0) warn(at('highlight'), `${n} highlights "${hl}", which is not (all) in its ${s.headline !== undefined ? 'headline' : 'quote'}, so that part will be drawn without it. Punctuation and capital letters do not matter.`);
+    if (s.photo_hint !== undefined && (typeof s.photo_hint !== 'string' || s.photo_hint.length > 90)) err(at('photo_hint'), `${n} "photo_hint" must be a short line of text (at most 90 characters) saying what picture the slide wants.`);
+    if (s.photo !== undefined && (typeof s.photo !== 'string' || !s.photo.trim())) err(at('photo'), `${n} "photo" must be the name of one of your photos, in quotes.`);
     if (s.element_tags === undefined) warn(at('element_tags'), `${n} has no "element_tags", so pictures cannot follow what it says. Add 2 to 4 words, for example ["money", "growth"].`);
     else for (const m of checkElementTags(s.element_tags)) err(at('element_tags'), `${n}: ${m}`);
   });
@@ -224,6 +226,7 @@ export function scriptPrompt(topic: string, format: Format): string {
     '- One idea per slide. No filler slides.',
     '- Every slide has "element_tags": 2 to 4 single lower-case words for pictures that match what the slide says. Prefer these words: ' + VOCABULARY.join(', ') + '.',
     '- "highlight" is optional: 1 to 3 words copied exactly from the headline (or quote).',
+    '- "photo_hint" is optional: a few words describing the photo that would suit the slide (for example "a person at a desk, morning light"). Leave it out when no photo is needed.',
     '- A "stat" slide needs a "value" such as "3x" or "42%". Do not invent figures. Use a number from the topic above; if there is none, leave the stat slide out, or put "placeholder: use your own number" in "note".',
     '- Plain, specific language. No hashtags, no emoji, no links.',
   ].join('\n');

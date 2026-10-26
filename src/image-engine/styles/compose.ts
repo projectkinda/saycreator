@@ -9,6 +9,9 @@ import { add, type LCtx } from './kit';
 import type { LoadedStyle } from './load';
 import * as A from './layouts-a';
 import * as B from './layouts-b';
+import * as C from './layouts-c';
+import { chromeScrim, fieldLayer } from '../photo/slot';
+import type { PhotoInput } from '../photo/zones';
 import { placeElements, type TestAsset } from './elements';
 import { labelText, pageNumber } from './tools';
 
@@ -34,6 +37,13 @@ export const LAYOUTS: Record<string, Layout> = {
   'quote-centre': B.quoteCentre,
   'closing-button': B.closingButton,
   'closing-bar': B.closingBar,
+  'cover-photo-full': C.coverPhotoFull,
+  'cover-photo-shape': C.coverPhotoShape,
+  'cover-photo-split': C.coverPhotoSplit,
+  'content-photo-frame': C.contentPhotoFrame,
+  'content-photo-strip': C.contentPhotoStrip,
+  'stat-photo': C.statPhoto,
+  'quote-photo-blur': C.quotePhotoBlur,
 };
 
 export interface StyledSlide extends ComposedSlide {
@@ -60,6 +70,7 @@ const wordCount = (s?: string) => (s ?? '').split(/\s+/).filter(Boolean).length;
 interface Facts {
   index: number;
   occurrence: number;
+  photo: boolean;
   headlineWords: number;
   bodyWords: number;
   items: number;
@@ -67,11 +78,12 @@ interface Facts {
   quoteChars: number;
 }
 
-function factsOf(s: SlideScript, index: number, occurrence: number): Facts {
+function factsOf(s: SlideScript, index: number, occurrence: number, hasPhoto = false): Facts {
   const any = s as unknown as Record<string, unknown>;
   return {
     index,
     occurrence,
+    photo: hasPhoto || !!s.photo || !!s.photo_hint,
     headlineWords: wordCount((any.headline ?? any.quote ?? any.label) as string | undefined),
     bodyWords: wordCount((any.body ?? any.sub ?? any.after ?? any.note) as string | undefined),
     items: Array.isArray(any.items) ? any.items.length : 0,
@@ -99,12 +111,13 @@ export function matches(w: When | undefined, f: Facts): string | null {
   if (w.itemsMax !== undefined && !need(f.items <= w.itemsMax, `the list has ${f.items} items (at most ${w.itemsMax})`)) return null;
   if (w.valueCharsMax !== undefined && !need(f.valueChars <= w.valueCharsMax, `the number is ${f.valueChars} characters (at most ${w.valueCharsMax})`)) return null;
   if (w.quoteCharsMin !== undefined && !need(f.quoteChars >= w.quoteCharsMin, `the quote is ${f.quoteChars} characters (at least ${w.quoteCharsMin})`)) return null;
+  if (w.photo !== undefined && !need(f.photo === w.photo, f.photo ? 'the slide has a photo' : 'the slide has no photo')) return null;
   if (w.occurrence !== undefined && !need(w.occurrence === 'odd' ? f.occurrence % 2 === 1 : f.occurrence % 2 === 0, `it is the ${f.occurrence}${['th', 'st', 'nd', 'rd'][f.occurrence % 10 > 3 || Math.floor(f.occurrence / 10) === 1 ? 0 : f.occurrence % 10]} slide of this type`)) return null;
   return why.join(', ');
 }
 
-export function pickRule(style: StyleSpec, type: SlideType, slide: SlideScript, index: number, occurrence: number): { rule: LayoutRule; at: number; because: string } {
-  const f = factsOf(slide, index, occurrence);
+export function pickRule(style: StyleSpec, type: SlideType, slide: SlideScript, index: number, occurrence: number, hasPhoto = false): { rule: LayoutRule; at: number; because: string } {
+  const f = factsOf(slide, index, occurrence, hasPhoto);
   const rules = style.layouts[type];
   for (let i = 0; i < rules.length; i++) {
     const m = matches(rules[i].when, f);
@@ -131,6 +144,8 @@ export interface StyledOptions {
   elementMatching?: 'tags' | 'ignore';
   /** Per slide (0-based index): a layout variant chosen by hand, a salt that reshuffles the elements, and element swaps (old id to new id). */
   overrides?: Record<number, SlideOverride>;
+  /** Photos the person added, with their numbers (see photo/analyse.ts). Slides whose style has photo layouts use them; slides name one with "photo". */
+  photos?: PhotoInput[];
 }
 
 export interface SlideOverride {
@@ -157,7 +172,8 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
   const seen: Record<string, number> = {};
   return script.slides.map((s, i) => {
     seen[s.type] = (seen[s.type] ?? 0) + 1;
-    let { rule, at, because } = pickRule(style, s.type, s, i, seen[s.type]);
+    const pool = opts.photos ?? [];
+    let { rule, at, because } = pickRule(style, s.type, s, i, seen[s.type], pool.length > 0);
     const ov = opts.overrides?.[i];
     const choices = [...new Set(style.layouts[s.type].map((r) => r.use))];
     if (ov?.layout && ov.layout !== rule.use) {
@@ -174,8 +190,21 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
     const c: LCtx = {
       style, theme: asTheme(style, pal), assets: loaded.assets, pal, palName, W, H, M, top: area.top, bottom: area.bottom, index: i, count: script.slides.length,
       occurrence: seen[s.type], handle: script.brand.handle, layers: [], notes: [], keepClear: [], params: rule.params ?? {},
+      photoPool: pool, photoPick: s.photo, photoHint: s.photo_hint, slots: [],
     };
     LAYOUTS[rule.use](c, s);
+    // Page chrome (a handle strip, dots, a page number) over a full photo is kept readable too.
+    if (c.fullPhoto && chrome !== 'none') {
+      const sc = chromeScrim(c, chrome, M);
+      const at1 = c.layers.findIndex((l) => l.kind === 'image' && l.id === 'photo');
+      if (sc && at1 >= 0) c.layers.splice(at1 + 1, 0, sc);
+    }
+    // A soft colour field in place of the flat background, when the rule asks for it.
+    if (rule.params?.field && (style.photo?.field || style.photo?.fields?.[palName])) {
+      const f = fieldLayer(c);
+      const at0 = c.layers.findIndex((l) => l.id === 'bg');
+      if (f && at0 >= 0) c.layers[at0] = f;
+    }
     // A highlight that is not in the slide's text never stops the slide. Whatever the layout does with it, the card says so.
     {
       const hl = (s as { highlight?: unknown }).highlight;
@@ -206,7 +235,7 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
       elementsUsed = placed.used;
       elementLinks = placed.links;
     }
-    const plan: Plan = { schema: 1, revision: 1, canvas: { width: W, height: H, background: solidOf(pal.bg) }, layers: c.layers, ...(s.element_tags || c.keepClear.length ? { meta: { ...(s.element_tags ? { elementTags: s.element_tags } : {}), ...(c.keepClear.length ? { keepClear: c.keepClear } : {}) } } : {}) };
+    const plan: Plan = { schema: 1, revision: 1, canvas: { width: W, height: H, background: solidOf(pal.bg) }, layers: c.layers, ...(s.element_tags || c.keepClear.length || c.slots.length ? { meta: { ...(s.element_tags ? { elementTags: s.element_tags } : {}), ...(c.keepClear.length ? { keepClear: c.keepClear } : {}), ...(c.slots.length ? { photoSlots: c.slots } : {}) } } : {}) };
     return { id: `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`, type: s.type, plan, notes: c.notes, style: style.name, layout: rule.use, rule: at, palette: palName, because, elementsUsed, layoutChoices: choices, ...(s.element_tags ? { elementTags: s.element_tags } : {}), ...(elementLinks ? { elementLinks } : {}) };
   });
 }

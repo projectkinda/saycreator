@@ -57,6 +57,7 @@ export function buildWritePrompt(req: WriteRequest): string {
     `- One idea per slide. Short copy that fits: headline at most 60 characters, body at most 160, "sub" at most 90, checklist items at most 50 characters and 3 to 5 of them, "kicker" at most 24, stat "value" at most 8 characters.`,
     `- Tone: ${tone.label} (${tone.how}).`,
     '- Every slide has "element_tags": 2 to 4 single lower-case words for the pictures that fit what that slide says. Use words from this list: ' + VOCABULARY.join(', ') + '.',
+    '- "photo_hint" is optional: a few words (at most 12) describing the photo that would suit the slide, for example "a person at a desk, morning light". Add it on slides where a photo would help (the cover, a quote, a stat); leave it out otherwise. Never describe real, named people.',
     '- "highlight" is optional: 1 to 3 words copied exactly from that slide\'s headline (or quote).',
     '- Plain, specific language. No hashtags, no emoji, no links.',
     `- If the text is too short or thin to make ${n} different slides, write fewer (at least ${lo}) and add a top-level "note" saying so in one sentence. Never pad.`,

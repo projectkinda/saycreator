@@ -19,8 +19,8 @@ export const SHAPE_PATHS = {
   /** A rectangle with a semicircle on top. */
   arch: 'M 0 100 L 0 50 C 0 22 22 0 50 0 C 78 0 100 22 100 50 L 100 100 Z',
   diamond: 'M 50 0 L 100 50 L 50 100 L 0 50 Z',
-  /** Five round petals, like the flower-shaped photo crop in the references. */
-  flower: fill100((a) => 34 + 15 * Math.cos(5 * a)),
+  /** Six round petals, like the flower-shaped photo crop in the references. */
+  flower: fill100((a) => 40 + 8.5 * Math.cos(6 * a)),
   /** An organic blob. */
   blob: fill100((a) => 40 + 6 * Math.cos(2 * a + 1) + 5 * Math.cos(3 * a + 2) + 3 * Math.cos(5 * a)),
   /** A starburst sticker with 16 points. */

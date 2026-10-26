@@ -4,6 +4,7 @@ import { findHighlight, missingHighlightNote } from '../draw/words';
 import type { Highlight, Layer, Plan } from '../types';
 import { background, buildText, marker, sticker, type Built } from '../carousel/toolbox';
 import type { Palette, Theme } from '../carousel/types';
+import type { PhotoInput } from '../photo/zones';
 import type { StyleSpec } from './format';
 import { assetLayers, type SvgAsset } from './svg';
 import { labelText, outlinePill } from './tools';
@@ -34,6 +35,15 @@ export interface LCtx {
   /** Areas a layout wants kept free of pictures (a split line and its arrow button). Pictures are never placed there, and the check fails if one is. */
   keepClear: NonNullable<NonNullable<Plan['meta']>['keepClear']>;
   params: Record<string, string | number | boolean>;
+  /** The photos the composer was given (empty when none). */
+  photoPool: PhotoInput[];
+  /** The photo this slide's script named, and what it said it wants. */
+  photoPick?: string;
+  photoHint?: string;
+  /** Every photo slot the layout drew, filled or not. */
+  slots: NonNullable<NonNullable<Plan['meta']>['photoSlots']>;
+  /** The photo that fills the whole slide, if a layout drew one (its numbers decide how the page chrome is protected). */
+  fullPhoto?: PhotoInput;
 }
 
 export const add = (c: LCtx, ...l: Layer[]) => c.layers.push(...l);

@@ -3,26 +3,27 @@
 import { contrast, parseColor } from '../lint/color';
 import { FONT_WEIGHTS } from '../fonts';
 import type { Palette, SlideScript, Theme } from '../carousel/types';
-import { FONT_FAMILIES } from '../types';
-import { isColor, validFill } from '../validate';
+import { FONT_FAMILIES, type Treatment } from '../types';
+import { isColor, validFill, validateTreatment } from '../validate';
+import { resolveTreatments } from '../photo/resolve';
 
 export type SlideType = SlideScript['type'];
 export const SLIDE_TYPES: SlideType[] = ['cover', 'content', 'step', 'stat', 'checklist', 'beforeafter', 'quote', 'closing'];
 
 /** Which layout variants exist for each slide type. A style picks from these by name. */
 export const LAYOUT_IDS: Record<SlideType, string[]> = {
-  cover: ['cover-stack', 'cover-top', 'cover-centre'],
-  content: ['content-stack', 'content-bar', 'content-columns'],
+  cover: ['cover-stack', 'cover-top', 'cover-centre', 'cover-photo-full', 'cover-photo-shape', 'cover-photo-split'],
+  content: ['content-stack', 'content-bar', 'content-columns', 'content-photo-frame', 'content-photo-strip'],
   step: ['step-badge', 'step-numeral', 'step-pill'],
-  stat: ['stat-giant', 'stat-card'],
+  stat: ['stat-giant', 'stat-card', 'stat-photo'],
   checklist: ['checklist-icons', 'checklist-lines'],
   beforeafter: ['ba-split', 'ba-cards'],
-  quote: ['quote-marks', 'quote-centre'],
+  quote: ['quote-marks', 'quote-centre', 'quote-photo-blur'],
   closing: ['closing-button', 'closing-bar'],
 };
 
 export const PALETTE_ROLES = ['bg', 'text', 'muted', 'accent', 'onAccent', 'marker', 'onMarker', 'surface', 'onSurface', 'line'] as const;
-export const WHEN_KEYS = ['indexMin', 'indexMax', 'headlineWordsMin', 'headlineWordsMax', 'bodyWordsMin', 'bodyWordsMax', 'itemsMin', 'itemsMax', 'valueCharsMax', 'quoteCharsMin', 'occurrence'] as const;
+export const WHEN_KEYS = ['indexMin', 'indexMax', 'headlineWordsMin', 'headlineWordsMax', 'bodyWordsMin', 'bodyWordsMax', 'itemsMin', 'itemsMax', 'valueCharsMax', 'quoteCharsMin', 'occurrence', 'photo'] as const;
 export const CHROME_KINDS = ['dots-swipe', 'page-number', 'strip', 'none'] as const;
 export const CASE_STYLES = ['upper', 'lower', 'sentence'] as const;
 
@@ -41,6 +42,8 @@ export interface When {
   quoteCharsMin?: number;
   /** The 1st, 3rd, 5th... or 2nd, 4th... slide of this type in the deck. */
   occurrence?: 'odd' | 'even';
+  /** true: only when the slide has a photo (or a photo slot with a hint) or photos were given to the composer. false: only when it has none. */
+  photo?: boolean;
 }
 export interface LayoutRule {
   use: string;
@@ -97,6 +100,26 @@ export interface ElementSpec {
   rules: ElementRule[];
 }
 
+/** How a style treats photos. Colours may be "$accent", "$bg", "$text"... (any palette colour name), meaning that colour of the slide's own palette. */
+export interface FieldSpec {
+  blobs: { x: number; y: number; r: number; color: string; alpha?: number }[];
+  blur: number;
+  grain: number;
+}
+
+export interface PhotoSpec {
+  /** Named lists of treatments, applied in order. A layout rule names one with params.treatment. */
+  treatments: Record<string, Treatment[]>;
+  /** The soft colour field used behind slides whose layout rule says params.field is true. Blob places are shares of the slide. */
+  field?: FieldSpec;
+  /** Fields for particular palettes, by palette name (a field that is right on a dark slide is often too strong on a light one). */
+  fields?: Record<string, FieldSpec>;
+  /** The glass card look. */
+  glass?: { fill: string; blur: number; radius: number; border?: { color: string; width: number }; shadow?: { color: string; blur: number; offsetX: number; offsetY: number } };
+  /** Colour of the overlay under words on a photo. Default black. */
+  overlay?: string;
+}
+
 export interface StyleSpec {
   schema: 1;
   /** Must equal the folder name. */
@@ -127,6 +150,8 @@ export interface StyleSpec {
   assets: Record<string, string>;
   /** Illustrative elements (arrows, stickers, doodles...) this style uses, where, and how many. Optional. */
   elements?: ElementSpec;
+  /** Photo treatments, colour fields and glass for styles that use photos. Optional. */
+  photo?: PhotoSpec;
   /** Places where this style's own look breaks our phone-size rules, written down instead of changed. */
   knownLintConflicts?: string[];
   /** What the reference had that this style does not reproduce, and why. */
@@ -287,7 +312,7 @@ export function validateStyle(raw: unknown, folder: string, knownTags?: Set<stri
           else
             for (const [k, v] of Object.entries(r.when)) {
               if (!(WHEN_KEYS as readonly string[]).includes(k)) err(`${where}.when has "${k}", which is not a condition. Allowed: ${WHEN_KEYS.join(', ')}.`);
-              else if (k === 'occurrence' ? v !== 'odd' && v !== 'even' : !num(v)) err(`${where}.when.${k} has a wrong value.`);
+              else if (k === 'occurrence' ? v !== 'odd' && v !== 'even' : k === 'photo' ? typeof v !== 'boolean' : !num(v)) err(`${where}.when.${k} has a wrong value.`);
             }
         }
         if (r.params !== undefined && isObj(r.params))
@@ -343,6 +368,61 @@ export function validateStyle(raw: unknown, folder: string, knownTags?: Set<stri
           if (r.opacity !== undefined && (!num(r.opacity) || r.opacity < 0.05 || r.opacity > 1)) err(`${w}.opacity must be from 0.05 to 1.`);
         });
     }
+  }
+  if (s.photo !== undefined) {
+    const ph = s.photo;
+    if (!isObj(ph) || !isObj(ph.treatments) || Object.keys(ph.treatments).length === 0) err('"photo" needs "treatments": named lists of photo treatments, for example {"mono": [{"op": "grayscale"}]}.');
+    else {
+      for (const [tn, list] of Object.entries(ph.treatments)) {
+        if (!Array.isArray(list) || list.length > 12) {
+          err(`photo.treatments.${tn} must be a list of at most 12 steps.`);
+          continue;
+        }
+        for (const t of list as unknown as Record<string, unknown>[])
+          for (const v of Object.values(t ?? {})) if (typeof v === 'string' && v.startsWith('$') && !(PALETTE_ROLES as readonly string[]).includes(v.slice(1))) err(`photo.treatments.${tn} uses the colour "${v}", which is not a palette colour name (${PALETTE_ROLES.join(', ')}).`);
+        for (const pn of palNames) {
+          const resolved = resolveTreatments(list as Treatment[], (pals as Record<string, Record<string, unknown>>)[pn]);
+          resolved.forEach((t, i) => {
+            const e: string[] = [];
+            validateTreatment(t, `photo.treatments.${tn}[${i}] (palette ${pn})`, e);
+            e.forEach(err);
+          });
+        }
+      }
+      const rules = lay ? Object.values(lay).flat() : [];
+      for (const r of rules as { use?: string; params?: Record<string, unknown> }[]) {
+        const tn = r?.params?.treatment;
+        if (typeof tn === 'string' && !(tn in (ph.treatments as object))) err(`A layout asks for the treatment "${tn}", which is not in photo.treatments (${Object.keys(ph.treatments as object).join(', ')}).`);
+      }
+    }
+    const tok = (v: unknown, where: string) => {
+      if (typeof v !== 'string') return err(`${where} must be a colour.`);
+      if (v.startsWith('$')) {
+        if (!(PALETTE_ROLES as readonly string[]).includes(v.slice(1))) err(`${where} is "${v}", which is not a palette colour name (${PALETTE_ROLES.join(', ')}).`);
+      } else if (!isColor(v)) err(`${where} is "${v}", which is not a colour.`);
+    };
+    const checkField = (f0: unknown, where: string) => {
+      const f = f0 as { blobs?: unknown; blur?: unknown; grain?: unknown };
+      if (!isObj(f) || !Array.isArray(f.blobs) || f.blobs.length > 12 || !num(f.blur) || f.blur < 0 || f.blur > 400 || !num(f.grain) || f.grain < 0 || f.grain > 1) err(`${where} must be {"blobs": [...] (at most 12), "blur": 0 to 400, "grain": 0 to 1}.`);
+      else (f.blobs as { x: unknown; y: unknown; r: unknown; color: unknown; alpha?: unknown }[]).forEach((b, i) => {
+        tok(b.color, `${where}.blobs[${i}].color`);
+        if (![b.x, b.y, b.r].every(num) || (b.alpha !== undefined && !num(b.alpha))) err(`${where}.blobs[${i}] needs numbers x, y, r (shares of the slide width) and optionally alpha.`);
+      });
+    };
+    if (isObj(ph) && ph.field !== undefined) checkField(ph.field, 'photo.field');
+    if (isObj(ph) && ph.fields !== undefined) {
+      if (!isObj(ph.fields)) err('photo.fields must map palette names to fields.');
+      else for (const [pn, f] of Object.entries(ph.fields)) {
+        if (!palNames.includes(pn)) err(`photo.fields has "${pn}", which is not a palette.`);
+        checkField(f, `photo.fields.${pn}`);
+      }
+    }
+    if (isObj(ph) && ph.glass !== undefined) {
+      const g = ph.glass as { fill?: unknown; blur?: unknown; radius?: unknown; border?: { color?: unknown; width?: unknown } };
+      if (!isObj(g) || !isColor(g.fill) || !num(g.blur) || !num(g.radius)) err('photo.glass must be {"fill": a colour (with its see-through amount, for example rgba(255,255,255,0.14)), "blur": px, "radius": px}.');
+      else if (g.border && (!isColor(g.border.color) || !num(g.border.width))) err('photo.glass.border must be {"color", "width"}.');
+    }
+    if (isObj(ph) && ph.overlay !== undefined) tok(ph.overlay, 'photo.overlay');
   }
   if (s.knownLintConflicts !== undefined && !(Array.isArray(s.knownLintConflicts) && s.knownLintConflicts.every((x) => typeof x === 'string'))) err('"knownLintConflicts" must be a list of sentences.');
   if (s.notReproduced !== undefined && !(Array.isArray(s.notReproduced) && s.notReproduced.every((x) => typeof x === 'string'))) err('"notReproduced" must be a list of sentences.');
