@@ -1,0 +1,471 @@
+{
+  "schema": 1,
+  "name": "glass-gradient",
+  "title": "Soft gradient and glass",
+  "description": "Blurred colour fields, glass cards and a few photos in light type, for calm step-by-step teaching.",
+  "suits": {
+    "tones": [
+      "calm",
+      "modern",
+      "premium"
+    ],
+    "keywords": [
+      "step",
+      "steps",
+      "guide",
+      "framework",
+      "offer",
+      "clear",
+      "simple",
+      "process",
+      "method",
+      "how",
+      "learn",
+      "design",
+      "product"
+    ],
+    "slideTypes": [
+      "step",
+      "content",
+      "cover"
+    ]
+  },
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "none",
+    "note": "A reference that no stored style covered: the soft orange gradient deck (blurred colour on white or black, a glass card, thin light type, one black swoosh). It was left out of every cluster in Phase 1. It also leans on the quiet monochrome slides of the dark-quiet group for its photo slides."
+  },
+  "palettes": {
+    "dusk": {
+      "bg": "#0C0A09",
+      "text": "#F7F3EE",
+      "muted": "#DAD0C6",
+      "accent": "#FF7A3D",
+      "onAccent": "#0C0A09",
+      "marker": "#FF7A3D",
+      "onMarker": "#0C0A09",
+      "surface": "#1B1714",
+      "onSurface": "#F7F3EE",
+      "line": "#F7F3EE"
+    },
+    "milk": {
+      "bg": "#F7F2EC",
+      "text": "#14110F",
+      "muted": "#4F4842",
+      "accent": "#9A2F08",
+      "onAccent": "#F7F2EC",
+      "marker": "#FFC9A6",
+      "onMarker": "#14110F",
+      "surface": "#FFFFFF",
+      "onSurface": "#14110F",
+      "line": "#14110F"
+    }
+  },
+  "rhythm": [
+    "dusk",
+    "milk",
+    "dusk",
+    "milk",
+    "milk",
+    "dusk"
+  ],
+  "byType": {
+    "cover": "dusk",
+    "stat": "dusk",
+    "quote": "dusk",
+    "closing": "milk"
+  },
+  "fonts": {
+    "headline": "Schibsted Grotesk",
+    "headlineWeight": 600,
+    "body": "Instrument Sans",
+    "bodyWeight": 400,
+    "strong": 600
+  },
+  "type": {
+    "cover": 132,
+    "headline": 92,
+    "body": 44,
+    "small": 34,
+    "stat": 290,
+    "quote": 76,
+    "label": 32
+  },
+  "caseStyle": "sentence",
+  "headlineLineHeight": 1.02,
+  "bodyLineHeight": 1.34,
+  "shape": {
+    "radius": 36,
+    "outline": 2,
+    "stroke": 5,
+    "badge": "circle",
+    "marker": "underline",
+    "sticker": "pill",
+    "hardShadow": 0,
+    "decor": "orbs"
+  },
+  "spacing": {
+    "margin": 84,
+    "gap": 26,
+    "section": 54
+  },
+  "chrome": "dots-swipe",
+  "layouts": {
+    "cover": [
+      {
+        "use": "cover-photo-full",
+        "when": {
+          "photo": true,
+          "headlineWordsMax": 7
+        },
+        "palette": "dusk",
+        "params": {
+          "treatment": "soft-dark",
+          "bar": "last",
+          "kicker": "pill",
+          "textAt": "bottom"
+        }
+      },
+      {
+        "use": "cover-top",
+        "palette": "dusk",
+        "params": {
+          "field": true,
+          "visual": "asset",
+          "asset": "swoosh",
+          "assetSize": 760,
+          "kicker": "pill",
+          "bar": "last"
+        },
+        "when": {
+          "headlineWordsMax": 8
+        }
+      },
+      {
+        "use": "cover-stack",
+        "palette": "dusk",
+        "params": {
+          "field": true,
+          "bar": "last",
+          "kicker": "pill"
+        }
+      }
+    ],
+    "content": [
+      {
+        "use": "content-photo-frame",
+        "when": {
+          "photo": true,
+          "occurrence": "odd"
+        },
+        "palette": "milk",
+        "params": {
+          "frame": "phone",
+          "treatment": "soft",
+          "field": true,
+          "bar": "last"
+        }
+      },
+      {
+        "use": "content-photo-frame",
+        "when": {
+          "photo": true,
+          "occurrence": "even"
+        },
+        "palette": "dusk",
+        "params": {
+          "frame": "glass",
+          "treatment": "soft-dark",
+          "bar": "last"
+        }
+      },
+      {
+        "use": "content-stack",
+        "palette": "milk",
+        "params": {
+          "field": true,
+          "ruleWidth": 140
+        },
+        "when": {
+          "bodyWordsMax": 17
+        }
+      },
+      {
+        "use": "content-bar",
+        "palette": "dusk",
+        "params": {
+          "field": true
+        }
+      }
+    ],
+    "step": [
+      {
+        "use": "step-pill",
+        "when": {
+          "occurrence": "odd"
+        },
+        "palette": "milk",
+        "params": {
+          "field": true
+        }
+      },
+      {
+        "use": "step-badge",
+        "palette": "dusk",
+        "params": {
+          "field": true,
+          "badgeSize": 150
+        }
+      }
+    ],
+    "stat": [
+      {
+        "use": "stat-photo",
+        "when": {
+          "photo": true
+        },
+        "palette": "dusk",
+        "params": {
+          "treatment": "soft-dark",
+          "kicker": "pill"
+        }
+      },
+      {
+        "use": "stat-giant",
+        "palette": "dusk",
+        "params": {
+          "field": true
+        },
+        "when": {
+          "valueCharsMax": 3
+        }
+      },
+      {
+        "use": "stat-card",
+        "palette": "milk",
+        "params": {
+          "field": true
+        }
+      }
+    ],
+    "checklist": [
+      {
+        "use": "checklist-lines",
+        "when": {
+          "itemsMin": 4
+        },
+        "palette": "dusk",
+        "params": {
+          "field": true
+        }
+      },
+      {
+        "use": "checklist-icons",
+        "palette": "milk",
+        "params": {
+          "field": true
+        }
+      }
+    ],
+    "beforeafter": [
+      {
+        "use": "ba-cards",
+        "palette": "milk",
+        "params": {
+          "field": true
+        },
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "ba-split",
+        "params": {
+          "alt": "dusk"
+        }
+      }
+    ],
+    "quote": [
+      {
+        "use": "quote-photo-blur",
+        "when": {
+          "photo": true
+        },
+        "palette": "dusk",
+        "params": {
+          "treatment": "blur-soft",
+          "glass": true
+        }
+      },
+      {
+        "use": "quote-marks",
+        "when": {
+          "quoteCharsMin": 48
+        },
+        "palette": "milk",
+        "params": {
+          "field": true
+        }
+      },
+      {
+        "use": "quote-centre",
+        "palette": "dusk",
+        "params": {
+          "field": true
+        }
+      }
+    ],
+    "closing": [
+      {
+        "use": "closing-bar",
+        "when": {
+          "headlineWordsMax": 4
+        },
+        "palette": "dusk",
+        "params": {
+          "field": true
+        }
+      },
+      {
+        "use": "closing-button",
+        "palette": "milk",
+        "params": {
+          "field": true
+        }
+      }
+    ]
+  },
+  "assets": {
+    "swoosh": "assets/swoosh.svg"
+  },
+  "photo": {
+    "treatments": {
+      "soft": [
+        {
+          "op": "levels",
+          "contrast": 0.06,
+          "saturation": 0.06
+        },
+        {
+          "op": "grain",
+          "amount": 0.08,
+          "size": 1,
+          "seed": 12
+        }
+      ],
+      "soft-dark": [
+        {
+          "op": "levels",
+          "brightness": -0.08,
+          "contrast": 0.08
+        },
+        {
+          "op": "vignette",
+          "amount": 0.35
+        },
+        {
+          "op": "grain",
+          "amount": 0.08,
+          "size": 1,
+          "seed": 14
+        }
+      ],
+      "blur-soft": [
+        {
+          "op": "blur",
+          "radius": 26
+        },
+        {
+          "op": "levels",
+          "brightness": -0.14,
+          "saturation": 0.1
+        },
+        {
+          "op": "grain",
+          "amount": 0.08,
+          "size": 1,
+          "seed": 3
+        }
+      ]
+    },
+    "fields": {
+      "dusk": {
+        "blobs": [
+          {
+            "x": 0.22,
+            "y": 0.1,
+            "r": 0.5,
+            "color": "$accent",
+            "alpha": 0.24
+          },
+          {
+            "x": 0.95,
+            "y": 0.8,
+            "r": 0.46,
+            "color": "$accent",
+            "alpha": 0.2
+          },
+          {
+            "x": 0.05,
+            "y": 0.95,
+            "r": 0.3,
+            "color": "$accent",
+            "alpha": 0.12
+          }
+        ],
+        "blur": 130,
+        "grain": 0.09
+      },
+      "milk": {
+        "blobs": [
+          {
+            "x": 0.18,
+            "y": 0.1,
+            "r": 0.5,
+            "color": "$marker",
+            "alpha": 0.95
+          },
+          {
+            "x": 0.95,
+            "y": 0.82,
+            "r": 0.5,
+            "color": "$marker",
+            "alpha": 0.9
+          },
+          {
+            "x": 0.05,
+            "y": 0.96,
+            "r": 0.28,
+            "color": "#FF9B63",
+            "alpha": 0.55
+          }
+        ],
+        "blur": 120,
+        "grain": 0.07
+      }
+    },
+    "glass": {
+      "fill": "rgba(18,14,12,0.38)",
+      "blur": 30,
+      "radius": 44,
+      "border": {
+        "color": "rgba(255,255,255,0.4)",
+        "width": 2
+      },
+      "shadow": {
+        "color": "rgba(0,0,0,0.3)",
+        "blur": 40,
+        "offsetX": 0,
+        "offsetY": 20
+      }
+    },
+    "overlay": "#000000"
+  },
+  "knownLintConflicts": [],
+  "notReproduced": [
+    "The orange 3D spiral object and the glass folder icon of the reference: a glossy 3D object needs a transparent picture of it (none supplied), and the folder-shaped glass card was not built (the glass card here is a rounded rectangle).",
+    "The very thin light weight of the reference type: the lightest bundled headline weight is 600, so the headline reads heavier than the reference.",
+    "The hairline header with the author's name and an arrow icon at the top of every slide: not built (the page dots and swipe cue are used instead).",
+    "The leaf photo with the purple swoosh across it: the swoosh is only used on the cover without a photo."
+  ]
+}

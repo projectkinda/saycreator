@@ -1,0 +1,406 @@
+{
+  "schema": 1,
+  "name": "mono-poster",
+  "title": "Mono photo poster",
+  "description": "Black-and-white photo posters with huge caps and one hot red-orange, for bold local or brand statements.",
+  "suits": {
+    "tones": [
+      "bold",
+      "urban"
+    ],
+    "keywords": [
+      "city",
+      "brand",
+      "agency",
+      "studio",
+      "local",
+      "content",
+      "results",
+      "growth",
+      "attention",
+      "launch",
+      "street",
+      "design",
+      "marketing"
+    ],
+    "slideTypes": [
+      "cover",
+      "stat",
+      "quote"
+    ]
+  },
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "hot-flat",
+    "note": "The photo-led poster decks of the hot-flat group: black-and-white city photography, huge condensed upper-case headlines, one red-orange, black or red colour slides in between. The hot-flat style already holds the flat-colour side; this one adds the photo side."
+  },
+  "palettes": {
+    "ink": {
+      "bg": "#0E0E0E",
+      "text": "#F4F1EA",
+      "muted": "#CFCABD",
+      "accent": "#FF4B1F",
+      "onAccent": "#0E0E0E",
+      "marker": "#FF4B1F",
+      "onMarker": "#0E0E0E",
+      "surface": "#1E1E1E",
+      "onSurface": "#F4F1EA",
+      "line": "#F4F1EA"
+    },
+    "paper": {
+      "bg": "#F2EFE8",
+      "text": "#0E0E0E",
+      "muted": "#4A4741",
+      "accent": "#C42A08",
+      "onAccent": "#F2EFE8",
+      "marker": "#E8390E",
+      "onMarker": "#0E0E0E",
+      "surface": "#E3DFD3",
+      "onSurface": "#0E0E0E",
+      "line": "#0E0E0E"
+    },
+    "red": {
+      "bg": "#E8390E",
+      "text": "#0E0E0E",
+      "muted": "#140805",
+      "accent": "#0E0E0E",
+      "onAccent": "#F4F1EA",
+      "marker": "#0E0E0E",
+      "onMarker": "#F4F1EA",
+      "surface": "#0E0E0E",
+      "onSurface": "#F4F1EA",
+      "line": "#0E0E0E"
+    }
+  },
+  "rhythm": [
+    "ink",
+    "paper",
+    "red",
+    "ink",
+    "paper"
+  ],
+  "byType": {
+    "cover": "ink",
+    "stat": "ink",
+    "quote": "ink",
+    "closing": "red"
+  },
+  "fonts": {
+    "headline": "Schibsted Grotesk",
+    "headlineWeight": 800,
+    "body": "Instrument Sans",
+    "bodyWeight": 500,
+    "strong": 600
+  },
+  "type": {
+    "cover": 150,
+    "headline": 108,
+    "body": 44,
+    "small": 34,
+    "stat": 340,
+    "quote": 84,
+    "label": 32
+  },
+  "caseStyle": "upper",
+  "headlineLineHeight": 0.92,
+  "shape": {
+    "radius": 0,
+    "outline": 4,
+    "stroke": 8,
+    "badge": "square",
+    "marker": "box",
+    "sticker": "tag",
+    "hardShadow": 0,
+    "decor": "blocks"
+  },
+  "spacing": {
+    "margin": 72,
+    "gap": 24,
+    "section": 48
+  },
+  "chrome": "strip",
+  "layouts": {
+    "cover": [
+      {
+        "use": "cover-photo-full",
+        "when": {
+          "photo": true,
+          "headlineWordsMax": 5
+        },
+        "palette": "ink",
+        "params": {
+          "treatment": "mono",
+          "bar": "last",
+          "kicker": "sticker"
+        }
+      },
+      {
+        "use": "cover-photo-split",
+        "when": {
+          "photo": true
+        },
+        "palette": "paper",
+        "params": {
+          "treatment": "mono",
+          "at": 0.54,
+          "bar": "last",
+          "kicker": "label",
+          "offset": true
+        }
+      },
+      {
+        "use": "cover-top",
+        "when": {
+          "headlineWordsMax": 7
+        },
+        "palette": "paper",
+        "params": {
+          "bar": "all",
+          "visual": "asset",
+          "asset": "swoosh",
+          "assetSize": 420,
+          "kicker": "label",
+          "prefix": "// "
+        }
+      },
+      {
+        "use": "cover-stack",
+        "palette": "red",
+        "params": {
+          "bar": "last",
+          "asset": "swoosh",
+          "assetSize": 340,
+          "kicker": "sticker"
+        }
+      }
+    ],
+    "content": [
+      {
+        "use": "content-photo-frame",
+        "when": {
+          "photo": true,
+          "occurrence": "odd"
+        },
+        "palette": "paper",
+        "params": {
+          "frame": "offset",
+          "treatment": "mono",
+          "bar": "last"
+        }
+      },
+      {
+        "use": "content-photo-strip",
+        "when": {
+          "photo": true,
+          "occurrence": "even"
+        },
+        "palette": "ink",
+        "params": {
+          "treatment": "mono",
+          "bar": "last",
+          "stripGap": 12
+        }
+      },
+      {
+        "use": "content-bar",
+        "when": {
+          "bodyWordsMax": 17
+        },
+        "palette": "red",
+        "params": {
+          "asset": "swoosh",
+          "assetSize": 260
+        }
+      },
+      {
+        "use": "content-stack",
+        "params": {
+          "ruleWidth": 200
+        }
+      }
+    ],
+    "step": [
+      {
+        "use": "step-numeral",
+        "when": {
+          "occurrence": "odd"
+        },
+        "params": {
+          "numeralSize": 380
+        }
+      },
+      {
+        "use": "step-badge",
+        "params": {
+          "badgeSize": 180
+        }
+      }
+    ],
+    "stat": [
+      {
+        "use": "stat-photo",
+        "when": {
+          "photo": true
+        },
+        "palette": "ink",
+        "params": {
+          "treatment": "mono-dark",
+          "kicker": "sticker"
+        }
+      },
+      {
+        "use": "stat-giant",
+        "when": {
+          "valueCharsMax": 3
+        },
+        "palette": "red",
+        "params": {
+          "pill": true
+        }
+      },
+      {
+        "use": "stat-card"
+      }
+    ],
+    "checklist": [
+      {
+        "use": "checklist-lines",
+        "when": {
+          "itemsMin": 4
+        }
+      },
+      {
+        "use": "checklist-icons"
+      }
+    ],
+    "beforeafter": [
+      {
+        "use": "ba-cards",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "ba-split",
+        "params": {
+          "alt": "red"
+        }
+      }
+    ],
+    "quote": [
+      {
+        "use": "quote-photo-blur",
+        "when": {
+          "photo": true
+        },
+        "palette": "ink",
+        "params": {
+          "treatment": "mono-blur"
+        }
+      },
+      {
+        "use": "quote-marks",
+        "when": {
+          "quoteCharsMin": 48
+        }
+      },
+      {
+        "use": "quote-centre"
+      }
+    ],
+    "closing": [
+      {
+        "use": "closing-bar",
+        "when": {
+          "headlineWordsMax": 4
+        }
+      },
+      {
+        "use": "closing-button"
+      }
+    ]
+  },
+  "assets": {
+    "swoosh": "assets/swoosh.svg"
+  },
+  "photo": {
+    "treatments": {
+      "mono": [
+        {
+          "op": "grayscale"
+        },
+        {
+          "op": "levels",
+          "contrast": 0.28,
+          "brightness": -0.04
+        },
+        {
+          "op": "grain",
+          "amount": 0.09,
+          "size": 1,
+          "seed": 4
+        }
+      ],
+      "mono-dark": [
+        {
+          "op": "grayscale"
+        },
+        {
+          "op": "levels",
+          "contrast": 0.3,
+          "brightness": -0.12
+        },
+        {
+          "op": "vignette",
+          "amount": 0.35
+        },
+        {
+          "op": "grain",
+          "amount": 0.08,
+          "size": 1,
+          "seed": 6
+        }
+      ],
+      "mono-blur": [
+        {
+          "op": "grayscale"
+        },
+        {
+          "op": "blur",
+          "radius": 22
+        },
+        {
+          "op": "levels",
+          "brightness": -0.16,
+          "contrast": 0.12
+        },
+        {
+          "op": "grain",
+          "amount": 0.07,
+          "size": 1,
+          "seed": 8
+        }
+      ],
+      "halftone": [
+        {
+          "op": "grayscale"
+        },
+        {
+          "op": "halftone",
+          "cell": 12,
+          "angle": 45,
+          "dark": "$bg",
+          "light": "$text",
+          "contrast": 0.9
+        }
+      ]
+    },
+    "overlay": "#000000"
+  },
+  "knownLintConflicts": [],
+  "notReproduced": [
+    "The brush-script word in the references (a hand-lettered accent over the heavy caps): no script font is bundled, and drawing letters as paths would not be editable text.",
+    "The real photography of the references (a skyline at night, a skater, palm trees). These are the user's own test photos, which are mostly landscapes and street scenes, so the poster look comes from the black-and-white treatment, not the subject.",
+    "Cut-out objects such as the palm silhouette standing on the colour slide: that needs a transparent cutout, and none was supplied."
+  ]
+}
