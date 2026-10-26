@@ -87,19 +87,19 @@ For every slide type (`cover`, `content`, `step`, `stat`, `checklist`, `beforeaf
 ]
 ```
 
-The first rule whose `when` holds is used. `when` can use: `indexMin`, `indexMax` (position in the deck, counted from 0), `headlineWordsMin/Max`, `bodyWordsMin/Max`, `itemsMin/Max` (checklist), `valueCharsMax` (stat number), `quoteCharsMin`, and `occurrence` (`"odd"` or `"even"`: the 1st, 3rd... or 2nd, 4th... slide of that type). A rule may also set `"palette"` to use a different palette for that layout.
+The first rule whose `when` holds is used. `when` can use: `indexMin`, `indexMax` (position in the deck, counted from 0), `headlineWordsMin/Max`, `bodyWordsMin/Max`, `itemsMin/Max` (checklist), `valueCharsMax` (stat number), `quoteCharsMin`, `occurrence` (`"odd"` or `"even"`: the 1st, 3rd... or 2nd, 4th... slide of that type), and `photo` (true or false: the slide has a photo, or not). A rule may also set `"palette"` to use a different palette for that layout.
 
 **Layouts you can name:**
 
 | slide type | layouts |
 |---|---|
-| cover | `cover-stack` (headline fills the slide and sits low), `cover-top` (headline at the top, a visual below), `cover-centre` (centred, a mark above, a button below) |
-| content | `content-stack` (heading, rule, body), `content-bar` (heading on solid bars, body below), `content-columns` (heading on top, narrow body at the foot) |
+| cover | `cover-stack` (headline fills the slide and sits low), `cover-top` (headline at the top, a visual below), `cover-centre` (centred, a mark above, a button below), and the photo layouts `cover-photo-full`, `cover-photo-shape`, `cover-photo-split` (see "photo" below) |
+| content | `content-stack` (heading, rule, body), `content-bar` (heading on solid bars, body below), `content-columns` (heading on top, narrow body at the foot), and the photo layouts `content-photo-frame`, `content-photo-strip` |
 | step | `step-badge` (numbered badge), `step-numeral` (huge number), `step-pill` (outlined "STEP 01" pill) |
-| stat | `stat-giant` (huge number), `stat-card` (number in a card) |
+| stat | `stat-giant` (huge number), `stat-card` (number in a card), `stat-photo` (number over a photo) |
 | checklist | `checklist-icons` (round ticks), `checklist-lines` (numbered rows between rules) |
 | beforeafter | `ba-split` (two halves), `ba-cards` (two cards) |
-| quote | `quote-marks` (big marks, text at the left), `quote-centre` (everything centred) |
+| quote | `quote-marks` (big marks, text at the left), `quote-centre` (everything centred), `quote-photo-blur` (over a blurred photo) |
 | closing | `closing-button` (button and handle), `closing-bar` (full-width bar at the foot) |
 
 **Params** (all optional): `bar` (`last`, `all`, `none`: solid bars behind the last line or every line of the headline), `asset` (an asset name), `assetSize` (px), `kicker` (`sticker`, `pill` or `label`), `prefix` (text before a label, for example `"// "`), `visual` (`ui-card`, `glow`, `asset`, `none`; cover-top), `chart` (`bars` or `line`), `button` (true: a round arrow button), `headlineShare` (0 to 1: how much of the room the cover-top headline may use), `numeralSize`, `ghost` (true: the step number in the muted colour), `badgeSize`, `ruleWidth`, `pill` (true: an outlined arrow pill on the stat), `alt` (the palette used for the second half of a split).
@@ -131,6 +131,32 @@ Rule fields: `tags` (any of these; the library's tags are listed on the Results 
 **Following the slide.** A slide in a script can carry `"element_tags": ["money", "growth"]` (2 to 4 lower-case words; the concept words are listed in `src/image-engine/styles/tags.ts`). Rules with `"match": "slide"` then use only elements whose tags link to those tags, best link first, never the same picture twice, and place nothing when none links. Other rules that pick among their own tags also skip any picture of a thing that does not link to the slide. Plain decoration (arrows, squiggles, tape, blobs) is never judged. The plan records the tags in `meta.elementTags`, and the phone-size checks gain an eighth check, "Elements match the slide", which flags an "unrelated element". A script with no `element_tags` behaves as before.
 
 Plain-language problems: a bad zone, count, tint or colour is an error that says what is allowed. A rule whose tags match nothing in the library is a warning ("places nothing"), not an error.
+
+## photo (optional): styles that use photos
+
+A style with a `photo` block can use the photo layouts and treatments. Without it the photo layouts still draw (untreated), but a style that wants a look should add it.
+
+```jsonc
+"photo": {
+  "treatments": {                      // named lists, applied in order
+    "mono": [{ "op": "grayscale" }, { "op": "levels", "contrast": 0.28 }, { "op": "grain", "amount": 0.09, "size": 1, "seed": 4 }],
+    "duo":  [{ "op": "duotone", "dark": "$bg", "light": "$accent" }]
+  },
+  "field":  { "blobs": [{ "x": 0.2, "y": 0.1, "r": 0.5, "color": "$accent", "alpha": 0.5 }], "blur": 130, "grain": 0.09 },
+  "fields": { "dusk": { "blobs": [], "blur": 120, "grain": 0.07 } },   // optional: a field for one palette by name
+  "glass":  { "fill": "rgba(18,14,12,0.38)", "blur": 30, "radius": 44, "border": { "color": "rgba(255,255,255,0.4)", "width": 2 } },
+  "overlay": "#000000"                // the colour of the overlay under words on a photo ("$bg" works too)
+}
+```
+
+- **Treatment steps:** `grayscale {amount}`, `duotone {dark, light, amount}`, `halftone {cell, angle, dark, light, contrast}`, `grain {amount, size, seed}`, `levels {brightness, contrast, saturation}`, `blur {radius}`, `motionBlur {length, angle}`, `tint {color, amount}`, `vignette {amount}`, `fade {from, color, amount, start}`, `wash {color, amount}`. Ranges are checked by the plan checker (a style with a step out of range is refused with a sentence).
+- **Colours** may be `"$accent"`, `"$bg"`, `"$text"`... (any palette colour name): the colour of the slide's own palette. An unknown name is refused. A palette whose `bg` is a gradient uses its first stop.
+- A layout rule picks a treatment with `"params": { "treatment": "mono" }` (an unknown name is refused) and asks for the colour field instead of a flat background with `"params": { "field": true }` (any layout; it uses `fields[<palette>]`, else `field`).
+- **`when.photo`** (true or false): true only when the slide has a photo (a `photo` name, a `photo_hint`, or photos were given to the composer); false only when it has none. Put the photo rules first and keep two non-photo layouts for every slide type, so a deck without photos still looks designed.
+
+**Photo layouts:** `cover-photo-full` (photo fills the slide, big headline low or high where the photo is calmer), `cover-photo-shape` (photo cut to a shape with the headline under it; `shape`: arch, flower, blob, ellipse, pill, diamond, starburst, roundRect; `side`: left or right), `cover-photo-split` (photo above a colour block; `at`: share of the height; `offset`: true puts a colour block behind it), `content-photo-frame` (`frame`: phone, laptop, polaroid, ticket, offset, plain or glass; `tilt`: degrees), `content-photo-strip` (three photos; `stripGap`, `radius`), `stat-photo` (the number over a full photo), `quote-photo-blur` (the quote over a blurred photo; `glass`: true puts it in a glass card). Shared params: `treatment`, `bar`, `kicker`, `textAt` (top, bottom or middle, to force the place for words).
+
+**Photos are given to the composer** (`composeStyled(script, style, { photos })`) as `PhotoInput { id, src, width, height, focal?, stats?, label?, synthetic? }` (`analysePhoto` fills in `stats`). A slide names one with `"photo": "<id or label>"`; otherwise single-photo slides take them in turn and strips take the last three, so a strip does not repeat the photo next to it. The photo pictures are never inside a plan: only their address.
 
 ## assets/*.svg
 

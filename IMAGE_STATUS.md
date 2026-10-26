@@ -423,3 +423,34 @@ The ring round a number, a highlight phrase longer than a line, real writers on 
 - **Graceful failure:** a highlight that is not in the slide's text no longer fails a slide. It is left out, the slide is drawn, and the slide card shows "Highlight 'x' not found; drawn without it." (a note on the slide, also for styles that mark whole lines). Only `validatePlan`, used for hand-written plans, keeps the strict error.
 - Tested: 21 tests in `highlight-match.spec.ts` (the comparison, the validator, all four styles, the card in the app).
 - Which styles show the cover "UI card" (a report, nothing changed): only object-neon, and only when the headline is 7 words or fewer and there is room (3 of the 9 sample scripts). The card is the `visual: "ui-card"` setting of the `cover-top` layout; no other style sets it (dark-quiet's `cover-top` says `none`, hot-flat's draws an arrow asset, editorial-collage has no `cover-top`).
+
+
+## Step 11: The photo side (v1)
+
+Photos, treated and framed, in carousels. Built in the engine and the style system; **not in the app yet** (the Images screen is unchanged: no upload, no treatment controls; that is next).
+
+### What exists
+- **Treatments on an image layer** (`treatments` in the plan, applied in order, drawn in the browser at the layer's own pixel size, repeatable): grayscale, duotone (two colours), halftone, film grain (seeded), brightness/contrast/saturation, gaussian blur, directional motion blur, tint, vignette, edge fades (a dark fade from the bottom and so on), colour wash. The original is never changed and nothing leaves the browser.
+- **Masks:** rectangle, rounded rectangle, circle, pill, arch, diamond, six-petal flower, blob, starburst (paths in `draw/shapes.ts`).
+- **Frames** (`photo/frames.ts`, plain layers): phone, laptop, polaroid, ticket, 3-up strip, a colour block offset behind a photo, tilted white chip cards.
+- **Backgrounds:** a blurred colour field (`field` layer: blobs, blur, grain), a glow (a field with one blob), a glass card (`glass` layer: blurs what is behind it, translucent fill, soft border, rounded, optional shadow).
+- **Objects:** an image layer with `object` effects (soft contact shadow, floor reflection, glow), scale and rotation by the layer's own box; plus a `shadow` on image and shape layers.
+- **Photo-aware text:** `photo/analyse.ts` reads a photo into a 12 by 15 grid of brightness and detail (cropped the way it will be drawn); `photo/zones.ts` picks the calmest band for the words and works out an overlay (or a plate) for the 4.5:1 contrast with a margin; the page chrome (handle strip, dots, page number) is protected the same way; `photo/repair.ts` is the safety net after drawing (stronger overlay under the words, then a whole-photo overlay, then plates). No face finding.
+- **Photo slots in the script:** optional `photo` (the name of one of the person's photos) and `photo_hint` (at most 90 characters) per slide; the validator checks them, and both prompts (copied prompt and writer prompt) mention `photo_hint`. An empty slot draws a clean placeholder (a panel with a picture symbol, or a labelled frame) and the slide card gets a note; the plan's `meta.photoSlots` lists every slot (filled or not, hint, synthetic). It never fails a check.
+- **Seven photo layouts** (`styles/layouts-c.ts`): `cover-photo-full`, `cover-photo-shape`, `cover-photo-split`, `content-photo-frame` (phone, laptop, polaroid, ticket, offset block, plain or glass), `content-photo-strip`, `stat-photo`, `quote-photo-blur`.
+- **Three styles from references no stored style covered:** `mono-poster`, `film-paper`, `glass-gradient` (each a folder with `style.json` and an SVG asset where used). A style opts in with a `photo` block (named treatments, per-palette colour fields, glass look); a layout rule can ask `when: { photo: true }`.
+
+### Results (Results screen, "Step 11: Photo side"; TEST ASSETS: not shippable)
+- Treatment gallery: 37 plans, one per treatment, mask, frame, background and object effect, all on one of your photos (the objects use a labelled stand-in drawn in code).
+- 3 styles x 2 photo decks x 7 slides = 42 slides with your photos, every slide its own PNG, plan, lint and phone-size copy. All 42 pass the eight phone-size checks. 4 of the 33 photo slides needed the safety net (a stronger overlay) after drawing; none ended failing.
+- The same deck with no photos: the slides that asked for a photo draw placeholders and carry a warning; none fails.
+- My verdicts: mono-poster **close**, glass-gradient **close**, film-paper **off** (reasons and lists in the Results screen and in `tests/image-engine/step11-findings.json`).
+
+### What it could not do
+No transparent pictures were supplied, so the 3D-object style was not built and nothing is cut out of a photo (no fake cutouts). The object effects are shown on a synthetic stand-in. Not reproduced: the brush-script and serif/handwriting fonts (not bundled), torn paper, tape, stickers, the window-shaped crop, a folder-shaped glass card, a thin light headline weight. The test photos are mostly places, not people, so the people-led looks of the references are untested.
+
+### Weak
+Mono-poster's cover and stat photos are dark (your test photos are dark and are crushed to black and white under an overlay). Film-paper has one film recipe for every photo. On the dark gradient slides the colour field is faint (stronger fields failed the contrast check against orange words). Words can still land on a face, since there is no face finding.
+
+### Not tested
+Only Chrome. Treatments use the canvas blur filter (older browsers lack it). The `photo_hint` rule in the writer prompt was never run with a real writer. In the app, the three new styles appear in the style picker and in Pick for me; with no photos a photo style shows its non-photo layouts, and placeholders only on slides that carry a hint. Pick for me was not re-measured. No performance measurement.

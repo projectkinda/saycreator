@@ -203,6 +203,20 @@ The prompt (`src/carousel/writerPrompt.ts`) carries the person's text, the scrip
 
 Not in the contract yet: saving a finished carousel to the Images list or to a video project, more than one project at a time, brand colours and fonts from the Branding screen, server-side rendering, sharing for review, and a production server for the API writer.
 
+### Photos (Step 11, engine only: the Images screen does not use them yet)
+
+Additions the image engine accepts; nothing in the mock engine changes.
+
+| Piece | What it is |
+|---|---|
+| Script | A slide may carry `photo` (the name of a photo the person added) and `photo_hint` (at most 90 characters, what picture would suit it). Both optional. A slide with no photo for its slot draws a clean placeholder and a note on the slide card, never an error. |
+| Image layer | `treatments` (a list of at most 12 steps: grayscale, duotone, halftone, grain, levels, blur, motionBlur, tint, vignette, fade, wash), `object` (shadow `contact` or `drop`, `reflection`, `glow`; needs `fit: "contain"`), `shadow`, `synthetic` (true for a stand-in picture, so it is labelled wherever shown), and `mask.shape` may also be pill, arch, diamond, flower, blob or starburst. |
+| New layers | `field` (a blurred colour field: base colour, blobs, blur, grain, seed) and `glass` (a card that blurs what is behind it; not rotated). |
+| Plan meta | `photoSlots`: for each photo slot of a slide, whether it is filled, the hint, and whether the picture is a stand-in. |
+| In the browser | `analysePhoto(url)` reads a photo into a 12 by 15 grid (brightness, detail) used to place words; no network call, no model. `checkWithRepair` draws and checks a slide and, if the words still fail contrast on a full photo, strengthens the overlay, then adds a whole-photo overlay, then plates. |
+
+Not in the contract yet: uploading photos, choosing a photo per slide, treatments or frames in the editor, and cut-outs inside a carousel.
+
 ## Test switches (mock only)
 
 `mockControls.failNext('upload' | 'render' | 'text' | 'image' | 'connect' | 'payment' | 'support')` makes the next call fail. In dev it is also on
