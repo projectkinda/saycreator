@@ -1,6 +1,6 @@
 // Plain-language validation. Every problem is a sentence a person can act on.
 import { findHighlight } from './draw/words';
-import { FONT_FAMILIES, type Layer, type Plan } from './types';
+import { FONT_FAMILIES, MASK_SHAPES, type Layer, type Plan, type Treatment } from './types';
 
 const MAX_LAYERS = 60;
 const MIN_SIDE = 64;
@@ -49,7 +49,7 @@ function validateLayer(l: Layer, errors: string[]) {
   range(errors, who, 'opacity', l.opacity, 0, 1);
   if (l.role !== undefined && !ROLES.includes(l.role)) errors.push(`${who}: role must be decor, content or container.`);
   if (l.mask) {
-    if (!['rect', 'roundRect', 'ellipse'].includes(l.mask.shape)) errors.push(`${who}: mask shape must be rect, roundRect or ellipse.`);
+    if (!(MASK_SHAPES as readonly string[]).includes(l.mask.shape)) errors.push(`${who}: mask shape must be one of ${MASK_SHAPES.join(', ')}.`);
     range(errors, who, 'mask radius', l.mask.radius, 0, 4096, true);
   }
 
@@ -66,6 +66,55 @@ function validateLayer(l: Layer, errors: string[]) {
         range(errors, who, 'contrast', l.filters.contrast, -1, 1, true);
         range(errors, who, 'saturation', l.filters.saturation, -1, 1, true);
         range(errors, who, 'blur', l.filters.blur, 0, 40, true);
+      }
+      if (l.treatments !== undefined) {
+        if (!Array.isArray(l.treatments) || l.treatments.length > 12) errors.push(`${who}: treatments must be a list of at most 12 steps.`);
+        else l.treatments.forEach((t, i) => validateTreatment(t, `${who}: treatment ${i + 1}`, errors));
+      }
+      if (l.object !== undefined) {
+        if (l.fit !== 'contain') errors.push(`${who}: an object picture needs fit "contain".`);
+        range(errors, who, 'reflection', l.object.reflection, 0, 1, true);
+        if (l.object.shadow !== undefined && !['contact', 'drop'].includes(l.object.shadow)) errors.push(`${who}: the object shadow must be contact or drop.`);
+        if (l.object.glow) {
+          if (!isColor(l.object.glow.color)) errors.push(`${who}: the glow colour is not a colour.`);
+          range(errors, who, 'glow blur', l.object.glow.blur, 0, 300);
+          range(errors, who, 'glow amount', l.object.glow.amount, 0, 1);
+        }
+      }
+      if (l.shadow) {
+        if (!isColor(l.shadow.color)) errors.push(`${who}: the shadow colour is not a colour.`);
+        range(errors, who, 'shadow blur', l.shadow.blur, 0, 200);
+        range(errors, who, 'shadow offset', l.shadow.offsetX, -300, 300);
+        range(errors, who, 'shadow offset', l.shadow.offsetY, -300, 300);
+      }
+      break;
+    case 'field':
+      if (!isColor(l.base)) errors.push(`${who}: the base colour is not a colour.`);
+      if (!Array.isArray(l.blobs) || l.blobs.length > 16) errors.push(`${who}: a colour field needs a list of at most 16 blobs.`);
+      else
+        l.blobs.forEach((b, i) => {
+          if (!isColor(b.color)) errors.push(`${who}: blob ${i + 1} colour is not a colour.`);
+          range(errors, who, `blob ${i + 1} x`, b.x, -1, 2);
+          range(errors, who, `blob ${i + 1} y`, b.y, -1, 2);
+          range(errors, who, `blob ${i + 1} radius`, b.r, 0.01, 3);
+          range(errors, who, `blob ${i + 1} alpha`, b.alpha, 0, 1, true);
+        });
+      range(errors, who, 'blur', l.blur, 0, 400);
+      range(errors, who, 'grain', l.grain, 0, 1);
+      if (!Number.isInteger(l.seed)) errors.push(`${who}: the seed must be a whole number.`);
+      break;
+    case 'glass':
+      if (!isColor(l.fill)) errors.push(`${who}: the glass fill is not a colour.`);
+      range(errors, who, 'blur', l.blur, 0, 100);
+      range(errors, who, 'corner radius', l.radius, 0, 4096);
+      if (l.rotation !== 0) errors.push(`${who}: a glass card cannot be rotated.`);
+      if (l.border) {
+        if (!isColor(l.border.color)) errors.push(`${who}: the border colour is not a colour.`);
+        range(errors, who, 'border width', l.border.width, 0, 60);
+      }
+      if (l.shadow) {
+        if (!isColor(l.shadow.color)) errors.push(`${who}: the shadow colour is not a colour.`);
+        range(errors, who, 'shadow blur', l.shadow.blur, 0, 200);
       }
       break;
     case 'text': {
@@ -150,13 +199,60 @@ function validateLayer(l: Layer, errors: string[]) {
       break;
     }
     default:
-      errors.push(`${who}: "${String((l as { kind?: unknown }).kind)}" is not a layer type. Use image, text, shape, path or element.`);
+      errors.push(`${who}: "${String((l as { kind?: unknown }).kind)}" is not a layer type. Use image, text, shape, path, element, field or glass.`);
   }
   if ('filters' in l && l.kind !== 'image' && (l as { filters?: unknown }).filters)
     errors.push(`${who}: filters only work on image layers.`);
 }
 
 /** Returns a list of plain-language problems. Empty means the plan is valid. */
+const TREATMENT_OPS = ['grayscale', 'duotone', 'halftone', 'grain', 'levels', 'blur', 'motionBlur', 'tint', 'vignette', 'fade', 'wash'];
+export function validateTreatment(t: Treatment, who: string, errors: string[]) {
+  if (!t || typeof t !== 'object' || !TREATMENT_OPS.includes(t.op)) return void errors.push(`${who}: the step must be one of ${TREATMENT_OPS.join(', ')}.`);
+  const col = (name: string, v: unknown) => {
+    if (!isColor(v)) errors.push(`${who}: ${name} is not a colour.`);
+  };
+  switch (t.op) {
+    case 'grayscale':
+      return range(errors, who, 'amount', t.amount, 0, 1, true);
+    case 'duotone':
+      col('the dark colour', t.dark);
+      col('the light colour', t.light);
+      return range(errors, who, 'amount', t.amount, 0, 1, true);
+    case 'halftone':
+      col('the dark colour', t.dark);
+      col('the light colour', t.light);
+      range(errors, who, 'dot spacing', t.cell, 3, 120);
+      range(errors, who, 'angle', t.angle, -180, 180, true);
+      return range(errors, who, 'contrast', t.contrast, 0.2, 4, true);
+    case 'grain':
+      range(errors, who, 'amount', t.amount, 0, 1);
+      return range(errors, who, 'grain size', t.size, 1, 12, true);
+    case 'levels':
+      range(errors, who, 'brightness', t.brightness, -1, 1, true);
+      range(errors, who, 'contrast', t.contrast, -1, 1, true);
+      return range(errors, who, 'saturation', t.saturation, -1, 1, true);
+    case 'blur':
+      return range(errors, who, 'blur radius', t.radius, 0, 120);
+    case 'motionBlur':
+      range(errors, who, 'length', t.length, 0, 400);
+      return range(errors, who, 'angle', t.angle, -360, 360);
+    case 'tint':
+      col('the tint colour', t.color);
+      return range(errors, who, 'amount', t.amount, 0, 1);
+    case 'vignette':
+      return range(errors, who, 'amount', t.amount, 0, 1);
+    case 'fade':
+      col('the fade colour', t.color);
+      if (!['bottom', 'top', 'left', 'right'].includes(t.from)) errors.push(`${who}: a fade starts from bottom, top, left or right.`);
+      range(errors, who, 'amount', t.amount, 0, 1);
+      return range(errors, who, 'how far it reaches', t.start, 0.05, 1, true);
+    case 'wash':
+      col('the wash colour', t.color);
+      return range(errors, who, 'amount', t.amount, 0, 1);
+  }
+}
+
 export function validatePlan(plan: unknown): string[] {
   const errors: string[] = [];
   const p = plan as Partial<Plan> | null;

@@ -14,10 +14,43 @@ export interface ImageFilters {
   blur?: number;
 }
 
+/** The shape a layer is cut to. pill, arch, diamond, flower, blob and starburst fill the layer's box. */
+export const MASK_SHAPES = ['rect', 'roundRect', 'ellipse', 'pill', 'arch', 'diamond', 'flower', 'blob', 'starburst'] as const;
 export interface Mask {
-  shape: 'rect' | 'roundRect' | 'ellipse';
+  shape: (typeof MASK_SHAPES)[number];
   /** roundRect only, px */
   radius?: number;
+}
+
+/**
+ * What is done to a photo, in order. All of it happens at the layer's own pixel size, so a treatment never changes the box.
+ * Colours are hex or rgba. Amounts are 0 to 1 unless said.
+ */
+export type Treatment =
+  | { op: 'grayscale'; amount?: number }
+  /** Dark tones become `dark`, light tones `light`, in between a blend. */
+  | { op: 'duotone'; dark: string; light: string; amount?: number }
+  /** A dot screen: `cell` px between dots, `angle` in degrees. Ink is `dark` on `light`. */
+  | { op: 'halftone'; cell: number; angle?: number; dark: string; light: string; contrast?: number }
+  | { op: 'grain'; amount: number; size?: number; seed?: number }
+  /** brightness and contrast from -1 to 1 */
+  | { op: 'levels'; brightness?: number; contrast?: number; saturation?: number }
+  | { op: 'blur'; radius: number }
+  /** Smear along a direction. length in px, angle in degrees (0 = left to right). */
+  | { op: 'motionBlur'; length: number; angle: number }
+  | { op: 'tint'; color: string; amount: number }
+  | { op: 'vignette'; amount: number }
+  /** A gradient from an edge towards the middle. `start` (0 to 1) is how far in it is already clear. */
+  | { op: 'fade'; from: 'bottom' | 'top' | 'left' | 'right'; color: string; amount: number; start?: number }
+  /** One flat colour over the whole photo. */
+  | { op: 'wash'; color: string; amount: number };
+
+/** What a transparent object picture gets: a contact or drop shadow, a floor reflection, a glow. */
+export interface ObjectFx {
+  shadow?: 'contact' | 'drop';
+  /** Strength of the floor reflection, 0 to 1. */
+  reflection?: number;
+  glow?: { color: string; blur: number; amount: number };
 }
 
 /** A straight-edged gradient. angle is CSS-style: 0 = towards the top, 90 = towards the right, 180 = towards the bottom. */
@@ -62,6 +95,14 @@ export interface ImageLayer extends LayerBase {
   /** Where `cover` keeps the crop centred, 0 to 1 on each axis. Default 0.5, 0.5. */
   focal?: { x: number; y: number };
   filters?: ImageFilters;
+  /** Photo treatments, in order (grayscale, duotone, halftone, grain, blur...). */
+  treatments?: Treatment[];
+  /** A transparent object picture (a PNG cut-out): scaled to fit, with a shadow, reflection or glow. Needs fit "contain". */
+  object?: ObjectFx;
+  /** A soft shadow under the picture. */
+  shadow?: { color: string; blur: number; offsetX: number; offsetY: number };
+  /** A synthetic stand-in, not the person's own picture (a test object, a placeholder). The checker and the Results screen say so. */
+  synthetic?: boolean;
 }
 
 export interface TextStyle {
@@ -112,6 +153,35 @@ export interface ShapeLayer extends LayerBase {
   stroke?: { color: string; width: number };
   /** rect corners, px */
   radius?: number;
+  shadow?: { color: string; blur: number; offsetX: number; offsetY: number };
+}
+
+/** A soft, blurred colour field: big colour blobs over a base colour, with grain. A background for the glass look. */
+export interface FieldLayer extends LayerBase {
+  kind: 'field';
+  base: string;
+  /** Blob centres and radii are fractions of the box: x and y from 0 to 1, r is a fraction of the width. */
+  blobs: { x: number; y: number; r: number; color: string; alpha?: number }[];
+  /** Blur in px at final size. */
+  blur: number;
+  /** 0 to 1 */
+  grain: number;
+  seed: number;
+}
+
+/**
+ * A glass card: what is drawn behind it, blurred, with a translucent fill, a soft border and rounded corners.
+ * It blurs the layers before it in the list, so it must come after them. Rotation must be 0.
+ */
+export interface GlassLayer extends LayerBase {
+  kind: 'glass';
+  /** Translucent fill, for example rgba(255,255,255,0.18). */
+  fill: string;
+  /** Blur of what is behind, px. */
+  blur: number;
+  radius: number;
+  border?: { color: string; width: number };
+  shadow?: { color: string; blur: number; offsetX: number; offsetY: number };
 }
 
 /**
@@ -143,7 +213,7 @@ export interface ElementLayer extends LayerBase {
   shadow?: { color: string; blur: number; offsetX: number; offsetY: number };
 }
 
-export type Layer = ImageLayer | TextLayer | ShapeLayer | PathLayer | ElementLayer;
+export type Layer = ImageLayer | TextLayer | ShapeLayer | PathLayer | ElementLayer | FieldLayer | GlassLayer;
 
 export interface Canvas {
   width: number;
@@ -163,6 +233,8 @@ export interface Plan {
     elementTags?: string[];
     /** Areas a layout wants kept free of pictures: the line where a slide splits in two, and the arrow button on it. */
     keepClear?: { name: 'split' | 'arrow'; x: number; y: number; width: number; height: number }[];
+    /** The photo slots of a slide: whether each has a picture, and what the ideal picture is. */
+    photoSlots?: { id: string; filled: boolean; hint?: string; synthetic?: boolean }[];
   };
 }
 

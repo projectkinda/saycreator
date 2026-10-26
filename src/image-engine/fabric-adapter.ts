@@ -22,10 +22,12 @@ import type { CanvasAdapter, ExportOptions } from './adapter';
 import { getElementSvg } from './assets/library';
 import { prepareElement } from './assets/svg-prepare';
 import { clampRadius, containFit, coverCrop } from './draw/geometry';
+import { SHAPE_PATHS, isPathShape } from './draw/shapes';
+import { makeCanvas, renderField, renderObject, renderPhoto } from './draw/treat';
 import { layoutText } from './draw/text';
 import { FONT_WEIGHTS, loadFonts, nearestWeight } from './fonts';
 import { applyPatch } from './patcher';
-import type { ElementLayer, Fill, ImageLayer, Layer, PathLayer, Patch, PatchResult, Plan, RenderReport, RenderWarning, ShapeLayer, TextLayer } from './types';
+import type { ElementLayer, FieldLayer, Fill, GlassLayer, ImageLayer, Layer, PathLayer, Patch, PatchResult, Plan, RenderReport, RenderWarning, ShapeLayer, TextLayer } from './types';
 import { validatePlan } from './validate';
 
 interface Meta {
@@ -160,14 +162,23 @@ export class FabricAdapter implements CanvasAdapter {
 
     const canvas = this.canvas;
     const warnings: RenderWarning[] = [];
-    const built = await Promise.all(plan.layers.map((l) => (l.visible === false ? null : this.build(l, warnings))));
+    const built = await Promise.all(plan.layers.map((l) => (l.visible === false || l.kind === 'glass' ? null : this.build(l, warnings))));
 
     const activeId = canvas instanceof Canvas ? this.meta.get(canvas.getActiveObject() ?? {})?.layer.id : undefined;
     this.suppressSelect = true;
     canvas.clear();
     canvas.setDimensions({ width: plan.canvas.width, height: plan.canvas.height });
     canvas.backgroundColor = plan.canvas.background;
-    for (const obj of built) if (obj) canvas.add(obj);
+    for (let i = 0; i < built.length; i++) {
+      const l = plan.layers[i];
+      if (l.kind === 'glass' && l.visible !== false) {
+        // A glass card blurs what is drawn so far, so the picture so far is taken first.
+        canvas.renderAll();
+        const behind = canvas.toCanvasElement(1);
+        const obj = await this.build(l, warnings, behind);
+        if (obj) canvas.add(obj);
+      } else if (built[i]) canvas.add(built[i]!);
+    }
     this.suppressSelect = false;
     canvas.renderAll();
     this.current = structuredClone(plan);
@@ -192,7 +203,7 @@ export class FabricAdapter implements CanvasAdapter {
     return p;
   }
 
-  private async build(layer: Layer, warnings: RenderWarning[]): Promise<FabricObject | null> {
+  private async build(layer: Layer, warnings: RenderWarning[], behind?: HTMLCanvasElement): Promise<FabricObject | null> {
     const pad = layer.kind === 'text' ? Math.ceil(layer.style.stroke?.width ?? 0) + 2 : layer.kind === 'shape' || layer.kind === 'path' ? Math.ceil(layer.stroke?.width ?? 0) : 0;
     const w = layer.width;
     const h = layer.height;
@@ -206,6 +217,8 @@ export class FabricAdapter implements CanvasAdapter {
     } else if (layer.kind === 'shape') parts.push(this.buildShape(layer, pad));
     else if (layer.kind === 'path') parts.push(this.buildPath(layer, pad));
     else if (layer.kind === 'element') parts.push(...(await this.buildElement(layer, pad, warnings)));
+    else if (layer.kind === 'field') parts.push(this.buildField(layer, pad));
+    else if (layer.kind === 'glass') parts.push(...this.buildGlass(layer, pad, behind));
     else parts.push(...this.buildText(layer, pad, warnings));
 
     // Fixed size: the group is exactly the box (plus pad), so children can never move its centre.
@@ -234,6 +247,16 @@ export class FabricAdapter implements CanvasAdapter {
   private buildMask(layer: Layer, w: number, h: number): FabricObject {
     const m = layer.mask!;
     if (m.shape === 'ellipse') return new Ellipse({ rx: w / 2, ry: h / 2, originX: 'center', originY: 'center' });
+    if (m.shape === 'pill') {
+      const r = Math.min(w, h) / 2;
+      return new Rect({ width: w, height: h, rx: r, ry: r, originX: 'center', originY: 'center' });
+    }
+    if (isPathShape(m.shape)) {
+      // The shape is drawn in a 0 to 100 box, then stretched to the layer's box.
+      const p = new Path(SHAPE_PATHS[m.shape], { originX: 'center', originY: 'center', objectCaching: false });
+      p.set({ scaleX: w / p.width, scaleY: h / p.height, left: 0, top: 0 });
+      return p;
+    }
     const r = m.shape === 'roundRect' ? clampRadius(m.radius, w, h) : 0;
     return new Rect({ width: w, height: h, rx: r, ry: r, originX: 'center', originY: 'center' });
   }
@@ -249,6 +272,19 @@ export class FabricAdapter implements CanvasAdapter {
     const nw = el.naturalWidth || el.width;
     const nh = el.naturalHeight || el.height;
     let img: FabricImage;
+    const sh = layer.shadow ? new Shadow({ color: layer.shadow.color, blur: layer.shadow.blur, offsetX: layer.shadow.offsetX, offsetY: layer.shadow.offsetY }) : undefined;
+    if (layer.object) {
+      // A transparent object with its own shadow, reflection or glow, drawn at the size of its box.
+      img = new FabricImage(renderObject(el, layer.width, layer.height, layer.object), { left: pad, top: pad });
+      if (sh) img.shadow = sh;
+      return img;
+    }
+    if (layer.treatments && layer.treatments.length > 0) {
+      // Treated in the browser at the box's own pixel size, so the treatment never changes the box.
+      img = new FabricImage(renderPhoto(el, layer.width, layer.height, layer.fit, layer.focal, layer.treatments), { left: pad, top: pad, scaleX: layer.width / Math.round(layer.width), scaleY: layer.height / Math.round(layer.height) });
+      if (sh) img.shadow = sh;
+      return img;
+    }
     if (layer.fit === 'cover') {
       const c = coverCrop(nw, nh, layer.width, layer.height, layer.focal);
       img = new FabricImage(el, { left: pad, top: pad, cropX: c.sx, cropY: c.sy, width: c.sw, height: c.sh, scaleX: layer.width / c.sw, scaleY: layer.height / c.sh });
@@ -256,6 +292,7 @@ export class FabricAdapter implements CanvasAdapter {
       const f = containFit(nw, nh, layer.width, layer.height);
       img = new FabricImage(el, { left: pad + f.x, top: pad + f.y, scaleX: f.width / nw, scaleY: f.height / nh });
     }
+    if (sh) img.shadow = sh;
     const f = layer.filters;
     if (f) {
       const list = [];
@@ -270,9 +307,38 @@ export class FabricAdapter implements CanvasAdapter {
     return img;
   }
 
+  private buildField(layer: FieldLayer, pad: number): FabricObject {
+    return new FabricImage(renderField(layer.width, layer.height, layer.base, layer.blobs, layer.blur, layer.grain, layer.seed), { left: pad, top: pad });
+  }
+
+  /** A glass card: the picture behind it, blurred and clipped to a rounded box, then a translucent fill and a soft border. */
+  private buildGlass(layer: GlassLayer, pad: number, behind?: HTMLCanvasElement): FabricObject[] {
+    const w = Math.round(layer.width);
+    const h = Math.round(layer.height);
+    const r = clampRadius(layer.radius, w, h);
+    const out: FabricObject[] = [];
+    if (behind) {
+      // Blur the whole picture so far (a little bigger, so the edges stay solid), then cut out this card's part of it.
+      const blurred = makeCanvas(behind.width, behind.height);
+      const bg = blurred.getContext('2d')!;
+      bg.filter = `blur(${layer.blur}px)`;
+      bg.drawImage(behind, 0, 0);
+      const card = makeCanvas(w, h);
+      const g = card.getContext('2d')!;
+      g.drawImage(blurred, -layer.x, -layer.y);
+      const img = new FabricImage(card, { left: pad, top: pad });
+      img.clipPath = new Rect({ width: w, height: h, rx: r, ry: r, originX: 'center', originY: 'center' });
+      if (layer.shadow) img.shadow = new Shadow({ color: layer.shadow.color, blur: layer.shadow.blur, offsetX: layer.shadow.offsetX, offsetY: layer.shadow.offsetY });
+      out.push(img);
+    }
+    const bw = layer.border?.width ?? 0;
+    out.push(new Rect({ left: pad + bw / 2, top: pad + bw / 2, width: w - bw, height: h - bw, rx: r, ry: r, fill: layer.fill, stroke: layer.border?.color, strokeWidth: bw }));
+    return out;
+  }
+
   private buildShape(layer: ShapeLayer, pad: number): FabricObject {
     const sw = layer.stroke?.width ?? 0;
-    const common = { left: pad + sw / 2, top: pad + sw / 2, fill: paint(layer.fill, layer.width - sw, layer.height - sw), stroke: layer.stroke?.color, strokeWidth: sw };
+    const common = { left: pad + sw / 2, top: pad + sw / 2, fill: paint(layer.fill, layer.width - sw, layer.height - sw), stroke: layer.stroke?.color, strokeWidth: sw, ...(layer.shadow ? { shadow: new Shadow({ color: layer.shadow.color, blur: layer.shadow.blur, offsetX: layer.shadow.offsetX, offsetY: layer.shadow.offsetY }) } : {}) };
     if (layer.shape === 'ellipse') return new Ellipse({ ...common, rx: (layer.width - sw) / 2, ry: (layer.height - sw) / 2 });
     const r = clampRadius(layer.radius, layer.width, layer.height);
     return new Rect({ ...common, width: layer.width - sw, height: layer.height - sw, rx: r, ry: r });
