@@ -35,7 +35,8 @@ test.beforeAll(() => fs.mkdirSync(REAL_OUT, { recursive: true }));
 
 async function pictureOf(page: Page, selector: string): Promise<string> {
   return page.evaluate(async (sel) => {
-    const img = document.querySelector(sel) as HTMLImageElement;
+    const img = document.querySelector(sel) as HTMLImageElement | null;
+    if (!img) return '';
     const blob = await (await fetch(img.src)).blob();
     return await new Promise<string>((res) => {
       const r = new FileReader();
@@ -83,8 +84,11 @@ for (const run of RUNS.filter((r) => !only || r.id === only)) {
         const names: string[] = [];
         for (let k = 0; k < Math.min(pc, 3); k++) {
           const base = `ol[aria-label="Rounds"] > li:nth-child(${i + 1}) .rf-pair:nth-child(${k + 1})`;
-          fs.writeFileSync(path.join(dir, `round${i}-ref${k + 1}.png`), Buffer.from(await pictureOf(page, `${base} img:nth-child(1)`), 'base64'));
-          fs.writeFileSync(path.join(dir, `round${i}-ours${k + 1}.png`), Buffer.from(await pictureOf(page, `${base} .rf-pair-imgs img:nth-child(2)`), 'base64'));
+          const a = await pictureOf(page, `${base} .rf-pair-imgs img:nth-child(1)`);
+          const b = await pictureOf(page, `${base} .rf-pair-imgs img:nth-child(2)`);
+          if (!a || !b) continue;
+          fs.writeFileSync(path.join(dir, `round${i}-ref${k + 1}.png`), Buffer.from(a, 'base64'));
+          fs.writeFileSync(path.join(dir, `round${i}-ours${k + 1}.png`), Buffer.from(b, 'base64'));
           names.push(`round${i}-ref${k + 1}.png`, `round${i}-ours${k + 1}.png`);
         }
         out.push({ header, made, files: names });

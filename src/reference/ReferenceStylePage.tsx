@@ -65,10 +65,17 @@ export default function ReferenceStylePage() {
     for (const f of take) {
       try {
         const bm = await bitmapOf(f);
-        const small = cut(bm, null, 900);
-        const k = bm.width / small.width;
-        const g = detectGrid(pxOfCanvas(small));
-        const grid = g ? { ...g, cells: g.cells.map((c) => ({ x: Math.round(c.x * k), y: Math.round(c.y * k), width: Math.round(c.width * k), height: Math.round(c.height * k) })) } : null;
+        // Thin gutters can vanish at one size and show at another, so look at three sizes and take the first grid found.
+        let grid: GridResult | null = null;
+        for (const size of [1400, 900, 600]) {
+          const small = cut(bm, null, size);
+          const g = detectGrid(pxOfCanvas(small));
+          if (g) {
+            const k = bm.width / small.width;
+            grid = { ...g, cells: g.cells.map((c) => ({ x: Math.round(c.x * k), y: Math.round(c.y * k), width: Math.round(c.width * k), height: Math.round(c.height * k) })) };
+            break;
+          }
+        }
         const t = await jpegUrl(bm, null, 520);
         next.push({ id: `img${uploads.length + next.length + 1}`, name: f.name, bitmap: bm, thumb: t.url, width: bm.width, height: bm.height, grid, mode: grid ? 'grid' : 'single', ticked: grid ? grid.cells.map(() => true) : [], crop: null, learn: 'everything' });
       } catch {
