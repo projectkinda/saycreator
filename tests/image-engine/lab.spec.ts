@@ -133,7 +133,8 @@ test('Slides: a photo deck is labelled TEST ASSETS, and the deck with no photos 
   await scriptList(page).selectOption('photo:photo-creator-habits');
   const cards = page.locator('.res-pane:not([hidden]) .res-rec-card');
   await expect(cards).toHaveCount(7);
-  await expect(cards.first().locator('.chip-warn')).toContainText('TEST ASSETS');
+  // The first gallery picture (under Treatments) is one of your test photos.
+  await expect(pane.locator('.res-source', { has: page.getByRole('heading', { name: 'Treatments', exact: true }) }).locator('.res-gal-card').first().locator('.chip-warn')).toContainText('TEST ASSETS');
   await scriptList(page).selectOption('photo:no-photos');
   await expect(cards.first().locator('.chip-warn')).toContainText('NO PHOTOS');
 });
