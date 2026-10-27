@@ -8,6 +8,7 @@ import { outUrl, writeStepResults, type ResultsItem } from './results';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const FLOW = path.join(ROOT, 'out/image-engine/photos-app-flow');
+const OBJ = path.join(ROOT, 'out/image-engine/photos-app-object');
 
 test('Photos in the app: Results item', async () => {
   test.skip(!fs.existsSync(path.join(FLOW, 'timings.json')), 'Run photos-app-flow.spec.ts first.');
@@ -26,11 +27,19 @@ test('Photos in the app: Results item', async () => {
     shot('07-after-refresh.png', 'refresh', '7. After a refresh', 'The project comes back with its photos, treatments, crop points and objects, read out of this browser’s storage. The zip download is made from these slides.'),
   ];
 
+  const objShot = (file: string, id: string, title: string, caption: string): ResultsItem[] => (fs.existsSync(path.join(OBJ, file)) ? [shot2(file, id, title, caption)] : []);
+  const shot2 = (file: string, id: string, title: string, caption: string): ResultsItem => ({ id, title, tag: 'Made with a test picture drawn in the page (not your photo)', images: [{ url: outUrl(path.join(OBJ, file)), label: title }], facts: [caption] });
+  const objects: ResultsItem[] = [
+    ...objShot('08-object-free-space.png', 'object-free', '8. An object, placed by the slide', 'With no place chosen, the slide finds free space for the object: off the headline and the other words, and off the photo’s crop point when there is a choice. If it does not fit it is made smaller (down to 40%), and the card says so.'),
+    ...objShot('09-object-covers-words.png', 'object-bad', '9. A deliberately bad variant', 'The same object made big and put on the headline by hand. The new check “Object stays off the words” fails and says which words are covered; “Place automatically” gives the placing back to the slide.'),
+  ];
+
   const notes: ResultsItem[] = [
     { id: 'timings', title: 'Timings on this computer', images: [], facts: [`Ten photos (${t.photos.join(', ')}; ${(x.bytesOfTenPhotos / 1048576).toFixed(1)} MB in all) added together: ${secs(x.addTenPhotosMs)}. One slide drawn again after a treatment change: ${secs(x.redrawAfterTreatmentChangeMs)}; after moving the crop point: ${secs(x.redrawAfterCropMoveMs)}. A refresh to all seven slides drawn again (photos read back from storage): ${secs(x.refreshToAllSlidesDrawnMs)}. The zip of seven slides: ${secs(x.exportZipMs)} (${(x.zipBytes / 1048576).toFixed(1)} MB). One run in Chrome on this computer, not a benchmark; the test photos are drawn shapes, so real photos may be slower to decode.`] },
     { id: 'where', title: 'Where the pictures are', images: [], facts: ['In this browser’s own storage (IndexedDB), and nowhere else. The page never asks the network for a picture (a test checks this). The original file is kept as it was added; a working copy, turned the right way up and at most 3000 pixels on the long side, is what is drawn, so nothing is drawn below the 1080 by 1350 slide unless the original was smaller. If the browser would not store a picture, the person is told and the project keeps working until the refresh.'] },
-    { id: 'weak-object', title: 'Weak: an object can cover the words', images: [], tag: 'WEAK', facts: ['An object starts in the lower middle of the slide and can sit on top of the headline (see screenshot 6). It is not placed in free space for you, and the checks do not look at it: move it yourself.'] },
-    { id: 'weak-strips', title: 'Weak: the last three photos are kept for strips', images: [], tag: 'WEAK', facts: ['With five or more photos, single-photo slides take them in turn from the first ones and the last three are kept for the 3-up strip layout. A photo in that group is not put on a slide by itself; you can still put it on any slide by hand. The strip says "on 0 slides" for it, which can look like a mistake.'] },
+    { id: 'fixed-object', title: 'Fixed: an object no longer lands on the words', images: [], facts: ['The object is now placed in free space and a check fails when it covers words (see 8 and 9). Its box is the whole picture, transparent corners included, so the check is a little strict. If a slide has no room at all, the card says so instead of hiding it.'] },
+    { id: 'fixed-strips', title: 'Fixed: photos kept for the 3-up strip', images: [], facts: ['With five or more photos the last three are kept for the 3-up strip layout. The Photos strip now says “kept for the 3-up strip (drag it onto a slide to use it there)” instead of “on 0 slides”.'] },
+    { id: 'photo-layouts', title: 'A slide switches to a photo layout only when it has a photo or a photo hint', images: [], facts: ['Having photos in the project no longer turns every slide into a photo slide. A slide with neither shows “This slide has no photo slot. Add a photo, and it switches to a photo layout.”'] },
     { id: 'weak-text', title: 'Weak: words are placed for the photo’s first crop', images: [], tag: 'WEAK', facts: ['Where the words go on a photo is worked out from the photo with its crop centred. If you move the crop point a long way, the overlay may be too weak or too strong; the check after drawing adds a stronger overlay when contrast fails, but the first guess is for the centred crop.'] },
     { id: 'weak-formats', title: 'Weak: HEIC, and the browser can clear storage', images: [], tag: 'WEAK', facts: ['HEIC photos (iPhones) are read only by a browser that can decode them itself (Safari); in Chrome and others the card says "This is an HEIC photo. Convert it to JPG or PNG, then add it again." No permissively licensed reader exists (see LICENSES-ASSETS.md). A browser can clear a site’s storage; the project then shows "Not in storage" for those photos and asks to add them again.'] },
     { id: 'untested', title: 'Not tested', images: [], tag: 'NOT TESTED', facts: ['Only Chrome. Safari and Firefox (EXIF turning and drag and drop may differ), touch screens, a real full-storage browser (it was simulated by making the store fail), pictures over 100 million pixels (a 54 million pixel one was tried), and more than ten photos.'] },
@@ -43,7 +52,7 @@ test('Photos in the app: Results item', async () => {
     order: 12,
     intro: 'Adding your own photos inside Images > Make a carousel. Everything here was made by a test that uses the app like a person: it adds ten pictures drawn in the page (no private photo is used).',
     groups: [
-      { title: 'Photos in the app: the flow', items: flow },
+      { title: 'Photos in the app: the flow', items: [...flow, ...objects] },
       { title: 'Photos in the app: timings and findings', items: notes },
     ],
   });

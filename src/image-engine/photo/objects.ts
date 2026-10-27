@@ -20,21 +20,21 @@ export interface ObjectChoice {
   scale: number;
   /** Degrees, -180 to 180. */
   rotation: number;
-  /** Where the middle of the object is, as a share of the slide (0 to 1). */
-  x: number;
-  y: number;
+  /** Where the middle of the object is, as a share of the slide (0 to 1). Left out: the slide finds free space for it, off the words. */
+  x?: number;
+  y?: number;
   fx: ObjectFxChoice;
 }
 
-export const DEFAULT_OBJECT = { scale: 1, rotation: 0, x: 0.5, y: 0.62, fx: 'contact' } as const;
+export const DEFAULT_OBJECT = { scale: 0.8, rotation: 0, fx: 'contact' } as const;
 
 export function objectLayer(W: number, H: number, o: ObjectChoice, input: ObjectInput, glow: string): ImageLayer {
   const box = Math.round(W * 0.5 * Math.min(2.5, Math.max(0.15, o.scale)));
   const ratio = input.width / Math.max(1, input.height);
   const w = ratio >= 1 ? box : Math.round(box * ratio);
   const h = ratio >= 1 ? Math.round(box / ratio) : box;
-  const cx = Math.min(1, Math.max(0, o.x)) * W;
-  const cy = Math.min(1, Math.max(0, o.y)) * H;
+  const cx = Math.min(1, Math.max(0, o.x ?? 0.5)) * W;
+  const cy = Math.min(1, Math.max(0, o.y ?? 0.62)) * H;
   return {
     id: 'object',
     kind: 'image',

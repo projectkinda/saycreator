@@ -41,8 +41,9 @@ test('a slide with a photo hint has a photo slot with the hint as helper text; a
   await expect(c1.getByText('Your pictures stay in this browser. They are never sent anywhere.')).toBeVisible();
   // The empty slot is drawn as a placeholder, with a note, and the checks still pass.
   await expect(c1.getByText(/^Phone check: all \d+ pass/)).toBeVisible();
-  // A slide with no hint (and no photos) has no photo slot.
-  await expect(card(page, 2).getByRole('region', { name: 'Photo for slide 2' })).toHaveCount(0);
+  // A slide with no hint and no photo is not turned into a photo slide: it says so, and a photo can still be added to it.
+  await expect(card(page, 2).getByText('This slide has no photo slot. Add a photo, and it switches to a photo layout.')).toBeVisible();
+  await expect(card(page, 2).getByText(/^Ideal photo:/)).toHaveCount(0);
   // A style with no photo layouts: no photo control anywhere, and the strip says why.
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat colour/ }).click();
   await allDrawn(page, 7);
@@ -206,6 +207,117 @@ test('an object: a transparent PNG with size, turn, position and an effect; undo
   expect((await savedDoc(page))!.choices['1'].object).toBeUndefined();
   await undoBtn(page).click();
   await whenSaved(page, (d) => d.choices['1']?.object?.fx === 'glow');
+});
+
+test('a photo kept for the 3-up strip says so (never "on 0 slides"), and every photo says where it is used', async ({ page }) => {
+  await useScriptInStyle(page, photoScript(), STYLE);
+  const files = [];
+  for (let n = 0; n < 5; n++) files.push(await makePic(page, { name: `p${n + 1}.jpg`, w: 1400, h: 1000, hue: n * 60 }));
+  await stripInput(page).setInputFiles(files);
+  await expect.poll(async () => (await savedDoc(page))?.photos?.length).toBe(5);
+  await allDrawn(page, 7);
+  const items = page.getByRole('list', { name: /photos and/ }).getByRole('listitem');
+  await expect(items).toHaveCount(5);
+  const texts = await items.allInnerTexts();
+  for (const t of texts) expect(t, t).not.toContain('on 0 slides');
+  const kept = texts.filter((t) => t.includes('kept for the 3-up strip'));
+  // The first two are for single-photo slides; the last three are kept for the strip (and say so while no slide uses them).
+  expect(texts[0]).toMatch(/on [1-9]\d* slides?/);
+  expect(kept.length, texts.join(' | ')).toBe(3);
+  for (const t of texts.slice(0, 2)) expect(t).not.toContain('kept for the 3-up strip');
+  expect(kept[0]).toContain('drag it onto a slide');
+  // A kept photo can be used on a slide: drop it from the strip onto slide 1.
+  await dragOnto(page, '.cr-strip-item:nth-child(3)', '[data-testid="photo-drop-0"]');
+  await whenSaved(page, (d) => !!d.choices['0']?.photo?.id);
+  const d = (await savedDoc(page))!;
+  expect(d.photos!.find((p) => p.id === d.choices['0'].photo!.id)!.name).toBe('p3');
+});
+
+test('a slide has a photo layout only when it has a photo or a photo hint; adding a photo to a slide without a hint switches it', async ({ page }) => {
+  await useScriptInStyle(page, photoScript(), STYLE);
+  const files = [];
+  for (let n = 0; n < 3; n++) files.push(await makePic(page, { name: `q${n + 1}.jpg`, w: 1400, h: 1000, hue: n * 80 }));
+  await stripInput(page).setInputFiles(files);
+  await expect.poll(async () => (await savedDoc(page))?.photos?.length).toBe(3);
+  await allDrawn(page, 7);
+  // Slides 1, 3 and 5 have a hint: photo slots. The others have neither a hint nor a photo: no photo slot, whatever the project holds.
+  for (const n of [1, 3, 5]) await expect(card(page, n).getByText(/^Ideal photo:/), `slide ${n}`).toBeVisible();
+  for (const n of [2, 4, 6, 7]) {
+    await expect(card(page, n).getByText('This slide has no photo slot. Add a photo, and it switches to a photo layout.'), `slide ${n}`).toBeVisible();
+    expect(await card(page, n).getByLabel('Layout').inputValue(), `slide ${n}`).not.toMatch(/photo/);
+  }
+  // Giving a slide without a hint a photo switches it to a photo layout, where the style has one for that kind of slide;
+  // where it has none, the card says so.
+  const switched: number[] = [];
+  for (const n of [2, 4, 6, 7]) {
+    const before = await card(page, n).getByLabel('Layout').inputValue();
+    await card(page, n).getByLabel(`Use one of your photos on slide ${n}`).selectOption({ index: 1 });
+    await whenSaved(page, (d) => !!d.choices[String(n - 1)]?.photo?.id);
+    await allDrawn(page, 7);
+    const after = await card(page, n).getByLabel('Layout').inputValue();
+    if (/photo/.test(after)) {
+      switched.push(n);
+      expect(after, `slide ${n}`).not.toBe(before);
+      await expect(card(page, n).getByRole('button', { name: 'Remove photo' })).toBeVisible();
+    } else await expect(card(page, n).getByText('has no photo layout in this style'), `slide ${n}`).toBeVisible();
+  }
+  expect(switched.length, 'at least one kind of slide switches').toBeGreaterThan(0);
+});
+
+const OBJECT_CHECK = 'Object stays off the words';
+const objectShots = path.join(OUT, '..', 'photos-app-object');
+
+test('an object with no place chosen goes into free space: on every slide of the deck it stays off the words', async ({ page }) => {
+  test.setTimeout(180_000);
+  await useScriptInStyle(page, photoScript(), STYLE);
+  // Real photos in the slots (an empty slot is a hole for the person to fill, so the object keeps off it).
+  await stripInput(page).setInputFiles([await makePic(page, { name: 'one.jpg', w: 1600, h: 1200, hue: 20 }), await makePic(page, { name: 'two.jpg', w: 1200, h: 1600, hue: 140 }), await makePic(page, { name: 'three.jpg', w: 1500, h: 1500, hue: 220 })]);
+  await expect.poll(async () => (await savedDoc(page))?.photos?.length).toBe(3);
+  await allDrawn(page, 7);
+  await page.getByLabel('Choose transparent objects to add').setInputFiles(await makePic(page, { name: 'ball.png', w: 600, h: 600, type: 'image/png', hue: 280, transparent: true }));
+  await expect.poll(async () => (await savedDoc(page))?.photos?.some((p) => p.kind === 'object')).toBe(true);
+  for (let n = 1; n <= 7; n++) await card(page, n).getByLabel(`Use one of your objects on slide ${n}`).selectOption({ index: 1 });
+  await whenSaved(page, (d) => Object.values(d.choices).filter((c) => c.object).length === 7);
+  await allDrawn(page, 7);
+  const report: string[] = [];
+  for (let n = 1; n <= 7; n++) {
+    const c = card(page, n);
+    await expect(c.getByText(/^Phone check:/)).toBeVisible();
+    const choice = (await savedDoc(page))!.choices[String(n - 1)].object!;
+    expect(choice.x, `slide ${n} was not placed by hand`).toBeUndefined();
+    const failed = await c.locator('.cr-lint-fail', { hasText: OBJECT_CHECK }).count();
+    const noRoom = await c.getByText(/no free space for the object/).count();
+    fs.mkdirSync(objectShots, { recursive: true });
+    await c.screenshot({ path: path.join(objectShots, `object-auto-slide-${n}.png`) });
+    report.push(`slide ${n}: ${failed ? 'COVERS WORDS' : 'clear'}${noRoom ? ' (said there was no room)' : ''}`);
+    expect(failed, report.join('; ')).toBe(0);
+  }
+  console.log('[object placement]', report.join('; '));
+});
+
+test('the check "Object stays off the words" fails on a deliberately bad variant, and "Place automatically" fixes it', async ({ page }) => {
+  await useScriptInStyle(page, photoScript(), STYLE);
+  await page.getByLabel('Choose transparent objects to add').setInputFiles(await makePic(page, { name: 'ball.png', w: 600, h: 600, type: 'image/png', hue: 280, transparent: true }));
+  await expect.poll(async () => (await savedDoc(page))?.photos?.some((p) => p.kind === 'object')).toBe(true);
+  const c = card(page, 2);
+  await c.getByLabel('Use one of your objects on slide 2').selectOption({ index: 1 });
+  await whenSaved(page, (d) => !!d.choices['1']?.object);
+  await allDrawn(page, 7);
+  await expect(c.locator('.cr-lint-fail', { hasText: OBJECT_CHECK })).toHaveCount(0);
+  fs.mkdirSync(objectShots, { recursive: true });
+  await c.scrollIntoViewIfNeeded();
+  await c.screenshot({ path: path.join(objectShots, '08-object-free-space.png') });
+  // The bad variant: big, and put by hand on top of the headline.
+  await c.getByLabel('Object size on slide 2').fill('1.8');
+  await c.getByLabel('Object position across on slide 2').fill('0.5');
+  await c.getByLabel('Object position down on slide 2').fill('0.3');
+  await whenSaved(page, (d) => d.choices['1']?.object?.y === 0.3 && d.choices['1'].object.scale === 1.8);
+  await expect(c.locator('.cr-lint-fail', { hasText: OBJECT_CHECK })).toBeVisible({ timeout: 30_000 });
+  await expect(c.locator('.cr-lint-fail')).toContainText('The object covers');
+  await c.screenshot({ path: path.join(objectShots, '09-object-covers-words.png') });
+  await c.getByRole('button', { name: 'Place automatically' }).click();
+  await whenSaved(page, (d) => d.choices['1']?.object?.x === undefined);
+  await expect(c.locator('.cr-lint-fail', { hasText: OBJECT_CHECK })).toHaveCount(0, { timeout: 30_000 });
 });
 
 test('refresh: the project comes back with its photos, their treatment and crop, and the slide is drawn with them', async ({ page }) => {

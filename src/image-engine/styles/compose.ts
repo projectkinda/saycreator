@@ -13,6 +13,7 @@ import * as C from './layouts-c';
 import { chromeScrim, fieldLayer } from '../photo/slot';
 import type { PhotoInput } from '../photo/zones';
 import { objectLayer, type ObjectChoice, type ObjectInput } from '../photo/objects';
+import { boxesToAvoid, placeObject } from '../photo/objectPlace';
 import type { Treatment } from '../types';
 import { placeElements, type TestAsset } from './elements';
 import { labelText, pageNumber } from './tools';
@@ -188,7 +189,7 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
     const allPhotos = opts.photos ?? [];
     // A slot the person emptied on purpose stays empty: no photo is filled in for it.
     const pool = ov?.photo?.id === null ? [] : allPhotos;
-    let { rule, at, because } = pickRule(style, s.type, s, i, seen[s.type], allPhotos.length > 0 || ov?.photo?.id === null);
+    let { rule, at, because } = pickRule(style, s.type, s, i, seen[s.type], typeof ov?.photo?.id === 'string' || ov?.photo?.id === null);
     const choices = [...new Set(style.layouts[s.type].map((r) => r.use))];
     if (ov?.layout && ov.layout !== rule.use) {
       const j = style.layouts[s.type].findIndex((r) => r.use === ov.layout);
@@ -212,7 +213,18 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
     // An object the person placed: above the layout, under the page chrome.
     if (ov?.object) {
       const input = (opts.objects ?? []).find((x) => x.id === ov.object!.id);
-      if (input) add(c, objectLayer(W, H, ov.object, input, pal.accent));
+      if (input) {
+        let ob = ov.object;
+        // No place chosen by hand: free space, off the words (and off the photo's crop point), made smaller if it must be.
+        if (ob.x === undefined || ob.y === undefined) {
+          const focal = c.photoOverride?.focal ?? c.fullPhoto?.focal ?? { x: 0.5, y: 0.5 };
+          const p = placeObject(W, H, ob, input, boxesToAvoid(c.layers, W, H), { x: M, y: c.top, width: W - 2 * M, height: c.bottom - c.top }, c.fullPhoto ? { x: focal.x * W, y: focal.y * H } : undefined);
+          ob = { ...ob, x: p.x, y: p.y, scale: p.scale };
+          if (!p.free) c.notes.push('There is no free space for the object on this slide, so it covers some words. Make it smaller or move it.');
+          else if (p.shrunk) c.notes.push('The object was made smaller to fit in the free space.');
+        }
+        add(c, objectLayer(W, H, ob, input, pal.accent));
+      }
       else c.notes.push('The object picture for this slide is missing, so it is not drawn.');
     }
     // Page chrome (a handle strip, dots, a page number) over a full photo is kept readable too.

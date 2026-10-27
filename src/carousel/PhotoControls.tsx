@@ -132,11 +132,17 @@ export function PhotoControls({ index, slide, script, choice, object, pictures, 
 
   if (!hasSlot && !hasPhotoStyle) return null;
   const o = object;
+  // Where the object really is now (free space is found by the slide when the person has not placed it).
+  const placedLayer = slide.plan.layers.find((l) => l.id === 'object');
+  const atX = o ? o.x ?? (placedLayer ? Math.round(((placedLayer.x + placedLayer.width / 2) / slide.plan.canvas.width) * 100) / 100 : 0.5) : 0.5;
+  const atY = o ? o.y ?? (placedLayer ? Math.round(((placedLayer.y + placedLayer.height / 2) / slide.plan.canvas.height) * 100) / 100 : 0.62) : 0.62;
   const setObject = (patch: Partial<ObjectChoice>) => o && run(apply(patches.object(index, { ...o, ...patch })));
+  // Moving it by hand fixes both numbers; "Place automatically" gives the choice back to the slide.
+  const moveObject = (patch: { x?: number; y?: number }) => setObject({ x: atX, y: atY, ...patch });
 
   return (
     <div className="cr-photo">
-      {hasSlot && (
+      {(hasSlot || hasPhotoStyle) && (
         <section aria-label={`Photo for slide ${index + 1}`}>
           <h4 className="h4">Photo</h4>
           {hint && <p className="small muted cr-hint">Ideal photo: {hint}</p>}
@@ -150,6 +156,7 @@ export function PhotoControls({ index, slide, script, choice, object, pictures, 
               <p className="small muted">{choice?.id === null ? 'No photo on this slide. ' : ''}Drop a photo here{photos.length ? ', or drag one from the Photos strip' : ''}.</p>
             )}
           </div>
+          {!hasSlot && <p className="small muted">{typeof choice?.id === 'string' ? 'This kind of slide has no photo layout in this style, so the photo is not shown here.' : 'This slide has no photo slot. Add a photo, and it switches to a photo layout.'}</p>}
           {isMissing(slots[0]?.photo ?? '') && <p className="small cr-problem" role="alert">This photo is no longer in the browser’s storage. Add it again.</p>}
           <div className="cr-photo-actions">
             <button type="button" className="btn btn-outline btn-sm" onClick={() => fileRef.current?.click()}>{shownId ? 'Replace photo' : 'Add photo'}</button>
@@ -234,8 +241,8 @@ export function PhotoControls({ index, slide, script, choice, object, pictures, 
             <div className="cr-object-ctl">
               <label className="cr-range"><span className="small">Size</span><input type="range" min={0.15} max={2.5} step={0.05} value={o.scale} aria-label={`Object size on slide ${index + 1}`} onChange={(e) => setObject({ scale: Number(e.target.value) })} /></label>
               <label className="cr-range"><span className="small">Turn</span><input type="range" min={-180} max={180} step={1} value={o.rotation} aria-label={`Object rotation on slide ${index + 1}`} onChange={(e) => setObject({ rotation: Number(e.target.value) })} /></label>
-              <label className="cr-range"><span className="small">Across</span><input type="range" min={0} max={1} step={0.01} value={o.x} aria-label={`Object position across on slide ${index + 1}`} onChange={(e) => setObject({ x: Number(e.target.value) })} /></label>
-              <label className="cr-range"><span className="small">Down</span><input type="range" min={0} max={1} step={0.01} value={o.y} aria-label={`Object position down on slide ${index + 1}`} onChange={(e) => setObject({ y: Number(e.target.value) })} /></label>
+              <label className="cr-range"><span className="small">Across</span><input type="range" min={0} max={1} step={0.01} value={atX} aria-label={`Object position across on slide ${index + 1}`} onChange={(e) => moveObject({ x: Number(e.target.value) })} /></label>
+              <label className="cr-range"><span className="small">Down</span><input type="range" min={0} max={1} step={0.01} value={atY} aria-label={`Object position down on slide ${index + 1}`} onChange={(e) => moveObject({ y: Number(e.target.value) })} /></label>
               <label className="cr-inline">
                 <span className="field-label">Effect</span>
                 <select className="plain-select cr-select" value={o.fx} onChange={(e) => setObject({ fx: e.target.value as ObjectFxChoice })}>
@@ -244,7 +251,14 @@ export function PhotoControls({ index, slide, script, choice, object, pictures, 
                   ))}
                 </select>
               </label>
-              <p className="small muted">The object sits on top of the slide’s words and shapes: move it where it does not cover them.</p>
+              {o.x !== undefined || o.y !== undefined ? (
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => setObject({ x: undefined, y: undefined })}>Place automatically</button>
+              ) : (
+                <p className="small muted">Placed in the free space of the slide, off the words. Move it with Across and Down if you want it elsewhere.</p>
+              )}
+              {slide.notes.filter((n) => /object/i.test(n)).map((n) => (
+                <p key={n} className="small cr-warn" role="status"><span aria-hidden="true">⚠ </span>{n}</p>
+              ))}
             </div>
           )}
         </section>

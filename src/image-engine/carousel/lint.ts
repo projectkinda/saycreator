@@ -29,7 +29,7 @@ export const CAROUSEL_LIMITS = {
 /** The slide types the words check applies to. Cover, stat, quote and closing slides are short by design. */
 export const WORDS_CHECKED_TYPES = ['content', 'step', 'checklist', 'beforeafter'];
 
-export type CarouselLintId = 'fit' | 'size' | 'contrast' | 'orphan' | 'margins' | 'edges' | 'overlap' | 'related' | 'split' | 'words';
+export type CarouselLintId = 'fit' | 'size' | 'contrast' | 'orphan' | 'margins' | 'edges' | 'overlap' | 'related' | 'split' | 'words' | 'object';
 
 export interface CarouselLintResult {
   id: CarouselLintId;
@@ -53,6 +53,7 @@ export const CAROUSEL_CHECK_LABELS: Record<CarouselLintId, string> = {
   related: 'Elements match the slide',
   split: 'Elements stay off the split',
   words: 'Not too many words',
+  object: 'Object stays off the words',
 };
 
 export interface Box {
@@ -307,6 +308,18 @@ export function lintSlide(input: CarouselLintInput): CarouselLintResult[] {
       measured: n,
       limit: L.wordsFail,
     });
+  }
+
+  // 11. object: a picture the person placed (a product, a sticker) must not sit on top of any words. Its box is the whole picture,
+  // transparent corners included, so the check is a little strict.
+  const obj = layers.find((l) => l.id === 'object' && l.kind === 'image');
+  if (obj) {
+    const ob = layerBox(obj);
+    const hit = inks.filter((i) => {
+      const o = overlapOf(ob, i.box);
+      return o.w > L.slackPx && o.h > L.slackPx;
+    });
+    res('object', hit.length === 0, hit.length === 0 ? 'The object does not cover any words.' : `The object covers ${hit.slice(0, 2).map((i) => snippet(i.layer.text)).join(' and ')}${hit.length > 2 ? ` and ${hit.length - 2} more` : ''}. Move it, make it smaller, or use Place automatically.`, hit.length, 0);
   }
 
   return out;

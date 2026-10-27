@@ -32,6 +32,8 @@ export function PhotosStrip({ pictures, supported, styleTitle, addFiles, onRemov
   };
   const photos = pictures.filter((p) => p.kind === 'photo');
   const objects = pictures.filter((p) => p.kind === 'object');
+  // With five or more photos the last three are kept for the 3-up strip layout; single-photo slides do not take them by themselves.
+  const keptForStrip = (id: string) => photos.length >= 5 && photos.slice(-3).some((p) => p.id === id);
   return (
     <section className="card cr-strip" aria-labelledby="cr-photos-h">
       <div className="cr-strip-head">
@@ -67,7 +69,7 @@ export function PhotosStrip({ pictures, supported, styleTitle, addFiles, onRemov
                 <li key={p.id} className={`cr-strip-item${isMissing(p.id) ? ' missing' : ''}`} draggable={p.kind === 'photo' && !!url} onDragStart={(e) => e.dataTransfer.setData(PICTURE_DRAG, p.id)} aria-label={`${p.kind === 'photo' ? 'Photo' : 'Object'} ${p.name}`}>
                   {url ? <img src={url} alt="" draggable={false} /> : <span className="cr-strip-gone small">Not in storage</span>}
                   <span className="small cr-strip-name" title={p.name}>{p.name}</span>
-                  <span className="small muted">{p.width}×{p.height} · {mb(p.bytes)}{p.kind === 'object' ? ' · object' : n ? ` · on ${n} slide${n === 1 ? '' : 's'}` : ''}</span>
+                  <span className="small muted">{p.width}×{p.height} · {mb(p.bytes)}{p.kind === 'object' ? ' · object' : n ? ` · on ${n} slide${n === 1 ? '' : 's'}` : keptForStrip(p.id) ? ' · kept for the 3-up strip (drag it onto a slide to use it there)' : ''}</span>
                   <button type="button" className="btn btn-outline btn-sm" onClick={() => onRemove(p.id)} aria-label={`Remove ${p.name} from the project`}>Remove</button>
                 </li>
               );

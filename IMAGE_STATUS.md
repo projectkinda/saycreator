@@ -475,3 +475,10 @@ An object is not placed in free space and can cover words. With five or more pho
 
 ### Not tested
 Only Chrome; Safari and Firefox (EXIF and drag and drop), touch screens, real full storage (simulated by making the store fail), pictures over 100 million pixels (54 million tried), more than ten photos, and real photographs (the test pictures are drawn shapes; the private test photos were not used, by rule).
+
+### Cleanup after Step 12
+- **Shuffle elements** now always draws the slide's pictures differently from now when another arrangement exists (it tries random salts until one differs, `pickShuffleSalt`); when none does, the card says "No other pictures fit this slide." Tests seed `Math.random`; a test presses it 20 times.
+- **Object placement:** an object with no place chosen goes into free space (`photo/objectPlace.ts`): off every text as laid out, off cards and plates, off a full photo's crop point when there is a choice, made smaller (down to 40%) if it must be. A new lint check, "Object stays off the words", fails when the object's box covers words. Moving the object by hand fixes its place; "Place automatically" gives it back. The box is the whole picture, transparent corners included, so the check is a little strict.
+- **HEIC:** no MIT, Apache-2.0 or BSD reader exists (see `LICENSES-ASSETS.md`). A browser that decodes HEIC itself (Safari) is let through; the others show "This is an HEIC photo. Convert it to JPG or PNG, then add it again." beside the photo control.
+- **Strip photos** say "kept for the 3-up strip (drag it onto a slide to use it there)" instead of "on 0 slides".
+- **Photo layouts** are used only on slides that have a photo or a photo hint. A slide without either shows "This slide has no photo slot. Add a photo, and it switches to a photo layout." Where a style has no photo layout for that kind of slide, the card says so.
