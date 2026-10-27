@@ -1,0 +1,97 @@
+/* Images > Make a thumbnail. Reuses the carousel screen's pieces (drop area, subject pointer, chips, toolbar). */
+.tn-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.tn-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tn-sec h2,
+.tn-sec h3,
+.tn-sec p {
+  margin: 0;
+}
+.tn-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tn-drop .cr-focal img {
+  max-height: 300px;
+}
+.tn-pointer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+.tn-pointer > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 460px;
+}
+.tn-extras {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+  margin-top: 10px;
+}
+.tn-extras > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tn-topic {
+  width: 100%;
+  min-height: 64px;
+}
+.tn-written {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tn-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.tn-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+.tn-card.chosen {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.tn-pic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-thumb);
+  background: var(--surface);
+  overflow: hidden;
+  width: 100%;
+}
+.tn-pic img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+.tn-card h3,
+.tn-card p {
+  margin: 0;
+}

@@ -221,6 +221,7 @@ export default function Images() {
           ) : (
             <Link to="/images/carousel" className="btn btn-outline btn-lg">Make a carousel</Link>
           )}
+          <Link to="/images/thumbnail" className="btn btn-outline btn-lg">Make a thumbnail</Link>
         <button
           type="button"
           className="btn btn-primary btn-lg"

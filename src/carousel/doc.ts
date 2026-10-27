@@ -86,7 +86,7 @@ function setAt(root: Bag, path: Path, value: unknown): void {
 }
 
 /** Applies the steps and returns the inverse. No validation: used for undo and redo, which restore states that were valid. */
-export function applyRaw(doc: Doc, patch: DocPatch): { doc: Doc; inverse: DocPatch } {
+export function applyRaw<T extends object = Doc>(doc: T, patch: DocPatch): { doc: T; inverse: DocPatch } {
   const next = structuredClone(doc);
   const inverse: DocPatch = { label: patch.label, ...(patch.coalesce ? { coalesce: patch.coalesce } : {}), ops: [] };
   for (const op of patch.ops) {

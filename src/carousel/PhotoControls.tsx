@@ -17,7 +17,7 @@ export const PICTURE_DRAG = 'application/x-cr-picture';
 export type AddFiles = (files: File[], kind: 'photo' | 'object') => Promise<{ added: PictureMeta[]; messages: string[] }>;
 
 /** Shows the whole photo with a dot where the crop is centred. Drag the dot (or use the arrow keys) to keep the subject in the crop. */
-function FocalPicker({ url, focal, onMove, label }: { url: string; focal: { x: number; y: number }; onMove: (f: { x: number; y: number }) => void; label: string }) {
+export function FocalPicker({ url, focal, onMove, label }: { url: string; focal: { x: number; y: number }; onMove: (f: { x: number; y: number }) => void; label: string }) {
   const box = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const at = drag ?? focal;

@@ -14,7 +14,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
-export const SYSTEM_PROMPT = 'You write short social-media carousel scripts as strict JSON. You never add commentary. You never invent facts, statistics, names or quotes that are not in the text you are given.';
+export const SYSTEM_PROMPT = 'You write short social-media copy (carousel scripts, thumbnail titles) as strict JSON. You never add commentary. You never invent facts, statistics, names or quotes that are not in the text you are given.';
 const MAX_BODY = 80_000;
 export const CLI_TIMEOUT_MS = 240_000;
 export const API_TIMEOUT_MS = 120_000;
