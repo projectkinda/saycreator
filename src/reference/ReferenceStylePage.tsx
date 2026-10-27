@@ -55,6 +55,8 @@ export default function ReferenceStylePage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<ReferenceItem[]>([]);
   const [measured, setMeasured] = useState<Measured[]>([]);
+  /** The pieces are being cut and measured again after a change: Read references waits for them. */
+  const [preparing, setPreparing] = useState(false);
 
   const addFiles = async (files: File[]) => {
     const room = MAX_IMAGES - uploads.length;
@@ -93,6 +95,7 @@ export default function ReferenceStylePage() {
   // The pieces the style learns from, and their measurements.
   useEffect(() => {
     let live = true;
+    setPreparing(true);
     (async () => {
       const list: ReferenceItem[] = [];
       const ms: Measured[] = [];
@@ -107,6 +110,7 @@ export default function ReferenceStylePage() {
       if (live) {
         setItems(list);
         setMeasured(ms);
+        setPreparing(false);
       }
     })();
     return () => {
@@ -157,7 +161,7 @@ export default function ReferenceStylePage() {
   const abort = useRef<AbortController | null>(null);
   const ctx = useRef<{ content: SampleContent; spec: StyleSpec; name: string } | null>(null);
 
-  const canRead = items.length > 0 && !!readers?.length && !busy;
+  const canRead = items.length > 0 && !!readers?.length && !busy && !preparing;
   const read = async () => {
     const reader = readers![0];
     const base = getStyles().styles.find((s) => s.spec.name === baseName)?.spec ?? baseOptions[0].spec;
@@ -388,7 +392,7 @@ export default function ReferenceStylePage() {
           </label>
           <span className="small muted">{samplePic ? 'It stays in memory only.' : 'Without one, a built-in drawn landscape is used.'}</span>
         </div>
-        {readers && readers.length === 0 && <p className="small cr-warn" role="status">No reader is connected, so “Read references” is off. Start the app with the dev server (it uses Claude Code on this computer) or set ANTHROPIC_API_KEY on the server.</p>}
+        {readers && readers.length === 0 && <p className="small cr-warn" role="status">No reader is connected, so “Read references” is off. Start the app with the dev server (it uses Claude Code on this computer) or give the server an API key (see the server notes).</p>}
         {readers && readers.length > 0 && <p className="small muted" role="status">Reader: {readers[0].label}.</p>}
         <div className="cr-photo-actions">
           <button type="button" className="btn btn-primary btn-sm" disabled={!canRead} onClick={() => void read()}>Read references</button>
