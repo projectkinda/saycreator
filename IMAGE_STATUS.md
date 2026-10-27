@@ -454,3 +454,24 @@ Mono-poster's cover and stat photos are dark (your test photos are dark and are 
 
 ### Not tested
 Only Chrome. Treatments use the canvas blur filter (older browsers lack it). The `photo_hint` rule in the writer prompt was never run with a real writer. In the app, the three new styles appear in the style picker and in Pick for me; with no photos a photo style shows its non-photo layouts, and placeholders only on slides that carry a hint. Pick for me was not re-measured. No performance measurement.
+
+## Step 12: Photos in the app (Images > Make a carousel)
+
+### What exists
+- **A Photos strip** at the top of the editor: add photos (button or drop files), add transparent objects, see each picture's size and how many slides use it, drag one onto a slide, remove it. One plain sentence says the pictures stay in this browser and are never sent anywhere.
+- **A photo slot on each slide card** whose layout has one (only in the three photo styles): add, replace, remove, drop a file or a photo from the strip, or choose from a list ("Use a photo…", the keyboard way). The slide's `photo_hint` shows as "Ideal photo: ...". Styles or layouts with no photo slot show no photo control.
+- **Per photo, on each slide:** a treatment (the style's own look, none, black and white, duotone, halftone, grain, blur, tint) with a small live preview, a draggable crop point (arrow keys work too), a frame (on the frame layout) or a shape (on the cut-out cover). Every change is a patch with undo and redo.
+- **An object slot:** a transparent PNG with size, turn, position and an effect (soft shadow, drop shadow, glow).
+- **Storage:** IndexedDB in the browser (`photoStore.ts`): the original as added, and a working copy turned the right way up (EXIF) and at most 3000 px on the long side. Unreadable files, HEIC, files over 60 MB, pictures over 120 million pixels and empty files give plain messages and the rest of a batch still works. A photo that is small, or stretched past the existing "photo resolution for this crop" limit, is warned about. If the browser will not store a picture the person is told and the project keeps working until a refresh. A refresh brings the project back with its photos; "Start over" removes them from the browser too.
+- **Export** (single PNG and zip) is the same drawing as the cards: photos are drawn at the slide's size from the working copy, so nothing is drawn below the slide size unless the original was smaller.
+- **Platform cap:** choosing Instagram, LinkedIn, Facebook or X caps the slide count at 20, 20, 10 or 4, with the line "Capped at 4 for X". A script that is already longer is warned about, not cut.
+- **Engine additions** (nothing removed): per-slide `photo` and `object` choices in `SlideOverride`, `photoSlots[].photo` in the plan's meta, `objects` in the composer options, and the safety net (`checkWithRepair`) is now used for every slide drawn in the app.
+
+### Results (Photo tools > Photos in the app)
+Seven screenshots of the flow with ten test pictures (drawn in the page, never your photos), timings on this computer (one run: ten photos added in about 2 s, a slide drawn again in about 0.1 to 0.2 s, a refresh to all seven slides drawn in about 4 s, the zip in about 0.2 s), and what is weak.
+
+### Weak
+An object is not placed in free space and can cover words. With five or more photos the last three are kept for the 3-up strip, so a photo there is not put on a slide by itself. Words are placed for the photo's first, centred crop. HEIC cannot be read. The browser may clear its storage.
+
+### Not tested
+Only Chrome; Safari and Firefox (EXIF and drag and drop), touch screens, real full storage (simulated by making the store fail), pictures over 100 million pixels (54 million tried), more than ten photos, and real photographs (the test pictures are drawn shapes; the private test photos were not used, by rule).

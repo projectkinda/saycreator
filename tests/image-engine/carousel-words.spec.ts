@@ -137,19 +137,27 @@ test.describe('platform chip (the page)', () => {
     await expect(page.getByTestId('platform-warning')).toHaveCount(0);
   });
 
-  test('choosing X warns that 7 slides is too many, choosing it again clears it, and LinkedIn has no warning', async ({ page }) => {
+  test('choosing X caps the 7 slides at 4 and says so; the list stops at 4; choosing it again lifts the limit; LinkedIn leaves 4 alone', async ({ page }) => {
     await open(page);
+    const slides = page.getByRole('combobox', { name: /^Slides/ });
     await chip(page, 'X').click();
     await expect(chip(page, 'X')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('platform-warning')).toContainText('X allows at most 4 slides in a post, and 7 are asked for');
-    await page.getByRole('combobox', { name: /^Slides/ }).selectOption('4');
-    await expect(page.getByTestId('platform-warning')).toHaveCount(0);
-    await page.getByRole('combobox', { name: /^Slides/ }).selectOption('7');
+    await expect(slides).toHaveValue('4');
+    await expect(page.getByTestId('platform-cap')).toContainText('Capped at 4 for X');
+    await expect(page.getByTestId('platform-cap')).toContainText('X allows up to 4 slides in a post');
+    expect(await slides.locator('option').allTextContents()).toEqual(['3', '4']);
     await chip(page, 'X').click();
     await expect(chip(page, 'X')).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.getByTestId('platform-warning')).toHaveCount(0);
+    await expect(page.getByTestId('platform-cap')).toHaveCount(0);
+    expect((await slides.locator('option').allTextContents()).length).toBe(8);
+    await slides.selectOption('7');
+    await chip(page, 'Facebook').click();
+    await expect(slides).toHaveValue('7');
+    await expect(page.getByTestId('platform-cap')).not.toContainText('Capped');
+    await slides.selectOption('10');
+    await chip(page, 'Facebook').click();
     await chip(page, 'LinkedIn').click();
-    await expect(page.getByTestId('platform-warning')).toHaveCount(0);
+    await expect(slides).toHaveValue('10');
     await page.screenshot({ path: path.join(OUT, 'platform-chip.png') });
   });
 

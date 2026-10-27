@@ -215,7 +215,9 @@ Additions the image engine accepts; nothing in the mock engine changes.
 | Plan meta | `photoSlots`: for each photo slot of a slide, whether it is filled, the hint, and whether the picture is a stand-in. |
 | In the browser | `analysePhoto(url)` reads a photo into a 12 by 15 grid (brightness, detail) used to place words; no network call, no model. `checkWithRepair` draws and checks a slide and, if the words still fail contrast on a full photo, strengthens the overlay, then adds a whole-photo overlay, then plates. |
 
-Not in the contract yet: uploading photos, choosing a photo per slide, treatments or frames in the editor, and cut-outs inside a carousel.
+In the carousel editor (Step 12): the project (`Doc`) has `photos` (what the person added: id, kind, name, size; the pictures themselves are in the browser's IndexedDB, never sent anywhere) and, per slide under `choices`, `photo` (`id` or null for empty on purpose, `treatment`, `focal`, `frame`, `shape`) and `object` (`id`, `scale`, `rotation`, `x`, `y`, `fx`). All of these are patches with undo and redo except the list of pictures. `options.platform` (Instagram, LinkedIn, Facebook, X) caps the slide count asked of the writer.
+
+Not in the contract yet: cut-outs made inside a carousel, photos shared between projects, and anything that sends a picture off the device.
 
 ## Test switches (mock only)
 

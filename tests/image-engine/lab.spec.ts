@@ -143,7 +143,9 @@ test('Photo tools: the gallery is grouped, each picture has a caption, a label c
   await openResults(page, 'Photo tools');
   const pane = page.locator('.res-pane:not([hidden])');
   const groups = await pane.locator('h3').allTextContents();
-  expect(groups).toEqual(['Treatments', 'Shapes and frames', 'Backgrounds', 'Objects', 'Findings and weak points']);
+  // "Photos in the app" comes first once its test has written its results.
+  const withApp = fs.existsSync(path.join(RESULTS_DIR, 'photos-app.json')) ? ['Photos in the app'] : [];
+  expect(groups).toEqual([...withApp, 'Treatments', 'Shapes and frames', 'Backgrounds', 'Objects', 'Findings and weak points']);
   const cards = pane.locator('.res-gal-card');
   expect(await cards.count()).toBeGreaterThanOrEqual(37);
   await expect(cards.first().locator('figcaption')).not.toBeEmpty();
