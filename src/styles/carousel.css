@@ -243,3 +243,172 @@
   max-height: calc(96vh - 90px);
   margin: 0 auto;
 }
+
+/* ---- photos in the editor ---- */
+.cr-strip {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.cr-strip p {
+  margin: 0;
+}
+.cr-strip-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.cr-strip-drop {
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius-thumb);
+  padding: 10px;
+}
+.cr-strip-drop.over,
+.cr-drop.over {
+  border-color: var(--accent);
+  background: var(--surface-tint);
+}
+.cr-strip-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+}
+.cr-strip-item {
+  flex: 0 0 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: grab;
+}
+.cr-strip-item img {
+  width: 132px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.cr-strip-item.missing {
+  opacity: 0.6;
+}
+.cr-strip-gone {
+  width: 132px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border-radius: 8px;
+}
+.cr-strip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cr-photo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.cr-photo section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cr-photo h4 {
+  margin: 0;
+}
+.cr-photo p {
+  margin: 0;
+}
+.cr-hint {
+  font-style: italic;
+}
+.cr-drop {
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius-thumb);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.cr-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.cr-focal {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  touch-action: none;
+  cursor: crosshair;
+  line-height: 0;
+}
+.cr-focal img {
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 8px;
+  display: block;
+  user-select: none;
+}
+.cr-focal-dot {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  cursor: grab;
+}
+.cr-focal-dot:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 2px;
+}
+.cr-treat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+.cr-treat-prev {
+  width: 96px;
+  height: 120px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  flex: none;
+}
+.cr-object-ctl {
+  display: grid;
+  gap: 6px;
+}
+.cr-range {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+/* The treatment choices are radio buttons: they look chosen the same way as the other chips. */
+.chip-btn[aria-checked='true'] {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--page);
+  font-weight: 600;
+}
+.cr-strip-item .btn {
+  margin-top: auto;
+}

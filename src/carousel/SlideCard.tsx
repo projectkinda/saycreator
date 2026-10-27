@@ -10,6 +10,11 @@ import { patches } from './doc';
 import { FieldEditor, LintBadges, TagEditor, type Apply } from './parts';
 import type { Rendered } from './render';
 import { FIELDS, TYPE_LABEL } from './script';
+import type { Palette } from '../image-engine/carousel/types';
+import type { ObjectChoice } from '../image-engine/photo/objects';
+import { PhotoControls, type AddFiles } from './PhotoControls';
+import type { PhotoChoice } from './photoChoices';
+import type { PictureMeta } from './photoLibrary';
 
 export interface SlideView {
   status: 'drawing' | 'ready' | 'error';
@@ -41,7 +46,13 @@ function Alternatives({ slide, info, used, onPick }: { slide: StyledSlide; info:
   );
 }
 
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onOpen, onDownload, deckLabel }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+  photo?: PhotoChoice;
+  object?: ObjectChoice;
+  pictures: PictureMeta[];
+  palette: Palette;
+  hasPhotoStyle: boolean;
+  addFiles: AddFiles;
   index: number;
   count: number;
   slide: StyledSlide;
@@ -62,7 +73,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onO
   const rec = script as unknown as Record<string, unknown>;
 
   return (
-    <li className="card cr-card" aria-label={title}>
+    <li className="card cr-card" aria-label={title} data-status={view?.status ?? "drawing"}>
       <div className="cr-pic">
         <button type="button" className="cr-pic-btn" onClick={onOpen} disabled={!view?.url} aria-label={`Open ${deckLabel} slide ${index + 1} full size`}>
           {view?.url ? <img src={view.url} alt={`${deckLabel}, slide ${index + 1}: ${slide.type}, ${slide.layout} layout`} width={216} height={216 * (slide.plan.canvas.height / slide.plan.canvas.width)} /> : <span className="cr-pic-wait small muted" role="status">{view?.status === 'error' ? 'Could not draw this slide' : 'Drawing…'}</span>}
@@ -86,6 +97,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onO
           <FieldEditor key={f.key} index={index} def={f} value={rec[f.key]} apply={apply} />
         ))}
         <TagEditor index={index} tags={script.element_tags ?? []} apply={apply} />
+        <PhotoControls index={index} slide={slide} script={script} choice={photo} object={object} pictures={pictures} palette={palette} hasPhotoStyle={hasPhotoStyle} apply={apply} addFiles={addFiles} />
         <div className="cr-actions">
           <label className="cr-inline">
             <span className="field-label">Layout</span>

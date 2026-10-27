@@ -5,7 +5,7 @@ import { WriterError, detectProviders, generateScript, type GenerateResult, type
 import { MAX_CHARS, TONES, textProblem, type WriteRequest } from './writerPrompt';
 import { FORMATS, SLIDE_RANGE, type Format, type Issue } from './script';
 import { getStyles } from './render';
-import { PLATFORMS, isPlatform, platformWarning } from './platform';
+import { PLATFORMS, isPlatform, platformOf, platformWarning, type Platform } from './platform';
 
 /** The style used when the writer does not name one: by tone. Only names that exist are used. */
 const TONE_STYLE: Record<string, string> = { clear: 'dark-quiet', bold: 'hot-flat', friendly: 'editorial-collage', expert: 'object-neon' };
@@ -79,8 +79,23 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
   const disabled = busy || !!why || !!problem;
   const label = (doc.format === 'quote' ? 'Cards' : 'Slides');
   const platform = isPlatform(options.platform) ? options.platform : null;
-  const asked = Math.min(hi, Math.max(lo, options.slides));
-  const platformNote = doc.format === 'carousel' ? (doc.script ? platformWarning(doc.script.slides.length, platform) : null) ?? platformWarning(asked, platform, 'asked') : null;
+  const plat = doc.format === 'carousel' ? platformOf(platform) : null;
+  const ceiling = plat ? plat.max : hi;
+  const asked = Math.min(hi, Math.max(lo, options.slides), ceiling);
+  const [cap, setCap] = useState('');
+  // A script that is already longer than the platform allows is warned about (it is not cut).
+  const platformNote = doc.format === 'carousel' && doc.script ? platformWarning(doc.script.slides.length, platform) : null;
+  const choosePlatform = (p: Platform) => {
+    const next = platform === p ? null : p;
+    const nx = platformOf(next);
+    if (nx && options.slides > nx.max) {
+      setOptions({ platform: next, slides: nx.max });
+      setCap(`Capped at ${nx.max} for ${nx.label}`);
+    } else {
+      setOptions({ platform: next });
+      setCap('');
+    }
+  };
   return (
     <section className="card ws-card" aria-labelledby="cr-make-h">
       <h2 id="cr-make-h" className="h3">Make it from your text</h2>
@@ -103,8 +118,12 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
           </div>
           <label className="cr-inline">
             <span className="field-label">{label}</span>
-            <select className="plain-select cr-select" value={Math.min(hi, Math.max(lo, options.slides))} disabled={busy} onChange={(e) => setOptions({ slides: Number(e.target.value) })}>
-              {counts.map((c) => (
+            <select className="plain-select cr-select" value={asked} disabled={busy} onChange={(e) => {
+              const n = Number(e.target.value);
+              setOptions({ slides: Math.min(n, ceiling) });
+              setCap(plat && n > plat.max ? `Capped at ${plat.max} for ${plat.label}` : '');
+            }}>
+              {counts.filter((c) => c <= ceiling).map((c) => (
                 <option key={c} value={c}>{c}{c === DEFAULT_OPTIONS.slides && doc.format === 'carousel' ? ' (usual)' : ''}</option>
               ))}
             </select>
@@ -113,7 +132,7 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
             <span className="field-label" id="cr-platform-l">Platform</span>
             <div role="group" aria-labelledby="cr-platform-l" className="chip-group">
               {PLATFORMS.map((p) => (
-                <button key={p.id} type="button" className="chip-btn" aria-pressed={platform === p.id} disabled={busy} title={`At most ${p.max} slides. Press again to clear.`} onClick={() => setOptions({ platform: platform === p.id ? null : p.id })}>
+                <button key={p.id} type="button" className="chip-btn" aria-pressed={platform === p.id} disabled={busy} title={`At most ${p.max} slides. Press again to clear.`} onClick={() => choosePlatform(p.id)}>
                   {p.label}
                 </button>
               ))}
@@ -135,6 +154,12 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
           </div>
         </div>
 
+        {plat && (
+          <p className="small muted" role="status" data-testid="platform-cap">
+            {cap ? <strong>{cap}. </strong> : null}
+            {plat.label} allows up to {plat.max} slides in a post.
+          </p>
+        )}
         {platformNote && (
           <p className="small cr-problem" role="status" data-testid="platform-warning">
             {platformNote}

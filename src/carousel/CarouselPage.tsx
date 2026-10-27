@@ -12,7 +12,10 @@ import { pickStyle } from './pickStyle';
 import { type WriteRequest } from './writerPrompt';
 import { downloadBlob, exportAllAsZip, slideFileName, zipFileName } from './export';
 import { composeDoc, getStyles, renderer, styleByName, type Rendered } from './render';
-import { platformWarning } from './platform';
+import { platformOf, platformWarning } from './platform';
+import { PhotosStrip } from './PhotosStrip';
+import type { AddFiles } from './PhotoControls';
+import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, useLibraryVersion, type PictureMeta } from './photoLibrary';
 import { SlideCard, type SlideView } from './SlideCard';
 import { PASTE_KEY, readStore, useProject, writeStore } from './useProject';
 import '../styles/carousel.css';
@@ -119,10 +122,19 @@ function FullSize({ items, at, onClose, onMove }: { items: { url: string; alt: s
 export default function CarouselPage() {
   useDocumentTitle('Make a carousel');
   const proj = useProject(styleByName(DEFAULT_STYLE) ? DEFAULT_STYLE : getStyles().styles[0]?.spec.name ?? DEFAULT_STYLE);
-  const { project, apply, undo, redo, setTopic, setOptions, startOver } = proj;
+  const { project, apply, undo, redo, setTopic, setOptions, setPhotos, startOver } = proj;
   const { doc, past, future } = project;
   const options = { ...DEFAULT_OPTIONS, ...doc.options };
   const style = styleByName(doc.style);
+  const pictures = doc.photos ?? [];
+  const libVersion = useLibraryVersion();
+  const hasPhotoStyle = !!style?.spec.photo;
+  const [lowRoom, setLowRoom] = useState('');
+  // After a refresh the pictures come back out of the browser's storage.
+  useEffect(() => {
+    void hydrate(pictures);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // pasted text (kept across refreshes) and its live check
   const [pasted, setPasted] = useState(() => readStore(PASTE_KEY) ?? '');
@@ -208,7 +220,36 @@ export default function CarouselPage() {
     // Slides that are being redrawn keep their old picture until the new one is ready.
     setViews((v) => Object.fromEntries(Object.entries(v).filter(([k]) => Number(k) < composed.slides.length).map(([k, x]) => [k, { ...x, status: 'drawing' as const }])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.script, doc.style, doc.format, doc.choices]);
+  }, [doc.script, doc.style, doc.format, doc.choices, doc.photos, libVersion]);
+
+  /** Adds files to the project's pictures. Unusable files are reported in plain words and skipped; the rest are added. */
+  const addFiles: AddFiles = async (files, kind) => {
+    const added: PictureMeta[] = [];
+    const messages: string[] = [];
+    for (const f of files) {
+      try {
+        const r = await addPicture(f, kind);
+        added.push(r.meta);
+        messages.push(...r.notes);
+      } catch (e) {
+        messages.push(e instanceof PictureError ? e.message : `"${f.name}" could not be added: ${(e as Error).message}`);
+      }
+    }
+    if (added.length) setPhotos((before) => [...before, ...added]);
+    const prob = currentStorageProblem();
+    if (prob) messages.push(prob);
+    setLowRoom(await storageRoomNote());
+    return { added, messages };
+  };
+  const usedOn = (id: string) => slides.filter((s) => s.plan.meta?.photoSlots?.some((p) => p.photo === id)).length + Object.values(doc.choices).filter((c) => c.object?.id === id).length;
+  const removePictureEverywhere = async (id: string) => {
+    const n = usedOn(id);
+    if (n > 0 && !window.confirm(`This picture is on ${n} slide${n === 1 ? '' : 's'}. Remove it anyway? Those slides go back to filling their photo from your list.`)) return;
+    const ops = Object.entries(doc.choices).flatMap(([k, c]) => [...(c.photo?.id === id ? [{ path: ['choices', k, 'photo', 'id'] as (string | number)[], value: undefined }] : []), ...(c.object?.id === id ? [{ path: ['choices', k, 'object'] as (string | number)[], value: undefined }] : [])]);
+    if (ops.length) apply({ label: 'Remove a picture from its slides', ops });
+    await removePicture(id);
+    setPhotos((before) => before.filter((p) => p.id !== id));
+  };
 
   const deck = doc.script?.title ?? 'carousel';
   const ready = slides.length > 0 && slides.every((_, i) => views[i]?.rendered && views[i].status === 'ready');
@@ -268,7 +309,8 @@ export default function CarouselPage() {
     const [lo, hi] = SLIDE_RANGE[doc.format];
     const req: WriteRequest = {
       text: doc.topic,
-      slides: Math.min(hi, Math.max(lo, options.slides)),
+      // A chosen platform sets a ceiling; the count asked for is capped to it (the chip says so).
+      slides: Math.min(hi, Math.max(lo, options.slides), doc.format === 'carousel' ? platformOf(options.platform)?.max ?? hi : hi),
       tone: options.tone,
       format: doc.format,
       styleChoice: options.autoStyle ? 'auto' : doc.style,
@@ -410,6 +452,8 @@ export default function CarouselPage() {
         </div>
       )}
 
+      <PhotosStrip pictures={pictures} supported={hasPhotoStyle} styleTitle={style?.spec.title ?? 'This style'} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} usedOn={usedOn} storageProblem={currentStorageProblem()} lowRoom={lowRoom} />
+
       <section aria-labelledby="cr-slides-h" className="cr-slides-sec">
         <div className="cr-toolbar">
           <h2 id="cr-slides-h" className="h3">{hasWork ? `Your ${doc.format === 'quote' ? 'cards' : 'slides'}` : '4. Your slides'}</h2>
@@ -428,7 +472,8 @@ export default function CarouselPage() {
               className="btn btn-outline btn-sm"
               disabled={!hasWork && !doc.topic}
               onClick={() => {
-                if (window.confirm('Start over? This removes the script and every edit from this browser.')) {
+                if (window.confirm('Start over? This removes the script, every edit and your pictures from this browser.')) {
+                  pictures.forEach((p) => void removePicture(p.id));
                   startOver(doc.style);
                   setNotice('Started over.');
                 }
@@ -465,6 +510,12 @@ export default function CarouselPage() {
                 onOpen={() => setOpen(i)}
                 onDownload={() => downloadOne(i)}
                 deckLabel={deck}
+                photo={doc.choices[String(i)]?.photo}
+                object={doc.choices[String(i)]?.object}
+                pictures={pictures}
+                palette={style.spec.palettes[s.palette]}
+                hasPhotoStyle={hasPhotoStyle}
+                addFiles={addFiles}
               />
             ))}
           </ol>
