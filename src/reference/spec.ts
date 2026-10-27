@@ -85,6 +85,8 @@ function mergeSection(key: string, base: unknown, over: unknown): unknown {
 }
 
 export interface AssembleOptions {
+  /** Receives a plain sentence for every value that had to be moved to what the toolbox supports. */
+  notes?: string[];
   /** The sections the references allow the style to take (see LEARN_SECTIONS). Others keep the base style's values. */
   sections: string[];
   /** The unique style name (also its folder name for validation), for example "mine-bold-poster-ab12". */
@@ -109,28 +111,46 @@ export function assembleSpec(base: StyleSpec, answer: Bag, o: AssembleOptions): 
   delete spec.notReproduced;
   if (typeof answer.description === 'string' && o.sections.includes('description') && answer.description.length >= 10) spec.description = answer.description.slice(0, 140);
   else spec.description = (typeof base.description === 'string' ? base.description : 'A style made from your own references.').slice(0, 140);
-  return cleanSpec(spec as unknown as StyleSpec, o.target);
+  return cleanSpec(spec as unknown as StyleSpec, o.target, o.notes);
 }
 
 /** Makes every cross-reference hold: palette names, treatment names, assets, weights, ranges. Never invents content. */
-export function cleanSpec(s: StyleSpec, target: Target): StyleSpec {
+export function cleanSpec(s: StyleSpec, target: Target, notes?: string[]): StyleSpec {
   const spec = clone(s) as unknown as Bag & { palettes: Record<string, Bag>; layouts: Record<string, Bag[]> };
   const pals = isObj(spec.palettes) ? spec.palettes : {};
   const names = Object.keys(pals);
   const f = spec.fonts as Bag;
+  // Every value the toolbox cannot honour is moved to the nearest one it can, and said in plain words (the closeness panel shows the list).
+  const say = (m: string) => notes?.push(m);
+  const clampTo = (obj: Bag, key: string, lo: number, hi: number, name: string, why: string) => {
+    const v = obj[key];
+    if (typeof v !== 'number') return;
+    const to = Math.min(hi, Math.max(lo, v));
+    if (to !== v) {
+      say(`${name} was ${v}, ${to > v ? 'raised' : 'lowered'} to ${to} (${why}).`);
+      obj[key] = to;
+    }
+  };
   if (isObj(f)) {
-    if (!(FONT_FAMILIES as readonly string[]).includes(f.headline as string)) f.headline = FONT_FAMILIES[0];
-    if (!(FONT_FAMILIES as readonly string[]).includes(f.body as string)) f.body = FONT_FAMILIES[1];
-    f.headlineWeight = nearestWeight(f.headline as string, Number(f.headlineWeight) || 700);
-    f.bodyWeight = nearestWeight(f.body as string, Number(f.bodyWeight) || 500);
-    f.strong = nearestWeight(f.body as string, Number(f.strong) || 600);
+    for (const k of ['headline', 'body'] as const) {
+      if (!(FONT_FAMILIES as readonly string[]).includes(f[k] as string)) {
+        say(`fonts.${k} "${String(f[k])}" is not a bundled font, so ${FONT_FAMILIES[k === 'headline' ? 0 : 1]} is used.`);
+        f[k] = FONT_FAMILIES[k === 'headline' ? 0 : 1];
+      }
+    }
+    for (const [k, fam, d] of [['headlineWeight', 'headline', 700], ['bodyWeight', 'body', 500], ['strong', 'body', 600]] as const) {
+      const want = Number(f[k]) || d;
+      const got = nearestWeight(f[fam] as string, want);
+      if (got !== want) say(`fonts.${k} ${want} is not bundled for ${String(f[fam])}; ${got} is used.`);
+      f[k] = got;
+    }
   }
-  if (isObj(spec.type)) for (const k of Object.keys(spec.type)) if (typeof spec.type[k] === 'number') spec.type[k] = Math.min(400, Math.max(10, spec.type[k] as number));
-  if (isObj(spec.spacing) && typeof spec.spacing.margin === 'number') spec.spacing.margin = Math.max(48, spec.spacing.margin);
+  if (isObj(spec.type)) for (const k of Object.keys(spec.type)) clampTo(spec.type, k, 32, 400, `type.${k}`, 'text under 32 px is too small to read on a phone');
+  if (isObj(spec.spacing)) clampTo(spec.spacing, 'margin', 48, 300, 'spacing.margin', 'anything under 48 px is too close to the edge for the phone-size checker');
   // Corner radii, outlines and shadows have limits the drawing enforces (a marker's corner is a third of the radius and may not pass 100).
-  if (isObj(spec.shape)) for (const [k, max] of [['radius', 120], ['outline', 24], ['stroke', 40], ['hardShadow', 40]] as const) if (typeof spec.shape[k] === 'number') spec.shape[k] = Math.min(max, Math.max(0, spec.shape[k] as number));
-  if (isObj(spec.spacing)) for (const k of ['gap', 'section']) if (typeof spec.spacing[k] === 'number') spec.spacing[k] = Math.min(300, Math.max(0, spec.spacing[k] as number));
-  if (typeof spec.headlineLineHeight === 'number') spec.headlineLineHeight = Math.min(1.6, Math.max(0.8, spec.headlineLineHeight));
+  if (isObj(spec.shape)) for (const [k, max] of [['radius', 120], ['outline', 24], ['stroke', 40], ['hardShadow', 40]] as const) clampTo(spec.shape, k, 0, max, `shape.${k}`, 'the most the drawing allows');
+  if (isObj(spec.spacing)) for (const k of ['gap', 'section']) clampTo(spec.spacing, k, 0, 300, `spacing.${k}`, 'the most the layouts allow');
+  clampTo(spec as unknown as Bag, 'headlineLineHeight', 0.8, 1.6, 'headlineLineHeight', 'the range the layouts allow');
   if (Array.isArray(spec.rhythm)) spec.rhythm = (spec.rhythm as string[]).filter((n) => names.includes(n));
   if (!Array.isArray(spec.rhythm) || spec.rhythm.length === 0) spec.rhythm = names.slice(0, 2);
   if (isObj(spec.byType)) spec.byType = Object.fromEntries(Object.entries(spec.byType).filter(([t, n]) => (SLIDE_TYPES as string[]).includes(t) && names.includes(n as string)));
@@ -209,7 +229,7 @@ export interface SpecPatch {
 const FORBIDDEN = new Set(['__proto__', 'constructor', 'prototype', 'name', 'schema', 'assets', 'version', 'basedOn']);
 
 /** Sets values at paths. Refuses paths that could harm the object. Returns the new spec (cleaned) and what was refused. */
-export function applyPatches(spec: StyleSpec, patches: SpecPatch[], target: Target): { spec: StyleSpec; refused: string[] } {
+export function applyPatches(spec: StyleSpec, patches: SpecPatch[], target: Target, notes?: string[]): { spec: StyleSpec; refused: string[] } {
   const next = clone(spec) as unknown as Bag;
   const refused: string[] = [];
   for (const p of patches) {
@@ -238,5 +258,5 @@ export function applyPatches(spec: StyleSpec, patches: SpecPatch[], target: Targ
     if (p.value === null) delete cur[last];
     else cur[last] = p.value;
   }
-  return { spec: cleanSpec(next as unknown as StyleSpec, target), refused };
+  return { spec: cleanSpec(next as unknown as StyleSpec, target, notes), refused };
 }

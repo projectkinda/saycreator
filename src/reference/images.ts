@@ -55,7 +55,7 @@ export async function bitmapFromUrl(url: string): Promise<ImageBitmap> {
 /** The reader's picture of one pair: the reference on the left, our replica on the right, the same height. */
 export async function pairImage(referenceUrl: string, replica: Blob, name: string): Promise<ReaderImage> {
   const [a, b] = await Promise.all([bitmapFromUrl(referenceUrl), bitmapOf(replica)]);
-  const H = 900;
+  const H = 760;
   const wa = Math.round((a.width / a.height) * H);
   const wb = Math.round((b.width / b.height) * H);
   const c = canvasOf(wa + wb + 24, H);

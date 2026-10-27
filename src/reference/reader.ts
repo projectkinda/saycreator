@@ -101,6 +101,7 @@ export function buildReadPrompt(o: { items: ReferenceItem[]; target: Target; bas
     '',
     `Target: ${TARGET_LABEL[o.target]}. ${o.target === 'carousel' ? 'Write layouts for all 8 slide types.' : o.target === 'thumbnail' ? 'Write the "thumbnail" block (and a palette, fonts and type that suit it).' : 'Write layouts for all 8 slide types and the "thumbnail" block.'}`,
     `The style is laid over a base style (${o.baseName}); give only the sections you want to change. You may only change these sections: ${sections.join(', ')}. Each image only says what its "learn from" allows: "Colours and type only" gives palettes, fonts, type, case and shape; "Layout only" gives layouts, spacing, chrome and the thumbnail layout; "Photo treatment only" gives the photo treatments.`,
+    `The base style is BLANK: plain white, no decorations, no elements (no stickers, tape, bulbs, squiggles), no photo treatments. Anything you do not state stays blank. Add decorations ("elements") and photo treatments only when a reference really has them, and give the slide types that show a photo a rule with "when": {"photo": true} that uses a photo layout (cover-photo-full, cover-photo-split, cover-photo-shape, content-photo-frame, content-photo-strip, stat-photo or quote-photo-blur) and a "treatment" param naming an entry of photo.treatments.`,
     single ? 'Only ONE image is given: build the style from its look and extrapolate the other slide types from it. In "seen_slide_types" list only the slide types the image really shows.' : '',
     '',
     'The measured values are facts from the pixels. Use colours close to the measured palette, sizes close to the measured shares (a title that is 12% of the frame height on a 1350 high slide is about 160 px of type), and margins close to the measured margins.',
@@ -111,7 +112,7 @@ export function buildReadPrompt(o: { items: ReferenceItem[]; target: Target; bas
     exampleExcerpt(o.base),
     '',
     'Reply with this JSON:',
-    '{"style": {sections you change}, "seen_slide_types": ["cover", ...from: ' + SLIDE_TYPES.join(', ') + '], "missing_tools": [{"tool": "short name", "why": "one short reason", "images": ["ref1.jpg"]}], "notes": "one or two plain sentences"}',
+    '{"style": {sections you change}, "seen_slide_types": ["cover", ...from: ' + SLIDE_TYPES.join(', ') + '], "images_with_photos": ["ref1.jpg" for every reference that clearly shows a photo, a person, a device or an object], "missing_tools": [{"tool": "short name", "why": "one short reason", "images": ["ref1.jpg"]}], "notes": "one or two plain sentences"}',
     'missing_tools: what the references use that the vocabulary cannot draw: cutouts of people or objects, 3D renders, fonts that are not bundled (say what the font looks like), textures and paper, hand-drawn doodles, photo collages, anything else. Be specific and short.',
   ]
     .filter((l) => l !== '')
@@ -165,7 +166,8 @@ export function parseRead(text: string): { ok: true; result: ReadResult } | { ok
   const missing: MissingTool[] = Array.isArray(raw.missing_tools)
     ? (raw.missing_tools as unknown[]).flatMap((m) => (isObj(m) && typeof m.tool === 'string' && m.tool.trim() ? [{ tool: m.tool.trim().slice(0, 80), why: typeof m.why === 'string' ? m.why.trim().slice(0, 200) : '', ...(Array.isArray(m.images) ? { images: (m.images as unknown[]).filter((x): x is string => typeof x === 'string') } : {}) }] : []))
     : [];
-  return { ok: true, result: { style: raw.style, seenSlideTypes: [...new Set(seen)], missingTools: missing, notes: typeof raw.notes === 'string' ? raw.notes.slice(0, 400) : '' } };
+  const photos = Array.isArray(raw.images_with_photos) ? (raw.images_with_photos as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+  return { ok: true, result: { style: raw.style, seenSlideTypes: [...new Set(seen)], photoImages: photos, missingTools: missing, notes: typeof raw.notes === 'string' ? raw.notes.slice(0, 400) : '' } };
 }
 
 export interface RefineAnswer {
@@ -196,6 +198,8 @@ export interface ReadOutcome {
   attempts: 1 | 2;
   ms: number;
   warnings: string[];
+  /** Values that had to be moved to what the toolbox supports, in plain words. */
+  clamps: string[];
 }
 
 const retryPrompt = (first: string, previous: string, errors: string[]) => [first, '', 'Your previous answer was:', previous.slice(0, 7000), '', 'It cannot be used, for these reasons:', ...errors.slice(0, 14).map((e) => `- ${e}`), '', 'Answer again with ONE JSON object that fixes every one of these.'].join('\n');
@@ -205,13 +209,14 @@ export async function readStyle(o: { reader: ReferenceReader; items: ReferenceIt
   const prompt = buildReadPrompt({ items: o.items, target: o.target, base: o.base, baseName: o.baseName, measured: o.measured });
   const sections = sectionsFor(o.items.map((i) => i.learn));
   const note = `${o.items.length === 1 ? 'Built from one image' : `Built from ${o.items.length} images`}: ${o.items.map((i) => `${i.name} (${LEARN_LABEL[i.learn].toLowerCase()})`).join(', ')}.`;
-  const attempt = (text: string): { spec: StyleSpec; result: ReadResult; errors: string[]; warnings: string[] } => {
+  const attempt = (text: string): { spec: StyleSpec; result: ReadResult; errors: string[]; warnings: string[]; clamps: string[] } => {
     const p = parseRead(text);
-    if (!p.ok) return { spec: o.base, result: { style: {}, seenSlideTypes: [], missingTools: [], notes: '' }, errors: p.errors, warnings: [] };
-    let spec = assembleSpec(o.base, p.result.style, { sections, name: o.name, title: o.title, target: o.target, note });
+    if (!p.ok) return { spec: o.base, result: { style: {}, seenSlideTypes: [], photoImages: [], missingTools: [], notes: '' }, errors: p.errors, warnings: [], clamps: [] };
+    const clamps: string[] = [];
+    let spec = assembleSpec(o.base, p.result.style, { sections, name: o.name, title: o.title, target: o.target, note, notes: clamps });
     if (o.target !== 'carousel' && !spec.thumbnail) spec = { ...spec, thumbnail: defaultThumbnail(spec) };
     const c = checkSpec(spec);
-    return { spec, result: p.result, errors: c.errors, warnings: c.warnings };
+    return { spec, result: p.result, errors: c.errors, warnings: c.warnings, clamps };
   };
   o.onPhase?.('reading');
   let a = await o.reader.read({ prompt, images: o.images }, o.signal);
@@ -226,7 +231,7 @@ export async function readStyle(o: { reader: ReferenceReader; items: ReferenceIt
     r = attempt(a.text);
   }
   if (r.errors.length) throw new ReaderError('invalid', 'The reader answered twice, but neither answer was a style that passes the checks.', r.errors);
-  return { spec: r.spec, result: r.result, attempts, ms: total, warnings: r.warnings };
+  return { spec: r.spec, result: r.result, attempts, ms: total, warnings: r.warnings, clamps: r.clamps };
 }
 
 export interface RefineOutcome {
@@ -235,6 +240,8 @@ export interface RefineOutcome {
   judgement: Judgement;
   stop: boolean;
   refused: string[];
+  /** Values the patches set that had to be moved to what the toolbox supports. */
+  clamps: string[];
   attempts: 1 | 2;
   ms: number;
   /** Set when the answer could not be used and the spec is unchanged. */
@@ -245,14 +252,15 @@ export interface RefineOutcome {
 export async function refineStyle(o: { reader: ReferenceReader; spec: StyleSpec; target: Target; sections: string[]; pairs: { name: string; reference: Measured; replica: Measured }[]; images: ReaderImage[]; round: number; feedback?: string; signal: AbortSignal }): Promise<RefineOutcome> {
   const prompt = buildRefinePrompt({ spec: o.spec, sections: o.sections, pairs: o.pairs, round: o.round, feedback: o.feedback });
   const empty: Judgement = { score: 0, matched: [], approximated: [], missing: [] };
-  const attempt = (text: string): { out?: { spec: StyleSpec; answer: RefineAnswer; refused: string[] }; errors: string[] } => {
+  const attempt = (text: string): { out?: { spec: StyleSpec; answer: RefineAnswer; refused: string[]; clamps: string[] }; errors: string[] } => {
     const p = parseRefine(text);
     if (!p.ok) return { errors: p.errors };
     // Only sections the references allow may change.
     const allowed = p.answer.patches.filter((x) => o.sections.includes(x.path.split('.')[0]));
-    const { spec, refused } = applyPatches(o.spec, allowed, o.target);
+    const clamps: string[] = [];
+    const { spec, refused } = applyPatches(o.spec, allowed, o.target, clamps);
     const c = checkSpec(spec);
-    return c.errors.length ? { errors: c.errors } : { out: { spec, answer: p.answer, refused: [...refused, ...p.answer.patches.filter((x) => !allowed.includes(x)).map((x) => `${x.path}: not a section these references may change`)] }, errors: [] };
+    return c.errors.length ? { errors: c.errors } : { out: { spec, answer: p.answer, clamps, refused: [...refused, ...p.answer.patches.filter((x) => !allowed.includes(x)).map((x) => `${x.path}: not a section these references may change`)] }, errors: [] };
   };
   let a = await o.reader.read({ prompt, images: o.images }, o.signal);
   let total = a.ms;
@@ -264,6 +272,6 @@ export async function refineStyle(o: { reader: ReferenceReader; spec: StyleSpec;
     total += a.ms;
     r = attempt(a.text);
   }
-  if (!r.out) return { spec: o.spec, patches: [], judgement: empty, stop: true, refused: [], attempts, ms: total, problem: `The reader's patches could not be used (${r.errors[0] ?? 'invalid answer'}), so the style is unchanged.` };
-  return { spec: r.out.spec, patches: r.out.answer.patches, judgement: r.out.answer.judgement, stop: r.out.answer.stop, refused: r.out.refused, attempts, ms: total };
+  if (!r.out) return { spec: o.spec, patches: [], judgement: empty, stop: true, refused: [], clamps: [], attempts, ms: total, problem: `The reader's patches could not be used (${r.errors[0] ?? 'invalid answer'}), so the style is unchanged.` };
+  return { spec: r.out.spec, patches: r.out.answer.patches, judgement: r.out.answer.judgement, stop: r.out.answer.stop, refused: r.out.refused, clamps: r.out.clamps, attempts, ms: total };
 }

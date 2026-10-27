@@ -12,7 +12,8 @@ import { ensureTemplatesLoaded, saveTemplate, styleNameFor, templateProblem, use
 import { closenessOf, rankMissing, SINGLE_IMAGE_NOTE } from './closeness';
 import { detectGrid, type GridResult } from './grid';
 import { bitmapOf, cut, jpegUrl, pxOfCanvas, previewOf, readerImageOf, samplePhoto } from './images';
-import { applyFeedback, runLoop, type Round, type SampleContent } from './loop';
+import { applyFeedback, keptSentence, runLoop, type Round, type SampleContent } from './loop';
+import { BLANK_NAME, blankStyle } from './blank';
 import { describeMeasured, measure } from './measure';
 import { detectReaders, ReaderError, readStyle, type ReferenceReader } from './reader';
 import { sectionsFor } from './spec';
@@ -102,7 +103,7 @@ export default function ReferenceStylePage() {
       for (const u of uploads) {
         const pieces: { rect: Rect | null; cell?: number }[] = u.mode === 'grid' && u.grid ? u.grid.cells.flatMap((c, i) => (u.ticked[i] ? [{ rect: c, cell: i }] : [])) : u.mode === 'crop' && u.crop ? [{ rect: u.crop }] : [{ rect: null }];
         for (const p of pieces) {
-          const j = await jpegUrl(u.bitmap, p.rect, 1100);
+          const j = await jpegUrl(u.bitmap, p.rect, 1000);
           list.push({ id: p.cell !== undefined ? `${u.id}#${p.cell + 1}` : u.id, name: p.cell !== undefined ? `${u.name} (slide ${p.cell + 1})` : u.name, dataUrl: j.url, width: j.width, height: j.height, learn: u.learn, source: { image: u.id, ...(p.cell !== undefined ? { cell: p.cell } : {}), ...(p.rect ? { rect: p.rect } : {}) } });
           ms.push(measure(pxOfCanvas(cut(u.bitmap, p.rect, 420))));
         }
@@ -121,8 +122,9 @@ export default function ReferenceStylePage() {
   // ----- target, name, base -----
   const [target, setTarget] = useState<Target>('carousel');
   const [title, setTitle] = useState('');
-  const baseOptions = useMemo(() => getStyles().styles.filter((s) => !s.spec.name.startsWith('mine-')), [tplVersion]);
-  const [baseName, setBaseName] = useState('editorial-collage');
+  // The base is blank (plain white, nothing added) unless the person picks a stored style to start from.
+  const baseOptions = useMemo(() => [blankStyle(), ...getStyles().styles.filter((s) => !s.spec.name.startsWith('mine-')).map((s) => s.spec)], [tplVersion]);
+  const [baseName, setBaseName] = useState(BLANK_NAME);
   const [sampleTitle, setSampleTitle] = useState('Ride before sunrise');
   const [samplePic, setSamplePic] = useState<{ id: string; url: string; width: number; height: number; name: string } | null>(null);
   const pickSample = async (f: File | undefined) => {
@@ -159,12 +161,13 @@ export default function ReferenceStylePage() {
   const [attempts, setAttempts] = useState<1 | 2 | null>(null);
   const [feedback, setFeedback] = useState('');
   const abort = useRef<AbortController | null>(null);
-  const ctx = useRef<{ content: SampleContent; spec: StyleSpec; name: string } | null>(null);
+  const ctx = useRef<{ content: SampleContent; spec: StyleSpec; name: string; photoItems: Set<string>; readClamps: string[] } | null>(null);
+  const [keptText, setKeptText] = useState('');
 
   const canRead = items.length > 0 && !!readers?.length && !busy && !preparing;
   const read = async () => {
     const reader = readers![0];
-    const base = getStyles().styles.find((s) => s.spec.name === baseName)?.spec ?? baseOptions[0].spec;
+    const base = baseOptions.find((s) => s.name === baseName) ?? baseOptions[0];
     const name = styleNameFor(title || 'style');
     abort.current = new AbortController();
     setBusy(true);
@@ -183,7 +186,9 @@ export default function ReferenceStylePage() {
       setAttempts(out.attempts);
       const photo = samplePic ?? { ...(await samplePhoto()), id: 'sample-builtin' };
       const content: SampleContent = { title: sampleTitle.trim() || 'Your title here', photo };
-      ctx.current = { content, spec: out.spec, name };
+      // The references that show a photo, a person, a device or an object get a photo in their sample.
+      const photoItems = new Set(items.filter((_, i) => out.result.photoImages.includes(`ref${i + 1}.jpg`)).map((i) => i.id));
+      ctx.current = { content, spec: out.spec, name, photoItems, readClamps: out.clamps };
       const all: Round[] = [];
       const result = await runLoop({
         reader,
@@ -193,6 +198,8 @@ export default function ReferenceStylePage() {
         items,
         measured,
         seen: out.result.seenSlideTypes,
+        photoItems,
+        readClamps: out.clamps,
         content,
         signal: abort.current.signal,
         onRound: (r) => {
@@ -204,7 +211,9 @@ export default function ReferenceStylePage() {
         onPhase: setPhase,
       });
       setPicked(result.best);
-      setTiming(`Read and refined in ${((performance.now() - t0) / 1000).toFixed(0)} s (${result.rounds.length} round${result.rounds.length === 1 ? '' : 's'} drawn).`);
+      setKeptText(keptSentence(result.rounds, result.best, result.stopped));
+      const sum = (f: (r: Round) => number) => (result.rounds.reduce((a, r) => a + f(r), 0) / 1000).toFixed(0);
+      setTiming(`Read and refined in ${((performance.now() - t0) / 1000).toFixed(0)} s (${result.rounds.length} round${result.rounds.length === 1 ? '' : 's'} drawn). Where it went: the first read by the reader ${(out.ms / 1000).toFixed(0)} s, drawing and measuring ${sum((r) => r.timing.renderMs)} s, making the pictures for the reader ${sum((r) => r.timing.prepMs)} s, the reader looking at them ${sum((r) => r.timing.lookMs)} s.`);
       setPhase('');
     } catch (e) {
       setPhase('');
@@ -226,7 +235,7 @@ export default function ReferenceStylePage() {
     try {
       const from = rounds[picked];
       const r = await applyFeedback(
-        { reader: readers[0], spec: from.spec, target, sections: sectionsFor(items.map((i) => i.learn)), items, measured, seen, content: c.content, signal: abort.current.signal, onRound: () => undefined },
+        { reader: readers[0], spec: from.spec, target, sections: sectionsFor(items.map((i) => i.learn)), items, measured, seen, photoItems: c.photoItems, readClamps: c.readClamps, content: c.content, signal: abort.current.signal, onRound: () => undefined },
         from,
         rounds.length,
         text,
@@ -245,7 +254,7 @@ export default function ReferenceStylePage() {
   // ----- saving -----
   const [saved, setSaved] = useState<{ id: string; name: string } | null>(null);
   const chosen = rounds[picked] ?? null;
-  const close = chosen ? closenessOf(chosen, { itemCount: items.length, seen, target, missing }) : null;
+  const close = chosen ? closenessOf(chosen, { itemCount: items.length, seen, target, missing, clamped: chosen.clamped }) : null;
   const save = async () => {
     if (!chosen) return;
     const name = title.trim() || 'My style';
@@ -377,7 +386,7 @@ export default function ReferenceStylePage() {
           <span className="field-label">What it does not learn stays as in</span>
           <select className="plain-select cr-select" value={baseName} onChange={(e) => setBaseName(e.target.value)} aria-label="Base style">
             {baseOptions.map((s) => (
-              <option key={s.spec.name} value={s.spec.name}>{s.spec.title}</option>
+              <option key={s.name} value={s.name}>{s.title}</option>
             ))}
           </select>
         </label>
@@ -431,6 +440,7 @@ export default function ReferenceStylePage() {
           <h2 id="rf-rounds-h" className="h3">4. The replica, round by round</h2>
           {timing && <p className="small muted" role="status">{timing}{attempts === 2 ? ' The reader’s first answer had to be corrected once.' : ''}</p>}
           {notes && <p className="small">The reader says: {notes}</p>}
+          {keptText && <p className="small" role="status"><strong>{keptText}</strong></p>}
           <ol className="rf-rounds" aria-label="Rounds">
             {rounds.map((r, i) => (
               <li key={r.n} className={`card rf-round${i === picked ? ' chosen' : ''}`} aria-label={`Round ${i}: ${r.label}`}>
@@ -442,6 +452,7 @@ export default function ReferenceStylePage() {
                 </div>
                 {r.madeBy.length > 0 && <p className="small muted">Changes from the round before: {r.madeBy.map((p) => `${p.path} → ${typeof p.value === 'object' ? 'a list of changes' : String(p.value)}`).slice(0, 6).join('; ')}.</p>}
                 {r.note && <p className="small cr-warn">{r.note}</p>}
+                {r.clamped.length > 0 && <p className="small cr-warn">Moved to what the toolbox supports: {r.clamped.join(' ')}</p>}
                 <div className="rf-pairs">
                   {r.replicas.slice(0, 4).map((rep) => {
                     const it = items.find((x) => x.id === rep.itemId);
@@ -488,6 +499,10 @@ export default function ReferenceStylePage() {
             <div>
               <h3 className="h4">Extrapolated</h3>
               <ul>{close.extrapolated.length ? <li className="small">These slide types were not in your references, so the style made them up from what it saw: {close.extrapolated.join(', ')}.</li> : <li className="small muted">Every slide type was shown by a reference.</li>}</ul>
+            </div>
+            <div>
+              <h3 className="h4">Moved to what the toolbox supports</h3>
+              <ul aria-label="Clamped values">{close.clamped.length ? close.clamped.map((m) => <li key={m} className="small">{m}</li>) : <li className="small muted">Nothing had to be moved.</li>}</ul>
             </div>
             <div>
               <h3 className="h4">Missing: what our toolbox cannot draw</h3>

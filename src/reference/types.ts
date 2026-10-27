@@ -106,6 +106,8 @@ export interface ReadResult {
   /** The sections of the style the reader chose to change, in the style.json vocabulary. */
   style: Record<string, unknown>;
   seenSlideTypes: SlideType[];
+  /** The reference files (ref1.jpg...) that clearly show a photo, a person, a device or an object. */
+  photoImages: string[];
   missingTools: MissingTool[];
   notes: string;
 }

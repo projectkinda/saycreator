@@ -13,6 +13,8 @@ export interface Closeness {
   /** "Built from one image. Other slide types are extrapolated from it." when that is so. */
   singleImage: string | null;
   missing: MissingTool[];
+  /** Values the reader asked for that were moved to what the toolbox supports. */
+  clamped: string[];
   /** The reader's own words about the replica it looked at. */
   reader: Judgement | null;
   /** The reader's score and the measured total, as a plain sentence (no claim of a perfect copy). */
@@ -22,7 +24,7 @@ export interface Closeness {
 export const SINGLE_IMAGE_NOTE = 'Built from one image. Other slide types are extrapolated from it.';
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
-export function closenessOf(round: Round, o: { itemCount: number; seen: SlideType[]; target: Target; missing: MissingTool[] }): Closeness {
+export function closenessOf(round: Round, o: { itemCount: number; seen: SlideType[]; target: Target; missing: MissingTool[]; clamped?: string[] }): Closeness {
   const s = round.similarity;
   const matched: string[] = [];
   const approximated: string[] = [];
@@ -37,6 +39,7 @@ export function closenessOf(round: Round, o: { itemCount: number; seen: SlideTyp
     extrapolated,
     singleImage: o.itemCount === 1 ? SINGLE_IMAGE_NOTE : null,
     missing: o.missing,
+    clamped: o.clamped ?? [],
     reader: j,
     summary: `Measured similarity ${pct(s.total)}${j ? `, the reader scores it ${Math.round(j.score)} out of 100` : ''}. It is as close as our toolbox allows, not a copy.`,
   };
