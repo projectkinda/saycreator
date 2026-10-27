@@ -68,7 +68,7 @@ function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; 
               <button type="button" className="card start-opt cr-style" aria-pressed={!auto && value === st.spec.name} onClick={() => onPick(st.spec.name, st.spec.title)}>
                 <span className={`cr-style-pic r${format === 'quote' ? '1-1' : '4-5'}`}>{img ? <img src={img} alt={`Preview of the ${st.spec.title} style`} /> : <span className="small muted" role="status">Drawing…</span>}</span>
                 <strong>{st.spec.title}</strong>
-                <span className="small muted">{st.spec.name}</span>
+                <span className="small muted">{isUserStyle(st.spec.name) ? 'Made from your references' : st.spec.name}</span>
                 {isUserStyle(st.spec.name) && <span className="chip chip-tag">Mine</span>}
                 {auto && value === st.spec.name && <span className="chip chip-tag">In use</span>}
                 {st.warnings.some((w) => /phone-size checker needs at least 32 px/.test(w)) && <span className="chip chip-warn">Some text is below phone size</span>}
