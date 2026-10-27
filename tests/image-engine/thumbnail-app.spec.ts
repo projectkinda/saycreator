@@ -28,7 +28,7 @@ test('with no photo and no title the screen says what to do, and nothing is draw
   await expect(optionCards(page)).toHaveCount(0);
 });
 
-test('a photo and a title give at least three options, each with its twelve phone-size checks', async ({ page }) => {
+test('a photo and a title give at least three options, each with its thirteen phone-size checks', async ({ page }) => {
   await openThumb(page);
   await addPhoto(page);
   await titleInput(page).fill('Ride before sunrise');
@@ -37,7 +37,7 @@ test('a photo and a title give at least three options, each with its twelve phon
   expect(n).toBeLessThanOrEqual(6);
   for (const c of await optionCards(page).all()) {
     await c.getByText('All checks').click();
-    await expect(c.locator('.cr-lint-all li')).toHaveCount(12);
+    await expect(c.locator('.cr-lint-all li')).toHaveCount(13);
   }
   await expect(page.getByText(/The dot is a guess|No pointer placed yet/)).toBeVisible();
   await expect(page.getByText('It is your pointer, not detection').first()).toBeVisible();

@@ -30,7 +30,7 @@ export default function ThumbnailsV2() {
                   {im && <Pic src={im.url} alt={it.title} />}
                   <figcaption>
                     <p className="small"><b>{it.title}</b> <LabelChip tag={it.tag} /></p>
-                    {it.checker && <CheckLine failed={failed} passText="PASS (all 12 checks)" />}
+                    {it.checker && <CheckLine failed={failed} passText="PASS (all 13 checks)" />}
                     {it.facts?.map((f) => (
                       <p key={f} className="small muted">{f}</p>
                     ))}

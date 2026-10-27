@@ -21,6 +21,10 @@ export const THRESHOLDS = {
   minMeanLuma: 0.16,
   /** Laplacian variance of the cropped photo at up to 640px wide. */
   minSharpness: 100,
+  /** The most of the title's letters that may be covered by something drawn over them. */
+  maxLettersCovered: 0.02,
+  /** The most of one letter's edge that may run into something of the letter's own colour. */
+  maxLetterMerged: 0.05,
 };
 
 export interface Zone {
@@ -65,6 +69,8 @@ export interface LintInput {
   subjects?: { x: number; y: number; r: number; of: string }[];
   /** Version 2 only. The photo layers' boxes in canvas px, so the crop can be checked against the subject. */
   photoBoxes?: { id: string; x: number; y: number; width: number; height: number }[];
+  /** Version 2 only. How much of the letters is covered by something drawn over it (a share), and the worst share of a letter's edge that runs into its own colour; `where` is the line it is in. */
+  letters?: { covered: number; merged: number; where: string };
   /** Version 2 only. Elements and objects (stickers, arrows, a product picture) in canvas px. */
   things?: { id: string; kind: 'element' | 'object'; x: number; y: number; width: number; height: number }[];
   /** Version 2 only. Chips, badges and plates the things must also stay off. */
@@ -231,6 +237,23 @@ export function lintThumbnail(i: LintInput): LintResult[] {
     reason: sharp >= T.minSharpness ? `The cropped photo has enough fine detail (score ${Math.round(sharp)}, needs ${T.minSharpness}).` : `The cropped photo has little fine detail (score ${Math.round(sharp)}, needs ${T.minSharpness}). It may be blurry, or flat-coloured artwork, which this check cannot tell apart.`,
   });
 
+  if (i.letters) {
+    const { covered, merged, where } = i.letters;
+    const coveredBad = covered > T.maxLettersCovered;
+    const mergedBad = merged > T.maxLetterMerged;
+    out.push({
+      id: 'legible',
+      label: 'Letters keep their shape',
+      pass: !coveredBad && !mergedBad,
+      measured: Math.round(Math.max(covered / T.maxLettersCovered, merged / T.maxLetterMerged) * 100) / 100,
+      limit: 1,
+      reason: coveredBad
+        ? `${Math.round(covered * 100)}% of the letters is covered by something drawn over it (more than ${Math.round(T.maxLettersCovered * 100)}% fails). Move what covers them.`
+        : mergedBad
+          ? `A letter in “${where.slice(0, 30)}” runs into something of its own colour (${Math.round(merged * 100)}% of its edge; more than ${Math.round(T.maxLetterMerged * 100)}% fails), so its shape is lost, like the tail of a Q sinking into a box of the same colour. Give the lines more room, or change a colour.`
+          : 'Every letter keeps its whole shape: nothing covers it and nothing of its own colour touches it.',
+    });
+  }
   if (i.subjects && i.subjects.length) subjectChecks(i, out);
   return out;
 }

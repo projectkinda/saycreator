@@ -136,7 +136,8 @@ interface TitleOpts {
 function setTitle(c: Ctx, box: Box, o: TitleOpts): Box {
   const { style, tb, pal } = c;
   const look = o.on === 'block' ? 'plain' : o.forcePlate ? 'plate' : tb.title.look;
-  const lh = Math.min(1.05, Math.max(0.95, style.spec.headlineLineHeight));
+  // A box behind the stressed word reaches up and down; the lines need room so it never touches the letters of the line above (the tail of a Q, the foot of an R).
+  const lh = c.emphasis ? 1.16 : Math.min(1.05, Math.max(0.95, style.spec.headlineLineHeight));
   const weight = tb.title.weight ?? style.spec.fonts.headlineWeight;
   const groundRole = o.on === 'block' ? (o.ground ?? tb.block ?? 'accent') : tb.title.ground ?? 'accent';
   const blockLetters = ON[groundRole] ?? 'text';
@@ -273,8 +274,11 @@ const splitColour: Layout = (c) => {
     const ph = Math.round(H * 0.46);
     if (c.tb.glass) {
       putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: 0.5, y: 0.3 }, c.treatments, true);
-      c.layers.push(rect('block-tint', 'decor', 0, ph, W, H - ph, rgba(c.scrim, 0.6)), glass(c, 'block', 0, ph, W, H - ph));
-      setTitle(c, { x: m, y: ph + m, width: Math.round(W * 0.78) - m, height: Math.round(H * 0.76) - ph - m }, { on: 'photo', valign: 'middle', forcePlate: false });
+      // A glass card floating over the photo, in the area above the platform's own caption, with the title large inside it.
+      const card: Box = { x: m, y: Math.round(H * 0.47), width: W - 2 * m, height: Math.round(H * 0.29) };
+      const p = Math.round(m * 0.7);
+      c.layers.push(...glassCard(c, card));
+      setTitle(c, { x: card.x + p, y: card.y + p, width: Math.round(W * 0.56), height: card.height - 2 * p }, { on: 'photo', valign: 'middle' });
       return;
     }
     putPhoto(c, 'photo', c.req.photo, c.req.subject, { x: 0, y: 0, width: W, height: ph }, { x: 0.5, y: 0.5 }, c.treatments);
@@ -291,8 +295,10 @@ const splitColour: Layout = (c) => {
     const at = putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: photoRight ? 0.7 : 0.3, y: 0.5 }, c.treatments, true);
     // The glass card goes on the side the subject is not on.
     const gx = at.x > W / 2 ? 0 : pw;
-    c.layers.push(rect('block-tint', 'decor', gx, 0, bw, H, rgba(c.scrim, 0.6)), glass(c, 'block', gx, 0, bw, H));
-    setTitle(c, { x: gx + m, y: m, width: bw - 2 * m, height: H - 2 * m }, { on: 'photo', valign: 'middle' });
+    const card: Box = { x: gx === 0 ? m : W - m - bw, y: m, width: bw - m, height: H - 2 * m };
+    const p = Math.round(m * 0.8);
+    c.layers.push(...glassCard(c, card));
+    setTitle(c, { x: card.x + p, y: card.y + p, width: card.width - 2 * p, height: card.height - 2 * p }, { on: 'photo', valign: 'middle' });
     return;
   }
   putPhoto(c, 'photo', c.req.photo, c.req.subject, { x: photoRight ? bw : 0, y: 0, width: pw, height: H }, { x: 0.5, y: 0.5 }, c.treatments);
@@ -300,9 +306,13 @@ const splitColour: Layout = (c) => {
   setTitle(c, text, { on: 'block', ground: role, valign: 'middle' });
 };
 
-const glass = (c: Ctx, id: string, x: number, y: number, w: number, h: number): Layer => {
+/** A rounded glass card with a dark tint under it, so the letters on it have something to stand on. */
+const glassCard = (c: Ctx, b: Box): Layer[] => {
   const g = c.style.spec.photo?.glass ?? { fill: 'rgba(255,255,255,0.14)', blur: 28, radius: 36 };
-  return { id, kind: 'glass', role: 'decor', x, y, width: w, height: h, rotation: 0, opacity: 1, fill: g.fill, blur: g.blur, radius: 0, ...(g.border ? { border: g.border } : {}) } as Layer;
+  return [
+    rect('block-tint', 'decor', b.x, b.y, b.width, b.height, rgba(c.scrim, 0.55), { radius: g.radius }),
+    { id: 'block', kind: 'glass', role: 'decor', x: b.x, y: b.y, width: b.width, height: b.height, rotation: 0, opacity: 1, fill: g.fill, blur: g.blur, radius: g.radius, ...(g.border ? { border: g.border } : {}) } as Layer,
+  ];
 };
 
 /** A picture of an object (a transparent PNG) with the title beside it, on the photo blurred and darkened behind. */

@@ -26,7 +26,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 for (const style of STYLES) {
-  test(`${style}: every test photo gets at least 3 options, each is a valid plan with its twelve checks`, async ({ page }) => {
+  test(`${style}: every test photo gets at least 3 options, each is a valid plan with its thirteen checks`, async ({ page }) => {
     test.setTimeout(240_000);
     for (const c of present) {
       for (const aspect of c.aspects) {

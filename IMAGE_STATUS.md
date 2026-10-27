@@ -500,6 +500,12 @@ Only Chrome; Safari and Firefox (EXIF and drag and drop), touch screens, real fu
 
 **Results.** New "Thumbnails (v2)": per style, every option as its own card with the checker's result and a verdict box (matches / close / off / wrong). The old Step 2 thumbnail results moved under Checks and tests > Older work.
 
-**Weak.** The layouts are my invention; options can look generic. Photos of the wrong shape or size still fail the v1 crop, resolution and sharpness checks. In the film look the outline can swallow the tail of a Q. With the subject guess unchecked by a person the title can land on the wrong thing.
+**Weak.** The layouts are my invention; options can look generic. Photos of the wrong shape or size still fail the v1 crop, resolution and sharpness checks. (Fixed in the follow-up below: the Q in the film look was not swallowed by the outline but covered by the box of the next line.) With the subject guess unchecked by a person the title can land on the wrong thing.
 
 **Not tested.** Video frames, Safari and Firefox, touch screens, a real writer (tests use a stand-in), more than two photos.
+
+### Follow-up: letters that lose their shape
+- **What was wrong.** In the film look "THE QUIET GENIUS" read "OUIET". My first guess (the outline swallows the Q's tail) was wrong: a test render shows the tail survives a 7% outline. The tail dropped into the lime box behind the next line, which is the same lime as the letters, so the two merged.
+- **New check, "Letters keep their shape"** (13 checks now), measured on the drawn pixels: each line is drawn alone (same size and place, no outline, shadow or box) to find the pixels that are solidly the letters, one letter at a time. In the finished picture those pixels must still be the letters' colour (nothing drawn over them, at most 2% covered), and the ring 2 to 4 px outside each letter must not be the letter's own colour (at most 5% of one letter's edge; the letter's own outline does not count). The old film look (lime letters, tight lines, lime box) measures 15% and fails; every stored option measures 0 to 3%.
+- **Fixes.** Titles with a stressed word are set with a line height of 1.16, so a box never reaches the letters of the line above (this alone cleared 31 options in five styles that touched). The film look is unchanged.
+- **Glass tall split** redone: a rounded glass card over the photo with the title large inside it, instead of a block that filled the bottom of the picture.

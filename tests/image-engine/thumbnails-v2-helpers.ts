@@ -10,7 +10,7 @@ export const ROOT = path.resolve(here, '../..');
 export const OUT = path.join(ROOT, 'out/image-engine/thumbs-v2');
 export const IMAGES = path.join(ROOT, 'test-images');
 
-export const NEW_CHECKS = ['subject', 'focal', 'overlap'];
+export const NEW_CHECKS = ['subject', 'focal', 'overlap', 'legible'];
 export const ALL_CHECKS = ['words', 'readable', 'contrast', 'overlay', 'margins', 'resolution', 'crop', 'brightness', 'sharpness', ...NEW_CHECKS];
 export const STYLES = ['hot-flat', 'mono-poster', 'object-neon', 'glass-gradient', 'film-paper', 'editorial-collage'];
 

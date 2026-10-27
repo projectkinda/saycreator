@@ -56,10 +56,11 @@ test('Thumbnails (v2): Results items', async () => {
   const bad = path.join(OUT, 'bad-variants');
   const badItems: ResultsItem[] = [];
   const BAD_TITLES: Record<string, [string, string, string]> = {
-    good: ['The good variant', 'All twelve checks pass.', ''],
+    good: ['The good variant', 'All thirteen checks pass.', ''],
     'title-on-subject': ['Bad: title on the subject', 'The title moved onto the subject pointer.', 'subject'],
     'object-covers-title': ['Bad: object on the title', 'A picture the person added dropped on the title.', 'overlap'],
     'subject-at-edge': ['Bad: subject at the very edge of the crop', 'The crop puts the subject pointer at the picture’s edge.', 'focal'],
+    'letters-lose-shape': ['Bad: letters lose their shape', 'The old film look: lime letters over a lime box on tight lines. The tail of the Q sinks into the box and the word reads “OUIET”.', 'legible'],
   };
   for (const [name, [title, what, id]] of Object.entries(BAD_TITLES)) {
     const j = path.join(bad, `${name}.json`);
@@ -89,6 +90,7 @@ test('Thumbnails (v2): Results items', async () => {
     { id: 'pointer', title: 'The subject is your pointer, not detection', images: [], facts: ['The app does not find faces or understand a picture. With no pointer placed it guesses where the most detail and colour is, and says so. On a photo with several people or a busy background the guess can be wrong; the pointer fixes it, and the title, stickers and object stay off it.'] },
     { id: 'weak-photo', title: 'Weak: a photo of the wrong shape or size', images: [], tag: 'WEAK', facts: ['A tall photo cut to a wide thumbnail, or a small photo stretched, still fails the older “crop keeps enough of the photo”, “resolution” and “sharpness” checks. These options are shown with that failure; the app does not repair them. The photo may be drawn up to 50% bigger so the subject sits where a layout wants it, which also lowers its resolution.'] },
     { id: 'weak-layouts', title: 'Weak: the layouts are my own invention', images: [], tag: 'WEAK', facts: ['The six layouts and the six style blocks come from the carousel readings and general thumbnail habits, not from measured thumbnails. A title is always at the same few places; an option may look generic. Before and after, number badge and object and title appear only when the photos, a number in the title or an object are given.'] },
+    { id: 'legible', title: 'Letters keep their shape (the film “OUIET” problem)', images: [], facts: ['The Q in “QUIET” was not swallowed by the outline, as first thought: its tail sank into the lime box behind the next line, which is the same lime. The new check measures this on the drawn pixels (each line drawn alone, then compared with the finished picture). Lines with a stressed word now have more room. See the bad variant above.'] },
     { id: 'untested', title: 'Not tested', images: [], tag: 'NOT TESTED', facts: ['Video frames (only still photos were used), Safari and Firefox, touch screens, a real writer for titles (the tests use a stand-in that answers with fixed text), photos over a few thousand pixels, and more than two photos.'] },
   );
 
@@ -98,6 +100,6 @@ test('Thumbnails (v2): Results items', async () => {
     title: 'Thumbnails (v2)',
     order: 13,
     intro: 'Images > Make a thumbnail: a photo, a title and a style give several thumbnails, each checked at phone size. Everything here was made by tests that use your own test photos (still pictures, not video frames). No reference thumbnails exist yet.',
-    groups: [...groups, { title: 'The new checks, shown failing on purpose', note: 'Three checks need to know where the subject is: the title stays off it, the crop keeps it, and elements and objects stay clear. Each is shown on a variant made to fail it.', items: badItems }, { title: 'Timings and findings', items: notes }],
+    groups: [...groups, { title: 'The new checks, shown failing on purpose', note: 'Four checks are new: the title stays off the subject, the crop keeps it, elements and objects stay clear, and the letters keep their shape (measured on the drawn pixels). Each is shown on a variant made to fail it.', items: badItems }, { title: 'Timings and findings', items: notes }],
   });
 });

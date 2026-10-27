@@ -66,6 +66,29 @@ test('each new check fails on a deliberately bad variant, for the right reason, 
   expect(fo.reason).toContain('sits at the very edge of its picture');
 });
 
+test('letters that lose their shape fail "Letters keep their shape": the film look with lime letters over a lime box on tight lines, where the tail of the Q sinks into the box', async ({ page }) => {
+  test.setTimeout(120_000);
+  const photo = 'GHWd3WIW0AICE11.jpg';
+  const r = await run(page, { style: 'film-paper', photoUrl: url(photo), title: 'The Quiet Genius', subject: { x: 0.5, y: 0.34 }, aspect: '16:9', layouts: ['face-left-title-right'] });
+  const good = r.options[0];
+  const legible = (l: LintResult[]) => l.find((x) => x.id === 'legible')!;
+  expect(legible(good.lint).pass, 'the stored film look keeps every letter whole').toBe(true);
+  save(`${BAD}/legible-good.png`, good.png);
+  const bad = structuredClone(good.option) as { plan: Plan };
+  const t = bad.plan.layers.find((l) => l.id === 'title') as { style: { lineHeight: number; color: string }; highlight: { color: string } };
+  // The old look: lines set tight, letters the same lime as the box behind the next line.
+  t.style.lineHeight = 1.0;
+  t.style.color = t.highlight.color;
+  const [res] = await call<{ lint: LintResult[]; png: string }[]>(page, 'thumbV2Check', [bad], { photo: url(photo) });
+  save(`${BAD}/letters-lose-shape.png`, res.png);
+  fs.writeFileSync(path.join(OUT, BAD, 'letters-lose-shape.json'), JSON.stringify({ lint: res.lint }, null, 2));
+  fs.writeFileSync(path.join(OUT, BAD, 'legible-good.json'), JSON.stringify({ lint: good.lint }, null, 2));
+  const l = legible(res.lint);
+  expect(l.pass).toBe(false);
+  expect(l.reason).toContain('A letter in “QUIET” runs into something of its own colour');
+  expect(l.reason).toContain('like the tail of a Q');
+});
+
 test('the thumbnail block of a style file is validated, and every rejection is a sentence a person can act on', async ({ page }) => {
   const list = await call<{ styles: { spec: Record<string, unknown> }[]; problems: unknown[] }>(page, 'styleList');
   expect(list.problems, 'no stored style is rejected').toEqual([]);
