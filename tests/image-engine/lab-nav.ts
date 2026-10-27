@@ -1,7 +1,7 @@
 // Shared by the Results screen specs: go to /lab through the left menu, then to one part of the screen through its own list.
 import { expect, type Page } from '@playwright/test';
 
-export type ResultsView = 'Overview' | 'Styles' | 'Slides' | 'Photo tools' | 'Thumbnails' | 'Cutouts' | 'Elements' | 'Coverage' | 'Checks and tests';
+export type ResultsView = 'Overview' | 'Styles' | 'Slides' | 'Photo tools' | 'Thumbnails (v2)' | 'Cutouts' | 'Elements' | 'Coverage' | 'Checks and tests';
 
 export async function openResults(page: Page, view: ResultsView = 'Overview', o: { details?: boolean } = {}) {
   await page.goto('/');
@@ -13,7 +13,7 @@ export async function openResults(page: Page, view: ResultsView = 'Overview', o:
 
 /** Opens a part of the screen from the list on the left (or the strip on a phone). `details` also opens its "technical details" fold. */
 export async function goView(page: Page, view: ResultsView, o: { details?: boolean } = {}) {
-  await page.getByRole('navigation', { name: 'Sections of this page' }).getByRole('link', { name: new RegExp(`^${view}`) }).click();
+  await page.getByRole('navigation', { name: 'Sections of this page' }).getByRole('link', { name: new RegExp(`^${view.replace(/[()]/g, '\\$&')}`) }).click();
   await expect(page.locator('.res-pane:not([hidden]) h2').first()).toHaveText(view);
   if (o.details) {
     const d = page.locator('.res-pane:not([hidden]) details.res-older').first();

@@ -13,7 +13,8 @@ const present = presentCases();
 test.describe.configure({ mode: 'serial' });
 test.beforeAll(() => {
   expect(present.length, 'no test photos found in test-images/').toBeGreaterThan(0);
-  fs.rmSync(OUT, { recursive: true, force: true });
+  // Only what this spec writes is cleared: the bad variants and the pointer pictures belong to the checks spec.
+  for (const s of STYLES) fs.rmSync(path.join(OUT, s), { recursive: true, force: true });
   fs.mkdirSync(OUT, { recursive: true });
 });
 test.afterAll(() => {

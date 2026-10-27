@@ -1,8 +1,10 @@
 // Step 13: the new thumbnail checks each shown failing on a deliberately bad variant, the style block's validation, which options exist
 // and why, the subject pointer, and edits as patches. Runs after thumbnails-v2.spec.ts (which clears the output folder).
 import { expect, test } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { LintResult, Plan } from '../../src/image-engine/types';
-import { NEW_CHECKS, STYLES, call, run, save, url, type RunOption } from './thumbnails-v2-helpers';
+import { NEW_CHECKS, OUT, STYLES, call, run, save, url, type RunOption } from './thumbnails-v2-helpers';
 
 const RIDER = 'GCKR3575.JPG';
 const BAD = 'bad-variants';
@@ -21,11 +23,13 @@ test('each new check fails on a deliberately bad variant, for the right reason, 
   const good = r.options[0];
   expect(good.lint.filter((l) => NEW_CHECKS.includes(l.id) && !l.pass), 'the good variant passes the new checks').toEqual([]);
   save(`${BAD}/good.png`, good.png);
+  fs.writeFileSync(path.join(OUT, BAD, 'good.json'), JSON.stringify({ lint: good.lint }, null, 2));
   const pictures = { photo: url(RIDER) };
   const checkBad = async (name: string, edit: (o: Opt) => Opt) => {
     const bad = edit(structuredClone(good.option as Opt));
     const [res] = await call<{ id: string; lint: LintResult[]; png: string }[]>(page, 'thumbV2Check', [bad], pictures);
     save(`${BAD}/${name}.png`, res.png);
+    fs.writeFileSync(path.join(OUT, BAD, `${name}.json`), JSON.stringify({ lint: res.lint }, null, 2));
     return res.lint;
   };
 

@@ -15,6 +15,7 @@ import Step1 from './results/Step1';
 import Step2, { type Upload } from './results/Step2';
 import Step3 from './results/Step3';
 import Step4 from './results/Step4';
+import ThumbnailsV2 from './results/ThumbnailsV2';
 import StyleReading from './results/StyleReading';
 import StylesView from './results/StylesView';
 import { LabDataContext, VIEWS, type LastRun, type RecData, type TestAsset, type View } from './results/labdata';
@@ -29,7 +30,7 @@ const VIEW_TITLE: Record<View, string> = {
   styles: 'Styles',
   slides: 'Slides',
   photo: 'Photo tools',
-  thumbnails: 'Thumbnails',
+  thumbnails: 'Thumbnails (v2)',
   cutouts: 'Cutouts',
   elements: 'Elements',
   coverage: 'Coverage',
@@ -188,7 +189,7 @@ export default function Lab() {
     return () => cancelAnimationFrame(id);
   }, [onlyUnrated, state.records, tick, view, recreation, manifests, sel]);
   const done = useCallback(() => reloadLast(), [reloadLast]);
-  const other = manifests.filter((m) => m.file !== 'step11.json' && m.file !== 'photos-app.json').sort((a, b) => (b.order ?? 0) - (a.order ?? 0));
+  const other = manifests.filter((m) => m.file !== 'step11.json' && m.file !== 'photos-app.json' && m.file !== 'thumbs-v2.json').sort((a, b) => (b.order ?? 0) - (a.order ?? 0));
   /** What each part of the screen shows: the Styles view has only the style cards, Slides the slides, Photo tools the gallery. */
   const viewCounts = useMemo(() => {
     const c: Partial<Record<View, { waiting: number; total: number }>> = {};
@@ -208,7 +209,7 @@ export default function Lab() {
     if (v === 'overview') return n(Math.max(0, ...(VIEWS.filter((x) => x !== 'overview') as View[]).map((x) => latestOf(x) ?? 0)));
     if (v === 'styles' || v === 'slides') return n(recreation?.lastRun);
     if (v === 'photo') return n(last.generic['step11.json']);
-    if (v === 'thumbnails') return n(last.step2);
+    if (v === 'thumbnails') return n(last.generic['thumbs-v2.json']);
     if (v === 'elements') return n(last.elements);
     if (v === 'coverage') return n(last.coverage);
     if (v === 'cutouts') return n(last.step4);
@@ -285,8 +286,8 @@ export default function Lab() {
                 </ViewFrame>
               ))}
               {mounted('thumbnails', (
-                <ViewFrame id="thumbnails" title="Thumbnails" latest={latestOf('thumbnails')} count={countOf('thumbnails')} looking="Each picture with every thumbnail option, drawn at phone size, with the checker's result." todo="Rate each option: good, meh or bad. Add your own picture with Add pictures at the top.">
-                  <AreaContext.Provider value="thumbnails"><Step2 lastRun={last.step2} refreshKey={refreshKey} onRefreshed={done} uploads={uploads} /></AreaContext.Provider>
+                <ViewFrame id="thumbnails" title="Thumbnails (v2)" latest={latestOf('thumbnails')} count={countOf('thumbnails')} looking="For each of six styles, every thumbnail option the app makes from your test photos, full size, with the checker's result in plain words. Then the new checks shown failing on purpose, and how long it takes. No reference thumbnails exist yet, so there is nothing to put beside them. These are still photos, not video frames: nothing here says how real video frames will look." todo="Rate each option: matches (a creator would post it), close, off or wrong, with a one-line reason. The older thumbnail results are under Checks and tests.">
+                  <ThumbnailsV2 />
                 </ViewFrame>
               ))}
               {mounted('cutouts', (
@@ -332,6 +333,7 @@ export default function Lab() {
                         <Generic key={m.file} manifest={m} lastRun={last.generic[m.file] ?? 0} onRefresh={reloadAll} busy={busy} />
                       ))}
                       <StyleReading refreshKey={refreshKey} onRefreshed={done} />
+                      <AreaContext.Provider value="checks"><Step2 lastRun={last.step2} refreshKey={refreshKey} onRefreshed={done} uploads={uploads} /></AreaContext.Provider>
                       <Step3 lastRun={last.step3} refreshKey={refreshKey} onRefreshed={done} />
                       <Step1 lastRun={last.step1} refreshKey={refreshKey} onRefreshed={done} />
                     </details>

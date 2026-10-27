@@ -41,7 +41,7 @@ export function ViewFrame({ id, title, looking, todo, latest, count, children }:
 export const AREA_STATUS: Record<string, { title: string; status: Status; sentence: string; view: string }> = {
   styles: { title: 'Carousel styles', status: 'working', sentence: 'Seven styles draw seven-slide decks from a script, and every slide passes the phone-size checks.', view: 'styles' },
   photo: { title: 'Photo tools', status: 'partly', sentence: 'Treatments, shapes, frames, glass and the photo styles work in the engine. Not in the app yet, and nothing is cut out of a photo.', view: 'photo' },
-  thumbnails: { title: 'Thumbnails', status: 'working', sentence: 'Thumbnail options are drawn from a picture and checked at phone size.', view: 'thumbnails' },
+  thumbnails: { title: 'Thumbnails (v2)', status: 'partly', sentence: 'Thumbnails in six styles, with a subject pointer, twelve phone-size checks and written titles. Made from still photos only, with no reference thumbnails to compare against.', view: 'thumbnails' },
   cutouts: { title: 'Cutouts', status: 'blocked', sentence: 'No real background-removal model has produced a cutout on this computer, so cutouts are parked.', view: 'cutouts' },
   elements: { title: 'Element library', status: 'working', sentence: 'Icons, objects and doodles are placed in free space and follow what each slide says.', view: 'elements' },
   checks: { title: 'Checks and tests', status: 'working', sentence: 'Older results and technical details are kept here, closed by default.', view: 'checks' },

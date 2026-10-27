@@ -19,7 +19,7 @@ test.use({ viewport: { width: 1500, height: 1000 } });
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 
 const verdictsText = (page: Page) => page.getByRole('status').filter({ hasText: /verdicts/ });
-const SECTIONS = ['Overview', 'Styles', 'Slides', 'Photo tools', 'Thumbnails', 'Cutouts', 'Elements', 'Coverage', 'Checks and tests'];
+const SECTIONS = ['Overview', 'Styles', 'Slides', 'Photo tools', 'Thumbnails (v2)', 'Cutouts', 'Elements', 'Coverage', 'Checks and tests'];
 
 test('Results is in the left menu, looks like the app, and is organised by what to judge, with no step numbers in the titles', async ({ page }) => {
   const errors: string[] = [];
@@ -53,7 +53,7 @@ test('Overview: a card per area with a status chip, one sentence and what is wai
   const cards = page.locator('.res-area');
   await expect(cards).toHaveCount(6);
   const titles = await cards.locator('h3').allTextContents();
-  expect(titles).toEqual(['Carousel styles', 'Photo tools', 'Thumbnails', 'Cutouts', 'Element library', 'Checks and tests']);
+  expect(titles).toEqual(['Carousel styles', 'Photo tools', 'Thumbnails (v2)', 'Cutouts', 'Element library', 'Checks and tests']);
   for (const c of await cards.all()) {
     await expect(c.locator('.chip').first()).toHaveText(/^(Working|Partly working|Blocked)$/);
     await expect(c).toContainText(/waiting for your verdict/);
@@ -186,7 +186,7 @@ test('Cutouts: says in plain words what is blocked and what to do; the technical
 });
 
 test('Thumbnails: each picture shows the original and every option at phone size, full size on click, with reasons', async ({ page }) => {
-  await openResults(page, 'Thumbnails');
+  await openResults(page, 'Checks and tests', { details: true });
   const s = page.locator('#step2');
   await expect(s.locator('.res-source[aria-label^="Source picture"]')).toHaveCount(8);
   const first = s.locator('.res-aspect').first();
@@ -225,7 +225,7 @@ test('Checks and tests: closed by default; inside, the plan and patch proof and 
 });
 
 test('verdicts: autosave, survive a reload, export, and the checker disagreement flag', async ({ page }) => {
-  await openResults(page, 'Thumbnails');
+  await openResults(page, 'Checks and tests', { details: true });
   const opt = page.locator('#step2 .res-opt').first();
   const failed = (await opt.locator('.chip-error').count()) > 0;
   await opt.getByRole('button', { name: failed ? 'good' : 'bad' }).click(); // against the checker on purpose
@@ -244,7 +244,7 @@ test('verdicts: autosave, survive a reload, export, and the checker disagreement
   await expect(verdictsText(page)).toContainText('4 verdicts');
   await page.reload();
   await expect(verdictsText(page)).toContainText('4 verdicts');
-  await goView(page, 'Thumbnails');
+  await goView(page, 'Checks and tests', { details: true });
   await expect(page.locator('#step2 .res-opt').first().getByPlaceholder('why? (one line)')).toHaveValue('I disagree on purpose');
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export verdicts JSON' }).click();
@@ -311,7 +311,7 @@ test('refresh: each section re-reads its results and keeps a last-run time', asy
 
 test('upload: your own picture can be cut out and made into thumbnails in the browser', async ({ page }) => {
   test.setTimeout(120_000);
-  await openResults(page, 'Thumbnails');
+  await openResults(page, 'Checks and tests', { details: true });
   await page.getByLabel('Add pictures to try').setInputFiles(path.join(ROOT, 'test-images', IMAGES[0]));
   await expect(page.getByText('Your pictures (kept only while this tab is open)')).toContainText(IMAGES[0]);
   const s = page.locator('#step2 .res-try');
@@ -368,7 +368,7 @@ test('phone width: the list of sections becomes a strip at the top and nothing s
   expect(await nav.evaluate((n) => getComputedStyle(n).position)).toBe('sticky');
   expect(await nav.locator('ul').evaluate((u) => getComputedStyle(u).flexDirection)).toBe('row');
   for (const v of SECTIONS) {
-    await nav.getByRole('link', { name: new RegExp(`^${v}`) }).click();
+    await nav.getByRole('link', { name: new RegExp(`^${v.replace(/[()]/g, '\\$&')}`) }).click();
     await expect(page.locator('.res-pane:not([hidden]) h2').first()).toHaveText(v);
     const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(over, `${v} scrolls sideways by ${over}px`).toBeLessThanOrEqual(1);
