@@ -34,3 +34,9 @@ export { checkWithRepair, type RepairedSlide } from './photo/repair';
 export * as frames from './photo/frames';
 export { SHAPE_PATHS } from './draw/shapes';
 export { renderPhoto, renderObject, renderField } from './draw/treat';
+
+// Thumbnails, version 2 (styles, subject pointer, objects, elements; twelve checks).
+export { composeThumbs, numberIn, layoutUnavailable, THUMB_SIZES, type ThumbRequest, type ThumbOption, type SubjectZone } from './thumbnail/v2/compose';
+export { checkThumbs, checkThumb, geometryOf, loadImage as loadThumbImage, type CheckedThumb } from './thumbnail/v2/check';
+export { guessSubject, fitSubject, subjectRadius, type SubjectPoint } from './thumbnail/v2/subject';
+export { THUMB_LAYOUTS, THUMB_LAYOUT_LABEL, TITLE_LOOKS, type ThumbLayoutId, type ThumbSpec } from './thumbnail/v2/spec';

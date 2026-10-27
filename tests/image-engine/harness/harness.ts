@@ -40,6 +40,13 @@ import {
   type TextLayer,
   type ThumbnailOption,
   type ThumbnailRequest,
+  composeThumbs,
+  checkThumbs,
+  guessSubject,
+  loadThumbImage,
+  type ThumbOption,
+  type ThumbLayoutId,
+  type Treatment,
 } from '../../../src/image-engine';
 
 import { CAROUSEL_LIMITS, WORDS_CHECKED_TYPES, layerBox, textInk, wordCount } from '../../../src/image-engine/carousel/lint';
@@ -664,7 +671,63 @@ async function styleCheckPlan(plan: Plan, styleName: string) {
 const svgCheck = (name: string, text: string) => parseSvg(name, text);
 const styleValidate = (raw: unknown, folder: string) => validateStyle(raw, folder, new Set(listElements().flatMap((e) => e.tags.map((t) => t.toLowerCase()))));
 
+/** Reads a picture into a small bitmap, for guessing the subject. */
+async function smallPixels(url: string, w = 96) {
+  const img = await loadThumbImage(url);
+  const h = Math.max(1, Math.round((w * img.naturalHeight) / img.naturalWidth));
+  const c = new OffscreenCanvas(w, h);
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.drawImage(img, 0, 0, w, h);
+  return { px: g.getImageData(0, 0, w, h), width: img.naturalWidth, height: img.naturalHeight };
+}
+const blobUrl = (b: Blob) => new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.readAsDataURL(b); });
+
+interface ThumbV2Args {
+  style: string;
+  photoUrl: string;
+  subject?: { x: number; y: number };
+  title: string;
+  emphasis?: string;
+  aspect: '16:9' | '9:16';
+  objectUrl?: string;
+  secondUrl?: string;
+  secondSubject?: { x: number; y: number };
+  badge?: string;
+  layouts?: ThumbLayoutId[];
+  treatments?: Treatment[];
+}
+const asPhoto = (id: string, url: string, w: number, h: number) => ({ id, src: url, width: w, height: h });
+
+/** Version-2 thumbnails: composes every layout the style suits, draws and checks each. Pictures are only addresses. */
+async function thumbV2Run(a: ThumbV2Args) {
+  await loadFonts();
+  const style = loadStyles().styles.find((x) => x.spec.name === a.style);
+  if (!style) throw new Error('No style called ' + a.style);
+  const main = await smallPixels(a.photoUrl);
+  const subject = a.subject ?? guessSubject(main.px);
+  const second = a.secondUrl ? await smallPixels(a.secondUrl) : null;
+  const obj = a.objectUrl ? await smallPixels(a.objectUrl) : null;
+  const t0 = performance.now();
+  const options = composeThumbs({ aspect: a.aspect, title: a.title, emphasis: a.emphasis, photo: asPhoto('p1', a.photoUrl, main.width, main.height), subject, badge: a.badge, layouts: a.layouts, treatments: a.treatments, ...(obj ? { object: { id: 'o1', src: a.objectUrl!, width: obj.width, height: obj.height } } : {}), ...(second ? { second: { photo: asPhoto('p2', a.secondUrl!, second.width, second.height), subject: a.secondSubject ?? guessSubject(second.px) } } : {}) }, style);
+  const composeMs = performance.now() - t0;
+  const pictures: Record<string, string> = { photo: a.photoUrl, ...(a.secondUrl ? { 'photo-after': a.secondUrl } : {}) };
+  const checked = await checkThumbs(options, pictures);
+  const out = [];
+  for (const c of checked) out.push({ id: c.option.id, layout: c.option.layout, plan: c.option.plan, option: c.option, notes: c.option.notes, subjects: c.option.subjects, elementsUsed: c.option.elementsUsed, lint: c.lint, ms: c.ms, png: await blobUrl(c.png), phone: await blobUrl(c.phonePng) });
+  return { subject, composeMs, options: out };
+}
+
+/** Checks options someone built or edited by hand (a deliberately bad variant, a patched option). */
+async function thumbV2Check(options: ThumbOption[], pictures: Record<string, string>) {
+  const checked = await checkThumbs(options, pictures);
+  const out = [];
+  for (const c of checked) out.push({ id: c.option.id, lint: c.lint, ms: c.ms, png: await blobUrl(c.png) });
+  return out;
+}
+
 (window as unknown as { __ie: unknown }).__ie = {
+  thumbV2Run,
+  thumbV2Check,
   probeImages,
   elementList: () => ({ packs: listPacks(), elements: listElements() }),
   elementFind: findElements,

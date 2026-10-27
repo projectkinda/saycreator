@@ -6,6 +6,7 @@ import type { Palette, SlideScript, Theme } from '../carousel/types';
 import { FONT_FAMILIES, type Treatment } from '../types';
 import { isColor, validFill, validateTreatment } from '../validate';
 import { resolveTreatments } from '../photo/resolve';
+import { THUMB_LAYOUTS, TITLE_LOOKS, type ThumbSpec } from '../thumbnail/v2/spec';
 
 export type SlideType = SlideScript['type'];
 export const SLIDE_TYPES: SlideType[] = ['cover', 'content', 'step', 'stat', 'checklist', 'beforeafter', 'quote', 'closing'];
@@ -153,6 +154,8 @@ export interface StyleSpec {
   /** Photo treatments, colour fields and glass for styles that use photos. Optional. */
   photo?: PhotoSpec;
   /** Places where this style's own look breaks our phone-size rules, written down instead of changed. */
+  /** How this style looks as a thumbnail (Make a thumbnail). Optional: a style without it is not offered there. */
+  thumbnail?: ThumbSpec;
   knownLintConflicts?: string[];
   /** What the reference had that this style does not reproduce, and why. */
   notReproduced?: string[];
@@ -424,9 +427,62 @@ export function validateStyle(raw: unknown, folder: string, knownTags?: Set<stri
     }
     if (isObj(ph) && ph.overlay !== undefined) tok(ph.overlay, 'photo.overlay');
   }
+  if (s.thumbnail !== undefined) {
+    const ph = isObj(s.photo) ? s.photo : {};
+    validateThumbnail(s.thumbnail, { palNames, pals: pals as Record<string, Record<string, unknown>> | null, hasElements: s.elements !== undefined, hasGlass: ph.glass !== undefined, hasField: ph.field !== undefined || ph.fields !== undefined, headlineFont: isObj(s.fonts) ? (s.fonts.headline as keyof typeof FONT_WEIGHTS) : undefined }, err, (m) => warnings.push(`Style "${folder}": ${m}`));
+  }
   if (s.knownLintConflicts !== undefined && !(Array.isArray(s.knownLintConflicts) && s.knownLintConflicts.every((x) => typeof x === 'string'))) err('"knownLintConflicts" must be a list of sentences.');
   if (s.notReproduced !== undefined && !(Array.isArray(s.notReproduced) && s.notReproduced.every((x) => typeof x === 'string'))) err('"notReproduced" must be a list of sentences.');
   return { errors, warnings };
+}
+
+/** The "thumbnail" block of a style: every rule a person can act on. */
+function validateThumbnail(raw: unknown, ctx: { palNames: string[]; pals: Record<string, Record<string, unknown>> | null; hasElements: boolean; hasGlass: boolean; hasField: boolean; headlineFont?: keyof typeof FONT_WEIGHTS }, err: (m: string) => void, warn: (m: string) => void) {
+  const roles = PALETTE_ROLES as readonly string[];
+  const role = (v: unknown, where: string) => {
+    if (typeof v !== 'string' || !roles.includes(v)) err(`thumbnail.${where} is "${String(v)}", which is not a palette colour name (${roles.join(', ')}).`);
+  };
+  if (!isObj(raw)) return err('"thumbnail" must be an object with "palette", "title" and "layouts".');
+  const t = raw as Record<string, unknown>;
+  if (typeof t.palette !== 'string' || !ctx.palNames.includes(t.palette)) err(`thumbnail.palette is "${String(t.palette)}", which is not in "palettes" (${ctx.palNames.join(', ')}).`);
+  const pal = typeof t.palette === 'string' ? ctx.pals?.[t.palette] : undefined;
+  if (!isObj(t.title)) err('thumbnail.title must be {"look": ..., "colour": a palette colour name}.');
+  else {
+    const ti = t.title;
+    if (!(TITLE_LOOKS as readonly string[]).includes(ti.look as string)) err(`thumbnail.title.look is "${String(ti.look)}". Looks: ${TITLE_LOOKS.join(', ')}.`);
+    role(ti.colour, 'title.colour');
+    if (ti.ground !== undefined) role(ti.ground, 'title.ground');
+    if ((ti.look === 'plate' || ti.look === 'outline') && ti.ground === undefined) err(`thumbnail.title.look "${String(ti.look)}" needs "ground": the palette colour of the ${ti.look === 'plate' ? 'plate' : 'outline'}.`);
+    if (ti.weight !== undefined) {
+      if (!num(ti.weight)) err('thumbnail.title.weight must be a number.');
+      else if (ctx.headlineFont && FONT_WEIGHTS[ctx.headlineFont] && !FONT_WEIGHTS[ctx.headlineFont].includes(ti.weight)) err(`thumbnail.title.weight is ${ti.weight}, but ${ctx.headlineFont} is bundled only in weights ${FONT_WEIGHTS[ctx.headlineFont].join(', ')}.`);
+    }
+    if (ti.case !== undefined && ti.case !== 'upper' && ti.case !== 'sentence') err('thumbnail.title.case must be "upper" or "sentence".');
+    if (pal && typeof ti.colour === 'string' && typeof ti.ground === 'string' && ti.look === 'plate' && isColor(pal[ti.colour]) && isColor(pal[ti.ground])) {
+      const r = contrast(lumOf(pal[ti.colour] as string), lumOf(pal[ti.ground] as string));
+      if (r < 4.5) warn(`thumbnail title letters on their plate reach only ${r.toFixed(1)}:1; the phone-size checker needs 4.5:1.`);
+    }
+  }
+  if (!Array.isArray(t.layouts) || t.layouts.length < 3 || new Set(t.layouts).size !== t.layouts.length || !t.layouts.every((l) => (THUMB_LAYOUTS as readonly string[]).includes(l as string))) err(`thumbnail.layouts must list 3 or more different layouts from ${THUMB_LAYOUTS.join(', ')}.`);
+  if (t.block !== undefined) role(t.block, 'block');
+  const sc = t.scrim as string;
+  if (t.scrim !== undefined && !(typeof sc === 'string' && (/^#[0-9a-fA-F]{6}$/.test(sc) || (sc.startsWith('$') && roles.includes(sc.slice(1)))))) err('thumbnail.scrim must be a colour (#RRGGBB) or a palette colour written "$bg".');
+  for (const k of ['glass', 'elements', 'field']) if (t[k] !== undefined && typeof t[k] !== 'boolean') err(`thumbnail.${k} must be true or false.`);
+  if (t.elements === true && !ctx.hasElements) err('thumbnail.elements is true, but the style has no "elements" to place.');
+  if (t.field === true && !ctx.hasField) err('thumbnail.field is true, but the style has no photo.field to use.');
+  if (t.glass === true && !ctx.hasGlass) warn('thumbnail.glass is true and the style has no photo.glass, so a default glass look is used.');
+  if (t.treatment !== undefined) {
+    if (!Array.isArray(t.treatment) || t.treatment.length > 12) err('thumbnail.treatment must be a list of at most 12 photo treatments.');
+    else {
+      for (const tr of t.treatment as Record<string, unknown>[]) for (const v of Object.values(tr ?? {})) if (typeof v === 'string' && v.startsWith('$') && !roles.includes(v.slice(1))) err(`thumbnail.treatment uses the colour "${v}", which is not a palette colour name.`);
+      if (pal)
+        resolveTreatments(t.treatment as Treatment[], pal).forEach((tr, i) => {
+          const e: string[] = [];
+          validateTreatment(tr, `thumbnail.treatment[${i}]`, e);
+          e.forEach(err);
+        });
+    }
+  }
 }
 
 function lumOf(c: string) {

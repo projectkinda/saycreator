@@ -467,5 +467,36 @@
     "The very thin light weight of the reference type: the lightest bundled headline weight is 600, so the headline reads heavier than the reference.",
     "The hairline header with the author's name and an arrow icon at the top of every slide: not built (the page dots and swipe cue are used instead).",
     "The leaf photo with the purple swoosh across it: the swoosh is only used on the cover without a photo."
-  ]
+  ],
+  "thumbnail": {
+    "palette": "dusk",
+    "title": {
+      "look": "plain",
+      "colour": "text"
+    },
+    "treatment": [
+      {
+        "op": "levels",
+        "contrast": 0.06,
+        "saturation": 0.06
+      },
+      {
+        "op": "grain",
+        "amount": 0.08,
+        "size": 1,
+        "seed": 12
+      }
+    ],
+    "layouts": [
+      "split-colour",
+      "title-over-photo",
+      "face-left-title-right",
+      "before-after",
+      "number-badge"
+    ],
+    "block": "accent",
+    "scrim": "$bg",
+    "glass": true,
+    "field": true
+  }
 }

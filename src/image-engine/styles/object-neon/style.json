@@ -75,5 +75,33 @@
     "The glossy 3D objects and glass shapes on almost every reference slide. They cannot be made here (no 3D renderer, no image generation) and a flat shape would be a worse substitute, so the object area is left to a flat interface card on the cover and empty elsewhere.",
     "Glow around objects: only a soft stacked-circle glow exists, and it is not used on these layouts.",
     "UI mock-ups of laptops and phones, icon rows with captions and callout cards that are slightly rotated."
-  ]
+  ],
+  "thumbnail": {
+    "palette": "dark",
+    "title": {
+      "look": "marker",
+      "colour": "text"
+    },
+    "treatment": [
+      {
+        "op": "levels",
+        "brightness": -0.08,
+        "contrast": 0.16
+      },
+      {
+        "op": "vignette",
+        "amount": 0.3
+      }
+    ],
+    "layouts": [
+      "object-title",
+      "face-left-title-right",
+      "number-badge",
+      "title-over-photo",
+      "split-colour"
+    ],
+    "block": "accent",
+    "scrim": "$bg",
+    "elements": true
+  }
 }

@@ -80,5 +80,34 @@
     "Black-and-white and halftone photographs, oval photo masks, laptop and phone mock-ups: there are no photos in the sample scripts and no photo treatments are built.",
     "Tape banners are built as a tool but not used in any layout yet.",
     "Different fonts or italics for single words inside a headline."
-  ]
+  ],
+  "thumbnail": {
+    "palette": "dark",
+    "title": {
+      "look": "plate",
+      "colour": "onAccent",
+      "ground": "accent"
+    },
+    "treatment": [
+      {
+        "op": "levels",
+        "contrast": 0.14,
+        "saturation": 0.18
+      },
+      {
+        "op": "vignette",
+        "amount": 0.18
+      }
+    ],
+    "layouts": [
+      "title-over-photo",
+      "number-badge",
+      "face-left-title-right",
+      "split-colour",
+      "object-title"
+    ],
+    "block": "accent",
+    "scrim": "$bg",
+    "elements": true
+  }
 }

@@ -422,5 +422,44 @@
     "The paper notes, torn-poster look, tape and stickers on the photos (a ruled to-do note, a pasted poster with tear-off tabs): only the polaroid, the ticket and the flower crop were built; there is no torn-paper or tape drawing yet.",
     "People as the subject. The references put a person in nearly every photo, often with type tucked behind them; that needs cutouts, and none were supplied. Here the type goes over or beside the photo, never behind a figure.",
     "The airplane window mask and the plastic cup photo: the user's test photos do not include them, and a window-shaped mask was not built."
-  ]
+  ],
+  "thumbnail": {
+    "palette": "film",
+    "title": {
+      "look": "outline",
+      "colour": "accent",
+      "ground": "bg"
+    },
+    "treatment": [
+      {
+        "op": "levels",
+        "contrast": 0.2,
+        "saturation": -0.45
+      },
+      {
+        "op": "tint",
+        "color": "#D8A45A",
+        "amount": 0.12
+      },
+      {
+        "op": "grain",
+        "amount": 0.15,
+        "size": 1,
+        "seed": 3
+      },
+      {
+        "op": "vignette",
+        "amount": 0.45
+      }
+    ],
+    "layouts": [
+      "face-left-title-right",
+      "title-over-photo",
+      "split-colour",
+      "number-badge",
+      "before-after"
+    ],
+    "block": "accent",
+    "scrim": "$bg"
+  }
 }

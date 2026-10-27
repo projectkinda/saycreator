@@ -61,6 +61,14 @@ export interface LintInput {
   source: { width: number; height: number };
   /** The cropped photo, at up to 640px wide. */
   photoPixels: Pixels;
+  /** Version 2 only. Where the subject is on the canvas (the person's pointer), with the radius the title and elements keep clear of. `of` is the photo layer it belongs to. */
+  subjects?: { x: number; y: number; r: number; of: string }[];
+  /** Version 2 only. The photo layers' boxes in canvas px, so the crop can be checked against the subject. */
+  photoBoxes?: { id: string; x: number; y: number; width: number; height: number }[];
+  /** Version 2 only. Elements and objects (stickers, arrows, a product picture) in canvas px. */
+  things?: { id: string; kind: 'element' | 'object'; x: number; y: number; width: number; height: number }[];
+  /** Version 2 only. Chips, badges and plates the things must also stay off. */
+  fixed?: { id: string; x: number; y: number; width: number; height: number }[];
 }
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -122,7 +130,7 @@ export function lintThumbnail(i: LintInput): LintResult[] {
       if (share < T.minContrastShare) problems.push(`only ${pct(share)} of the picture behind the words reaches ${T.minContrast}:1 (needs ${pct(T.minContrastShare)}); the typical contrast is ${med.toFixed(1)}:1`);
     }
   }
-  if (i.title.highlight?.textColor) {
+  if (i.title.highlight?.textColor && parseColor(i.title.highlight.color).alpha > 0.05) {
     const h = contrastRgb(parseColor(i.title.highlight.textColor).rgb, parseColor(i.title.highlight.color).rgb);
     if (h < T.minContrast) problems.push(`the highlighted word only reaches ${h.toFixed(1)}:1`);
     worst = Math.min(worst, h);
@@ -223,5 +231,67 @@ export function lintThumbnail(i: LintInput): LintResult[] {
     reason: sharp >= T.minSharpness ? `The cropped photo has enough fine detail (score ${Math.round(sharp)}, needs ${T.minSharpness}).` : `The cropped photo has little fine detail (score ${Math.round(sharp)}, needs ${T.minSharpness}). It may be blurry, or flat-coloured artwork, which this check cannot tell apart.`,
   });
 
+  if (i.subjects && i.subjects.length) subjectChecks(i, out);
   return out;
+}
+
+const hitsBox = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+const hitsCircle = (c: { x: number; y: number; r: number }, b: { x: number; y: number; width: number; height: number }) => Math.hypot(c.x - Math.min(Math.max(c.x, b.x), b.x + b.width), c.y - Math.min(Math.max(c.y, b.y), b.y + b.height)) < c.r;
+
+/** The checks that need to know where the subject is: the title off it, the crop keeping it, and the extra pictures off the words and off each other. */
+function subjectChecks(i: LintInput, out: LintResult[]) {
+  const subjects = i.subjects!;
+  const { width: W, height: H } = i.canvas;
+  // 10. the title stays off the subject
+  const covered = subjects.filter((s) => i.wordBoxes.some((b) => hitsCircle(s, b)));
+  out.push({
+    id: 'subject',
+    label: 'Title stays off the subject',
+    pass: covered.length === 0,
+    measured: covered.length,
+    limit: 0,
+    reason: covered.length === 0 ? 'The title stays clear of the point marked as the subject (your pointer, not a detected face).' : `The title runs over the point marked as the subject${covered[0].of === 'object' ? ' (the object)' : ''}. Move the title, or move the subject pointer so the crop puts the subject on the other side.`,
+  });
+  // 11. the crop keeps the subject, with room round it
+  const edge = 0.08;
+  const lost = subjects.filter((s) => s.of !== 'object').flatMap((s) => {
+    const box = i.photoBoxes?.find((p) => p.id === s.of);
+    if (!box) return [];
+    // Only the part of the picture that is on the canvas counts (a photo drawn bigger than the canvas bleeds off it).
+    const vis = { x: Math.max(0, box.x), y: Math.max(0, box.y), width: Math.min(W, box.x + box.width) - Math.max(0, box.x), height: Math.min(H, box.y + box.height) - Math.max(0, box.y) };
+    const rx = (s.x - vis.x) / vis.width;
+    const ry = (s.y - vis.y) / vis.height;
+    return rx < edge || rx > 1 - edge || ry < edge || ry > 1 - edge ? [{ s, rx, ry }] : [];
+  });
+  out.push({
+    id: 'focal',
+    label: 'Crop keeps the subject',
+    pass: lost.length === 0,
+    measured: lost.length,
+    limit: 0,
+    reason: lost.length === 0 ? 'The crop keeps the marked subject with room round it.' : `After cropping, the marked subject sits at the very edge of its picture (${Math.round(lost[0].rx * 100)}% across, ${Math.round(lost[0].ry * 100)}% down), so it is half cut off. Use a photo with more room round the subject, or pick another layout.`,
+  });
+  // 12. elements and objects do not overlap words, the subject, chips or each other
+  const things = i.things ?? [];
+  const problems: string[] = [];
+  for (let a = 0; a < things.length; a++) {
+    const t = things[a];
+    if (i.wordBoxes.some((w) => hitsBox(t, w))) problems.push(`${t.kind === 'object' ? 'the object' : t.id} covers part of the title`);
+    else if (t.kind === 'element' && subjects.some((s) => s.of !== 'object' && hitsCircle(s, t))) problems.push(`${t.id} covers the subject`);
+    else if ((i.fixed ?? []).some((f) => hitsBox(t, f))) problems.push(`${t.kind === 'object' ? 'the object' : t.id} sits on a badge, chip or plate`);
+    else if (t.x < 0 || t.y < 0 || t.x + t.width > W || t.y + t.height > H) {
+      if (t.kind === 'object') problems.push('the object is cut off by the edge');
+    }
+    // The two pieces of one element (code:tape:1 and code:tape:2) are drawn to overlap on purpose.
+    const family = (id: string) => id.replace(/:\d+$/, '');
+    for (let b = a + 1; b < things.length; b++) if (hitsBox(things[a], things[b]) && family(things[a].id) !== family(things[b].id)) problems.push(`${things[a].id} and ${things[b].id} overlap`);
+  }
+  out.push({
+    id: 'overlap',
+    label: 'Elements and objects stay clear',
+    pass: problems.length === 0,
+    measured: problems.length,
+    limit: 0,
+    reason: problems.length === 0 ? 'Elements and the object stay off the title, the subject and each other.' : `${problems[0].charAt(0).toUpperCase()}${problems[0].slice(1)}${problems.length > 1 ? ` (and ${problems.length - 1} more)` : ''}. Move or remove it.`,
+  });
 }

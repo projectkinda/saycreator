@@ -402,5 +402,38 @@
     "The brush-script word in the references (a hand-lettered accent over the heavy caps): no script font is bundled, and drawing letters as paths would not be editable text.",
     "The real photography of the references (a skyline at night, a skater, palm trees). These are the user's own test photos, which are mostly landscapes and street scenes, so the poster look comes from the black-and-white treatment, not the subject.",
     "Cut-out objects such as the palm silhouette standing on the colour slide: that needs a transparent cutout, and none was supplied."
-  ]
+  ],
+  "thumbnail": {
+    "palette": "ink",
+    "title": {
+      "look": "outline",
+      "colour": "text",
+      "ground": "bg"
+    },
+    "treatment": [
+      {
+        "op": "grayscale"
+      },
+      {
+        "op": "levels",
+        "contrast": 0.28,
+        "brightness": -0.04
+      },
+      {
+        "op": "grain",
+        "amount": 0.09,
+        "size": 1,
+        "seed": 4
+      }
+    ],
+    "layouts": [
+      "title-over-photo",
+      "face-left-title-right",
+      "split-colour",
+      "before-after",
+      "number-badge"
+    ],
+    "block": "accent",
+    "scrim": "$bg"
+  }
 }

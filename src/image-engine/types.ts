@@ -313,7 +313,7 @@ export interface ThumbnailOption {
   notes: string[];
 }
 
-export type LintId = 'words' | 'readable' | 'contrast' | 'overlay' | 'margins' | 'resolution' | 'crop' | 'brightness' | 'sharpness';
+export type LintId = 'words' | 'readable' | 'contrast' | 'overlay' | 'margins' | 'resolution' | 'crop' | 'brightness' | 'sharpness' | 'subject' | 'focal' | 'overlap';
 
 export interface LintResult {
   id: LintId;

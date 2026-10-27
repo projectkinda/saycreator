@@ -80,5 +80,35 @@
     "Photographs, halftone and paper cut-outs, stickers made from photos, the flower-shaped photo crop: no photos in the sample scripts and no photo treatments built.",
     "The serif italic word inside headlines, the condensed uppercase voice and the handwriting: those fonts are not bundled, and a lighter sans would be a worse substitute, so it is not faked.",
     "Hand-drawn marks are drawn as clean paths, so they look tidier than real pen strokes."
-  ]
+  ],
+  "thumbnail": {
+    "palette": "cream",
+    "title": {
+      "look": "marker",
+      "colour": "text"
+    },
+    "treatment": [
+      {
+        "op": "levels",
+        "saturation": 0.12,
+        "contrast": 0.08
+      },
+      {
+        "op": "grain",
+        "amount": 0.05,
+        "size": 1,
+        "seed": 3
+      }
+    ],
+    "layouts": [
+      "split-colour",
+      "face-left-title-right",
+      "number-badge",
+      "title-over-photo",
+      "before-after"
+    ],
+    "block": "marker",
+    "scrim": "$bg",
+    "elements": true
+  }
 }
