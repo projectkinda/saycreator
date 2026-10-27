@@ -18,10 +18,19 @@ const knownTags = () => new Set(listElements().flatMap((e) => e.tags.map((t) => 
 
 /** What the reader is allowed to say, as plain text for its prompt. Built from the same lists the validator uses, so it cannot drift. */
 export function vocabularyText(): string {
-  const fonts = FONT_FAMILIES.map((f) => `${f} (weights ${FONT_WEIGHTS[f].join(', ')})`).join('; ');
+  const LOOK: Record<string, string> = {
+    'Schibsted Grotesk': 'heavy bold grotesque, the usual headline face',
+    'Instrument Sans': 'plain humanist sans for body text',
+    'Hanken Grotesk': 'light to medium neo-grotesk (300 is a thin, airy headline)',
+    'Space Mono': 'typewriter-style monospace for labels and code-like text',
+    'Instrument Serif Italic': 'high-contrast italic serif, one weight, for an accent word or line',
+    'Bebas Neue': 'tall condensed all-caps display face, one weight',
+    'Caveat Brush': 'hand-drawn brush script, one weight',
+  };
+  const fonts = FONT_FAMILIES.map((f) => `${f} (${LOOK[f] ?? 'a bundled font'}; weights ${FONT_WEIGHTS[f].join(', ')})`).join('; ');
   return [
     'VOCABULARY. You may only use these. Anything else is rejected.',
-    `- Fonts (only these two are bundled): ${fonts}. fonts = {"headline": family, "headlineWeight": n, "body": family, "bodyWeight": n, "strong": n}.`,
+    `- Fonts (only these are bundled; any other font is rejected): ${fonts}. fonts = {"headline": family, "headlineWeight": n, "body": family, "bodyWeight": n, "strong": n}.`,
     `- Palettes: a map of names to palettes. Every palette has exactly these colours, each "#RRGGBB" ("bg" may also be {"type":"linear","angle":deg,"stops":[{"at":0,"color":"#..."},{"at":1,"color":"#..."}]}): ${PALETTE_ROLES.join(', ')}. text on bg and onAccent on accent need 4.5:1 contrast. "rhythm" is a list of palette names used slide after slide; "byType" maps a slide type to a palette name.`,
     '- type = font sizes in px on a 1080 wide slide, each 10 to 400: {"cover","headline","body","small","stat","quote","label"}. Keep body and small at 32 or more.',
     `- caseStyle: ${CASE_STYLES.join(' | ')}. headlineLineHeight 0.8 to 1.6. chrome: ${CHROME_KINDS.join(' | ')}.`,

@@ -1,6 +1,7 @@
 // Plan, patch and result types. The plan JSON is the single source of truth; see IMAGE_CONTRACT.md.
 
-export const FONT_FAMILIES = ['Schibsted Grotesk', 'Instrument Sans'] as const;
+/** Every bundled family (SIL OFL 1.1; see the OFL.txt in each fonts folder and LICENSES-ASSETS.md). "Instrument Serif Italic" is the italic of Instrument Serif, kept as its own family so that no italic style is needed anywhere else. */
+export const FONT_FAMILIES = ['Schibsted Grotesk', 'Instrument Sans', 'Hanken Grotesk', 'Space Mono', 'Instrument Serif Italic', 'Bebas Neue', 'Caveat Brush'] as const;
 export type FontFamily = (typeof FONT_FAMILIES)[number];
 
 export interface ImageFilters {

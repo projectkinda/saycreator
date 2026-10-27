@@ -36,3 +36,19 @@ Rule: only permissive licences (MIT, Apache-2.0, ISC, CC0 or similar), checked a
 ## Your own test assets (not a pack, not shippable)
 
 `test-assets/` (at the repository root) is private. It is gitignored, never bundled, and never referenced by a stored style or an export. Slides rendered with it are labelled **TEST ASSETS: not shippable**. `npm run check:test-assets` (part of `npm run build`) fails if any file in `src/`, `public/` or `dist/` references it or contains a copy of one of its files. Note: `public/test-assets/` is a different, older folder (the synthetic drawings from Step 1) and is unrelated.
+
+## Fonts (bundled, never loaded from the network)
+
+Rule: SIL Open Font License 1.1 only, read at the **upstream source** (the `google/fonts` repository `ofl/<family>/OFL.txt`, which names each family's own project) and compared with the licence the npm package `@fontsource/<family>` declares (OFL-1.1). The woff2 files are the Latin subset from those packages, with the OFL text from upstream next to them in `src/image-engine/fonts/<family>/OFL.txt`. No Reserved Font Name is declared by any of them. Checked 2026-10-27. `npm run check:licenses` fails if a font folder has no OFL text.
+
+| Family | Weights bundled | Looks like | Copyright line (upstream OFL.txt) |
+|---|---|---|---|
+| Schibsted Grotesk | 600, 700, 800 | heavy grotesque headlines | (from before; OFL.txt in its folder) |
+| Instrument Sans | 400, 500, 600 | plain humanist body text | (from before; OFL.txt in its folder) |
+| Hanken Grotesk | 300, 500, 700 | light neo-grotesk | Copyright 2021 The Hanken Grotesk Project Authors (https://github.com/marcologous/hanken-grotesk) |
+| Space Mono | 400, 700 | typewriter-style monospace | Copyright 2016 The Space Mono Project Authors (https://github.com/googlefonts/spacemono) |
+| Instrument Serif Italic | 400 | high-contrast italic serif (the italic of Instrument Serif, registered as its own family) | Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif) |
+| Bebas Neue | 400 | tall condensed all-caps display | Copyright © 2010 by Dharma Type. |
+| Caveat Brush | 400 | hand-drawn brush script | Copyright 2015 Google Inc. All Rights Reserved. |
+
+Not used: Inter (excluded on purpose). Permanent Marker is Apache-2.0 (permissive) but Caveat Brush already covers the brush look under OFL.

@@ -30,7 +30,7 @@ test.beforeEach(async ({ page }) => {
   test.info().annotations.push({ type: 'page-errors', description: errors.join('; ') || 'none' });
 });
 
-test('fonts: all six bundled faces load from the repo and are really used', async ({ page }) => {
+test('fonts: every bundled face loads from the repo and is really used', async ({ page }) => {
   const s = await call<{ loaded: string[]; expected: string[]; ours: number; serif: number }>(page, 'fontStatus');
   for (const e of s.expected) expect(s.loaded).toContain(e);
   expect(Math.abs(s.ours - s.serif)).toBeGreaterThan(s.serif * 0.03); // not the fallback font
