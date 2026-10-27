@@ -153,11 +153,11 @@ export default function Step4({ lastRun, refreshKey, onRefreshed, uploads }: { l
 
   const verdict = (key: string, option: string, img: string, label: string, extra?: RecordBase['timings']) => {
     const base: RecordBase = { key, step: 'step4', kind: 'cutout', image: img, option, ...(extra ? { timings: extra } : {}) };
-    return <VerdictBox label={label} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} />;
+    return <VerdictBox label={label} k={key} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} />;
   };
 
   return (
-    <Section id="step4" title="Step 4: Cutouts" lastRun={lastRun} onRefresh={refresh} busy={busy} intro="Each picture with its cutout on four backgrounds. Cutouts are parked: no real model has produced one on this machine, so everything below marked TOY is only a plumbing test and says nothing about cutout quality.">
+    <Section id="step4" title="Cutout test results (technical)" lastRun={lastRun} onRefresh={refresh} busy={busy} intro="Each picture with its cutout on four backgrounds. Cutouts are parked: no real model has produced one on this machine, so everything below marked TOY is only a plumbing test and says nothing about cutout quality.">
       <div className="res-banner" role="note">
         <b>{REAL}: none yet.</b> ISNet is blocked (licence unclear). BiRefNet_lite fails on this machine (see below).
       </div>

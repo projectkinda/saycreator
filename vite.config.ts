@@ -80,7 +80,9 @@ function labEndpoints(): Plugin {
         const generic: Record<string, number> = {};
         const rd = path.join(outDir, 'results');
         if (fs.existsSync(rd)) for (const f of fs.readdirSync(rd)) generic[f] = newest(path.join(rd, f));
-        json(res, { step1, step2: newest(path.join(outDir, 'step2')), step3: newest(path.join(outDir, 'step3')), step4: newest(path.join(outDir, 'step4')), generic });
+        const elements = Math.max(newest(path.join(outDir, 'asset-recreation')), newest(path.join(outDir, 'smart-placement')));
+        const coverage = Math.max(newest(path.join(outDir, 'step11')), newest(path.join(root, 'Reference carousels likes', 'clusters.json')));
+        json(res, { step1, step2: newest(path.join(outDir, 'step2')), step3: newest(path.join(outDir, 'step3')), step4: newest(path.join(outDir, 'step4')), elements, coverage, generic });
       });
       server.middlewares.use('/__lab/step1', (_req, res) => {
         const files = fs.existsSync(outDir) ? fs.readdirSync(outDir).filter((f) => f.startsWith('step1-')) : [];
@@ -243,6 +245,12 @@ function labEndpoints(): Plugin {
             json(res, { error: e instanceof Error ? e.message : String(e) });
           }
         });
+      });
+      // The private test pictures (names and sizes only), for the Coverage list on the Results screen.
+      server.middlewares.use('/__lab/testassets', (_req, res) => {
+        const d = path.join(root, 'test-assets');
+        const files = fs.existsSync(d) ? fs.readdirSync(d).filter((x) => /\.(png|jpe?g|webp|gif|svg)$/i.test(x)).sort().map((name) => ({ name, bytes: fs.statSync(path.join(d, name)).size, url: '/test-assets/' + encodeURIComponent(name) })) : [];
+        json(res, { files });
       });
       // Results written by later steps: out/image-engine/results/<step>.json, shown on the Results screen with no page changes.
       server.middlewares.use('/__lab/steps', (_req, res) => {

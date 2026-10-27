@@ -35,14 +35,14 @@ export default function Step1({ lastRun, refreshKey, onRefreshed }: { lastRun: n
           ))}
         </div>
         <CheckLine failed={base.checker.failed} passText="Drawn" />
-        <VerdictBox label={title} rec={records[base.key]} onChange={(v, r) => setRecord(base, v, r)} />
+        <VerdictBox label={title} k={base.key} rec={records[base.key]} onChange={(v, r) => setRecord(base, v, r)} />
       </div>
     );
   };
 
   const pc = data?.findings?.patchCycle;
   return (
-    <Section id="step1" title="Step 1: Plan and patch proof" lastRun={lastRun} onRefresh={refresh} busy={busy} intro="A slide and a quote card drawn from plans (a synthetic drawing, not a photo), and an edit made by a patch, undone and redone.">
+    <Section id="step1" title="Plan and patch proof" lastRun={lastRun} onRefresh={refresh} busy={busy} intro="A slide and a quote card drawn from plans (a synthetic drawing, not a photo), and an edit made by a patch, undone and redone.">
       {data === null && <p role="status">Loading…</p>}
       {data && data.files.length === 0 && <p className="lab-err">No Step 1 pictures found. Run <code>npm run test:image</code>.</p>}
       {data && (

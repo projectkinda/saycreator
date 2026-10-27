@@ -35,10 +35,10 @@ function Elements({ s }: { s: Slide }) {
   if (s.elementsUsed.length === 0) return <p className="small muted">No elements placed.</p>;
   return (
     <ul className="res-smart-els small">
-      {s.elementsUsed.map((id) => {
+      {s.elementsUsed.map((id, i) => {
         const l = s.elementLinks.find((x) => x.id === id);
         const mark = l?.related === true ? 'links to the tags' : l?.related === false ? 'UNRELATED' : 'decoration';
-        return <li key={id} className={l?.related === false ? 'lab-err' : ''}>{id} <span className="muted">({mark})</span></li>;
+        return <li key={`${id}-${i}`} className={l?.related === false ? 'lab-err' : ''}>{id} <span className="muted">({mark})</span></li>;
       })}
     </ul>
   );
@@ -82,7 +82,7 @@ export default function SmartPlacement({ refreshKey, onRefreshed }: { refreshKey
   const cards = groups.filter(([k]) => !k.startsWith('hot-flat|'));
 
   return (
-    <Section id="smart-placement" title="Step 7: Smart element placement" lastRun={data?.lastRun ?? null} onRefresh={refresh} busy={busy} intro="Elements now follow what each slide says. Each slide has 2 to 4 element tags (written by hand into the sample scripts for now; a model would fill them later). A picture of a thing is only placed if it links to those tags, otherwise nothing is. The sample is 4 hand-tagged decks: it shows the mechanism works on them, not that it generalises.">
+    <Section id="smart-placement" title="Elements that follow what the slide says" lastRun={data?.lastRun ?? null} onRefresh={refresh} busy={busy} intro="Elements now follow what each slide says. Each slide has 2 to 4 element tags (written by hand into the sample scripts for now; a model would fill them later). A picture of a thing is only placed if it links to those tags, otherwise nothing is. The sample is 4 hand-tagged decks: it shows the mechanism works on them, not that it generalises.">
       {data === null && <p role="status">Loading…</p>}
       {data && data.slides.length === 0 && <p className="lab-err">Nothing found. Run <code>npm run test:image</code> first.</p>}
       {totals.length > 0 && (
@@ -137,7 +137,7 @@ export default function SmartPlacement({ refreshKey, onRefreshed }: { refreshKey
                 );
               })}
             </div>
-            <VerdictBox label={`${any.style} ${any.scriptTitle} ${any.index}: is the new pick better than the old?`} options={VERDICT} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} />
+            <VerdictBox label={`${any.style} ${any.scriptTitle} ${any.index}: is the new pick better than the old?`} k={key} options={VERDICT} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} />
           </article>
         );
       })}

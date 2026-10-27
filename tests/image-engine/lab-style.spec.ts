@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { goView, openResults } from './lab-nav';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'out/image-engine/results-screen');
@@ -26,8 +27,7 @@ test.use({ viewport: { width: 1500, height: 1000 } });
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 
 const open = async (page: Page) => {
-  await page.goto('/');
-  await page.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name: 'Results' }).click();
+  await openResults(page, 'Checks and tests', { details: true });
   await expect(page.locator('#style-reading')).toBeVisible();
   await expect(page.locator('#style-reading article[aria-label^="Cluster"]').first()).toBeVisible();
 };
@@ -93,6 +93,7 @@ test('a verdict on a cluster is saved, survives a reload and is exported with th
   await a.getByRole('button', { name: 'partly right' }).click();
   await a.getByPlaceholder('why? (one line)').fill('yellow deck is the odd one out');
   await page.reload();
+  await goView(page, 'Checks and tests', { details: true });
   const b = page.locator('#style-reading article[aria-label^="Cluster"]').first();
   await expect(b.getByPlaceholder('why? (one line)')).toHaveValue('yellow deck is the odd one out');
   await expect(b.getByRole('button', { name: 'partly right' })).toHaveAttribute('aria-pressed', 'true');

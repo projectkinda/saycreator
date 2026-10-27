@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openResults } from './lab-nav';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'out/image-engine/results-screen');
@@ -12,15 +13,14 @@ test.use({ viewport: { width: 1500, height: 1000 } });
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 
 const open = async (page: Page) => {
-  await page.goto('/');
-  await page.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name: 'Results' }).click();
+  await openResults(page, 'Elements');
   await expect(page.locator('#asset-library .res-rec-card').first()).toBeVisible();
 };
 
 test('the library shows elements with tags, licence and three recolour previews, filterable by pack and tag', async ({ page }) => {
   await open(page);
   const s = page.locator('#asset-library');
-  await expect(s.getByRole('heading', { name: 'Step 6: Asset library' })).toBeVisible();
+  await expect(s.getByRole('heading', { name: 'Element library and element slides' })).toBeVisible();
   const first = s.locator('.res-el-card').first();
   await expect(first.locator('.res-el-swatch')).toHaveCount(3);
   await expect(first).toContainText('code:');

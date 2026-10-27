@@ -1,6 +1,7 @@
 // Any later step shows up here with no page changes: its tests write out/image-engine/results/<step>.json
 // (see tests/image-engine/results.ts). Items get pictures, a checker result, notes and verdict boxes like everywhere else.
 import { Pic, Section, VerdictBox, CheckLine, useResults, type RecordBase } from './common';
+import { plainTitle } from './labdata';
 
 export interface StepManifest {
   file: string;
@@ -33,7 +34,7 @@ export default function Generic({ manifest, lastRun, onRefresh, busy }: { manife
   const { records, setRecord } = useResults();
   const id = manifest.file.replace(/\.json$/, '');
   return (
-    <Section id={id} title={manifest.title} intro={manifest.intro} lastRun={lastRun} onRefresh={onRefresh} busy={busy}>
+    <Section id={id} title={plainTitle(manifest.title)} intro={manifest.intro} lastRun={lastRun} onRefresh={onRefresh} busy={busy}>
       {manifest.groups.map((g) => (
         <div key={g.title} className="res-source">
           <h3 className="h3">{g.title}</h3>
@@ -57,7 +58,7 @@ export default function Generic({ manifest, lastRun, onRefresh, busy }: { manife
                   {it.facts && it.facts.length > 0 && <p className="small muted">{it.facts.join(' · ')}</p>}
                   {it.error && <p className="lab-err" role="alert">{it.error}</p>}
                   {it.checker && <CheckLine failed={failed} />}
-                  <VerdictBox label={`${it.title} (${g.title})`} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} {...(it.verdictWords ? { options: it.verdictWords.map((w) => ({ value: w, label: w })) } : {})} />
+                  <VerdictBox label={`${it.title} (${g.title})`} k={key} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} {...(it.verdictWords ? { options: it.verdictWords.map((w) => ({ value: w, label: w })) } : {})} />
                 </div>
               );
             })}

@@ -146,7 +146,7 @@ export default function StyleReading({ refreshKey, onRefreshed }: { refreshKey: 
   );
 
   return (
-    <Section id="style-reading" title="Step 5: Style reading" lastRun={data?.lastRun ?? null} onRefresh={refresh} busy={busy} intro={`Phase 1 of style learning: I looked at every picture in "${data?.folder ?? 'Reference carousels likes'}", sorted them into clusters and wrote a draft style for each. Nothing is built from them yet. MEASURED means computed from pixels in code; GUESS means my reading. No text, logos, faces or brand names are copied from the pictures.`}>
+    <Section id="style-reading" title="How the reference decks were read into styles" lastRun={data?.lastRun ?? null} onRefresh={refresh} busy={busy} intro={`Phase 1 of style learning: I looked at every picture in "${data?.folder ?? 'Reference carousels likes'}", sorted them into clusters and wrote a draft style for each. Nothing is built from them yet. MEASURED means computed from pixels in code; GUESS means my reading. No text, logos, faces or brand names are copied from the pictures.`}>
       {data === null && <p role="status">Loading…</p>}
       {data && !cf && <p className="lab-err">No clusters.json found in the reference folder.</p>}
       {cf && (
@@ -215,7 +215,7 @@ export default function StyleReading({ refreshKey, onRefreshed }: { refreshKey: 
                 <p className="small muted">What our toolbox cannot draw yet, for this style.</p>
                 <ul className="res-missing">{c.spec.missingTools.map((m) => <li key={m}>{m}</li>)}</ul>
 
-                <VerdictBox label={`cluster ${c.name}`} options={VERDICT} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} />
+                <VerdictBox label={`cluster ${c.name}`} k={key} options={VERDICT} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} />
               </article>
             );
           })}

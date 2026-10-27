@@ -169,7 +169,7 @@ export default function AssetLibrary({ refreshKey, onRefreshed }: { refreshKey: 
   }, [data]);
 
   return (
-    <Section id="asset-library" title="Step 6: Asset library" lastRun={data?.lastRun ?? null} onRefresh={refresh} busy={busy} intro="The elements the engine can place and recolour, then the element-rich styles recreated with them. SHIPPABLE slides use only our library (permissive packs and shapes drawn in code). TEST ASSETS slides use your private test pictures and are not shippable. Every slide is its own file.">
+    <Section id="asset-library" title="Element library and element slides" lastRun={data?.lastRun ?? null} onRefresh={refresh} busy={busy} intro="The elements the engine can place and recolour, then the element-rich styles recreated with them. SHIPPABLE slides use only our library (permissive packs and shapes drawn in code). TEST ASSETS slides use your private test pictures and are not shippable. Every slide is its own file.">
       <Library />
       {data === null && <p role="status">Loading…</p>}
       {data?.testSkipped && (
@@ -220,7 +220,7 @@ export default function AssetLibrary({ refreshKey, onRefreshed }: { refreshKey: 
                               <button type="button" className="btn btn-outline btn-sm" onClick={() => setCmp({ slide: s, refs: files })}>
                                 <Icon name="search" size={14} /> Compare
                               </button>
-                              <VerdictBox label={`${st.title} ${mode} ${script} ${s.index}`} options={VERDICT} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} />
+                              <VerdictBox label={`${st.title} ${mode} ${script} ${s.index}`} k={key} options={VERDICT} rec={records[key]} onChange={(v, r) => setRecord(base, v, r)} />
                             </div>
                           );
                         })}

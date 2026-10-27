@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openResults } from './lab-nav';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'out/image-engine/results-screen');
@@ -11,15 +12,14 @@ test.use({ viewport: { width: 1500, height: 1000 } });
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 
 const open = async (page: Page) => {
-  await page.goto('/');
-  await page.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name: 'Results' }).click();
+  await openResults(page, 'Elements');
   await expect(page.locator('#smart-placement .res-smart-card').first()).toBeVisible();
 };
 
 test('each slide shows the old pick beside the new one, with tags, elements, links and a better/same/worse verdict', async ({ page }) => {
   await open(page);
   const s = page.locator('#smart-placement');
-  await expect(s.getByRole('heading', { name: 'Step 7: Smart element placement' })).toBeVisible();
+  await expect(s.getByRole('heading', { name: 'Elements that follow what the slide says' })).toBeVisible();
   await expect(s.locator('.res-smart-card')).toHaveCount(2 * 28); // editorial-collage and object-neon, 4 decks x 7 slides
   const card = s.locator('.res-smart-card').first();
   await expect(card.getByText('Before: random pick')).toBeVisible();

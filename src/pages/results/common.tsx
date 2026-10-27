@@ -30,7 +30,11 @@ export interface ResultsCtx {
   view: (url: string, alt: string) => void;
   /** Sections hand extra facts to the exported JSON (machine, models, settings). */
   addExport: (key: string, value: unknown) => void;
+  /** Every verdict box tells the page which item it is and which area it belongs to, so the page can count what is waiting. */
+  register?: (area: string, key: string) => void;
 }
+/** The area (a part of the Results screen) the verdict boxes below belong to. */
+export const AreaContext = createContext<string>('checks');
 export const ResultsContext = createContext<ResultsCtx | null>(null);
 export const useResults = () => {
   const c = useContext(ResultsContext);
@@ -64,10 +68,16 @@ export function Section({ id, title, intro, lastRun, onRefresh, busy, children }
   );
 }
 
-export function VerdictBox({ rec, onChange, label, options = GOOD_MEH_BAD }: { rec: Record_ | undefined; onChange: (v: Verdict | null, reason: string) => void; label: string; options?: { value: string; label: string }[] }) {
+export function VerdictBox({ rec, onChange, label, options = GOOD_MEH_BAD, k }: { rec: Record_ | undefined; onChange: (v: Verdict | null, reason: string) => void; label: string; options?: { value: string; label: string }[]; /** The item's key (so it can be counted). */ k?: string }) {
   const v = rec?.verdict ?? null;
+  const ctx = useContext(ResultsContext);
+  const area = useContext(AreaContext);
+  const register = ctx?.register;
+  useEffect(() => {
+    if (k && register) register(area, k);
+  }, [k, area, register]);
   return (
-    <div className="lab-verdict" role="group" aria-label={`Verdict for ${label}`}>
+    <div className="lab-verdict" role="group" aria-label={`Verdict for ${label}`} data-rated={v ? 'true' : 'false'}>
       {options.map((o, i) => (
         <button key={o.value} type="button" className={`v-${['good', 'meh', 'bad', 'bad'][Math.min(i, 3)]}`} aria-pressed={v === o.value} onClick={() => onChange(v === o.value ? null : o.value, rec?.reason ?? '')}>
           {o.label}

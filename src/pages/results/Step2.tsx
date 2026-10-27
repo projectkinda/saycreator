@@ -40,7 +40,7 @@ function Option({ img, layout, aspect, pngUrl, phoneUrl, lint, notes, step }: { 
       <p><b>{layout}</b></p>
       <CheckLine failed={failed} />
       {notes && notes.length > 0 && <p className="small muted">{notes.join(' ')}</p>}
-      <VerdictBox label={`${layout} for ${img}`} rec={rec} onChange={(v, r) => setRecord(base, v, r)} />
+      <VerdictBox label={`${layout} for ${img}`} k={base.key} rec={rec} onChange={(v, r) => setRecord(base, v, r)} />
       {disagree && <p className="lab-disagree">You and the checker disagree here.</p>}
     </div>
   );
@@ -87,7 +87,7 @@ export default function Step2({ lastRun, refreshKey, onRefreshed, uploads }: { l
   const liveResult = chosen ? live[chosen.name] : undefined;
 
   return (
-    <Section id="step2" title="Step 2: Thumbnails and checks" lastRun={lastRun} onRefresh={refresh} busy={busy} intro="Each picture with every option at phone size (320 px wide). Click a picture for full size. The checker's PASS or FAIL and its reasons are under each one.">
+    <Section id="step2" title="Thumbnail options and their checks" lastRun={lastRun} onRefresh={refresh} busy={busy} intro="Each picture with every option at phone size (320 px wide). Click a picture for full size. The checker's PASS or FAIL and its reasons are under each one.">
       {thumbs === null && <p role="status">Loading…</p>}
       {thumbs?.length === 0 && <p className="lab-err">No Step 2 outputs found. Run <code>npm run test:image</code> first.</p>}
       {groups.map(([image, aspects]) => (

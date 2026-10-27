@@ -36,7 +36,7 @@ export default function Step3({ lastRun, refreshKey, onRefreshed }: { lastRun: n
   }, [slides]);
 
   return (
-    <Section id="step3" title="Step 3: Carousels" lastRun={lastRun} onRefresh={refresh} busy={busy} intro="Each script is drawn in three themes from the same words. The checker's PASS or FAIL is on every slide; give your own verdict under it. The last group is broken on purpose, one check each.">
+    <Section id="step3" title="Text-only carousels in three themes" lastRun={lastRun} onRefresh={refresh} busy={busy} intro="Each script is drawn in three themes from the same words. The checker's PASS or FAIL is on every slide; give your own verdict under it. The last group is broken on purpose, one check each.">
       {slides === null && <p role="status">Loading…</p>}
       {slides?.length === 0 && <p className="lab-err">No Step 3 outputs found. Run <code>npm run test:image</code> first.</p>}
       {carouselGroups.map(([script, themes]) => (
@@ -57,7 +57,7 @@ export default function Step3({ lastRun, refreshKey, onRefreshed }: { lastRun: n
                       <Pic src={s.pngUrl} alt={theme + ' slide ' + s.index + ', ' + s.type + ', of ' + (s.scriptTitle ?? script)} />
                       <p><b>{s.index}. {s.type}</b> <span className={failed.length ? 'chk-fail' : 'chk-pass'}>{failed.length ? 'FAIL (' + failed.length + ')' : 'PASS'}</span></p>
                       {failed.length > 0 && <ul className="lab-fails">{failed.map((f) => <li key={f.id}>{f.reason}</li>)}</ul>}
-                      <VerdictBox label={theme + ' slide ' + s.index + ' of ' + (s.scriptTitle ?? script)} rec={rec} onChange={(vv, r) => setRecord(base, vv, r)} />
+                      <VerdictBox label={theme + ' slide ' + s.index + ' of ' + (s.scriptTitle ?? script)} k={base.key} rec={rec} onChange={(vv, r) => setRecord(base, vv, r)} />
                       {disagree && <p className="lab-disagree">You and the checker disagree here.</p>}
                     </div>
                   );
