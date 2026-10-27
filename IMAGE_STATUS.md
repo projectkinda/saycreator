@@ -482,3 +482,24 @@ Only Chrome; Safari and Firefox (EXIF and drag and drop), touch screens, real fu
 - **HEIC:** no MIT, Apache-2.0 or BSD reader exists (see `LICENSES-ASSETS.md`). A browser that decodes HEIC itself (Safari) is let through; the others show "This is an HEIC photo. Convert it to JPG or PNG, then add it again." beside the photo control.
 - **Strip photos** say "kept for the 3-up strip (drag it onto a slide to use it there)" instead of "on 0 slides".
 - **Photo layouts** are used only on slides that have a photo or a photo hint. A slide without either shows "This slide has no photo slot. Add a photo, and it switches to a photo layout." Where a style has no photo layout for that kind of slide, the card says so.
+
+## Step 13: Thumbnails, version 2 (Images > Make a thumbnail)
+
+**What it is.** A person adds a photo, points at the subject, gives a title (typed, or written through the same writer interface as the carousel script), picks a style (or "Pick for me") and gets 3 to 6 options, each drawn and checked at phone size. They pick one, edit title, stressed word, treatment and format, undo and redo, and export a PNG (1280×720 or 1080×1920) or a zip of every option. The project and its pictures are saved in the browser and come back after a refresh. Stills only: not frames of a video.
+
+**References.** The folder `Reference thumbnails/` does not exist, so nothing was read from real thumbnails. The six looks are derived from stored carousel styles: Hot flat colour, Mono photo poster, Tech polish with a neon accent, Soft gradient and glass, Film photo and paper, Warm editorial collage. Quiet dark minimal was left out as too quiet for a thumbnail. Whether these match what creators post is not known.
+
+**Engine** (`src/image-engine/thumbnail/v2/`; version 1 in `thumbnail/` is untouched):
+- `spec.ts` and `styles/format.ts`: the `thumbnail` block of `style.json` (palette, title look plain/outline/marker/plate, treatment, layouts, block colour, scrim, glass, elements, field) with its own validation in plain sentences. Six styles carry one.
+- `compose.ts`: six layouts (subject on one side and title on the other, big title over the photo, photo and colour block, object and title, number badge, before and after) for 16:9 and 9:16, built on the carousel toolbox (text, markers, treatments, glass, objects, elements). An option exists only when its inputs do: object-and-title needs an object, number badge needs a number in the title (it never makes one up), before-and-after needs a second photo.
+- `subject.ts`: the subject is the person's pointer (or a guess from where the detail is: not detection). The photo is cropped, and for a full-bleed photo drawn up to 50% bigger and slid, so the subject lands where the layout wants it; the title takes the side with more free room; elements and objects stay off a circle round it.
+- `check.ts` and `lint/thumbnail-lint.ts`: the nine v1 checks plus three: "Title stays off the subject", "Crop keeps the subject", "Elements and objects stay clear". Each has a deliberately bad variant that fails it (`thumbnails-v2-checks.spec.ts`).
+- `src/thumbnail/titles.ts`: the title writer (prompt, parser, one retry). It keeps a title only if it has at most 4 words, its stressed word is in it, and every number in it is in the source text.
+
+**App** (`src/thumbnail/`): `ThumbnailPage.tsx`, `doc.ts` (every change is a patch with undo and redo), `render.ts`, `useThumbProject.ts`. Photos reuse the Photos code (IndexedDB, EXIF, HEIC message, downscaling).
+
+**Results.** New "Thumbnails (v2)": per style, every option as its own card with the checker's result and a verdict box (matches / close / off / wrong). The old Step 2 thumbnail results moved under Checks and tests > Older work.
+
+**Weak.** The layouts are my invention; options can look generic. Photos of the wrong shape or size still fail the v1 crop, resolution and sharpness checks. In the film look the outline can swallow the tail of a Q. With the subject guess unchecked by a person the title can land on the wrong thing.
+
+**Not tested.** Video frames, Safari and Firefox, touch screens, a real writer (tests use a stand-in), more than two photos.

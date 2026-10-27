@@ -143,7 +143,7 @@ function setTitle(c: Ctx, box: Box, o: TitleOpts): Box {
   const letter = o.on === 'block' ? tok(pal, blockLetters) : look === 'plate' ? tok(pal, ON[groundRole] ?? tb.title.colour) : tok(pal, tb.title.colour);
   const pad = look === 'plate' ? Math.round(c.m * 0.5) : 0;
   // An outline grows past the letters by half its width on every side: leave that room inside the box.
-  const outlineRoom = look === 'outline' ? Math.round((o.size ?? (c.portrait ? 200 : 168)) * 0.06) : 0;
+  const outlineRoom = look === 'outline' ? Math.round((o.size ?? (c.portrait ? 200 : 168)) * 0.045) : 0;
   const size0 = o.size ?? (c.portrait ? 200 : 168);
   const minSize = o.minSize ?? (c.portrait ? 84 : 84);
   const built: Built = buildText({ id: 'title', x: 0, y: 0, width: box.width - 2 * pad - 2 * outlineRoom, maxHeight: box.height - 2 * pad - 2 * outlineRoom, text: c.text, font: style.spec.fonts.headline, weight, size: size0, minSize, color: letter, lineHeight: lh, align: o.align ?? 'left', balance: true, upper: (tb.title.case ?? 'upper') === 'upper' });
@@ -167,7 +167,7 @@ function setTitle(c: Ctx, box: Box, o: TitleOpts): Box {
     behind.push(...mk.behind);
   } else {
     if (look === 'outline') {
-      const w = Math.round(built.size * 0.1);
+      const w = Math.round(built.size * 0.07);
       layer.style.stroke = { color: tok(pal, groundRole), width: w };
       layer.style.shadow = { color: 'rgba(0,0,0,0.45)', blur: 10, offsetX: 0, offsetY: 5 };
       layer.x += outlineRoom;
