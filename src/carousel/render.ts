@@ -39,6 +39,29 @@ export function composeDoc(doc: Doc): { slides: StyledSlide[]; margin: number } 
   return { slides, margin: style.spec.spacing.margin };
 }
 
+/** What a slide's pictures look like, as a string: which elements, where, turned how. Two slides with the same string look the same. */
+const pictureSignature = (s: StyledSlide) => s.plan.layers.filter((l) => l.kind === 'element').map((l) => `${l.kind === 'element' ? l.element : ''}@${l.x},${l.y},${l.width},${l.rotation ?? 0}`).join('|');
+
+/**
+ * A salt for "Shuffle elements" that really changes the slide: random for variety, but only one that draws the slide's pictures
+ * differently from now. Null when no salt tried gives a different slide (nothing else fits).
+ */
+export function pickShuffleSalt(doc: Doc, index: number, random: () => number = Math.random, tries = 24): string | null {
+  const now = composeDoc(doc).slides[index];
+  if (!now) return null;
+  const before = pictureSignature(now);
+  const seen = new Set<string>();
+  for (let n = 0; n < tries; n++) {
+    const salt = random().toString(36).slice(2, 7);
+    if (seen.has(salt)) continue;
+    seen.add(salt);
+    const next: Doc = { ...doc, choices: { ...doc.choices, [String(index)]: { ...(doc.choices[String(index)] ?? {}), salt, swaps: undefined } } };
+    const slide = composeDoc(next).slides[index];
+    if (slide && pictureSignature(slide) !== before) return salt;
+  }
+  return null;
+}
+
 export interface Rendered {
   png: Blob;
   lint: CarouselLintResult[];

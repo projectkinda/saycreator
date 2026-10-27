@@ -46,7 +46,7 @@ function Alternatives({ slide, info, used, onPick }: { slide: StyledSlide; info:
   );
 }
 
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -61,6 +61,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onO
   swaps?: Record<string, string>;
   view: SlideView | undefined;
   apply: Apply;
+  /** Shuffles the slide's pictures; false when no other choice fits. */
+  onShuffle: () => boolean;
   onOpen: () => void;
   onDownload: () => void;
   deckLabel: string;
@@ -107,7 +109,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onO
               ))}
             </select>
           </label>
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => run(apply(patches.shuffle(index, Math.random().toString(36).slice(2, 7))))}>Shuffle elements</button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setProblem(onShuffle() ? '' : 'No other pictures fit this slide.')}>Shuffle elements</button>
           <button type="button" className="btn btn-outline btn-sm" onClick={() => run(apply(patches.regenerate(index)))}>Regenerate from the plan</button>
           <button type="button" className="btn btn-outline btn-sm" onClick={onDownload} disabled={!view?.rendered}>
             <Icon name="upload" size={14} /> Download PNG

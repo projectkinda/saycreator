@@ -11,7 +11,7 @@ import { MakeIt, runGenerate, useWriters, type GenState } from './MakeIt';
 import { pickStyle } from './pickStyle';
 import { type WriteRequest } from './writerPrompt';
 import { downloadBlob, exportAllAsZip, slideFileName, zipFileName } from './export';
-import { composeDoc, getStyles, renderer, styleByName, type Rendered } from './render';
+import { composeDoc, getStyles, pickShuffleSalt, renderer, styleByName, type Rendered } from './render';
 import { platformOf, platformWarning } from './platform';
 import { PhotosStrip } from './PhotosStrip';
 import type { AddFiles } from './PhotoControls';
@@ -507,6 +507,12 @@ export default function CarouselPage() {
                 swaps={doc.choices[String(i)]?.swaps}
                 view={views[i]}
                 apply={apply}
+                onShuffle={() => {
+                  const salt = pickShuffleSalt(doc, i);
+                  if (salt === null) return false;
+                  apply(patches.shuffle(i, salt));
+                  return true;
+                }}
                 onOpen={() => setOpen(i)}
                 onDownload={() => downloadOne(i)}
                 deckLabel={deck}

@@ -61,6 +61,16 @@ const undoBtn = (page: Page) => page.getByRole('button', { name: /^Undo/ });
 const redoBtn = (page: Page) => page.getByRole('button', { name: /^Redo/ });
 
 test.beforeEach(async ({ page, context }) => {
+  // The shuffle button picks a random salt. A fixed seed makes every run the same (the button must work for any seed: see the test of 20 presses).
+  await page.addInitScript(() => {
+    let a = 0x9e3779b9;
+    Math.random = () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  });
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   page.on('pageerror', (e) => console.log('[pageerror]', e.message.slice(0, 300)));
 });
@@ -268,6 +278,35 @@ test('per-slide actions are patches: layout, shuffle, swap an element, regenerat
   await expect.poll(async () => (await srcs(page))[1], { timeout: 20_000 }).toBe(start);
   await expect(redoBtn(page)).toContainText('Change layout on slide 2');
   await shot(page, 'slide-actions', 'Per-slide actions', 'Layout, shuffle, swap and regenerate are all undoable patches.');
+});
+
+test('Shuffle elements changes the picture every time it is pressed (20 presses)', async ({ page }) => {
+  test.setTimeout(240_000);
+  await loadExample(page);
+  const card = slideCard(page, 2);
+  let last = (await srcs(page))[1];
+  for (let n = 1; n <= 20; n++) {
+    await card.getByRole('button', { name: 'Shuffle elements' }).click();
+    await expect.poll(async () => (await srcs(page))[1], { timeout: 20_000, message: `press ${n} did not change the picture` }).not.toBe(last);
+    await expect(card.getByText('No other pictures fit this slide.')).toHaveCount(0);
+    last = (await srcs(page))[1];
+  }
+});
+
+test('Shuffle elements says so, and changes nothing, when no other choice fits the slide', async ({ page }) => {
+  // A random source that always gives the same number can only ever try one salt: the second press has nothing new to try.
+  await page.addInitScript(() => {
+    Math.random = () => 0.123456;
+  });
+  await loadExample(page);
+  const card = slideCard(page, 2);
+  await card.getByRole('button', { name: 'Shuffle elements' }).click();
+  await page.waitForTimeout(1500);
+  await card.getByRole('button', { name: 'Shuffle elements' }).click();
+  await expect(card.getByText('No other pictures fit this slide.')).toBeVisible();
+  const before = (await srcs(page))[1];
+  await page.waitForTimeout(1500);
+  expect((await srcs(page))[1]).toBe(before);
 });
 
 test('a slide opens full size, with next and previous, and closes with Escape', async ({ page }) => {
