@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_OPTIONS, commit, newProject, redo as redoP, undo as undoP, type DocPatch, type GenerateOptions, type Project } from './doc';
 import { validateScript } from './script';
 import { styleByName } from './render';
+import type { PictureMeta } from './photoLibrary';
 
 export const STORE_KEY = 'creator.carousel.project.v1';
 export const PASTE_KEY = 'creator.carousel.paste.v1';
@@ -57,6 +58,8 @@ export interface ProjectApi {
   setTopic(topic: string): void;
   /** Generate options (slides, tone, style choice): saved, but not part of the undo history. */
   setOptions(o: Partial<GenerateOptions>): void;
+  /** The list of the person's pictures: saved, but not part of the undo history (the pictures live in the browser's storage). */
+  setPhotos(change: (before: PictureMeta[]) => PictureMeta[]): void;
   /** A fresh project (kept: nothing). The old one is gone, so ask first. */
   startOver(style: string): void;
   saved: string;
@@ -110,7 +113,8 @@ export function useProject(defaultStyle: string): ProjectApi {
   const redo = useCallback(() => set(redoP(ref.current)), [set]);
   const setTopic = useCallback((topic: string) => set({ ...ref.current, doc: { ...ref.current.doc, topic } }), [set]);
   const setOptions = useCallback((o: Partial<GenerateOptions>) => set({ ...ref.current, doc: { ...ref.current.doc, options: { ...DEFAULT_OPTIONS, ...ref.current.doc.options, ...o } } }), [set]);
+  const setPhotos = useCallback((change: (before: PictureMeta[]) => PictureMeta[]) => set({ ...ref.current, doc: { ...ref.current.doc, photos: change(ref.current.doc.photos ?? []) } }), [set]);
   const startOver = useCallback((style: string) => set(newProject(style)), [set]);
 
-  return { project, apply, undo, redo, setTopic, setOptions, startOver, saved, saveFailed };
+  return { project, apply, undo, redo, setTopic, setOptions, setPhotos, startOver, saved, saveFailed };
 }

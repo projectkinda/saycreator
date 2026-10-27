@@ -3,11 +3,18 @@
 import type { CarouselScript } from '../image-engine/carousel/types';
 import { validateScript, type Format } from './script';
 import type { Platform } from './platform';
+import type { ObjectChoice } from '../image-engine/photo/objects';
+import type { PhotoChoice, TreatmentChoice } from './photoChoices';
+import type { PictureMeta } from './photoLibrary';
 
 export interface SlideChoice {
   layout?: string;
   salt?: string;
   swaps?: Record<string, string>;
+  /** The photo on this slide and how it is treated, framed and cropped. */
+  photo?: PhotoChoice;
+  /** A transparent object placed on this slide. */
+  object?: ObjectChoice;
 }
 export type Tone = 'clear' | 'bold' | 'friendly' | 'expert';
 export interface GenerateOptions {
@@ -31,6 +38,8 @@ export interface Doc {
   topic: string;
   /** Generate options (not part of the undo history). */
   options?: GenerateOptions;
+  /** The pictures the person added (the pictures themselves are in the browser's storage). Not part of the undo history. */
+  photos?: PictureMeta[];
   script: CarouselScript | null;
   /** By slide number, "0" for the first slide. */
   choices: Record<string, SlideChoice>;
@@ -163,7 +172,17 @@ export const patches = {
   layout: (i: number, layout: string): DocPatch => ({ label: `Change layout on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'layout'], value: layout }] }),
   swap: (i: number, from: string, to: string): DocPatch => ({ label: `Swap an element on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'swaps', from], value: to }] }),
   shuffle: (i: number, salt: string): DocPatch => ({ label: `Shuffle elements on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'swaps'], value: undefined }, { path: ['choices', String(i), 'salt'], value: salt }] }),
-  regenerate: (i: number): DocPatch => ({ label: `Regenerate slide ${i + 1} from the plan`, ops: [{ path: ['choices', String(i)], value: undefined }] }),
+  // Regenerating forgets the layout and element choices but keeps the person's photo and object.
+  regenerate: (i: number): DocPatch => ({ label: `Regenerate slide ${i + 1} from the plan`, ops: [{ path: ['choices', String(i), 'layout'], value: undefined }, { path: ['choices', String(i), 'salt'], value: undefined }, { path: ['choices', String(i), 'swaps'], value: undefined }] }),
+  /** Puts a photo on a slide (or null: leave it empty on purpose). */
+  photo: (i: number, id: string | null): DocPatch => ({ label: id === null ? `Remove the photo from slide ${i + 1}` : `Put a photo on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'photo', 'id'], value: id }] }),
+  treatment: (i: number, t: TreatmentChoice): DocPatch => ({ label: `Change the photo treatment on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'photo', 'treatment'], value: t === 'style' ? undefined : t }] }),
+  focal: (i: number, f: { x: number; y: number }): DocPatch => ({ label: `Move the crop point on slide ${i + 1}`, coalesce: `focal:${i}`, ops: [{ path: ['choices', String(i), 'photo', 'focal'], value: { x: Math.round(f.x * 1000) / 1000, y: Math.round(f.y * 1000) / 1000 } }] }),
+  frame: (i: number, frame: string): DocPatch => ({ label: `Change the photo frame on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'photo', 'frame'], value: frame }] }),
+  shape: (i: number, shape: string): DocPatch => ({ label: `Change the photo shape on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'photo', 'shape'], value: shape }] }),
+  object: (i: number, o: ObjectChoice | undefined): DocPatch => ({ label: o ? `Change the object on slide ${i + 1}` : `Remove the object from slide ${i + 1}`, coalesce: o ? `object:${i}` : undefined, ops: [{ path: ['choices', String(i), 'object'], value: o }] }),
+  /** The same photo on several slides in one step. */
+  photoOnSlides: (slides: number[], id: string): DocPatch => ({ label: `Put a photo on ${slides.length} slide${slides.length === 1 ? '' : 's'}`, ops: slides.map((i) => ({ path: ['choices', String(i), 'photo', 'id'] as Path, value: id })) }),
   style: (name: string, title: string): DocPatch => ({ label: `Change style to ${title}`, ops: [{ path: ['style'], value: name }] }),
   topic: (topic: string): DocPatch => ({ label: 'Edit topic', coalesce: 'topic', ops: [{ path: ['topic'], value: topic }] }),
   handle: (handle: string): DocPatch => ({ label: 'Change the handle', coalesce: 'handle', ops: [{ path: ['script', 'brand', 'handle'], value: handle }] }),

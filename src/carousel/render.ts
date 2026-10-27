@@ -3,14 +3,16 @@
 // pause between slides so the page keeps answering. Nothing is sent anywhere.
 import { FabricAdapter } from '../image-engine/fabric-adapter';
 import { loadFonts } from '../image-engine/fonts';
-import { checkSlidePlan } from '../image-engine/carousel/check';
+import { checkWithRepair } from '../image-engine/photo/repair';
 import type { CarouselLintResult } from '../image-engine/carousel/lint';
-import { composeStyled, type StyledSlide } from '../image-engine/styles/compose';
+import { composeStyled, type SlideOverride, type StyledSlide } from '../image-engine/styles/compose';
 import { loadStyles, type LoadedStyle } from '../image-engine/styles/load';
 import type { Plan } from '../image-engine/types';
 import type { Doc } from './doc';
 import { formatOf } from './script';
 import { yieldToBrowser } from './export';
+import { treatmentsFor } from './photoChoices';
+import { objectInputs, photoInputs } from './photoLibrary';
 
 let styles: { styles: LoadedStyle[]; problems: { folder: string; messages: string[] }[] } | null = null;
 /** The stored styles (one folder each under src/image-engine/styles/). A new folder appears here by itself. */
@@ -23,8 +25,17 @@ export function composeDoc(doc: Doc): { slides: StyledSlide[]; margin: number } 
   if (!style) throw new Error(`The style "${doc.style}" is not available any more. Pick another one.`);
   if (!doc.script) return { slides: [], margin: style.spec.spacing.margin };
   const f = formatOf(doc.format);
-  const overrides = Object.fromEntries(Object.entries(doc.choices).map(([k, v]) => [Number(k), v]));
-  const slides = composeStyled(doc.script, style, { width: f.width, height: f.height, chrome: doc.format === 'quote' ? 'none' : undefined, handle: doc.script.brand.handle, elements: 'shippable', overrides }, true);
+  // The person's choices, as the composer takes them: layout and elements as before, plus the photo and the object.
+  const overrides: Record<number, SlideOverride> = Object.fromEntries(
+    Object.entries(doc.choices).map(([k, v]) => {
+      const p = v.photo;
+      const o: SlideOverride = { layout: v.layout, salt: v.salt, swaps: v.swaps, ...(v.object ? { object: v.object } : {}) };
+      if (p) o.photo = { id: p.id, treatments: treatmentsFor(p.treatment), focal: p.focal, frame: p.frame, shape: p.shape };
+      return [Number(k), o];
+    }),
+  );
+  const pictures = doc.photos ?? [];
+  const slides = composeStyled(doc.script, style, { width: f.width, height: f.height, chrome: doc.format === 'quote' ? 'none' : undefined, handle: doc.script.brand.handle, elements: 'shippable', overrides, photos: photoInputs(pictures), objects: objectInputs(pictures) }, true);
   return { slides, margin: style.spec.spacing.margin };
 }
 
@@ -66,7 +77,8 @@ class Renderer {
       p = this.enqueue(async () => {
         const t0 = performance.now();
         const a = await this.ready();
-        const c = await checkSlidePlan(a, { id: slide.id, type: slide.type, plan: slide.plan, notes: slide.notes }, margin);
+        // A photo behind words gets a stronger overlay if the check still fails (a no-op on slides with no full photo).
+        const c = await checkWithRepair(a, { id: slide.id, type: slide.type, plan: slide.plan, notes: slide.notes }, margin);
         return { png: c.png, lint: c.lint, warnings: c.render.warnings.map((w) => w.message ?? w.code), ms: performance.now() - t0 };
       });
       this.cache.set(key, p);
