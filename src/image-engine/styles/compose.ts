@@ -12,6 +12,8 @@ import * as B from './layouts-b';
 import * as C from './layouts-c';
 import { chromeScrim, fieldLayer } from '../photo/slot';
 import type { PhotoInput } from '../photo/zones';
+import { objectLayer, type ObjectChoice, type ObjectInput } from '../photo/objects';
+import type { Treatment } from '../types';
 import { placeElements, type TestAsset } from './elements';
 import { labelText, pageNumber } from './tools';
 
@@ -146,12 +148,22 @@ export interface StyledOptions {
   overrides?: Record<number, SlideOverride>;
   /** Photos the person added, with their numbers (see photo/analyse.ts). Slides whose style has photo layouts use them; slides name one with "photo". */
   photos?: PhotoInput[];
+  /** Transparent pictures the person added (an `object` choice on a slide names one). */
+  objects?: ObjectInput[];
 }
 
 export interface SlideOverride {
   layout?: string;
   salt?: string;
   swaps?: Record<string, string>;
+  /**
+   * The person's choices for the slide's photo. `id`: a photo, or null for "leave the slot empty on purpose" (nothing is filled in
+   * automatically). `treatments`: a list in place of the style's own (colours may be "$accent"). `focal`: the crop point.
+   * `frame` and `shape` replace the layout's frame (content-photo-frame) and cut-out shape (cover-photo-shape).
+   */
+  photo?: { id?: string | null; treatments?: Treatment[]; focal?: { x: number; y: number }; frame?: string; shape?: string };
+  /** A transparent object placed on the slide. */
+  object?: ObjectChoice;
 }
 
 function chromeArea(chrome: StyleSpec['chrome'], M: number, H: number) {
@@ -172,9 +184,11 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
   const seen: Record<string, number> = {};
   return script.slides.map((s, i) => {
     seen[s.type] = (seen[s.type] ?? 0) + 1;
-    const pool = opts.photos ?? [];
-    let { rule, at, because } = pickRule(style, s.type, s, i, seen[s.type], pool.length > 0);
     const ov = opts.overrides?.[i];
+    const allPhotos = opts.photos ?? [];
+    // A slot the person emptied on purpose stays empty: no photo is filled in for it.
+    const pool = ov?.photo?.id === null ? [] : allPhotos;
+    let { rule, at, because } = pickRule(style, s.type, s, i, seen[s.type], allPhotos.length > 0 || ov?.photo?.id === null);
     const choices = [...new Set(style.layouts[s.type].map((r) => r.use))];
     if (ov?.layout && ov.layout !== rule.use) {
       const j = style.layouts[s.type].findIndex((r) => r.use === ov.layout);
@@ -189,10 +203,18 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
     const area = chromeArea(chrome, M, H);
     const c: LCtx = {
       style, theme: asTheme(style, pal), assets: loaded.assets, pal, palName, W, H, M, top: area.top, bottom: area.bottom, index: i, count: script.slides.length,
-      occurrence: seen[s.type], handle: script.brand.handle, layers: [], notes: [], keepClear: [], params: rule.params ?? {},
-      photoPool: pool, photoPick: s.photo, photoHint: s.photo_hint, slots: [],
+      occurrence: seen[s.type], handle: script.brand.handle, layers: [], notes: [], keepClear: [],
+      params: { ...(rule.params ?? {}), ...(ov?.photo?.frame ? { frame: ov.photo.frame } : {}), ...(ov?.photo?.shape ? { shape: ov.photo.shape } : {}) },
+      photoPool: pool, photoPick: typeof ov?.photo?.id === 'string' ? ov.photo.id : s.photo, photoHint: s.photo_hint, slots: [],
+      ...(ov?.photo && (ov.photo.treatments || ov.photo.focal) ? { photoOverride: { treatments: ov.photo.treatments, focal: ov.photo.focal } } : {}),
     };
     LAYOUTS[rule.use](c, s);
+    // An object the person placed: above the layout, under the page chrome.
+    if (ov?.object) {
+      const input = (opts.objects ?? []).find((x) => x.id === ov.object!.id);
+      if (input) add(c, objectLayer(W, H, ov.object, input, pal.accent));
+      else c.notes.push('The object picture for this slide is missing, so it is not drawn.');
+    }
     // Page chrome (a handle strip, dots, a page number) over a full photo is kept readable too.
     if (c.fullPhoto && chrome !== 'none') {
       const sc = chromeScrim(c, chrome, M);

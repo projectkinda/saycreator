@@ -1,7 +1,7 @@
 // Shared helpers for the layout catalogue. A layout is a function that adds layers to a slide using the style's tokens.
 import { glueWords, layoutText } from '../draw/text';
 import { findHighlight, missingHighlightNote } from '../draw/words';
-import type { Highlight, Layer, Plan } from '../types';
+import type { Highlight, Layer, Plan, Treatment } from '../types';
 import { background, buildText, marker, sticker, type Built } from '../carousel/toolbox';
 import type { Palette, Theme } from '../carousel/types';
 import type { PhotoInput } from '../photo/zones';
@@ -42,6 +42,8 @@ export interface LCtx {
   photoHint?: string;
   /** Every photo slot the layout drew, filled or not. */
   slots: NonNullable<NonNullable<Plan['meta']>['photoSlots']>;
+  /** What the person chose for this slide's photo: a treatment list (colours may be "$accent" and so on) and a crop point. */
+  photoOverride?: { treatments?: Treatment[]; focal?: { x: number; y: number } };
   /** The photo that fills the whole slide, if a layout drew one (its numbers decide how the page chrome is protected). */
   fullPhoto?: PhotoInput;
 }

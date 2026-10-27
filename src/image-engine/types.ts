@@ -234,7 +234,7 @@ export interface Plan {
     /** Areas a layout wants kept free of pictures: the line where a slide splits in two, and the arrow button on it. */
     keepClear?: { name: 'split' | 'arrow'; x: number; y: number; width: number; height: number }[];
     /** The photo slots of a slide: whether each has a picture, and what the ideal picture is. */
-    photoSlots?: { id: string; filled: boolean; hint?: string; synthetic?: boolean }[];
+    photoSlots?: { id: string; filled: boolean; photo?: string; hint?: string; synthetic?: boolean }[];
   };
 }
 

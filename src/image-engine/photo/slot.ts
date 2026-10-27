@@ -24,15 +24,19 @@ export function takePhotos(c: LCtx, n = 1, treatment?: string): Slot[] {
   const pool = strips ? c.photoPool.slice(-3) : c.photoPool.length >= 5 ? c.photoPool.slice(0, c.photoPool.length - 3) : c.photoPool;
   const name = treatment ?? (typeof c.params.treatment === 'string' ? c.params.treatment : undefined);
   const list = name && c.style.photo ? c.style.photo.treatments[name] : undefined;
-  const treatments = list ? resolveTreatments(list, c.pal as unknown as Record<string, unknown>) : [];
+  // The person's own choice for this slide (a treatment list, a crop point) wins over the style's.
+  const own = c.photoOverride;
+  const chosen = own?.treatments ?? list;
+  const treatments = chosen ? resolveTreatments(chosen, c.pal as unknown as Record<string, unknown>) : [];
   const out: Slot[] = [];
   for (let k = 0; k < n; k++) {
     let input: PhotoInput | null = null;
-    if (k === 0 && c.photoPick) input = pool.find((p) => p.id === c.photoPick || p.label === c.photoPick) ?? null;
+    // A photo the person chose is found among all of them (the last three are only reserved for the automatic fill of strips).
+    if (k === 0 && c.photoPick) input = c.photoPool.find((p) => p.id === c.photoPick || p.label === c.photoPick) ?? null;
     if (!input && pool.length > 0 && !(k === 0 && c.photoPick)) input = pool[(strips ? c.occurrence + k : c.index + k) % pool.length];
     out.push({
       input,
-      ref: input ? { src: input.src, ...(input.focal ? { focal: input.focal } : {}), ...(treatments.length ? { treatments } : {}), ...(input.synthetic ? { synthetic: true } : {}), width: input.width, height: input.height } : null,
+      ref: input ? { src: input.src, ...(own?.focal ?? input.focal ? { focal: own?.focal ?? input.focal } : {}), ...(treatments.length ? { treatments } : {}), ...(input.synthetic ? { synthetic: true } : {}), width: input.width, height: input.height } : null,
       hint: c.photoHint,
     });
   }
@@ -42,7 +46,7 @@ export function takePhotos(c: LCtx, n = 1, treatment?: string): Slot[] {
 
 /** Records the slot on the slide (the plan's meta and a note when it is empty). */
 export function recordSlot(c: LCtx, id: string, s: Slot) {
-  c.slots.push({ id, filled: !!s.ref, ...(s.hint ? { hint: s.hint } : {}), ...(s.input?.synthetic ? { synthetic: true } : {}) });
+  c.slots.push({ id, filled: !!s.ref, ...(s.input ? { photo: s.input.id } : {}), ...(s.hint ? { hint: s.hint } : {}), ...(s.input?.synthetic ? { synthetic: true } : {}) });
   if (!s.ref) c.notes.push(`Photo slot "${id}" is empty${s.hint ? ` (wanted: ${s.hint})` : ''}. A placeholder is drawn; add a photo to fill it.`);
   else if (s.input?.synthetic) c.notes.push(`Photo slot "${id}" uses a synthetic stand-in picture, not a real photo.`);
 }
