@@ -12,6 +12,7 @@ import { pickStyle } from './pickStyle';
 import { type WriteRequest } from './writerPrompt';
 import { downloadBlob, exportAllAsZip, slideFileName, zipFileName } from './export';
 import { composeDoc, getStyles, renderer, styleByName, type Rendered } from './render';
+import { platformWarning } from './platform';
 import { SlideCard, type SlideView } from './SlideCard';
 import { PASTE_KEY, readStore, useProject, writeStore } from './useProject';
 import '../styles/carousel.css';
@@ -383,6 +384,7 @@ export default function CarouselPage() {
             {check && check.errors.length === 0 && (
               <div className="notice notice-ok" role="status">
                 <strong>This script looks good: {check.script?.slides.length} {doc.format === 'quote' ? 'cards' : 'slides'}</strong>
+                {doc.format === 'carousel' && check.script && platformWarning(check.script.slides.length, options.platform) && <p className="small cr-problem">{platformWarning(check.script.slides.length, options.platform)}</p>}
                 {check.warnings.length > 0 && (
                   <ul className="cr-issues">
                     {check.warnings.map((w, i) => (

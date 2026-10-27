@@ -2,6 +2,7 @@
 // The document is plain JSON: format, style, the script, and per-slide choices (layout, element shuffle, element swaps).
 import type { CarouselScript } from '../image-engine/carousel/types';
 import { validateScript, type Format } from './script';
+import type { Platform } from './platform';
 
 export interface SlideChoice {
   layout?: string;
@@ -16,8 +17,10 @@ export interface GenerateOptions {
   autoStyle: boolean;
   /** Shown on the last slide, for example "@maya.builds". Empty: a placeholder is used and the person is told. */
   handle: string;
+  /** Where it will be posted. null: nowhere in particular, so no slide limit. Saved with the project. */
+  platform: Platform | null;
 }
-export const DEFAULT_OPTIONS: GenerateOptions = { slides: 7, tone: 'clear', autoStyle: true, handle: '' };
+export const DEFAULT_OPTIONS: GenerateOptions = { slides: 7, tone: 'clear', autoStyle: true, handle: '', platform: null };
 
 export interface Doc {
   version: 1;

@@ -5,6 +5,7 @@ import { WriterError, detectProviders, generateScript, type GenerateResult, type
 import { MAX_CHARS, TONES, textProblem, type WriteRequest } from './writerPrompt';
 import { FORMATS, SLIDE_RANGE, type Format, type Issue } from './script';
 import { getStyles } from './render';
+import { PLATFORMS, isPlatform, platformWarning } from './platform';
 
 /** The style used when the writer does not name one: by tone. Only names that exist are used. */
 const TONE_STYLE: Record<string, string> = { clear: 'dark-quiet', bold: 'hot-flat', friendly: 'editorial-collage', expert: 'object-neon' };
@@ -77,6 +78,9 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
   const why = !provider ? (providers === null ? 'Looking for a writer…' : 'No writer is available on this server yet. Use Advanced below to copy a prompt for Claude and paste the answer.') : null;
   const disabled = busy || !!why || !!problem;
   const label = (doc.format === 'quote' ? 'Cards' : 'Slides');
+  const platform = isPlatform(options.platform) ? options.platform : null;
+  const asked = Math.min(hi, Math.max(lo, options.slides));
+  const platformNote = doc.format === 'carousel' ? (doc.script ? platformWarning(doc.script.slides.length, platform) : null) ?? platformWarning(asked, platform, 'asked') : null;
   return (
     <section className="card ws-card" aria-labelledby="cr-make-h">
       <h2 id="cr-make-h" className="h3">Make it from your text</h2>
@@ -105,6 +109,16 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
               ))}
             </select>
           </label>
+          <div className="cr-inline">
+            <span className="field-label" id="cr-platform-l">Platform</span>
+            <div role="group" aria-labelledby="cr-platform-l" className="chip-group">
+              {PLATFORMS.map((p) => (
+                <button key={p.id} type="button" className="chip-btn" aria-pressed={platform === p.id} disabled={busy} title={`At most ${p.max} slides. Press again to clear.`} onClick={() => setOptions({ platform: platform === p.id ? null : p.id })}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <label className="cr-inline">
             <span className="field-label">Your handle (optional)</span>
             <input type="text" className="cr-input cr-handle" value={options.handle} placeholder="@yourname" maxLength={40} onChange={(e) => onHandle(e.target.value)} />
@@ -120,6 +134,12 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
             </div>
           </div>
         </div>
+
+        {platformNote && (
+          <p className="small cr-problem" role="status" data-testid="platform-warning">
+            {platformNote}
+          </p>
+        )}
 
         <div>
           <h3 className="h4">Style</h3>
