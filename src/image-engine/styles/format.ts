@@ -1,5 +1,6 @@
 // The style file format (styles/<name>/style.json) and its validator. Every rejection is a sentence a person can act on.
 // A style is a folder: style.json plus an assets/ folder of small SVG graphics. The engine reads styles only from these files.
+import { validateMarks, type MarkSpec } from './marks-spec';
 import { contrast, parseColor } from '../lint/color';
 import { FONT_WEIGHTS } from '../fonts';
 import type { Palette, SlideScript, Theme } from '../carousel/types';
@@ -151,6 +152,8 @@ export interface StyleSpec {
   assets: Record<string, string>;
   /** Illustrative elements (arrows, stickers, doodles...) this style uses, where, and how many. Optional. */
   elements?: ElementSpec;
+  /** Badges, stamps, shapes and textures drawn in code (see marks-spec.ts). Optional: a style with no "marks" never gets any. */
+  marks?: MarkSpec[];
   /** Photo treatments, colour fields and glass for styles that use photos. Optional. */
   photo?: PhotoSpec;
   /** Places where this style's own look breaks our phone-size rules, written down instead of changed. */
@@ -326,6 +329,7 @@ export function validateStyle(raw: unknown, folder: string, knownTags?: Set<stri
       if (used.size < 2) err(`layouts.${type} uses only ${used.size} different layout. A style needs at least 2 distinct layouts for every slide type.`);
       if (rules.length && isObj(rules[rules.length - 1]) && (rules[rules.length - 1] as Record<string, unknown>).when !== undefined) err(`The last rule of layouts.${type} has a "when", so a slide that matches no rule would have no layout. Remove the "when" from the last rule.`);
     }
+  if (s.marks !== undefined) validateMarks(s.marks, PALETTE_ROLES, SLIDE_TYPES, err);
   // elements
   if (s.elements !== undefined) {
     const el = s.elements;

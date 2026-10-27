@@ -17,6 +17,7 @@ import { boxesToAvoid, placeObject } from '../photo/objectPlace';
 import type { Treatment } from '../types';
 import { placeElements, type TestAsset } from './elements';
 import { labelText, pageNumber } from './tools';
+import { drawMarks } from './marks';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Layout = (c: LCtx, s: any) => void;
@@ -210,6 +211,14 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
       ...(ov?.photo && (ov.photo.treatments || ov.photo.focal) ? { photoOverride: { treatments: ov.photo.treatments, focal: ov.photo.focal } } : {}),
     };
     LAYOUTS[rule.use](c, s);
+    // Badges, stamps and textures the style draws in code: textures right above the background, the rest over the content.
+    if (style.marks?.length) {
+      const dm = drawMarks(style.marks, { theme: c.theme, pal, W, H, M, top: area.top, bottom: area.bottom, type: s.type, seed: `${script.id}-${style.name}-${i}` });
+      const at = c.layers.findIndex((l) => l.id === 'bg');
+      c.layers.splice(at >= 0 ? at + 1 : 0, 0, ...dm.under);
+      add(c, ...dm.over);
+      c.notes.push(...dm.notes);
+    }
     // An object the person placed: above the layout, under the page chrome.
     if (ov?.object) {
       const input = (opts.objects ?? []).find((x) => x.id === ov.object!.id);

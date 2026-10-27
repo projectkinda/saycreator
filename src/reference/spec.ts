@@ -5,6 +5,7 @@ import { FONT_WEIGHTS } from '../image-engine/fonts';
 import { VOCABULARY } from '../image-engine/styles/tags';
 import { CASE_STYLES, CHROME_KINDS, ELEMENT_ZONES, LAYOUT_IDS, PALETTE_ROLES, SLIDE_TYPES, validateStyle, type SlideType, type StyleSpec } from '../image-engine/styles/format';
 import { THUMB_LAYOUTS, TITLE_LOOKS } from '../image-engine/thumbnail/v2/spec';
+import { MARK_KINDS, MARK_ZONES, MAX_MARKS, TEXTURE_MARKS } from '../image-engine/styles/marks-spec';
 import { FONT_FAMILIES } from '../image-engine/types';
 import { FRAME_CHOICES, SHAPE_CHOICES } from '../carousel/photoChoices';
 import { LEARN_SECTIONS, type LearnFrom, type Target } from './types';
@@ -42,6 +43,7 @@ export function vocabularyText(): string {
     `  "params" keys you may use: treatment (a name in photo.treatments), bar ("none"|"last"|"all": the marker bar under headline words), kicker ("pill"|"label"|"sticker"), frame (${FRAME_CHOICES.map((f) => f.id).join('|')}), shape (${SHAPE_CHOICES.map((f) => f.id).join('|')}), field (true: soft colour field background), glass (true), pill (true), offset (true), ghost (true), button (true), side ("left"|"right"), at (0.3 to 0.7, where a split falls), badgeSize, numeralSize, ruleWidth (px), tilt (degrees), prefix (text), alt (a palette name). Do not use any "asset" params.`,
     '- photo (optional) = {"treatments": {name: [step, ...]}, "field": {"blobs":[{"x","y","r","color","alpha"?}],"blur","grain"}, "glass": {"fill":"rgba(...)","blur","radius","border"?}, "overlay": colour}. A step is one of: {"op":"grayscale","amount"?}, {"op":"duotone","dark","light"}, {"op":"halftone","cell","angle"?,"dark","light","contrast"?}, {"op":"grain","amount","size"?}, {"op":"levels","brightness"?,"contrast"?,"saturation"?} (each -1 to 1), {"op":"blur","radius"}, {"op":"tint","color","amount"}, {"op":"vignette","amount"}, {"op":"fade","from":"bottom|top|left|right","color","amount"}, {"op":"wash","color","amount"}. Colours may be "$accent", "$bg", "$text" (a colour of the slide\'s own palette).',
     `- elements (optional, small pictures placed around text) = {"density":{"min","max"},"gap"?,"rules":[{"tags":[words],"zone":${ELEMENT_ZONES.join('|')},"count":[a,b],"size":[small,big],"rotate"?:[a,b],"kinds"?:["icon"|"object"|"code"],"role"?:"frame"|"point"|"gap" (required when the tags are plain decoration)}]}. Tags come from: ${VOCABULARY.join(', ')}, and the decoration words arrow, burst, sparkle, squiggle, underline, circle, tape, star.`,
+    `- marks (optional, up to ${MAX_MARKS}: shapes and textures drawn in code, no pictures) = [{"kind": ${MARK_KINDS.join('|')}, "zone": ${MARK_ZONES.join('|')}, "size": px, "colour": role, "colour2"?: role, "text"?: words, "lines"?: [short lines], "rotate"?: -90 to 90, "points"?: 4 to 24, "opacity"?: 0.05 to 1, "bleed"?: bool, "font"?: "headline"|"body", "types"?: [slide types]}]. Shapes: asterisk, sparkle (size = width), round-badge and starburst-badge (size = diameter, text inside), circular-text (a ring of words, size = diameter), stamp (outlined box with words), ticket and label (words on a shape), outline-button (words and an arrow), arrow (curved), scribble-circle (a hand-drawn loop, put it over a word), ribbon (a band across the slide, size = its height), tape (a strip), two-tone-text (lines alternately in colour and colour2, size = text size). Textures: dot-grid and halftone-field (size = distance between dots; the zone is the area; halftone fades out away from the zone), stripes (size = distance between stripes, rotate = their angle), grain (size = speck spacing), text-rows (rows of repeated words, size = text size). Textures sit under the words, shapes over them. There is no gradient text.`,
     `- thumbnail (optional, how the style looks as a thumbnail) = {"palette": name, "title": {"look": ${TITLE_LOOKS.join('|')}, "colour": role, "ground"?: role (needed for plate and outline), "weight"?: n, "case"?: "upper"|"sentence"}, "treatment"?: [steps], "layouts": [3 or more of ${THUMB_LAYOUTS.join(', ')}], "block"?: role, "scrim"?: "#RRGGBB" or "$role", "glass"?: bool, "elements"?: bool, "field"?: bool}. Roles are palette colour names.`,
     '- Backgrounds: a palette bg colour or gradient, photo.field blobs, glass cards. Highlight styles: shape.marker. Masks and frames: the frame and shape params above.',
   ].join('\n');
@@ -80,7 +82,7 @@ function mergeSection(key: string, base: unknown, over: unknown): unknown {
     const b = isObj(base) ? base : {};
     return { ...b, ...over, treatments: { ...(isObj(b.treatments) ? b.treatments : {}), ...(isObj(over.treatments) ? over.treatments : {}) } };
   }
-  if (key === 'thumbnail' || key === 'elements' || key === 'rhythm' || key === 'byType') return over;
+  if (key === 'thumbnail' || key === 'elements' || key === 'marks' || key === 'rhythm' || key === 'byType') return over;
   return { ...(isObj(base) ? base : {}), ...over };
 }
 
@@ -122,6 +124,7 @@ export function cleanSpec(s: StyleSpec, target: Target, notes?: string[]): Style
   const f = spec.fonts as Bag;
   // Every value the toolbox cannot honour is moved to the nearest one it can, and said in plain words (the closeness panel shows the list).
   const say = (m: string) => notes?.push(m);
+  const roleName = (v: unknown) => typeof v === 'string' && (PALETTE_ROLES as readonly string[]).includes(v);
   const clampTo = (obj: Bag, key: string, lo: number, hi: number, name: string, why: string) => {
     const v = obj[key];
     if (typeof v !== 'number') return;
@@ -182,6 +185,47 @@ export function cleanSpec(s: StyleSpec, target: Target, notes?: string[]): Style
     // The last rule is the fallback: no condition.
     const rules = spec.layouts[t] as Bag[];
     if (rules.length) delete (rules[rules.length - 1] as Bag).when;
+  }
+  if (spec.marks !== undefined) {
+    // Marks the drawing cannot make are dropped, and sizes are moved into range; each change is said in plain words.
+    const list = Array.isArray(spec.marks) ? (spec.marks as Bag[]) : [];
+    const kept: Bag[] = [];
+    for (const raw of list) {
+      if (!isObj(raw)) continue;
+      const m: Bag = { ...raw };
+      const kind = String(m.kind);
+      if (!(MARK_KINDS as readonly string[]).includes(kind)) {
+        say(`A mark of kind "${kind}" is not one the toolbox draws, so it was left out.`);
+        continue;
+      }
+      if (!(MARK_ZONES as readonly string[]).includes(m.zone as string)) m.zone = 'top-right';
+      if (!roleName(m.colour)) m.colour = 'accent';
+      if (m.colour2 !== undefined && !roleName(m.colour2)) delete m.colour2;
+      const tex = (TEXTURE_MARKS as readonly string[]).includes(kind);
+      clampTo(m, 'size', tex ? 6 : 40, kind === 'text-rows' || kind === 'two-tone-text' ? 400 : 1600, `The ${kind} mark's size`, 'the range the drawing supports');
+      if (typeof m.size !== 'number') m.size = tex ? 24 : 240;
+      if (m.rotate !== undefined) clampTo(m, 'rotate', -90, 90, `The ${kind} mark's angle`, 'the range the drawing supports');
+      if (m.points !== undefined) {
+        m.points = Math.round(Math.min(24, Math.max(4, Number(m.points) || 8)));
+      }
+      if (m.opacity !== undefined) clampTo(m, 'opacity', 0.05, 1, `The ${kind} mark's opacity`, 'the range the drawing supports');
+      if (typeof m.text === 'string') m.text = m.text.slice(0, 40);
+      if (Array.isArray(m.lines)) m.lines = (m.lines as unknown[]).filter((l) => typeof l === 'string' && l.trim()).map((l) => String(l).slice(0, 24)).slice(0, 4);
+      if (m.types !== undefined) m.types = Array.isArray(m.types) ? (m.types as string[]).filter((t) => (SLIDE_TYPES as string[]).includes(t)) : undefined;
+      if (m.types === undefined || (m.types as string[]).length === 0) delete m.types;
+      if (['circular-text', 'stamp', 'ticket', 'label', 'outline-button', 'text-rows'].includes(kind) && !(typeof m.text === 'string' && m.text.trim())) {
+        say(`The ${kind} mark has no words, so it was left out.`);
+        continue;
+      }
+      if (kind === 'two-tone-text' && !(Array.isArray(m.lines) && m.lines.length)) {
+        say('The two-tone text mark has no lines, so it was left out.');
+        continue;
+      }
+      kept.push(m);
+    }
+    if (kept.length > MAX_MARKS) say(`Only ${MAX_MARKS} marks fit in one style; the rest were left out.`);
+    if (kept.length) spec.marks = kept.slice(0, MAX_MARKS);
+    else delete spec.marks;
   }
   if (target === 'carousel') delete spec.thumbnail;
   else if (isObj(spec.thumbnail)) {
