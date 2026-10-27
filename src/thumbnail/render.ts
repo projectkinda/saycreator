@@ -12,9 +12,10 @@ import { treatmentsFor } from '../carousel/photoChoices';
 import { sizeOf, urlOf } from '../carousel/photoLibrary';
 import { yieldToBrowser } from '../carousel/export';
 import { AUTO_STYLE, type ThumbDoc } from './doc';
+import { targetOfStyle } from '../reference/templates';
 
 /** The styles that have a thumbnail look, in a steady order. */
-export const thumbStyles = (): LoadedStyle[] => getStyles().styles.filter((s) => s.spec.thumbnail);
+export const thumbStyles = (): LoadedStyle[] => getStyles().styles.filter((s) => s.spec.thumbnail && targetOfStyle(s.spec.name) !== 'carousel');
 
 export interface Composed {
   options: ThumbOption[];

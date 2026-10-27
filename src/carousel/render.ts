@@ -13,10 +13,19 @@ import { formatOf } from './script';
 import { yieldToBrowser } from './export';
 import { treatmentsFor } from './photoChoices';
 import { objectInputs, photoInputs } from './photoLibrary';
+import { targetOfStyle, userStyles } from '../reference/templates';
 
 let styles: { styles: LoadedStyle[]; problems: { folder: string; messages: string[] }[] } | null = null;
-/** The stored styles (one folder each under src/image-engine/styles/). A new folder appears here by itself. */
-export const getStyles = () => (styles ??= loadStyles());
+let merged: { user: LoadedStyle[]; value: { styles: LoadedStyle[]; problems: { folder: string; messages: string[] }[] } } | null = null;
+/** The stored styles (one folder each under src/image-engine/styles/), then the person's own templates. A new folder appears here by itself. */
+export const getStyles = () => {
+  const base = (styles ??= loadStyles());
+  const user = userStyles();
+  if (!merged || merged.user !== user) merged = { user, value: { styles: [...base.styles, ...user], problems: base.problems } };
+  return merged.value;
+};
+/** The styles a carousel can use: a template made for thumbnails only is not offered here. */
+export const carouselStyles = () => getStyles().styles.filter((s) => targetOfStyle(s.spec.name) !== 'thumbnail');
 export const styleByName = (name: string) => getStyles().styles.find((s) => s.spec.name === name);
 
 /** The plans for every slide of the doc, with the person's layout and element choices applied. Not drawn yet. */

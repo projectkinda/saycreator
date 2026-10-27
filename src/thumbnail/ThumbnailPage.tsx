@@ -16,6 +16,7 @@ import { AUTO_STYLE, thumbPatches } from './doc';
 import { forgetGuess, composeProject, guessFor, thumbRenderer, thumbStyles, type Composed, type Drawn } from './render';
 import { TITLE_MAX_WORDS, generateTitles, type TitleOption } from './titles';
 import { useThumbProject } from './useThumbProject';
+import { ensureTemplatesLoaded, isUserStyle, targetWarning, useTemplatesVersion } from '../reference/templates';
 import '../styles/carousel.css';
 import '../styles/thumbnail.css';
 
@@ -35,7 +36,12 @@ export default function ThumbnailPage() {
   const { project, apply, undo, redo, setTopic, setPhotos, startOver } = proj;
   const { doc, past, future } = project;
   const libVersion = useLibraryVersion();
-  const styles = useMemo(() => thumbStyles(), []);
+  const tplVersion = useTemplatesVersion();
+  useEffect(() => {
+    void ensureTemplatesLoaded();
+  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const styles = useMemo(() => thumbStyles(), [tplVersion]);
   const pictures = doc.photos;
   const photos = pictures.filter((p) => p.kind === 'photo');
   const objects = pictures.filter((p) => p.kind === 'object');
@@ -189,7 +195,7 @@ export default function ThumbnailPage() {
     }, 200);
     return () => window.clearTimeout(timer);
     // The options depend on everything in the doc except the topic and the history; libVersion covers pictures coming back after a refresh.
-  }, [doc.aspect, doc.style, doc.title, doc.emphasis, doc.photoId, doc.objectId, doc.secondId, doc.subject, doc.secondSubject, doc.treatment, libVersion, doc.topic]);
+  }, [tplVersion, doc.aspect, doc.style, doc.title, doc.emphasis, doc.photoId, doc.objectId, doc.secondId, doc.subject, doc.secondSubject, doc.treatment, libVersion, doc.topic]);
 
   const ready = cards.length > 0 && cards.every((c) => c.status === 'ready');
   const size = THUMB_SIZES[doc.aspect];
@@ -364,9 +370,10 @@ export default function ThumbnailPage() {
           <div role="radiogroup" aria-labelledby="tn-style-l" className="chip-group">
             <button type="button" role="radio" aria-checked={doc.style === AUTO_STYLE} className="chip-btn" onClick={() => apply(thumbPatches.style(AUTO_STYLE))}>Pick for me</button>
             {styles.map((s) => (
-              <button key={s.spec.name} type="button" role="radio" aria-checked={doc.style === s.spec.name} className="chip-btn" title={s.spec.description} onClick={() => apply(thumbPatches.style(s.spec.name))}>{s.spec.title}</button>
+              <button key={s.spec.name} type="button" role="radio" aria-checked={doc.style === s.spec.name} className="chip-btn" title={s.spec.description} onClick={() => apply(thumbPatches.style(s.spec.name))}>{s.spec.title}{isUserStyle(s.spec.name) && <span className="chip chip-tag"> Mine</span>}</button>
             ))}
           </div>
+          {targetWarning(doc.style, 'thumbnail') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'thumbnail')}</p>}
           {composed?.why && <p className="small muted" role="status">Picked for you: {composed.style.spec.title}. {composed.why}</p>}
         </div>
         <div className="tn-field">

@@ -3,6 +3,7 @@ import path from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { carouselHandler } from './server/carousel-writer';
+import { referenceHandler } from './server/reference-reader';
 
 /** Dev-only JSON endpoints for the /lab page: the test pictures and the Step 2 thumbnail outputs with their checks. */
 function labEndpoints(): Plugin {
@@ -277,6 +278,9 @@ function carouselWriters(): Plugin {
       const env = { ...process.env, ...loadEnv('development', process.cwd(), ['ANTHROPIC_', 'CLAUDE_', 'CAROUSEL_']) };
       server.middlewares.use('/__carousel', carouselHandler('dev-cli', { env }));
       server.middlewares.use('/api/carousel', carouselHandler('api', { env }));
+      // The reference reader (a model with vision): the same two providers, for reading the look of reference images.
+      server.middlewares.use('/__reference', referenceHandler('dev-cli', { env }));
+      server.middlewares.use('/api/reference', referenceHandler('api', { env }));
     },
   };
 }

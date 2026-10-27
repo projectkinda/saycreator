@@ -11,7 +11,8 @@ import { MakeIt, runGenerate, useWriters, type GenState } from './MakeIt';
 import { pickStyle } from './pickStyle';
 import { type WriteRequest } from './writerPrompt';
 import { downloadBlob, exportAllAsZip, slideFileName, zipFileName } from './export';
-import { composeDoc, getStyles, pickShuffleSalt, renderer, styleByName, type Rendered } from './render';
+import { carouselStyles, composeDoc, getStyles, pickShuffleSalt, renderer, styleByName, type Rendered } from './render';
+import { ensureTemplatesLoaded, isUserStyle, targetWarning, useTemplatesVersion } from '../reference/templates';
 import { platformOf, platformWarning } from './platform';
 import { PhotosStrip } from './PhotosStrip';
 import type { AddFiles } from './PhotoControls';
@@ -25,7 +26,9 @@ const DEFAULT_STYLE = 'editorial-collage';
 // ---------- style picker with a small preview of each style ----------
 
 function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; value: string; auto: boolean; onAuto: () => void; onPick: (name: string, title: string) => void }) {
-  const { styles, problems } = getStyles();
+  useTemplatesVersion();
+  const styles = carouselStyles();
+  const { problems } = getStyles();
   const [previews, setPreviews] = useState<Record<string, string>>({});
   useEffect(() => {
     let live = true;
@@ -66,6 +69,7 @@ function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; 
                 <span className={`cr-style-pic r${format === 'quote' ? '1-1' : '4-5'}`}>{img ? <img src={img} alt={`Preview of the ${st.spec.title} style`} /> : <span className="small muted" role="status">Drawing…</span>}</span>
                 <strong>{st.spec.title}</strong>
                 <span className="small muted">{st.spec.name}</span>
+                {isUserStyle(st.spec.name) && <span className="chip chip-tag">Mine</span>}
                 {auto && value === st.spec.name && <span className="chip chip-tag">In use</span>}
                 {st.warnings.some((w) => /phone-size checker needs at least 32 px/.test(w)) && <span className="chip chip-warn">Some text is below phone size</span>}
               </button>
@@ -128,6 +132,10 @@ export default function CarouselPage() {
   const style = styleByName(doc.style);
   const pictures = doc.photos ?? [];
   const libVersion = useLibraryVersion();
+  const tplVersion = useTemplatesVersion();
+  useEffect(() => {
+    void ensureTemplatesLoaded();
+  }, []);
   const hasPhotoStyle = !!style?.spec.photo;
   const [lowRoom, setLowRoom] = useState('');
   // After a refresh the pictures come back out of the browser's storage.
@@ -220,7 +228,7 @@ export default function CarouselPage() {
     // Slides that are being redrawn keep their old picture until the new one is ready.
     setViews((v) => Object.fromEntries(Object.entries(v).filter(([k]) => Number(k) < composed.slides.length).map(([k, x]) => [k, { ...x, status: 'drawing' as const }])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.script, doc.style, doc.format, doc.choices, doc.photos, libVersion]);
+  }, [doc.script, doc.style, doc.format, doc.choices, doc.photos, libVersion, tplVersion]);
 
   /** Adds files to the project's pictures. Unusable files are reported in plain words and skipped; the rest are added. */
   const addFiles: AddFiles = async (files, kind) => {
@@ -314,7 +322,7 @@ export default function CarouselPage() {
       tone: options.tone,
       format: doc.format,
       styleChoice: options.autoStyle ? 'auto' : doc.style,
-      styles: getStyles().styles.map((x) => ({ name: x.spec.name, title: x.spec.title, description: x.spec.description })),
+      styles: carouselStyles().map((x) => ({ name: x.spec.name, title: x.spec.title, description: x.spec.description })),
     };
     setGen({ phase: 'writing' });
     setNotice('');
@@ -322,9 +330,9 @@ export default function CarouselPage() {
     abort.current = null;
     if (!r.ok) return setGen(r.state);
     const { result } = r;
-    const known = getStyles().styles.map((x) => x.spec.name);
+    const known = carouselStyles().map((x) => x.spec.name);
     // "Pick for me": scored from the tone, the words of the text and the slide types; the writer's own suggestion counts one point.
-    const pick = options.autoStyle ? pickStyle({ text: doc.topic, tone: options.tone, slideTypes: result.script.slides.map((x) => x.type), styles: getStyles().styles, writerSuggestion: result.style && known.includes(result.style) ? result.style : null }) : null;
+    const pick = options.autoStyle ? pickStyle({ text: doc.topic, tone: options.tone, slideTypes: result.script.slides.map((x) => x.type), styles: carouselStyles(), writerSuggestion: result.style && known.includes(result.style) ? result.style : null }) : null;
     const style = pick ? pick.name : null;
     const withHandle = { ...result.script, brand: { ...result.script.brand, handle: options.handle.trim() || result.script.brand.handle } };
     const done = apply(patches.generate(withHandle, style, GEN_LABEL));
@@ -390,7 +398,7 @@ export default function CarouselPage() {
         onCancel={cancel}
         provider={provider}
         providers={providers}
-        styles={<StylePicker format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} />}
+        styles={<><StylePicker format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} />{targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}</>}
       />
 
       <details className="card ws-card cr-advanced" open={advanced} onToggle={(e) => setAdvanced((e.target as HTMLDetailsElement).open)}>

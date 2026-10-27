@@ -36,7 +36,8 @@ export function loadSaved(defaultStyle: string): Project | null {
     if (!proj || proj.doc?.version !== 1) return null;
     const doc = proj.doc;
     if (doc.format !== 'carousel' && doc.format !== 'quote') return null;
-    if (!styleByName(doc.style)) doc.style = defaultStyle;
+    // A template is read from the browser's storage a moment after the page opens, so its style is not known yet: keep the choice.
+    if (!styleByName(doc.style) && !doc.style.startsWith('mine-')) doc.style = defaultStyle;
     if (doc.script) {
       const v = validateScript(doc.script, doc.format);
       if (v.errors.length) return { doc: { ...doc, script: null, choices: {} }, past: [], future: [] };

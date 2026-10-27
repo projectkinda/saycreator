@@ -68,7 +68,7 @@ export function apiStatus(env: NodeJS.ProcessEnv = process.env): { available: bo
 
 // ---------- dev-cli ----------
 
-function killTree(pid: number | undefined) {
+export function killTree(pid: number | undefined) {
   if (!pid) return;
   try {
     if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true });
