@@ -330,7 +330,7 @@ test('a grid found wrongly is corrected by hand: "it is a single image", or one 
     await expect(card).toContainText('This looks like a grid');
     await card.getByRole('button', { name: 'It is a single image' }).click();
   }
-  await expect(card).toContainText('single');
+  await expect(card).toHaveAttribute('data-mode', 'single');
   await expect(card.getByRole('checkbox')).toHaveCount(0);
   // Draw one rectangle: the style learns from that part only.
   await card.getByRole('button', { name: 'Draw one rectangle' }).click();
@@ -344,7 +344,7 @@ test('a grid found wrongly is corrected by hand: "it is a single image", or one 
   await run(page, 'Cropped');
   expect(rec.reads[0].images).toHaveLength(1);
   await card.getByRole('button', { name: 'Use the whole image' }).click();
-  await expect(card).toContainText('single');
+  await expect(card).toHaveAttribute('data-mode', 'single');
 });
 
 for (const [learn, label, changes, keeps] of [
@@ -391,4 +391,56 @@ test('learn from can differ by image: colours and type from one, layout from ano
   await run(page, 'Mixed');
   expect(rec.reads[0].prompt).toContain('ref1.jpg: learn from "Colours and type only"');
   expect(rec.reads[0].prompt).toContain('ref2.jpg: learn from "Layout only"');
+});
+
+test('process fixes: it starts from a blank base, so nothing the reader did not ask for appears', async ({ page }) => {
+  const rec = await fakeReader(page, usual);
+  await openStyleFromReferences(page);
+  await refInput(page).setInputFiles(await makeReference(page, { name: 'plain.jpg', kind: 'slide' }));
+  await run(page, 'Blank start');
+  expect(rec.reads[0].prompt).toContain('The base style is BLANK');
+  await page.getByRole('button', { name: 'Save as template' }).click();
+  await expect.poll(async () => (await storedTemplates(page)).length).toBe(1);
+  const spec = (await storedTemplates(page))[0].spec as Record<string, unknown>;
+  expect(spec.elements, 'no elements the reader did not ask for').toBeUndefined();
+  expect(spec.marks, 'no marks the reader did not ask for').toBeUndefined();
+  expect(spec.assets).toEqual({});
+});
+
+test('process fixes: a reference with a photo gets a photo slot in the sample, and the round that is kept is explained', async ({ page }) => {
+  await fakeReader(page, (kind, n) => {
+    if (kind === 'read' || kind === 'retry') return readAnswer({ seen: ['cover'], photo: true, photoImages: ['ref1.jpg'] });
+    if (n === 0) return refineAnswer({ patches: [{ path: 'type.headline', value: 132 }], score: 70 });
+    return refineAnswer({ patches: [{ path: 'type.headline', value: 60 }], score: 20 });
+  });
+  await openStyleFromReferences(page);
+  await refInput(page).setInputFiles(await makeReference(page, { name: 'photo.jpg', kind: 'slide' }));
+  await run(page, 'Photo sample');
+  const rounds = page.getByRole('list', { name: 'Rounds' }).getByRole('listitem');
+  await expect(rounds.first()).toContainText('with a photo');
+  // The first round that does not improve ends the loop, and the screen says which round was kept and why.
+  await expect(page.getByText(/was kept: its score of \d+/)).toBeVisible();
+});
+
+test('process fixes: values the toolbox cannot draw are moved, and the closeness panel says so', async ({ page }) => {
+  await fakeReader(page, (kind) => (kind === 'read' || kind === 'retry' ? readAnswer({ seen: ['cover'], extra: { shape: { radius: 1000, outline: 4, stroke: 8, hardShadow: 0, badge: 'square', marker: 'box', sticker: 'tag', decor: 'blocks' }, spacing: { margin: 10, gap: 24, section: 48 }, type: { cover: 150, headline: 12, body: 44, small: 34, stat: 340, quote: 84, label: 32 } } }) : refineAnswer({ patches: [], score: 70, stop: true })));
+  await openStyleFromReferences(page);
+  await refInput(page).setInputFiles(await makeReference(page, { name: 'c.jpg', kind: 'slide' }));
+  await run(page, 'Clamped');
+  const list = page.getByRole('list', { name: 'Clamped values' });
+  await expect(list).toContainText('shape.radius was 1000, lowered to 120');
+  await expect(list).toContainText('spacing.margin was 10, raised to 48');
+  await expect(list).toContainText('type.headline was 12, raised to 32');
+});
+
+test('a reader that asks for marks gets them drawn, and one that asks for a mark we do not have is told in plain words', async ({ page }) => {
+  await fakeReader(page, (kind) => (kind === 'read' || kind === 'retry' ? readAnswer({ seen: ['cover'], extra: { marks: [{ kind: 'round-badge', zone: 'top-right', size: 220, colour: 'accent', text: 'NEW' }, { kind: 'unicorn', zone: 'top', size: 100, colour: 'accent' }] } }) : refineAnswer({ patches: [], score: 70, stop: true })));
+  await openStyleFromReferences(page);
+  await refInput(page).setInputFiles(await makeReference(page, { name: 'm.jpg', kind: 'slide' }));
+  await run(page, 'With marks');
+  await page.getByRole('button', { name: 'Save as template' }).click();
+  await expect.poll(async () => (await storedTemplates(page)).length).toBe(1);
+  const spec = (await storedTemplates(page))[0].spec as { marks?: { kind: string }[] };
+  expect(spec.marks?.map((m) => m.kind)).toEqual(['round-badge']);
+  await expect(page.getByRole('list', { name: 'Clamped values' })).toContainText('unicorn');
 });

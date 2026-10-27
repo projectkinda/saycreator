@@ -9,19 +9,24 @@ const STEP = 'style-from-references';
 export default function StyleFromReferences() {
   const { manifests } = useLab();
   const { records, setRecord } = useResults();
-  const m = manifests.find((x) => x.file === 'style-from-references.json');
-  if (!m) return <p className="small muted" role="status">No results yet. Run the reference tests with the real reader (<code>REAL_REFERENCE=1 npm run test:image</code>) to make them.</p>;
+  // Round 1 first, then round 2 (the same screen after the 14b changes), each with its own title.
+  const ms = ['style-from-references.json', 'style-from-references-round2.json'].map((file) => manifests.find((x) => x.file === file)).filter((x): x is NonNullable<typeof x> => !!x);
+  if (ms.length === 0) return <p className="small muted" role="status">No results yet. Run the reference tests with the real reader (<code>REAL_REFERENCE=1 npm run test:image</code>) to make them.</p>;
   return (
     <AreaContext.Provider value="styles">
-      {m.intro && <p className="small muted">{m.intro}</p>}
+      {ms.map((m) => (
+        <section key={m.file} aria-label={m.title}>
+          <h2 className="h2">{m.title}</h2>
+          {m.intro && <p className="small muted">{m.intro}</p>}
       {m.groups.map((g) => (
         <div key={g.title} className="res-source">
           <h3 className="h3">{g.title}</h3>
           {g.note && <p className="small muted">{g.note}</p>}
           <div className="res-gallery">
             {g.items.map((it) => {
-              const key = `${STEP}|${g.title}|${it.id}`;
-              const base: RecordBase = { key, step: STEP, kind: 'item', image: g.title, option: it.title };
+              const step = m.file.includes('round2') ? `${STEP}-round2` : STEP;
+              const key = `${step}|${g.title}|${it.id}`;
+              const base: RecordBase = { key, step, kind: 'item', image: g.title, option: it.title };
               return (
                 <figure key={key} className="res-gal-card">
                   {it.images.length > 0 && (
@@ -46,6 +51,8 @@ export default function StyleFromReferences() {
             })}
           </div>
         </div>
+      ))}
+        </section>
       ))}
     </AreaContext.Provider>
   );

@@ -87,6 +87,14 @@ test.describe('grid detection', () => {
     expect(g.method).toContain('seams');
   });
 
+  test('one flat-coloured slide with a few text blocks is not read as a collage', () => {
+    const p = canvas(600, 750, '#d9381e');
+    box(p, 60, 150, 420, 80, '#101010');
+    box(p, 60, 300, 300, 24, '#101010');
+    box(p, 330, 520, 180, 110, '#e8e04a');
+    expect(detectGrid(p)).toBeNull();
+  });
+
   test('a single slide is not a grid', () => {
     expect(detectGrid(slide(540, 675, '#f4efe6', '#101010', 1))).toBeNull();
   });

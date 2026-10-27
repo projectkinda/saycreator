@@ -74,7 +74,7 @@ export async function makeReference(page: Page, o: { name: string; kind: 'slide'
 const pal = (bg: string, text: string, accent: string, onAccent = '#ffffff') => ({ bg, text, muted: '#555555', accent, onAccent, marker: accent, onMarker: '#000000', surface: '#eeeeee', onSurface: '#111111', line: '#111111' });
 
 /** A valid answer to "Read references": a few sections of a style, what was seen, and what could not be drawn. */
-export function readAnswer(o: { accent?: string; layouts?: boolean; photo?: boolean; thumbnail?: boolean; seen?: string[]; missing?: { tool: string; why: string; images?: string[] }[] } = {}) {
+export function readAnswer(o: { accent?: string; layouts?: boolean; photo?: boolean; thumbnail?: boolean; seen?: string[]; extra?: Record<string, unknown>; photoImages?: string[]; missing?: { tool: string; why: string; images?: string[] }[] } = {}) {
   const style: Record<string, unknown> = {
     palettes: { ink: pal('#101010', '#f5f5f5', o.accent ?? '#ff4b1f'), paper: pal('#f4efe6', '#101010', '#c42a08') },
     rhythm: ['ink', 'paper'],
@@ -89,7 +89,8 @@ export function readAnswer(o: { accent?: string; layouts?: boolean; photo?: bool
   if (o.layouts !== false) style.layouts = { cover: [{ use: 'cover-top', when: { headlineWordsMax: 7 } }, { use: 'cover-stack' }] };
   if (o.photo) style.photo = { treatments: { mono: [{ op: 'grayscale' }, { op: 'levels', contrast: 0.25 }] } };
   if (o.thumbnail) style.thumbnail = { palette: 'ink', title: { look: 'plain', colour: 'text' }, layouts: ['title-over-photo', 'face-left-title-right', 'split-colour'], block: 'accent', scrim: '$bg' };
-  return JSON.stringify({ style, seen_slide_types: o.seen ?? ['cover'], missing_tools: o.missing ?? [{ tool: '3D renders', why: 'The reference has a glossy 3D object; we can only draw flat shapes and pictures from the library.', images: ['ref1.jpg'] }, { tool: 'Fonts we do not bundle', why: 'The reference uses a condensed grotesque; we only have two families.' }], notes: 'Heavy caps, one hot accent, flat shapes.' });
+  Object.assign(style, o.extra ?? {});
+  return JSON.stringify({ style, seen_slide_types: o.seen ?? ['cover'], ...(o.photoImages ? { images_with_photos: o.photoImages } : {}), missing_tools: o.missing ?? [{ tool: '3D renders', why: 'The reference has a glossy 3D object; we can only draw flat shapes and pictures from the library.', images: ['ref1.jpg'] }, { tool: 'Fonts we do not bundle', why: 'The reference uses a condensed grotesque; we only have two families.' }], notes: 'Heavy caps, one hot accent, flat shapes.' });
 }
 
 /** A valid answer to a refinement round. */

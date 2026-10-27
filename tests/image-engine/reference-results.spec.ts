@@ -8,7 +8,7 @@ import { rankMissing } from '../../src/reference/rank';
 import { outUrl, writeStepResults, type ResultsItem } from './results';
 import { ROOT } from './reference-helpers';
 
-const REAL = path.join(ROOT, 'out/image-engine/reference-real');
+const REAL = path.join(ROOT, 'out/image-engine/reference-real-round1');
 interface RoundOut {
   header: string;
   made: string;

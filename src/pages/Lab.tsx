@@ -191,7 +191,7 @@ export default function Lab() {
     return () => cancelAnimationFrame(id);
   }, [onlyUnrated, state.records, tick, view, recreation, manifests, sel]);
   const done = useCallback(() => reloadLast(), [reloadLast]);
-  const other = manifests.filter((m) => m.file !== 'step11.json' && m.file !== 'photos-app.json' && m.file !== 'thumbs-v2.json' && m.file !== 'style-from-references.json').sort((a, b) => (b.order ?? 0) - (a.order ?? 0));
+  const other = manifests.filter((m) => m.file !== 'step11.json' && m.file !== 'photos-app.json' && m.file !== 'thumbs-v2.json' && m.file !== 'style-from-references.json' && m.file !== 'style-from-references-round2.json').sort((a, b) => (b.order ?? 0) - (a.order ?? 0));
   /** What each part of the screen shows: the Styles view has only the style cards, Slides the slides, Photo tools the gallery. */
   const viewCounts = useMemo(() => {
     const c: Partial<Record<View, { waiting: number; total: number }>> = {};
@@ -212,7 +212,7 @@ export default function Lab() {
     if (v === 'styles' || v === 'slides') return n(recreation?.lastRun);
     if (v === 'photo') return n(last.generic['step11.json']);
     if (v === 'thumbnails') return n(last.generic['thumbs-v2.json']);
-    if (v === 'references') return n(last.generic['style-from-references.json']);
+    if (v === 'references') return n(Math.max(last.generic['style-from-references.json'] ?? 0, last.generic['style-from-references-round2.json'] ?? 0));
     if (v === 'elements') return n(last.elements);
     if (v === 'coverage') return n(last.coverage);
     if (v === 'cutouts') return n(last.step4);

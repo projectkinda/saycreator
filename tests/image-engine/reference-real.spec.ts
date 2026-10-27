@@ -25,6 +25,8 @@ const RUNS: RealRun[] = [
   { id: 'deck-a', label: 'A carousel deck (6 of 12 slides)', files: ['44937935e682165c1f93e99a11a47123.jpg'], target: 'Carousels', keep: [1, 2, 3, 5, 8, 11], dir: CAROUSELS },
   { id: 'deck-b', label: 'Another carousel deck (6 of 9 slides)', files: ['58d68b12ac74ce8cc0f8d2f9df45e6de.jpg'], target: 'Carousels', keep: [1, 2, 4, 5, 7, 9], dir: CAROUSELS },
   { id: 'single', label: 'One image on its own (one slide)', files: ['1503c1de8dded2a7cbe333f061c7131a.jpg'], target: 'Carousels', keep: [1], dir: CAROUSELS },
+  // Round 2's new reference: a slide with a laptop and a dark and light split, from a deck not used before.
+  { id: 'new-single', label: 'A new single slide (laptop, dark and light)', files: ['9885e1020f38cd3f6c18df82813e7699.jpg'], target: 'Carousels', keep: [2], dir: CAROUSELS },
 ];
 const only = process.env.REAL_ONLY;
 
@@ -99,6 +101,8 @@ for (const run of RUNS.filter((r) => !only || r.id === only)) {
       result.missing = await panel.getByRole('list', { name: 'Missing tools' }).getByRole('listitem').allInnerTexts();
       result.measured = (await page.locator('section[aria-labelledby="rf-measured-h"]').innerText()).slice(0, 2500);
       result.notes = await page.locator('section[aria-labelledby="rf-rounds-h"] p').allInnerTexts();
+      result.kept = (await page.locator('section[aria-labelledby="rf-rounds-h"] p[role="status"]').allInnerTexts()).join(' ');
+      result.clamped = await panel.getByRole('list', { name: 'Clamped values' }).getByRole('listitem').allInnerTexts();
       await page.screenshot({ path: path.join(dir, 'screen.png'), fullPage: true });
     }
     fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(result, null, 2));

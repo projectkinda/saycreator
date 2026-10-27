@@ -13,6 +13,14 @@ export interface GridResult {
 }
 
 type RGB = [number, number, number];
+/** A plain strip: where it is, its colour, and the colours just outside it on each side. */
+interface Run {
+  a: number;
+  b: number;
+  rgb: RGB;
+  before?: RGB;
+  after?: RGB;
+}
 const l1 = (a: RGB, b: RGB) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
 
 /** For each column (or row), its mean colour and how much it varies along its length (the few most unlike samples are left out, so a speck of
@@ -47,14 +55,14 @@ function lineStats(p: Px, vertical: boolean) {
 }
 
 /** The strips that are one plain colour along their whole length, grouped into runs: [start, end) and the colour. */
-function gutterRuns(p: Px, vertical: boolean): { a: number; b: number; rgb: RGB }[] {
+function gutterRuns(p: Px, vertical: boolean): Run[] {
   const { mean, spread } = lineStats(p, vertical);
   const n = mean.length;
   // Plain means far calmer than a typical column: an absolute floor for flat gutters, and a share of the median for gutters over a soft vignette.
   const sorted = [...spread].sort((a, b) => a - b);
   const limit = Math.min(70, Math.max(14, 0.3 * (sorted[Math.floor(sorted.length / 2)] ?? 0)));
   const plain: boolean[] = spread.map((s) => s < limit);
-  const runs: { a: number; b: number; rgb: RGB }[] = [];
+  const runs: Run[] = [];
   let i = 0;
   while (i < n) {
     if (!plain[i]) {
@@ -63,14 +71,17 @@ function gutterRuns(p: Px, vertical: boolean): { a: number; b: number; rgb: RGB 
     }
     let j = i;
     while (j < n && plain[j] && l1(mean[j], mean[i]) < 40) j++;
-    runs.push({ a: i, b: j, rgb: mean[i] });
+    runs.push({ a: i, b: j, rgb: mean[i], before: mean[Math.max(0, i - 4)], after: mean[Math.min(n - 1, j + 3)] });
     i = j;
   }
   // A soft edge can split one gutter into pieces: join neighbours that touch and are alike.
-  const joined: { a: number; b: number; rgb: RGB }[] = [];
+  const joined: Run[] = [];
   for (const r of runs) {
     const last = joined[joined.length - 1];
-    if (last && last.b === r.a && l1(last.rgb, r.rgb) < 80) last.b = r.b;
+    if (last && last.b === r.a && l1(last.rgb, r.rgb) < 80) {
+      last.b = r.b;
+      last.after = r.after;
+    }
     else joined.push({ ...r });
   }
   // A gutter is a thin strip. A wide plain run is a plain slide (or a plain part of one), not a gutter.
@@ -78,26 +89,40 @@ function gutterRuns(p: Px, vertical: boolean): { a: number; b: number; rgb: RGB 
 }
 
 /** The cells between gutters along one direction: [start, end) spans whose sizes agree. Empty when there is no repeat. */
-function spansFrom(runs: { a: number; b: number; rgb: RGB }[], n: number): { a: number; b: number }[] {
+function spansFrom(runs: Run[], n: number): { a: number; b: number }[] {
   if (runs.length === 0) return [];
   // Real gutters repeat at one distance. Look for the longest chain of strips spaced evenly, and ignore plain strips inside slides.
   const chain = evenChain(runs, n);
-  if (chain.length >= 2) return cellsBetween(chain, n);
+  if (chain.length >= 2) return stands(chain) ? cellsBetween(chain, n) : [];
   // The gutter colour is the commonest among the runs.
   const colour = runs.reduce((best, r) => (runs.filter((q) => l1(q.rgb, r.rgb) < 40).length > runs.filter((q) => l1(q.rgb, best.rgb) < 40).length ? r : best), runs[0]).rgb;
-  return cellsBetween(runs.filter((r) => l1(r.rgb, colour) < 40), n);
+  const gut = runs.filter((r) => l1(r.rgb, colour) < 40);
+  return stands(gut) ? cellsBetween(gut, n) : [];
+}
+
+/** A real gutter is not the colour of what is next to it: a plain strip inside one flat slide is. At least half of the sides must show a difference. */
+function stands(gut: Run[]): boolean {
+  let sides = 0;
+  let differ = 0;
+  for (const g of gut)
+    for (const nb of [g.before, g.after]) {
+      if (!nb) continue;
+      sides++;
+      if (l1(nb, g.rgb) > 40) differ++;
+    }
+  return sides > 0 && differ >= sides / 2;
 }
 
 /** The longest run of strips spaced one distance apart (within a few percent), starting from any pair. */
-function evenChain(runs: { a: number; b: number; rgb: RGB }[], n: number): { a: number; b: number; rgb: RGB }[] {
+function evenChain(runs: Run[], n: number): Run[] {
   const mid = (r: { a: number; b: number }) => (r.a + r.b) / 2;
-  let best: { a: number; b: number; rgb: RGB }[] = [];
+  let best: Run[] = [];
   for (let i = 0; i < runs.length; i++)
     for (let j = i + 1; j < runs.length; j++) {
       const T = mid(runs[j]) - mid(runs[i]);
       if (T < n * 0.1) continue;
       const tol = Math.max(3, T * 0.03);
-      const got: { a: number; b: number; rgb: RGB }[] = [];
+      const got: Run[] = [];
       for (let k = -8; k <= 8; k++) {
         const at = mid(runs[i]) + k * T;
         if (at < 0 || at > n) continue;
@@ -109,7 +134,7 @@ function evenChain(runs: { a: number; b: number; rgb: RGB }[], n: number): { a: 
   return best;
 }
 
-function cellsBetween(gut: { a: number; b: number; rgb: RGB }[], n: number): { a: number; b: number }[] {
+function cellsBetween(gut: Run[], n: number): { a: number; b: number }[] {
   const inner: { a: number; b: number }[] = [];
   for (let i = 0; i + 1 < gut.length; i++) if (gut[i + 1].a > gut[i].b) inner.push({ a: gut[i].b, b: gut[i + 1].a });
   const sizes = inner.map((e) => e.b - e.a).sort((x, y) => x - y);
