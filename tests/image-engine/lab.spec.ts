@@ -133,8 +133,7 @@ test('Slides: a photo deck is labelled TEST ASSETS, and the deck with no photos 
   await scriptList(page).selectOption('photo:photo-creator-habits');
   const cards = page.locator('.res-pane:not([hidden]) .res-rec-card');
   await expect(cards).toHaveCount(7);
-  // The first gallery picture (under Treatments) is one of your test photos.
-  await expect(pane.locator('.res-source', { has: page.getByRole('heading', { name: 'Treatments', exact: true }) }).locator('.res-gal-card').first().locator('.chip-warn')).toContainText('TEST ASSETS');
+  await expect(cards.first().locator('.chip-warn')).toContainText('TEST ASSETS');
   await scriptList(page).selectOption('photo:no-photos');
   await expect(cards.first().locator('.chip-warn')).toContainText('NO PHOTOS');
 });
@@ -150,7 +149,8 @@ test('Photo tools: the gallery is grouped, each picture has a caption, a label c
   const cards = pane.locator('.res-gal-card');
   expect(await cards.count()).toBeGreaterThanOrEqual(37);
   await expect(cards.first().locator('figcaption')).not.toBeEmpty();
-  await expect(cards.first().locator('.chip-warn')).toContainText('TEST ASSETS');
+  // The first gallery picture (under Treatments) is one of your test photos.
+  await expect(pane.locator('.res-source', { has: page.getByRole('heading', { name: 'Treatments', exact: true }) }).locator('.res-gal-card').first().locator('.chip-warn')).toContainText('TEST ASSETS');
   await expect(pane.locator('.res-gal-card', { hasText: 'Soft contact shadow' }).locator('.chip-warn')).toContainText('SYNTHETIC');
   await page.screenshot({ path: path.join(OUT, '04-photo-tools.png') });
 });
