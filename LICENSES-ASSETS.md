@@ -30,6 +30,7 @@ Rule: only permissive licences (MIT, Apache-2.0, ISC, CC0 or similar), checked a
 | Twemoji | CC BY 4.0 (graphics): attribution is a condition. Not used. |
 | OpenMoji | CC BY-SA 4.0: attribution and share-alike. Not used. |
 | Noto emoji (Google) | The repository carries more than one licence (code, fonts and images differ). Unclear, not used. |
+| HEIC readers for the browser (checked 27 Oct 2026) | **heic2any** (npm, labelled MIT, no dependencies): its 1.36 MB `dist/heic2any.js` has libheif compiled into it and the package carries no libheif or LGPL notice, so the MIT label does not cover what is inside. **libheif-js** (npm 1.23.5, 9 MB unpacked) is labelled LGPL-3.0. **heic-decode** and **heic-convert** (ISC) only wrap libheif-js. **libheif** itself (upstream `COPYING`): the library is under the GNU Lesser General Public License; only its sample programs and wrappers are MIT. No MIT, Apache-2.0 or BSD reader was found, so none is bundled. Safari and any browser that can decode HEIC itself are let through; the others show "This is an HEIC photo. Convert it to JPG or PNG, then add it again." |
 | unDraw, Humaaans-style illustration sets, Streamline, Flaticon | Custom or no-redistribution licences. Not used. |
 
 ## Your own test assets (not a pack, not shippable)

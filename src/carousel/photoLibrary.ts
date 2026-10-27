@@ -47,8 +47,9 @@ export async function prepare(file: File, kind: 'photo' | 'object'): Promise<Pre
     // 'from-image' turns a phone photo the right way up from its EXIF orientation.
     bm = await createImageBitmap(file, { imageOrientation: 'from-image' });
   } catch {
+    // Browsers that read HEIC themselves (Safari) get here only if the file is damaged; the others cannot read it at all.
     const heic = /heic|heif/i.test(file.type + file.name);
-    throw new PictureError(heic ? `"${file.name}" is a HEIC picture, which this browser cannot read. Save it as a JPEG and add it again.` : `"${file.name}" could not be read as a picture. It may be damaged or not a picture. JPEG, PNG and WebP files work.`);
+    throw new PictureError(heic ? `"${file.name}": This is an HEIC photo. Convert it to JPG or PNG, then add it again.` : `"${file.name}" could not be read as a picture. It may be damaged or not a picture. JPEG, PNG and WebP files work.`);
   }
   try {
     const { width, height } = bm;

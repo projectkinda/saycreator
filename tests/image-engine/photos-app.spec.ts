@@ -265,6 +265,14 @@ test('export: the zip has every slide at full size, drawn with the photos', asyn
   expect(saved.photos!.every((x) => x.width === 3000 && x.height === 2000)).toBe(true); // the original size is kept in the project
 });
 
+test('a HEIC file on a slide card gives the plain message right beside that photo control', async ({ page }) => {
+  await useScriptInStyle(page, photoScript(), STYLE);
+  const c = card(page, 1);
+  await c.getByLabel('Choose a photo for slide 1').setInputFiles({ name: 'iphone.heic', mimeType: 'image/heic', buffer: Buffer.from('heic bytes') });
+  await expect(c.getByRole('status').filter({ hasText: 'This is an HEIC photo. Convert it to JPG or PNG, then add it again.' })).toBeVisible();
+  await expect.poll(async () => (await savedDoc(page))?.photos?.length ?? 0).toBe(0);
+});
+
 test('an unreadable file, a file that is too big, and a HEIC file each give a plain message, and the rest of a batch still works', async ({ page }) => {
   await useScriptInStyle(page, photoScript(), STYLE);
   const good = await makePic(page, { name: 'fine.jpg', w: 1000, h: 800, hue: 70 });
@@ -276,7 +284,7 @@ test('an unreadable file, a file that is too big, and a HEIC file each give a pl
   ]);
   const s = status(page);
   await expect(s).toContainText('"broken.jpg" could not be read as a picture');
-  await expect(s).toContainText('"phone.heic" is a HEIC picture, which this browser cannot read');
+  await expect(s).toContainText('This is an HEIC photo. Convert it to JPG or PNG, then add it again.');
   await expect(s).toContainText('"empty.png" is empty');
   await expect.poll(async () => (await savedDoc(page))?.photos?.map((p) => p.name)).toEqual(['fine']);
   // A file over the limit (written to disk first: it is too big to send as bytes).
