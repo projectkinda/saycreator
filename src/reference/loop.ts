@@ -53,6 +53,8 @@ export interface Round {
   note?: string;
 }
 
+/** A round whose style the drawing refused. */
+export class RoundError extends Error {}
 export const scoreOf = (sim: Similarity, j: Judgement | null) => Math.round((j ? 0.7 * sim.total + 0.3 * (j.score / 100) : sim.total) * 1000) / 1000;
 const loaded = (spec: StyleSpec): LoadedStyle => ({ spec, assets: {}, warnings: [] });
 
@@ -129,7 +131,13 @@ export interface LoopOptions {
 
 const roundOf = async (o: LoopOptions, n: number, label: string, spec: StyleSpec, judged: { judgement: Judgement | null; patchesOut: { path: string; value: unknown }[]; refused: string[]; ms: number; note?: string } | null): Promise<Round> => {
   const t0 = performance.now();
-  const replicas = await renderReplicas({ spec, target: o.target, items: o.items, measured: o.measured, seen: o.seen, content: o.content });
+  let replicas: Replica[];
+  try {
+    replicas = await renderReplicas({ spec, target: o.target, items: o.items, measured: o.measured, seen: o.seen, content: o.content });
+  } catch (e) {
+    // A style that passes the checks can still be one the drawing refuses (a value out of range): say so in plain words.
+    throw new RoundError(`This style could not be drawn: ${(e as Error).message.replace(/^This plan cannot be drawn: /, '')}`);
+  }
   const sim = meanSimilarity(replicas.map((r) => r.similarity));
   return { n, label, spec, replicas, similarity: sim, judgement: judged?.judgement ?? null, patchesOut: judged?.patchesOut ?? [], refused: judged?.refused ?? [], madeBy: [], score: scoreOf(sim, judged?.judgement ?? null), ms: Math.round(performance.now() - t0 + (judged?.ms ?? 0)), note: judged?.note };
 };
@@ -170,7 +178,14 @@ export async function runLoop(o: LoopOptions): Promise<{ rounds: Round[]; best: 
     const improved = rounds.length === 1 || current.score >= rounds[best].score;
     if (k === max || look.stop || noPatches || look.problem || (rounds.length > 1 && !improved)) break;
     o.onPhase?.(`Drawing round ${k + 1}…`);
-    current = { ...(await roundOf(o, k + 1, `Round ${k + 1}`, look.spec, null)), madeBy: look.patches };
+    try {
+      current = { ...(await roundOf(o, k + 1, `Round ${k + 1}`, look.spec, null)), madeBy: look.patches };
+    } catch (e) {
+      // The patched style could not be drawn: keep what we have, and say why this round is missing.
+      rounds[rounds.length - 1] = { ...rounds[rounds.length - 1], note: `The reader’s next changes could not be drawn, so the loop stopped here. ${(e as Error).message}` };
+      o.onRound(rounds[rounds.length - 1]);
+      break;
+    }
     rounds.push(current);
     o.onRound(current);
   }

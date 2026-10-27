@@ -118,6 +118,9 @@ export function cleanSpec(s: StyleSpec, target: Target): StyleSpec {
   }
   if (isObj(spec.type)) for (const k of Object.keys(spec.type)) if (typeof spec.type[k] === 'number') spec.type[k] = Math.min(400, Math.max(10, spec.type[k] as number));
   if (isObj(spec.spacing) && typeof spec.spacing.margin === 'number') spec.spacing.margin = Math.max(48, spec.spacing.margin);
+  // Corner radii, outlines and shadows have limits the drawing enforces (a marker's corner is a third of the radius and may not pass 100).
+  if (isObj(spec.shape)) for (const [k, max] of [['radius', 120], ['outline', 24], ['stroke', 40], ['hardShadow', 40]] as const) if (typeof spec.shape[k] === 'number') spec.shape[k] = Math.min(max, Math.max(0, spec.shape[k] as number));
+  if (isObj(spec.spacing)) for (const k of ['gap', 'section']) if (typeof spec.spacing[k] === 'number') spec.spacing[k] = Math.min(300, Math.max(0, spec.spacing[k] as number));
   if (typeof spec.headlineLineHeight === 'number') spec.headlineLineHeight = Math.min(1.6, Math.max(0.8, spec.headlineLineHeight));
   if (Array.isArray(spec.rhythm)) spec.rhythm = (spec.rhythm as string[]).filter((n) => names.includes(n));
   if (!Array.isArray(spec.rhythm) || spec.rhythm.length === 0) spec.rhythm = names.slice(0, 2);
