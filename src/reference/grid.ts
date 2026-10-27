@@ -15,7 +15,8 @@ export interface GridResult {
 type RGB = [number, number, number];
 const l1 = (a: RGB, b: RGB) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
 
-/** For each column (or row), its mean colour and how much it varies along its length. */
+/** For each column (or row), its mean colour and how much it varies along its length (the few most unlike samples are left out, so a speck of
+ *  white in a corner does not make a plain strip look busy). */
 function lineStats(p: Px, vertical: boolean) {
   const n = vertical ? p.width : p.height;
   const len = vertical ? p.height : p.width;
@@ -26,19 +27,21 @@ function lineStats(p: Px, vertical: boolean) {
     let r = 0;
     let g = 0;
     let b = 0;
-    let c = 0;
-    let r2 = 0;
-    let g2 = 0;
-    let b2 = 0;
+    const sums: number[] = [];
     for (let j = 0; j < len; j += step) {
       const k = ((vertical ? j * p.width + i : i * p.width + j) * 4);
-      const R = p.data[k];
-      const G = p.data[k + 1];
-      const B = p.data[k + 2];
-      r += R; g += G; b += B; r2 += R * R; g2 += G * G; b2 += B * B; c++;
+      r += p.data[k];
+      g += p.data[k + 1];
+      b += p.data[k + 2];
+      sums.push(p.data[k] + p.data[k + 1] + p.data[k + 2]);
     }
+    const c = sums.length;
     mean.push([r / c, g / c, b / c]);
-    spread.push(Math.sqrt(Math.max(0, r2 / c - (r / c) ** 2)) + Math.sqrt(Math.max(0, g2 / c - (g / c) ** 2)) + Math.sqrt(Math.max(0, b2 / c - (b / c) ** 2)));
+    sums.sort((x, y) => x - y);
+    const lo = Math.floor(c * 0.04);
+    const mid = sums.slice(lo, c - lo);
+    const m = mid.reduce((x, y) => x + y, 0) / mid.length;
+    spread.push(Math.sqrt(mid.reduce((x, y) => x + (y - m) ** 2, 0) / mid.length));
   }
   return { mean, spread };
 }
@@ -47,7 +50,10 @@ function lineStats(p: Px, vertical: boolean) {
 function gutterRuns(p: Px, vertical: boolean): { a: number; b: number; rgb: RGB }[] {
   const { mean, spread } = lineStats(p, vertical);
   const n = mean.length;
-  const plain: boolean[] = spread.map((s) => s < 14);
+  // Plain means far calmer than a typical column: an absolute floor for flat gutters, and a share of the median for gutters over a soft vignette.
+  const sorted = [...spread].sort((a, b) => a - b);
+  const limit = Math.min(70, Math.max(14, 0.3 * (sorted[Math.floor(sorted.length / 2)] ?? 0)));
+  const plain: boolean[] = spread.map((s) => s < limit);
   const runs: { a: number; b: number; rgb: RGB }[] = [];
   let i = 0;
   while (i < n) {
@@ -60,27 +66,62 @@ function gutterRuns(p: Px, vertical: boolean): { a: number; b: number; rgb: RGB 
     runs.push({ a: i, b: j, rgb: mean[i] });
     i = j;
   }
+  // A soft edge can split one gutter into pieces: join neighbours that touch and are alike.
+  const joined: { a: number; b: number; rgb: RGB }[] = [];
+  for (const r of runs) {
+    const last = joined[joined.length - 1];
+    if (last && last.b === r.a && l1(last.rgb, r.rgb) < 80) last.b = r.b;
+    else joined.push({ ...r });
+  }
   // A gutter is a thin strip. A wide plain run is a plain slide (or a plain part of one), not a gutter.
-  return runs.filter((r) => r.b - r.a < n * 0.08);
+  return joined.filter((r) => r.b - r.a < n * 0.08);
 }
 
 /** The cells between gutters along one direction: [start, end) spans whose sizes agree. Empty when there is no repeat. */
 function spansFrom(runs: { a: number; b: number; rgb: RGB }[], n: number): { a: number; b: number }[] {
   if (runs.length === 0) return [];
+  // Real gutters repeat at one distance. Look for the longest chain of strips spaced evenly, and ignore plain strips inside slides.
+  const chain = evenChain(runs, n);
+  if (chain.length >= 2) return cellsBetween(chain, n);
   // The gutter colour is the commonest among the runs.
   const colour = runs.reduce((best, r) => (runs.filter((q) => l1(q.rgb, r.rgb) < 40).length > runs.filter((q) => l1(q.rgb, best.rgb) < 40).length ? r : best), runs[0]).rgb;
-  const gut = runs.filter((r) => l1(r.rgb, colour) < 40);
-  const edges: { a: number; b: number }[] = [];
-  let at = 0;
-  for (const g of gut) {
-    if (g.a > at) edges.push({ a: at, b: g.a });
-    at = g.b;
-  }
-  if (at < n) edges.push({ a: at, b: n });
-  const sizes = edges.map((e) => e.b - e.a).sort((x, y) => x - y);
+  return cellsBetween(runs.filter((r) => l1(r.rgb, colour) < 40), n);
+}
+
+/** The longest run of strips spaced one distance apart (within a few percent), starting from any pair. */
+function evenChain(runs: { a: number; b: number; rgb: RGB }[], n: number): { a: number; b: number; rgb: RGB }[] {
+  const mid = (r: { a: number; b: number }) => (r.a + r.b) / 2;
+  let best: { a: number; b: number; rgb: RGB }[] = [];
+  for (let i = 0; i < runs.length; i++)
+    for (let j = i + 1; j < runs.length; j++) {
+      const T = mid(runs[j]) - mid(runs[i]);
+      if (T < n * 0.1) continue;
+      const tol = Math.max(3, T * 0.03);
+      const got: { a: number; b: number; rgb: RGB }[] = [];
+      for (let k = -8; k <= 8; k++) {
+        const at = mid(runs[i]) + k * T;
+        if (at < 0 || at > n) continue;
+        const hit = runs.find((r) => Math.abs(mid(r) - at) <= tol && l1(r.rgb, runs[i].rgb) < 60);
+        if (hit) got.push(hit);
+      }
+      if (got.length > best.length || (got.length === best.length && got.length >= 2 && T < mid(best[1]) - mid(best[0]))) best = got;
+    }
+  return best;
+}
+
+function cellsBetween(gut: { a: number; b: number; rgb: RGB }[], n: number): { a: number; b: number }[] {
+  const inner: { a: number; b: number }[] = [];
+  for (let i = 0; i + 1 < gut.length; i++) if (gut[i + 1].a > gut[i].b) inner.push({ a: gut[i].b, b: gut[i + 1].a });
+  const sizes = inner.map((e) => e.b - e.a).sort((x, y) => x - y);
   const med = sizes[Math.floor(sizes.length / 2)] ?? 0;
+  const edges = [...inner];
+  // The strips before the first gutter and after the last are a slide, or a slide with a margin: keep the slide-sized piece next to the gutter.
+  const first = gut[0];
+  if (med > 0 && first.a >= med * 0.85) edges.unshift({ a: Math.max(0, first.a - Math.round(med)), b: first.a });
+  const last = gut[gut.length - 1];
+  if (med > 0 && n - last.b >= med * 0.85) edges.push({ a: last.b, b: Math.min(n, last.b + Math.round(med)) });
   const spans = edges.filter((e) => e.b - e.a >= med * 0.85 && e.b - e.a <= med * 1.15);
-  return spans.length >= 2 ? spans : spans.length === 1 && edges.length === 1 ? [] : spans.length >= 2 ? spans : [];
+  return spans.length >= 2 ? spans : [];
 }
 
 /** The sum of changes between neighbouring columns (or rows) at one position: large where two slides meet. */
@@ -102,6 +143,9 @@ const FRAMES = [0.8, 1, 0.5625, 1.7778, 0.75, 1.25];
 
 /** Looks for a grid. Null when the picture looks like a single slide. */
 export function detectGrid(p: Px): GridResult | null {
+  // Seams at every evenly spaced line, all of them clear, settle it before looking for gutters (the plain margins inside slides can repeat evenly too).
+  const sure = seamGrid(p);
+  if (sure && sure.all) return sure.result;
   // 1. Gutters.
   const xs = spansFrom(gutterRuns(p, true), p.width);
   const ys = spansFrom(gutterRuns(p, false), p.height);
@@ -115,7 +159,11 @@ export function detectGrid(p: Px): GridResult | null {
     if (cells.length >= 2 && aspects.every((a) => a > 0.3 && a < 3.2)) return { cols: cx.length, rows: cy.length, cells, method: 'gutters between the slides' };
   }
   // 2. Slides set edge to edge: evenly spaced seams.
-  let best: { cols: number; rows: number; score: number } | null = null;
+  return sure ? sure.result : null;
+}
+
+function seamGrid(p: Px): { result: GridResult; all: boolean } | null {
+  let best: { cols: number; rows: number; score: number; all: boolean } | null = null;
   for (let cols = 1; cols <= 6; cols++)
     for (let rows = 1; rows <= 4; rows++) {
       if (cols * rows < 2) continue;
@@ -134,15 +182,19 @@ export function detectGrid(p: Px): GridResult | null {
         base += seam(p, true, x);
         bn++;
       }
-      const ratio = Math.min(...seams) / Math.max(1, base / Math.max(1, bn));
-      if (ratio > 2.4 && (!best || ratio * Math.sqrt(cols * rows) > best.score)) best = { cols, rows, score: ratio * Math.sqrt(cols * rows) };
+      // Two slides of the same dark colour meet without a visible seam, so not every seam has to show: most of them must, and at least two.
+      const b = Math.max(1, base / Math.max(1, bn));
+      const strong = seams.map((x) => Math.min(12, x / b)).filter((x) => x > 2.4);
+      if (strong.length < 2 || strong.length < seams.length / 2) continue;
+      const score = (strong.reduce((x, y) => x + y, 0) / strong.length) * (strong.length / seams.length) * Math.sqrt(cols * rows);
+      if (!best || score > best.score) best = { cols, rows, score, all: strong.length === seams.length && strong.every((x) => x > 4) };
     }
   if (best) {
     const cells: Rect[] = [];
     const cw = p.width / best.cols;
     const ch = p.height / best.rows;
     for (let r = 0; r < best.rows; r++) for (let c = 0; c < best.cols; c++) cells.push({ x: Math.round(c * cw), y: Math.round(r * ch), width: Math.round(cw), height: Math.round(ch) });
-    return { cols: best.cols, rows: best.rows, cells, method: 'seams where the slides meet (no gutter)' };
+    return { result: { cols: best.cols, rows: best.rows, cells, method: 'seams where the slides meet (no gutter)' }, all: best.all };
   }
   return null;
 }
