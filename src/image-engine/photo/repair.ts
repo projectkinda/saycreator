@@ -19,7 +19,7 @@ function strengthen(plan: Plan, id: string, alpha: number): Plan {
     layers: plan.layers.map((l) => {
       if (l.id !== id || l.kind !== 'shape' || typeof l.fill === 'string') return l;
       const stops = l.fill.stops.map((st) => {
-        const m = st.color.match(/rgba((d+),(d+),(d+),([d.]+))/);
+        const m = st.color.match(/rgba\((\d+),(\d+),(\d+),([\d.]+)\)/);
         return m && Number(m[4]) > 0 ? { ...st, color: `rgba(${m[1]},${m[2]},${m[3]},${Math.max(Number(m[4]), alpha)})` } : st;
       });
       return { ...l, fill: { ...l.fill, stops } };
