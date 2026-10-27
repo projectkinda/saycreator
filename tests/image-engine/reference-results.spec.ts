@@ -4,7 +4,7 @@
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { rankMissing } from '../../src/reference/closeness';
+import { rankMissing } from '../../src/reference/rank';
 import { outUrl, writeStepResults, type ResultsItem } from './results';
 import { ROOT } from './reference-helpers';
 
@@ -51,7 +51,17 @@ test('Style from references: Results items', async () => {
     items.push({ id: 'closeness', title: 'The closeness panel and the missing tools, as the app showed them', tag: TAG, images: [], facts: [`Time taken: ${r.seconds} s, ${r.readerCalls} calls to the reader. Grid found by the code: ${r.detectedMode === 'grid' ? `yes, ${r.cells} slides` : 'no (treated as one image)'}.`, ...closeness.slice(0, 40)] });
     return { title: `Run: ${r.label}`, note: `Files: ${r.files.join(', ')}. Target: ${r.target}. ${r.alert.length ? `The reader failed: ${r.alert.join(' ')}` : ''}`, items };
   });
-  const ranked = rankMissing(runs.map((r) => ({ name: r.label, missing: (r.missing ?? []).map((m) => ({ tool: m.split(':')[0].trim(), why: m.split(':').slice(1).join(':').trim() })) })));
+  // The reader words the same gap differently each time, so what it listed is grouped into the gaps in our toolbox that matter for the next step.
+  const BUCKETS: [string, RegExp][] = [
+    ['Photo cut-outs, device mockups and photo layouts (people or objects cut out, phones and laptops, photo grids and crops)', /cut-?out|mockup|photo|laptop|phone|triptych|crop/i],
+    ['Fonts we do not bundle (a mono, an italic serif, a light neo-grotesk, tiny caption sizes)', /font|serif|mono|grotesk|type scale|caption/i],
+    ['3D renders, glow and light effects', /3d|render|glow|particle|smoke/i],
+    ['Logos, marks and badges (asterisks, emblems, text on a circle)', /logo|asterisk|emblem|badge|wordmark|mark/i],
+    ['UI parts: buttons, cards, icon rows, list boxes, diagrams, globe icons', /button|pill|card|widget|icon|list|table|globe|diagram|venn|chart|player/i],
+    ['Textures, ribbons, repeated patterns and gradient or two-tone text', /tape|ribbon|ghost|pattern|texture|gradient|two-tone|colour|numeral|italic/i],
+  ];
+  const bucketOf = (t: string) => BUCKETS.find(([, re]) => re.test(t))?.[0] ?? t;
+  const ranked = rankMissing(runs.map((r) => ({ name: r.label, missing: (r.missing ?? []).filter((m) => !m.startsWith('The reader:')).map((m) => ({ tool: bucketOf(m), why: m.split(':').slice(1).join(':').trim() })) })));
   const missingItems: ResultsItem[] = ranked.map((m, i) => ({ id: `missing-${i}`, title: `${i + 1}. ${m.tool}`, images: [], facts: [`Needed by ${m.count} of ${runs.length} runs (${m.references.join('; ')}).`, m.why] }));
   const FINDINGS = path.join(REAL, 'findings.json');
   const findings = fs.existsSync(FINDINGS) ? (JSON.parse(fs.readFileSync(FINDINGS, 'utf8')) as { id: string; title: string; facts: string[]; tag?: string }[]) : [];

@@ -19,7 +19,7 @@ test.use({ viewport: { width: 1500, height: 1000 } });
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 
 const verdictsText = (page: Page) => page.getByRole('status').filter({ hasText: /verdicts/ });
-const SECTIONS = ['Overview', 'Styles', 'Slides', 'Photo tools', 'Thumbnails (v2)', 'Cutouts', 'Elements', 'Coverage', 'Checks and tests'];
+const SECTIONS = ['Overview', 'Styles', 'Style from references', 'Slides', 'Photo tools', 'Thumbnails (v2)', 'Cutouts', 'Elements', 'Coverage', 'Checks and tests'];
 
 test('Results is in the left menu, looks like the app, and is organised by what to judge, with no step numbers in the titles', async ({ page }) => {
   const errors: string[] = [];

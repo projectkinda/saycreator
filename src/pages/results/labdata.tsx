@@ -55,7 +55,7 @@ export interface TestAsset {
   url: string;
 }
 
-export const VIEWS = ['overview', 'styles', 'slides', 'photo', 'thumbnails', 'cutouts', 'elements', 'coverage', 'checks'] as const;
+export const VIEWS = ['overview', 'styles', 'references', 'slides', 'photo', 'thumbnails', 'cutouts', 'elements', 'coverage', 'checks'] as const;
 export type View = (typeof VIEWS)[number];
 
 export interface LabData {

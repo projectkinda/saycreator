@@ -16,6 +16,7 @@ import Step2, { type Upload } from './results/Step2';
 import Step3 from './results/Step3';
 import Step4 from './results/Step4';
 import ThumbnailsV2 from './results/ThumbnailsV2';
+import StyleFromReferences from './results/StyleFromReferences';
 import StyleReading from './results/StyleReading';
 import StylesView from './results/StylesView';
 import { LabDataContext, VIEWS, type LastRun, type RecData, type TestAsset, type View } from './results/labdata';
@@ -28,6 +29,7 @@ const STORE = 'ie-lab-v1';
 const VIEW_TITLE: Record<View, string> = {
   overview: 'Overview',
   styles: 'Styles',
+  references: 'Style from references',
   slides: 'Slides',
   photo: 'Photo tools',
   thumbnails: 'Thumbnails (v2)',
@@ -37,7 +39,7 @@ const VIEW_TITLE: Record<View, string> = {
   checks: 'Checks and tests',
 };
 /** Which area a part of the screen counts towards (Slides count towards Styles and Photo tools). */
-const VIEW_AREA: Partial<Record<View, string>> = { styles: 'styles', slides: 'styles', photo: 'photo', thumbnails: 'thumbnails', cutouts: 'cutouts', elements: 'elements', checks: 'checks' };
+const VIEW_AREA: Partial<Record<View, string>> = { styles: 'styles', references: 'references', slides: 'styles', photo: 'photo', thumbnails: 'thumbnails', cutouts: 'cutouts', elements: 'elements', checks: 'checks' };
 
 function load(): State {
   try {
@@ -189,7 +191,7 @@ export default function Lab() {
     return () => cancelAnimationFrame(id);
   }, [onlyUnrated, state.records, tick, view, recreation, manifests, sel]);
   const done = useCallback(() => reloadLast(), [reloadLast]);
-  const other = manifests.filter((m) => m.file !== 'step11.json' && m.file !== 'photos-app.json' && m.file !== 'thumbs-v2.json').sort((a, b) => (b.order ?? 0) - (a.order ?? 0));
+  const other = manifests.filter((m) => m.file !== 'step11.json' && m.file !== 'photos-app.json' && m.file !== 'thumbs-v2.json' && m.file !== 'style-from-references.json').sort((a, b) => (b.order ?? 0) - (a.order ?? 0));
   /** What each part of the screen shows: the Styles view has only the style cards, Slides the slides, Photo tools the gallery. */
   const viewCounts = useMemo(() => {
     const c: Partial<Record<View, { waiting: number; total: number }>> = {};
@@ -210,6 +212,7 @@ export default function Lab() {
     if (v === 'styles' || v === 'slides') return n(recreation?.lastRun);
     if (v === 'photo') return n(last.generic['step11.json']);
     if (v === 'thumbnails') return n(last.generic['thumbs-v2.json']);
+    if (v === 'references') return n(last.generic['style-from-references.json']);
     if (v === 'elements') return n(last.elements);
     if (v === 'coverage') return n(last.coverage);
     if (v === 'cutouts') return n(last.step4);
@@ -273,6 +276,11 @@ export default function Lab() {
               {mounted('styles', (
                 <ViewFrame id="styles" title="Styles" latest={latestOf('styles')} count={countOf('styles')} looking="One card for each of the seven styles: the reference deck it was made from beside three of our slides." todo="Rate each style as a whole: matches, close, off or wrong. Open its slides to look closer.">
                   <AreaContext.Provider value="styles"><StylesView /></AreaContext.Provider>
+                </ViewFrame>
+              ))}
+              {mounted('references', (
+                <ViewFrame id="references" title="Style from references" latest={latestOf('references')} count={countOf('references')} looking="Real runs of the new screen on your own references with the real reader: each round with the reference on the left and our replica on the right, how close it got, what our toolbox could not draw, and those gaps ranked. No thumbnail group was run: there is no Reference thumbnails folder." todo="Rate each replica: matches, close, off or wrong, with a one-line reason. Then read the ranked gaps to choose what to build next.">
+                  <StyleFromReferences />
                 </ViewFrame>
               ))}
               {mounted('slides', (

@@ -1,7 +1,7 @@
 // Shared by the Results screen specs: go to /lab through the left menu, then to one part of the screen through its own list.
 import { expect, type Page } from '@playwright/test';
 
-export type ResultsView = 'Overview' | 'Styles' | 'Slides' | 'Photo tools' | 'Thumbnails (v2)' | 'Cutouts' | 'Elements' | 'Coverage' | 'Checks and tests';
+export type ResultsView = 'Overview' | 'Styles' | 'Style from references' | 'Slides' | 'Photo tools' | 'Thumbnails (v2)' | 'Cutouts' | 'Elements' | 'Coverage' | 'Checks and tests';
 
 export async function openResults(page: Page, view: ResultsView = 'Overview', o: { details?: boolean } = {}) {
   await page.goto('/');
