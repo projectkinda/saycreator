@@ -60,8 +60,8 @@ function gutterRuns(p: Px, vertical: boolean): { a: number; b: number; rgb: RGB 
     runs.push({ a: i, b: j, rgb: mean[i] });
     i = j;
   }
-  // A plain run that is most of the picture is a plain slide, not a gutter.
-  return runs.filter((r) => r.b - r.a < n * 0.25);
+  // A gutter is a thin strip. A wide plain run is a plain slide (or a plain part of one), not a gutter.
+  return runs.filter((r) => r.b - r.a < n * 0.08);
 }
 
 /** The cells between gutters along one direction: [start, end) spans whose sizes agree. Empty when there is no repeat. */

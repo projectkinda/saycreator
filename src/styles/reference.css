@@ -1,0 +1,182 @@
+/* Images > Styles and New style from references. Reuses the carousel screen's pieces (drop area, chips, toolbar). */
+.rf-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.rf-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rf-sec h2,
+.rf-sec h3,
+.rf-sec p {
+  margin: 0;
+}
+.rf-uploads,
+.rf-rounds,
+.rf-templates {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.rf-upload {
+  display: grid;
+  grid-template-columns: minmax(220px, 420px) minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px;
+}
+@media (max-width: 760px) {
+  .rf-upload {
+    grid-template-columns: 1fr;
+  }
+}
+.rf-frame {
+  position: relative;
+  line-height: 0;
+  align-self: start;
+}
+.rf-frame img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px;
+  user-select: none;
+}
+.rf-cell {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  outline: 1px solid rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.rf-cell.on {
+  background: rgba(0, 0, 0, 0);
+  border-color: var(--accent);
+}
+.rf-cell input {
+  margin: 0;
+}
+.rf-crop,
+.rf-draw-box {
+  position: absolute;
+  border: 3px solid var(--accent);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.rf-draw {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+.rf-upload-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.rf-dl {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+.rf-dl > div {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  gap: 8px;
+}
+.rf-dl dt {
+  color: var(--muted);
+}
+.rf-dl dd {
+  margin: 0;
+}
+.rf-round {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rf-round.chosen {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.rf-round-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.rf-pairs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.rf-pair {
+  margin: 0;
+}
+.rf-pair-imgs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: start;
+}
+.rf-pair-imgs img {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  display: block;
+}
+.rf-feedback {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.rf-close {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.rf-close ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.rf-template {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px;
+}
+.rf-template img {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+.rf-template-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (max-width: 560px) {
+  .rf-template {
+    grid-template-columns: 1fr;
+  }
+}

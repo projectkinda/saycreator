@@ -18,6 +18,8 @@ import { Placeholder } from './pages/Placeholder';
 // The carousel editor loads on its own so the image engine is not part of every page.
 const CarouselPage = lazy(() => import('./carousel/CarouselPage'));
 const ThumbnailPage = lazy(() => import('./thumbnail/ThumbnailPage'));
+const StylesPage = lazy(() => import('./reference/StylesPage'));
+const ReferenceStylePage = lazy(() => import('./reference/ReferenceStylePage'));
 
 // Dev-only lab for judging the image engine. Not built into production.
 const Lab = import.meta.env.DEV ? lazy(() => import('./pages/Lab')) : null;
@@ -55,6 +57,22 @@ export default function App() {
             element={
               <Suspense fallback={<p className="page" role="status">Loading the thumbnail maker…</p>}>
                 <ThumbnailPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="images/styles"
+            element={
+              <Suspense fallback={<p className="page" role="status">Loading your styles…</p>}>
+                <StylesPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="images/styles/new"
+            element={
+              <Suspense fallback={<p className="page" role="status">Loading…</p>}>
+                <ReferenceStylePage />
               </Suspense>
             }
           />
