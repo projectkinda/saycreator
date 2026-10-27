@@ -118,6 +118,7 @@ test.describe('style elements block', () => {
   test('a style with no elements block is still valid and gets no elements', async ({ page }) => {
     const s = base();
     delete s.elements;
+    delete s.thumbnail; // the thumbnail block of hot-flat asks for elements, so it goes too
     expect((await check(page, s)).errors).toEqual([]);
   });
 });
