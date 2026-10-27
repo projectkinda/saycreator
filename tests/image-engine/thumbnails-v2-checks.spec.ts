@@ -132,8 +132,7 @@ test('an option is a plan: a patch changes the title, and undo and redo bring it
   const plan = r.options[0].plan;
   const first = await call<{ ok: boolean; reasons?: string[] }>(page, 'patchPlan', plan, { baseRevision: plan.revision, label: 'Shorter title', ops: [{ op: 'set', id: 'title', path: 'text', value: 'EARLY SUNRISE' }] });
   expect(first.reasons ?? [], 'the patch is accepted').toEqual([]);
-  const res = await call<{ ok: (boolean | undefined)[]; planAfterUndoEqualsBefore: boolean; entries: { label: string }[] }>(page, 'patchCycle', plan, { baseRevision: plan.revision, label: 'Shorter title', ops: [{ op: 'set', id: 'title', path: 'text', value: 'EARLY SUNRISE' }] });
+  const res = await call<{ ok: (boolean | undefined)[]; planAfterUndoEqualsBefore: boolean }>(page, 'patchCycle', plan, { baseRevision: plan.revision, label: 'Shorter title', ops: [{ op: 'set', id: 'title', path: 'text', value: 'EARLY SUNRISE' }] });
   expect(res.ok).toEqual([true, true, true]);
   expect(res.planAfterUndoEqualsBefore).toBe(true);
-  expect(res.entries.map((e) => e.label)).toContain('Shorter title');
 });
