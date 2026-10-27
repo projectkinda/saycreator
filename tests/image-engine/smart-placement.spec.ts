@@ -187,8 +187,9 @@ test.describe('lint and placement (in the browser)', () => {
           expect(smart.find((l) => l.id === 'related')?.pass, `${style} ${deck.id} ${n}`).toBe(true);
           const prev = path.join(ROOT, 'out/image-engine/asset-recreation', style, 'shippable', deck.id, `slide-${n}.lint.json`);
           if (!fs.existsSync(prev)) continue;
+          // The words-per-slide check came after the previous step, so it is not in that baseline (the awkward deck is meant to fail it).
           const was = new Set((JSON.parse(fs.readFileSync(prev, 'utf8')).lint as Lint[]).filter((l) => !l.pass).map((l) => l.id));
-          for (const f of smart.filter((l) => !l.pass)) expect(was.has(f.id), `${style}/${deck.id}/${n}: new failure ${f.id}: ${f.reason}`).toBe(true);
+          for (const f of smart.filter((l) => !l.pass && l.id !== 'words')) expect(was.has(f.id), `${style}/${deck.id}/${n}: new failure ${f.id}: ${f.reason}`).toBe(true);
         }
   });
 });

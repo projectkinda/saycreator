@@ -136,7 +136,7 @@ test('frames and arrows when they are asked for on every slide: a line sits unde
         }
         if (l.rotation === 90 && /arrow/.test(l.element!)) found.arrows++;
       }
-      const failed = s.lint.filter((x) => !x.pass);
+      const failed = s.lint.filter((x) => !x.pass && x.id !== 'words') // the words check is judged in carousel-words.spec.ts (the awkward deck fails it on purpose);
       if (failed.length) bad.push(`${where}: ${failed.map((f) => f.id + ': ' + f.reason).join(' | ')}`);
     });
   }

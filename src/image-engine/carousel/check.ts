@@ -49,7 +49,7 @@ export async function checkSlidePlan(adapter: FabricAdapter, slide: ComposedSlid
   const phonePng = await adapter.export({ format: 'png', scale });
   await adapter.render(withoutWords(plan));
   const phoneBackground = await blobPixels(await adapter.export({ format: 'png', scale }));
-  const lint = lintSlide({ plan, margin, phoneBackground, phoneScale: scale });
+  const lint = lintSlide({ plan, margin, phoneBackground, phoneScale: scale, slideType: slide.type });
   return { slide, png, phonePng, lint, failed: lint.filter((r) => !r.pass), render };
 }
 

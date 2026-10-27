@@ -124,9 +124,19 @@ export function TagEditor({ index, tags, apply }: { index: number; tags: string[
 export function LintBadges({ lint }: { lint: CarouselLintResult[] | undefined }) {
   if (!lint) return <p className="small muted" role="status">Drawing…</p>;
   const failed = lint.filter((l) => !l.pass);
+  const warned = lint.filter((l) => l.pass && l.warn);
   return (
     <div className="cr-lint">
-      <span className={`chip ${failed.length === 0 ? 'chip-ok' : 'chip-warn'}`}>{failed.length === 0 ? `Phone check: all ${lint.length} pass` : `Phone check: ${failed.length} to fix`}</span>
+      <span className={`chip ${failed.length === 0 && warned.length === 0 ? 'chip-ok' : 'chip-warn'}`}>{failed.length === 0 ? `Phone check: all ${lint.length} pass${warned.length ? `, ${warned.length} warning${warned.length > 1 ? 's' : ''}` : ''}` : `Phone check: ${failed.length} to fix`}</span>
+      {failed.length === 0 && warned.length > 0 && (
+        <ul className="cr-lint-fail small">
+          {warned.map((f) => (
+            <li key={f.id}>
+              <strong>{f.label} (warning):</strong> {f.reason}
+            </li>
+          ))}
+        </ul>
+      )}
       {failed.length > 0 && (
         <ul className="cr-lint-fail small">
           {failed.map((f) => (
@@ -141,7 +151,7 @@ export function LintBadges({ lint }: { lint: CarouselLintResult[] | undefined })
         <ul className="cr-lint-all">
           {lint.map((l) => (
             <li key={l.id}>
-              <span aria-hidden="true">{l.pass ? '✓' : '✗'}</span> <span className="visually-hidden">{l.pass ? 'Pass' : 'Fail'}: </span>
+              <span aria-hidden="true">{!l.pass ? '✗' : l.warn ? '!' : '✓'}</span> <span className="visually-hidden">{!l.pass ? 'Fail' : l.warn ? 'Warning' : 'Pass'}: </span>
               {l.label}
             </li>
           ))}

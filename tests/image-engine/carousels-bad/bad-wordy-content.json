@@ -1,0 +1,85 @@
+{
+  "id": "bad-wordy-content",
+  "title": "Deliberately bad: one content slide with far too many words",
+  "note": "Slide 4 has about 80 words. The words-per-slide check must fail it.",
+  "aspect": "4:5",
+  "brand": {
+    "handle": "@northdesk"
+  },
+  "slides": [
+    {
+      "type": "cover",
+      "kicker": "Myth busting",
+      "headline": "Remote work myths that quietly hurt your team",
+      "sub": "Three beliefs worth dropping this quarter.",
+      "highlight": "myths",
+      "element_tags": [
+        "remote",
+        "people",
+        "warning"
+      ]
+    },
+    {
+      "type": "beforeafter",
+      "beforeLabel": "Myth",
+      "before": "People who work from home are less productive.",
+      "afterLabel": "Fact",
+      "after": "Output depends on clear goals and fewer meetings, not on where the desk is.",
+      "element_tags": [
+        "remote",
+        "growth"
+      ]
+    },
+    {
+      "type": "beforeafter",
+      "beforeLabel": "Myth",
+      "before": "You need to reply instantly to look committed.",
+      "afterLabel": "Fact",
+      "after": "Fast replies reward noise. Agree on a response window and protect deep work.",
+      "element_tags": [
+        "message",
+        "time"
+      ]
+    },
+    {
+      "type": "content",
+      "headline": "Why short posts are not lazy posts",
+      "body": "Most people think a short post is a lazy post, so they pack every idea they have into one slide: the background, the three reasons, the two exceptions, the story about a client, the caveat, the link to the long article and a reminder to follow. By the time the reader gets to the end of the second line they have already swiped away, and the one thing you wanted them to remember is buried under everything else.",
+      "element_tags": [
+        "write",
+        "time"
+      ]
+    },
+    {
+      "type": "beforeafter",
+      "beforeLabel": "Myth",
+      "before": "More video calls build more trust.",
+      "afterLabel": "Fact",
+      "after": "Trust comes from doing what you said you would, and saying so in writing.",
+      "element_tags": [
+        "trust",
+        "people"
+      ]
+    },
+    {
+      "type": "quote",
+      "quote": "The best remote teams write more and meet less.",
+      "by": "Five years of running one",
+      "highlight": "write more",
+      "element_tags": [
+        "write",
+        "people"
+      ]
+    },
+    {
+      "type": "closing",
+      "headline": "Which myth did your team believe?",
+      "cta": "Tell me in the comments",
+      "highlight": "myth",
+      "element_tags": [
+        "message",
+        "people"
+      ]
+    }
+  ]
+}

@@ -20,14 +20,23 @@ export const CAROUSEL_LIMITS = {
   marginTolerancePx: 6,
   /** Two boxes may overlap by at most this many px in either direction before it counts. */
   slackPx: 2,
+  /** Words on a slide that carries body copy (content, step, checklist, before and after): more than this is a warning. */
+  wordsWarn: 35,
+  /** More than this many words fails the check. */
+  wordsFail: 50,
 };
 
-export type CarouselLintId = 'fit' | 'size' | 'contrast' | 'orphan' | 'margins' | 'edges' | 'overlap' | 'related' | 'split';
+/** The slide types the words check applies to. Cover, stat, quote and closing slides are short by design. */
+export const WORDS_CHECKED_TYPES = ['content', 'step', 'checklist', 'beforeafter'];
+
+export type CarouselLintId = 'fit' | 'size' | 'contrast' | 'orphan' | 'margins' | 'edges' | 'overlap' | 'related' | 'split' | 'words';
 
 export interface CarouselLintResult {
   id: CarouselLintId;
   label: string;
   pass: boolean;
+  /** A pass that still deserves a look (the words check between its warning and its failing limit). */
+  warn?: boolean;
   reason: string;
   measured?: number;
   limit?: number;
@@ -43,6 +52,7 @@ export const CAROUSEL_CHECK_LABELS: Record<CarouselLintId, string> = {
   overlap: 'No overlapping elements',
   related: 'Elements match the slide',
   split: 'Elements stay off the split',
+  words: 'Not too many words',
 };
 
 export interface Box {
@@ -95,6 +105,18 @@ export interface CarouselLintInput {
   phoneBackground: Pixels;
   /** Size of the phone copy divided by the plan's size. */
   phoneScale: number;
+  /** The slide's type, so the words check knows whether it applies. Without it the check is skipped. */
+  slideType?: string;
+}
+
+/** Words the reader has to read: every piece of text except the page chrome (page number, handle strip, dots, swipe cue). */
+export function wordCount(plan: Plan): number {
+  let n = 0;
+  for (const l of plan.layers) {
+    if (l.kind !== 'text' || l.role === 'decor' || l.visible === false || /^(page|strip|swipe|dots|handle)/.test(l.id)) continue;
+    n += l.text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+  }
+  return n;
 }
 
 export function lintSlide(input: CarouselLintInput): CarouselLintResult[] {
@@ -269,6 +291,22 @@ export function lintSlide(input: CarouselLintInput): CarouselLintResult[] {
     }
     const uniq = [...new Set(hits)];
     res('split', uniq.length === 0, uniq.length === 0 ? 'No picture crosses the split or sits near its arrow button.' : `Element crosses the split: ${uniq.join('; ')}.`, uniq.length, 0);
+  }
+
+  // 10. words: a slide that carries body copy must be short enough to read at a glance. Between the two limits it passes with a warning.
+  if (input.slideType && WORDS_CHECKED_TYPES.includes(input.slideType)) {
+    const n = wordCount(plan);
+    const fail = n > L.wordsFail;
+    const warn = !fail && n > L.wordsWarn;
+    out.push({
+      id: 'words',
+      label: CAROUSEL_CHECK_LABELS.words,
+      pass: !fail,
+      ...(warn ? { warn: true } : {}),
+      reason: fail ? `This slide has ${n} words, over the limit of ${L.wordsFail}. Nobody reads that much on a swipe: cut it down, or split it into two slides.` : warn ? `This slide has ${n} words. More than ${L.wordsWarn} is a lot for one swipe, and more than ${L.wordsFail} fails this check. Try to shorten it.` : `This slide has ${n} words (a warning above ${L.wordsWarn}, a failure above ${L.wordsFail}).`,
+      measured: n,
+      limit: L.wordsFail,
+    });
   }
 
   return out;

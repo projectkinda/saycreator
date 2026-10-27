@@ -42,7 +42,7 @@ import {
   type ThumbnailRequest,
 } from '../../../src/image-engine';
 
-import { layerBox, textInk } from '../../../src/image-engine/carousel/lint';
+import { CAROUSEL_LIMITS, WORDS_CHECKED_TYPES, layerBox, textInk, wordCount } from '../../../src/image-engine/carousel/lint';
 
 /** Which picture layers sit on top of which text (their boxes overlap). Frames (a ring, an underline) are meant to touch their text. */
 function elementTextOverlaps(plan: Plan) {
@@ -679,6 +679,8 @@ const styleValidate = (raw: unknown, folder: string) => validateStyle(raw, folde
   themes: () => THEMES,
   validate: validatePlan,
   elementTextOverlaps,
+  wordCount,
+  carouselLimits: () => ({ limits: CAROUSEL_LIMITS, wordsTypes: WORDS_CHECKED_TYPES }),
   highlightMarks,
   orphanWidth,
   carouselRun,

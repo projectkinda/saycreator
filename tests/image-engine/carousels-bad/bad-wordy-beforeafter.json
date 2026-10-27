@@ -1,0 +1,87 @@
+{
+  "id": "bad-wordy-beforeafter",
+  "title": "Deliberately bad: one before and after slide with far too many words",
+  "note": "Slide 2 has about 60 words. The words-per-slide check must fail it.",
+  "aspect": "4:5",
+  "brand": {
+    "handle": "@northdesk"
+  },
+  "slides": [
+    {
+      "type": "cover",
+      "kicker": "Myth busting",
+      "headline": "Remote work myths that quietly hurt your team",
+      "sub": "Three beliefs worth dropping this quarter.",
+      "highlight": "myths",
+      "element_tags": [
+        "remote",
+        "people",
+        "warning"
+      ]
+    },
+    {
+      "type": "beforeafter",
+      "beforeLabel": "What people assume",
+      "before": "Working from home means you are always available, you answer messages at every hour, you never switch off, your manager cannot see what you do all day and so you feel you have to prove it.",
+      "afterLabel": "What is actually true",
+      "after": "Teams that agree on hours, write down what they decide and meet only when a meeting is needed get more done, feel less watched and can still switch off properly at the end of the day.",
+      "element_tags": [
+        "warning",
+        "idea"
+      ]
+    },
+    {
+      "type": "beforeafter",
+      "beforeLabel": "Myth",
+      "before": "You need to reply instantly to look committed.",
+      "afterLabel": "Fact",
+      "after": "Fast replies reward noise. Agree on a response window and protect deep work.",
+      "element_tags": [
+        "message",
+        "time"
+      ]
+    },
+    {
+      "type": "content",
+      "headline": "The real problem is unclear ownership",
+      "body": "When nobody knows who decides, work stalls in every office. Remote just makes the stall visible.",
+      "highlight": "ownership",
+      "element_tags": [
+        "people",
+        "target",
+        "warning"
+      ]
+    },
+    {
+      "type": "beforeafter",
+      "beforeLabel": "Myth",
+      "before": "More video calls build more trust.",
+      "afterLabel": "Fact",
+      "after": "Trust comes from doing what you said you would, and saying so in writing.",
+      "element_tags": [
+        "trust",
+        "people"
+      ]
+    },
+    {
+      "type": "quote",
+      "quote": "The best remote teams write more and meet less.",
+      "by": "Five years of running one",
+      "highlight": "write more",
+      "element_tags": [
+        "write",
+        "people"
+      ]
+    },
+    {
+      "type": "closing",
+      "headline": "Which myth did your team believe?",
+      "cta": "Tell me in the comments",
+      "highlight": "myth",
+      "element_tags": [
+        "message",
+        "people"
+      ]
+    }
+  ]
+}
