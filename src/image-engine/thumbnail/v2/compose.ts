@@ -4,7 +4,7 @@
 import { contrast, luminance, parseColor } from '../../lint/color';
 import { buildText, ellipse, marker, rect, solidOf, TRANSPARENT, type Built } from '../../carousel/toolbox';
 import type { Palette } from '../../carousel/types';
-import { textInk } from '../../carousel/lint';
+import { layerBox, textInk } from '../../carousel/lint';
 import type { Highlight, Layer, Plan, TextLayer, Treatment, ThumbnailAspect } from '../../types';
 import { photoLayer } from '../../photo/frames';
 import { objectLayer, type ObjectInput } from '../../photo/objects';
@@ -13,7 +13,7 @@ import { resolveColor, resolveTreatments } from '../../photo/resolve';
 import { asTheme } from '../../styles/compose';
 import { placeElements } from '../../styles/elements';
 import type { LoadedStyle } from '../../styles/load';
-import { fitSubject, fitSubjectZoom, subjectRadius, type Box, type Pt, type SubjectPoint } from './subject';
+import { circleTouchesBox, fitSubject, fitSubjectZoom, subjectRadius, type Box, type Pt, type SubjectPoint } from './subject';
 import { THUMB_LAYOUTS, type ThumbLayoutId, type ThumbSpec } from './spec';
 
 export const THUMB_SIZES = { '16:9': { width: 1280, height: 720 }, '9:16': { width: 1080, height: 1920 } } as const;
@@ -152,7 +152,7 @@ function setTitle(c: Ctx, box: Box, o: TitleOpts): Box {
   const th = built.height + 2 * pad;
   const tw = (o.align === 'center' ? built.width : Math.ceil(Math.max(...built.lines.map((l) => measure(layer, l, built.size))))) + 2 * pad;
   layer.x = o.align === 'center' ? Math.round(box.x + (box.width - built.width) / 2) : box.x + pad;
-  layer.y = o.valign === 'top' ? box.y + pad : o.valign === 'bottom' ? box.y + box.height - th + pad : Math.round(box.y + (box.height - th) / 2 + pad);
+  layer.y = o.valign === 'top' ? box.y + pad + outlineRoom : o.valign === 'bottom' ? box.y + box.height - th + pad - outlineRoom : Math.round(box.y + (box.height - th) / 2 + pad);
   const behind: Layer[] = [];
   const emph = c.emphasis;
   if (look === 'plate') {
@@ -170,8 +170,7 @@ function setTitle(c: Ctx, box: Box, o: TitleOpts): Box {
       const w = Math.round(built.size * 0.1);
       layer.style.stroke = { color: tok(pal, groundRole), width: w };
       layer.style.shadow = { color: 'rgba(0,0,0,0.45)', blur: 10, offsetX: 0, offsetY: 5 };
-      layer.x += Math.ceil(w / 2) + outlineRoom;
-      layer.y += Math.ceil(w / 2);
+      layer.x += outlineRoom;
     }
     // The stressed word in the style's accent, when that reads against what is behind the letters.
     const behindCol = look === 'outline' ? tok(pal, groundRole) : tok(pal, 'bg');
@@ -271,10 +270,10 @@ const splitColour: Layout = (c) => {
   const role = c.tb.block ?? 'accent';
   const block = tok(c.pal, role);
   if (c.portrait) {
-    const ph = Math.round(H * 0.56);
+    const ph = Math.round(H * 0.46);
     if (c.tb.glass) {
-      putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: 0.5, y: 0.3 }, c.treatments);
-      c.layers.push(glass(c, 'block', 0, ph, W, H - ph));
+      putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: 0.5, y: 0.3 }, c.treatments, true);
+      c.layers.push(rect('block-tint', 'decor', 0, ph, W, H - ph, rgba(c.scrim, 0.6)), glass(c, 'block', 0, ph, W, H - ph));
       setTitle(c, { x: m, y: ph + m, width: Math.round(W * 0.78) - m, height: Math.round(H * 0.76) - ph - m }, { on: 'photo', valign: 'middle', forcePlate: false });
       return;
     }
@@ -289,9 +288,11 @@ const splitColour: Layout = (c) => {
   const bw = W - pw;
   const text: Box = { x: bx + m, y: m, width: bw - 2 * m, height: H - 2 * m };
   if (c.tb.glass) {
-    putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: photoRight ? 0.7 : 0.3, y: 0.5 }, c.treatments);
-    c.layers.push(glass(c, 'block', bx, 0, bw, H));
-    setTitle(c, text, { on: 'photo', valign: 'middle' });
+    const at = putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: photoRight ? 0.7 : 0.3, y: 0.5 }, c.treatments, true);
+    // The glass card goes on the side the subject is not on.
+    const gx = at.x > W / 2 ? 0 : pw;
+    c.layers.push(rect('block-tint', 'decor', gx, 0, bw, H, rgba(c.scrim, 0.6)), glass(c, 'block', gx, 0, bw, H));
+    setTitle(c, { x: gx + m, y: m, width: bw - 2 * m, height: H - 2 * m }, { on: 'photo', valign: 'middle' });
     return;
   }
   putPhoto(c, 'photo', c.req.photo, c.req.subject, { x: photoRight ? bw : 0, y: 0, width: pw, height: H }, { x: 0.5, y: 0.5 }, c.treatments);
@@ -332,24 +333,27 @@ const numberBadge: Layout = (c) => {
   const rest = c.req.title.trim().split(/\s+/).filter((w, i, all) => !(w === n && all.indexOf(w) === i));
   c.text = rest.length ? rest.join(' ') : c.req.title.trim();
   const role = c.tb.block ?? 'accent';
-  const d = c.portrait ? Math.round(W * 0.42) : Math.round(H * 0.5);
+  // A tall thumbnail: a subject high in the photo goes on top with the badge and title below it, side by side; a low one goes under them.
+  const subjectTop = c.portrait && c.req.subject.y < 0.5;
+  const d = c.portrait ? Math.round(W * (subjectTop ? 0.3 : 0.42)) : Math.round(H * 0.5);
   const r = subjectRadius(W, H);
   const subjectRight = c.req.subject.x <= 0.5;
-  const at = putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), c.portrait ? { x: 0.5, y: 0.66 } : { x: subjectRight ? 0.73 : 0.27, y: 0.5 }, c.treatments, true);
+  const at = putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), c.portrait ? { x: 0.5, y: subjectTop ? 0.3 : 0.66 } : { x: subjectRight ? 0.73 : 0.27, y: 0.5 }, c.treatments, true);
   // The badge and the title go on the side the subject is not on.
   const badgeLeft = c.portrait ? true : at.x > W / 2;
   const bx = badgeLeft ? m : W - m - d;
-  const by = m;
+  const by = subjectTop ? Math.max(Math.round(H * 0.46), Math.round(at.y + r + m * 0.5)) : m;
   const room = badgeLeft ? at.x - r - 2 * m : W - m - (at.x + r) - m;
   const textW = c.portrait ? Math.round(W * 0.78) - m : Math.max(Math.round(W * 0.28), Math.min(Math.round(W * 0.5) - m, Math.round(room)));
   const ty = by + d + Math.round(m * 0.5);
-  const box: Box = c.portrait ? { x: m, y: by + d + Math.round(m * 0.6), width: textW, height: Math.round(H * 0.3) } : { x: badgeLeft ? bx : W - m - textW, y: ty, width: textW, height: H - ty - m };
+  const sideX = bx + d + Math.round(m * 0.6);
+  const box: Box = subjectTop ? { x: sideX, y: by, width: Math.round(W * 0.78) - sideX, height: Math.max(Math.round(H * 0.16), Math.round(H * 0.76) - by) } : c.portrait ? { x: m, y: by + d + Math.round(m * 0.6), width: textW, height: Math.round(H * 0.3) } : { x: badgeLeft ? bx : W - m - textW, y: ty, width: textW, height: Math.min(H - ty - m, Math.round(H * 0.84) - ty) };
+  setTitle(c, box, { on: 'photo', valign: subjectTop ? 'middle' : 'top', scrim: subjectTop ? 'bottom' : c.portrait ? 'top' : badgeLeft ? 'left' : 'right', scrimReach: { x: bx, y: by, width: d, height: d } });
   c.layers.push(ellipse('badge', 'container', bx, by, d, d, tok(c.pal, role)));
   const fs = Math.round(d * (n.length > 3 ? 0.36 : n.length > 2 ? 0.46 : 0.6));
   const t = buildText({ id: 'badge-number', x: bx + Math.round(d * 0.06), y: 0, width: Math.round(d * 0.88), text: n, font: c.style.spec.fonts.headline, weight: c.tb.title.weight ?? c.style.spec.fonts.headlineWeight, size: fs, minSize: 40, color: tok(c.pal, ON[role] ?? 'text'), lineHeight: 1, align: 'center', balance: false });
   t.layer.y = Math.round(by + (d - t.height) / 2);
   c.layers.push(t.layer);
-  setTitle(c, box, { on: 'photo', valign: 'top', scrim: c.portrait ? 'top' : badgeLeft ? 'left' : 'right', scrimReach: { x: bx, y: by, width: d, height: d } });
 };
 
 /** Two pictures side by side (or one above the other), BEFORE and AFTER, with the title on a plate across the join. */
@@ -426,7 +430,11 @@ export function composeThumbs(req: ThumbRequest, style: LoadedStyle): ThumbOptio
     if (tb.elements && style.spec.elements) {
       const spec = { ...style.spec.elements, density: { min: 1, max: Math.min(2, style.spec.elements.density.max) } };
       const placed = placeElements({ spec, pal, layers: c.layers, width: W, height: H, type: 'cover', seed: `${req.seed ?? 'thumb'}|${layout}|${text}`, mode: 'shippable', paletteName: tb.palette, keepClear: c.keep as never });
-      c.layers.push(...placed.layers);
+      // An element made of several pieces (tape, a pair of arrows) is kept only if no piece touches a subject.
+      const family = (id: string) => id.replace(/:\d+$/, '');
+      const bad = new Set(placed.layers.filter((l) => c.subjects.some((z) => z.of !== 'object' && circleTouchesBox(z, layerBox(l)))).map((l) => family(l.id)));
+      if (bad.size) c.notes.push('An element was left out because it would have covered the subject.');
+      c.layers.push(...placed.layers.filter((l) => !bad.has(family(l.id))));
       used = placed.used;
       c.notes.push(...placed.notes);
     }
