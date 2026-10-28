@@ -30,10 +30,16 @@ const readJob = (page: Page): Promise<JobOut> =>
   });
 const save = (id: string, o: unknown) => fs.writeFileSync(path.join(OUT, `${id}.json`), JSON.stringify(o, null, 2));
 
+/** The app's own Clear cache button, so the test empties the cache the way a person does. */
+async function emptyCache(page: Page) {
+  const b = page.getByRole('button', { name: /^Clear cache/ });
+  if (await b.isEnabled()) await b.click();
+}
+
 async function styleJob(page: Page, id: string, file: string, keep: number[] | null, profile: string) {
   await openStyleFromReferences(page);
   await page.evaluate(async (p) => (window as unknown as { __speed: { setProfile: (x: string) => void } }).__speed.setProfile(p), profile);
-  await page.evaluate(() => indexedDB.deleteDatabase('creator-reader-cache'));
+  await emptyCache(page);
   await refInput(page).setInputFiles(path.join(CAROUSELS, file));
   const card = page.locator('.rf-upload').first();
   await expect(card).toBeVisible();
@@ -65,7 +71,7 @@ for (const p of PROFILES) {
 test('the same references read again: from the cache', async ({ page }) => {
   test.setTimeout(900_000);
   await openStyleFromReferences(page);
-  await page.evaluate(() => indexedDB.deleteDatabase('creator-reader-cache'));
+  await emptyCache(page);
   await refInput(page).setInputFiles(path.join(CAROUSELS, '1503c1de8dded2a7cbe333f061c7131a.jpg'));
   const card = page.locator('.rf-upload').first();
   const total = await card.getByRole('checkbox').count();

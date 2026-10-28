@@ -8,13 +8,18 @@ const DB = 'creator-reader-cache';
 /** Bump when the prompt, the vocabulary or the checks change, so old answers are not reused for a different question. */
 export const READER_VERSION = 'v3-14c';
 
+/** Opens the cache, but never waits on it for long: a cache that cannot be opened (blocked, or storage off) is the same as no cache. */
 const open = () =>
-  new Promise<IDBDatabase>((resolve, reject) => {
-    const r = indexedDB.open(DB, 1);
-    r.onupgradeneeded = () => r.result.createObjectStore('reads', { keyPath: 'key' });
-    r.onsuccess = () => resolve(r.result);
-    r.onerror = () => reject(r.error);
-  });
+  Promise.race([
+    new Promise<IDBDatabase>((resolve, reject) => {
+      const r = indexedDB.open(DB, 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('reads', { keyPath: 'key' });
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+      r.onblocked = () => reject(new Error('blocked'));
+    }),
+    new Promise<IDBDatabase>((_, reject) => setTimeout(() => reject(new Error('the cache did not open')), 2000)),
+  ]);
 
 async function sha(text: string): Promise<string> {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
