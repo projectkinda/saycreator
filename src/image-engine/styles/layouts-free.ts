@@ -117,7 +117,10 @@ export function freeSlide(c: LCtx, s: SlideScript, f: FreeLayout) {
     const weight = sl.weight ? nearest(FONT_WEIGHTS[font], sl.weight) : headline ? c.theme.fonts.headlineWeight : c.theme.fonts.bodyWeight;
     const on = (k: string) => sl.treatments.find((t) => t.kind === k && !t.off);
     const size = Math.max(32, Math.round(sl.sizePx * (H / 1350)));
-    const built = buildText({ id: `free-${sl.id}`, x: b.x, y: b.y, width: Math.max(40, b.w), text, font, weight, size, minSize: 32, maxHeight: Math.max(40, b.h), color: sl.colour ?? c.pal.text, lineHeight: c.style.headlineLineHeight || 1.05, align: sl.align === 'centre' ? 'center' : sl.align, role: 'content', upper: !!on('caps') || (c.style.caseStyle === 'upper' && headline), balance: false });
+    // A headline fills its box: the text is fitted to the largest size that stays inside it (up to 1.8 times the measured size), so shorter words than the
+    // reference's still take up the reference's space. Other text stays near its measured size.
+    const maxSize = Math.round(size * (sl.role === 'title' || sl.role === 'number' ? 1.8 : 1.15));
+    const built = buildText({ id: `free-${sl.id}`, x: b.x, y: b.y, width: Math.max(40, b.w), text, font, weight, size: maxSize, minSize: 32, maxHeight: Math.max(40, b.h), color: sl.colour ?? c.pal.text, lineHeight: c.style.headlineLineHeight || 1.05, align: sl.align === 'centre' ? 'center' : sl.align, role: 'content', upper: !!on('caps') || (c.style.caseStyle === 'upper' && headline), balance: false });
     const y = sl.anchor === 'middle' ? b.y + (b.h - built.height) / 2 : sl.anchor === 'bottom' ? b.y + b.h - built.height : b.y;
     const layer = { ...built.layer, y: Math.round(y * 10) / 10 };
     const st = on('outline');
@@ -128,6 +131,6 @@ export function freeSlide(c: LCtx, s: SlideScript, f: FreeLayout) {
     if (tilt) layer.rotation = tilt.angle ?? 0;
     add(c, layer);
     if (built.height > b.h * 1.08 + 4) c.notes.push(`The ${sl.role} text does not fit its box at ${built.size} px (the smallest allowed is 32 px), so it runs past the box.`);
-    else if (built.size < size) c.notes.push(`The ${sl.role} text was made smaller (${size} to ${built.size} px) to fit its box.`);
+    else if (built.size < size * 0.85) c.notes.push(`The ${sl.role} text was made smaller (${size} to ${built.size} px) to fit its box.`);
   }
 }

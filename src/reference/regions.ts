@@ -78,7 +78,6 @@ const at = (p: Px, x: number, y: number): RGB => {
   const k = (y * p.width + x) * 4;
   return [p.data[k], p.data[k + 1], p.data[k + 2]];
 };
-const grey = (c: RGB) => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
 const median = (v: number[]) => (v.length ? [...v].sort((a, b) => a - b)[Math.floor(v.length / 2)] : 0);
 const mean = (v: number[]) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0);
 const std = (v: number[]) => {
@@ -170,35 +169,30 @@ function backgroundOf(p: Px, bg: RGB): Background {
   return { kind: 'flat', colours: [hex(bg)] };
 }
 
-/** Blocks that look like a photograph: many tones, not just two. Returns a mask per 6 px block. */
-function photoBlocks(p: Px, bgRows: boolean): { mask: Uint8Array; cols: number; rows: number } {
-  const B = 6;
+/** Blocks that look like a photograph: a photograph is made of many slightly different colours (even a dark, smooth one), where flat colour, a soft
+ *  gradient and the edge of a letter have only a few. Counts the distinct colours (6-bit) in each 8 by 8 block. */
+export const PHOTO_BLOCK = 8;
+export function photoBlocks(p: Px, _gradient: boolean): { mask: Uint8Array; cols: number; rows: number } {
+  const B = PHOTO_BLOCK;
   const cols = Math.floor(p.width / B);
   const rows = Math.floor(p.height / B);
   const mask = new Uint8Array(cols * rows);
+  const seen = new Set<number>();
   for (let r = 0; r < rows; r++)
     for (let c = 0; c < cols; c++) {
-      const hist = new Array(8).fill(0);
-      const gs: number[] = [];
+      seen.clear();
       for (let y = 0; y < B; y++)
         for (let x = 0; x < B; x++) {
-          const g = grey(at(p, c * B + x, r * B + y));
-          hist[Math.min(7, Math.floor(g * 8))]++;
-          gs.push(g);
+          const v = at(p, c * B + x, r * B + y);
+          seen.add(((v[0] >> 2) << 12) | ((v[1] >> 2) << 6) | (v[2] >> 2));
         }
-      const occupied = hist.filter((n) => n >= 3).length;
-      const sortedH = [...hist].sort((a, b) => b - a);
-      const top = sortedH[0] / (B * B);
-      // Two tones with a soft edge between them (big letters on a box) are not a photograph: two bins hold most of the block.
-      if ((sortedH[0] + sortedH[1]) / (B * B) > 0.72) continue;
-      // Photographs are busy and spread over several tones; a gradient is smooth; flat colour and text edges are one or two tones.
-      if (std(gs) > (bgRows ? 0.05 : 0.07) && occupied >= 4 && top < 0.55) mask[r * cols + c] = 1;
+      if (seen.size >= 18) mask[r * cols + c] = 1;
     }
   return { mask, cols, rows };
 }
 
 /** Connected groups of marked cells, as boxes in cell units, with the number of cells. */
-function groups(mask: Uint8Array, cols: number, rows: number, link = 1): { x0: number; y0: number; x1: number; y1: number; n: number }[] {
+export function groups(mask: Uint8Array, cols: number, rows: number, link = 1): { x0: number; y0: number; x1: number; y1: number; n: number }[] {
   const seen = new Uint8Array(mask.length);
   const out: { x0: number; y0: number; x1: number; y1: number; n: number }[] = [];
   for (let i = 0; i < mask.length; i++) {
@@ -364,13 +358,13 @@ export function detectRegions(p: Px): Detected {
   const photos: PhotoRegion[] = [];
   const photoMask = new Uint8Array(W * H);
   for (const g of groups(pb.mask, pb.cols, pb.rows, 1)) {
-    const area = g.n * 36;
+    const area = g.n * PHOTO_BLOCK * PHOTO_BLOCK;
     if (area < W * H * 0.02) continue;
-    const box = { x0: g.x0 * 6, y0: g.y0 * 6, x1: (g.x1 + 1) * 6 - 1, y1: (g.y1 + 1) * 6 - 1 };
+    const box = { x0: g.x0 * PHOTO_BLOCK, y0: g.y0 * PHOTO_BLOCK, x1: (g.x1 + 1) * PHOTO_BLOCK - 1, y1: (g.y1 + 1) * PHOTO_BLOCK - 1 };
     // A photograph is a solid patch: a line of big letters is a thin, sparse run of cells.
     const cellsAcross = g.x1 - g.x0 + 1;
     const cellsDown = g.y1 - g.y0 + 1;
-    if (g.n / (cellsAcross * cellsDown) < 0.6 || Math.min(cellsAcross * 6 / W, cellsDown * 6 / H) < 0.08) continue;
+    if (g.n / (cellsAcross * cellsDown) < 0.5 || Math.min(cellsAcross * PHOTO_BLOCK / W, cellsDown * PHOTO_BLOCK / H) < 0.08) continue;
     const fillRatio = area / ((box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1));
     const cover = ((box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1)) / (W * H);
     const shape: PhotoRegion['shape'] = cover > 0.85 ? 'full-bleed' : fillRatio > 0.9 ? 'rect' : fillRatio > 0.7 && Math.abs((box.x1 - box.x0) - (box.y1 - box.y0)) < 0.2 * (box.x1 - box.x0) ? 'circle' : fillRatio > 0.75 ? 'rounded' : 'rect';
@@ -382,7 +376,15 @@ export function detectRegions(p: Px): Detected {
   // ---- foreground: pixels unlike the background, outside photos ----
   const fg = new Uint8Array(W * H);
   for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++) if (!photoMask[y * W + x] && l1(at(p, x, y), bgAt(x, y)) > 70) fg[y * W + x] = 1;
+    for (let x = 0; x < W; x++) {
+      if (!photoMask[y * W + x]) {
+        if (l1(at(p, x, y), bgAt(x, y)) > 70) fg[y * W + x] = 1;
+      } else {
+        // On a photograph the words are almost always white or black: take only those pixels (anything else is the picture).
+        const v = at(p, x, y);
+        if (Math.min(v[0], v[1], v[2]) >= 232 || Math.max(v[0], v[1], v[2]) <= 18) fg[y * W + x] = 1;
+      }
+    }
   const minH = Math.max(3, H * 0.008);
 
   // ---- flat shapes: what is left of the foreground after thin strokes are taken away (letters are thin, boxes and bars are not) ----

@@ -14,7 +14,10 @@ test.beforeAll(() => {
 test('detection against the plans of our own styles', async ({ page }) => {
   test.setTimeout(600_000);
   await page.goto('/images');
-  const report = await page.evaluate(async () => {
+  // A real photograph for the slides with a photo (the private test photos; tests only, never in the app). Without it a drawn landscape is used.
+  const photoFile = path.join(ROOT, 'test-images', 'baruk-granda-FKf0FU7OuPM-unsplash.jpg');
+  const photoB64 = fs.existsSync(photoFile) ? fs.readFileSync(photoFile).toString('base64') : '';
+  const report = await page.evaluate(async (photoB64) => {
     const { getStyles, renderer } = await import('/src/carousel/render.ts');
     const { composeStyled } = await import('/src/image-engine/styles/compose.ts');
     const { loadFonts } = await import('/src/image-engine/fonts.ts');
@@ -56,9 +59,21 @@ test('detection against the plans of our own styles', async ({ page }) => {
       for (let i = 0; i < buf.length; i += 8192) bin += String.fromCharCode(...buf.subarray(i, i + 8192));
       return btoa(bin);
     };
+    const { analysePhoto } = await import('/src/image-engine/photo/analyse.ts');
+    let pic = await I.samplePhoto();
+    if (photoB64) {
+      const bin = Uint8Array.from(atob(photoB64), (c) => c.charCodeAt(0));
+      const j = await I.jpegUrl(await I.bitmapOf(new Blob([bin], { type: 'image/jpeg' })), null, 1600);
+      pic = j;
+    }
+    const photo = await analysePhoto(pic.url, 'truth-photo', { label: 'sample' });
+    const withPhoto = { ...EXAMPLE, slides: EXAMPLE.slides.map((x: { type: string }) => (['cover', 'content', 'stat'].includes(x.type) ? { ...x, photo_hint: 'a photo' } : x)) };
     for (const st of getStyles().styles) {
       if (st.spec.name.startsWith('mine-')) continue;
-      const slides = composeStyled(EXAMPLE as never, st as never, { width: 1080, height: 1350, handle: '@you', elements: 'shippable' }, false);
+      const slides = [
+        ...composeStyled(EXAMPLE as never, st as never, { width: 1080, height: 1350, handle: '@you', elements: 'shippable' }, false),
+        ...composeStyled(withPhoto as never, st as never, { width: 1080, height: 1350, handle: '@you', elements: 'shippable', photos: [photo] } as never, false).filter((x: { plan: { layers: { kind: string }[] } }) => x.plan.layers.some((l) => l.kind === 'image')),
+      ];
       const sc = emptyScore();
       for (const s of slides) {
         if (!kinds.includes(s.type)) continue;
@@ -66,7 +81,8 @@ test('detection against the plans of our own styles', async ({ page }) => {
         const bm = await I.bitmapOf(blob);
         const px = I.pxOfCanvas(I.cut(bm, null, 420));
         const d = detectRegions(px);
-        if (drawn.length < 14 && (s.type === 'cover' || s.type === 'content')) drawn.push({ name: `${st.spec.name}-${s.type}`, b64: await overlay(bm, d) });
+        const hasImg = s.plan.layers.some((l: { kind: string }) => l.kind === 'image');
+        if ((drawn.length < 14 && !hasImg && (s.type === 'cover' || s.type === 'content')) || (hasImg && drawn.filter((x) => x.name.endsWith('-photo')).length < 5)) drawn.push({ name: `${st.spec.name}-${s.type}${hasImg ? '-photo' : ''}`, b64: await overlay(bm, d) });
         bm.close();
         const one = emptyScore();
         compare(groundTruth(s.plan), d, one);
@@ -80,7 +96,7 @@ test('detection against the plans of our own styles', async ({ page }) => {
       merge(total, sc);
     }
     return { total, perStyle, drawn, samples: samples.map((s) => ({ style: s.style, type: s.type, detected: s.detected })) };
-  });
+  }, photoB64);
   for (const d of report.drawn) fs.writeFileSync(path.join(OUT, `${d.name}.png`), Buffer.from(d.b64, 'base64'));
   const pctOf = (v: [number, number]) => (v[1] ? Math.round((v[0] / v[1]) * 100) : null);
   const summary: Record<string, string> = {};

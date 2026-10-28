@@ -64,6 +64,7 @@ for (const set of SETS) {
     test.setTimeout(900_000);
     const after = await run(page, set, 'after');
     expect(after.alert, 'the labelling read worked').toEqual([]);
+    if (process.env.REAL_MODE === 'after') return;
     const before = await run(page, set, 'before');
     expect(before.alert, 'the old read worked').toEqual([]);
   });
