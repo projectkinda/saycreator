@@ -105,5 +105,14 @@ test('detection against the plans of our own styles', async ({ page }) => {
   fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify({ summary, styles }, null, 2));
   console.log('TRUTH', JSON.stringify(summary));
   console.log('MISSES', JSON.stringify(report.total.misses));
-  expect(report.total.textFound[1]).toBeGreaterThan(20);
+  const ratio = (v: [number, number]) => v[0] / Math.max(1, v[1]);
+  const t = report.total;
+  // Floors from the tuned detection: a change that lowers any of these has made the detection worse on slides whose layout we know.
+  expect(t.textFound[1]).toBeGreaterThan(150);
+  expect(ratio(t.textFound), 'text found').toBeGreaterThan(0.9);
+  expect(ratio(t.textBox), 'text boxes right').toBeGreaterThan(0.7);
+  expect(ratio(t.size), 'type size right').toBeGreaterThan(0.75);
+  expect(ratio(t.align), 'alignment right').toBeGreaterThan(0.7);
+  expect(ratio(t.shapeFound), 'shapes found').toBeGreaterThan(0.85);
+  expect(ratio(t.background), 'background kind right').toBeGreaterThan(0.85);
 });
