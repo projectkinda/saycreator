@@ -32,14 +32,16 @@ test('the Live view opens by itself, shows stages with seconds, the pictures, th
   await openStyleFromReferences(page);
   await refInput(page).setInputFiles(await makeReference(page, { name: 'live.jpg', kind: 'slide' }));
   await page.getByLabel('Name the style').fill('Live');
+  // Rounds are only made with Advanced on (since the one-screen flow), so the Live view's round pictures are looked at with it on.
+  await page.getByRole('checkbox', { name: /^Advanced:/ }).check();
   await page.getByRole('button', { name: 'Read references' }).click();
   // It opened without being asked, and the stages are listed in order.
   await expect(live(page)).toBeVisible();
   const stages = live(page).getByRole('list', { name: 'Stages' }).getByRole('listitem');
   await expect(stages.first()).toContainText('Split collage');
   await expect(stages.nth(1)).toContainText('Measure colours, layout and type');
-  // A quick draft arrives before the reader has answered.
-  await expect(live(page).getByRole('button', { name: /^Quick draft/ })).toBeVisible({ timeout: 2400 });
+  // The instant draft is a stage of its own (drawn on your content before the reader answers), and a slow call shows as waiting.
+  await expect(stages.nth(2)).toContainText('Instant draft from the measurements');
   await expect(live(page).getByText(/Waiting on the reader/)).toBeVisible();
   await expect(live(page).getByRole('img', { name: /^Reference:/ })).toBeVisible();
   await expect(live(page).getByRole('img', { name: /^Our version/ })).toBeVisible();
@@ -52,9 +54,9 @@ test('the Live view opens by itself, shows stages with seconds, the pictures, th
   await expect(live(page).getByRole('list', { name: 'Stages' }).getByRole('listitem').filter({ hasText: 'Keep the best round' })).toContainText('done');
   // Earlier rounds are small pictures that can be clicked.
   const thumbs = live(page).getByRole('list', { name: 'Earlier pictures' }).getByRole('button');
-  expect(await thumbs.count()).toBeGreaterThanOrEqual(3);
-  await thumbs.nth(1).click();
-  await expect(thumbs.nth(1)).toHaveAttribute('aria-pressed', 'true');
+  expect(await thumbs.count()).toBeGreaterThanOrEqual(2);
+  await thumbs.nth(0).click();
+  await expect(thumbs.nth(0)).toHaveAttribute('aria-pressed', 'true');
   // What the reader decided, marked by where it came from, and what was moved.
   await expect(live(page).getByText('MEASURED', { exact: true }).first()).toBeVisible();
   await expect(live(page).getByText('READER', { exact: true }).first()).toBeVisible();
@@ -66,7 +68,7 @@ test('the Live view opens by itself, shows stages with seconds, the pictures, th
     return w.__liveJobs.saved();
   });
   expect(saved[0].kind).toBe('style-from-references');
-  expect(saved[0].rounds.length).toBeGreaterThanOrEqual(3);
+  expect(saved[0].rounds.length).toBeGreaterThanOrEqual(2);
   expect(saved[0].references.every((r) => r.url === '')).toBe(true);
   expect(saved[0].stages.filter((s) => s.seconds !== undefined).length).toBeGreaterThanOrEqual(5);
 });
@@ -145,6 +147,7 @@ test('Results shows the latest run: the stage times, their share, and the rounds
   await fakeReader(page, usual);
   await openStyleFromReferences(page);
   await refInput(page).setInputFiles(await makeReference(page, { name: 'latest.jpg', kind: 'slide' }));
+  await page.getByRole('checkbox', { name: /^Advanced:/ }).check();
   await page.getByRole('button', { name: 'Read references' }).click();
   await expect(page.getByRole('button', { name: 'Open the Live view' })).toBeVisible({ timeout: 120_000 });
   await openResults(page, 'Style from references');
@@ -152,6 +155,6 @@ test('Results shows the latest run: the stage times, their share, and the rounds
   await expect(latest).toBeVisible();
   await expect(latest.getByRole('article').first()).toContainText('Style from references');
   await expect(latest.getByRole('row', { name: /Ask the reader/ })).toContainText('%');
-  expect(await latest.getByRole('list', { name: 'Rounds of this run' }).first().getByRole('listitem').count()).toBeGreaterThanOrEqual(3);
+  expect(await latest.getByRole('list', { name: 'Rounds of this run' }).first().getByRole('listitem').count()).toBeGreaterThanOrEqual(2);
   await page.screenshot({ path: path.join(OUT, '4-results-latest.png'), fullPage: true });
 });
