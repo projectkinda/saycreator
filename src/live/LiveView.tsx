@@ -8,7 +8,7 @@ import '../styles/live.css';
 const WORD: Record<Stage['status'], string> = { waiting: 'waiting', running: 'running', done: 'done', skipped: 'skipped', failed: 'failed' };
 const SRC_TIP: Record<Decision['source'], string> = { MEASURED: 'measured by the code from the picture', READER: 'said by the model that looked at the picture', CLAMPED: 'moved to what the toolbox supports', REJECTED: 'turned down' };
 
-export const clock = (ms: number) => `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} s`;
+export const clock = (ms: number) => `${(Math.max(0, ms) / 1000).toFixed(ms < 10000 ? 1 : 0)} s`;
 
 export function StageList({ job, now }: { job: Job; now: number }) {
   return (

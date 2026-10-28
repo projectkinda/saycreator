@@ -1,5 +1,6 @@
 // Images > Make a thumbnail: upload a photo, point at the subject, give a title (or have titles written), choose a style, see several
 // options each checked at phone size, pick one, edit it and export it. Pictures stay in this browser. Stills only: not video frames.
+import { ReplayButton } from '../live/Replay';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../components/Icon';
 import { useDocumentTitle } from '../useDocumentTitle';
@@ -440,6 +441,7 @@ export default function ThumbnailPage() {
                     ))}
                     <div className="row-actions">
                       <button type="button" className="btn btn-outline btn-sm" aria-pressed={isChosen} onClick={() => apply(thumbPatches.select(isChosen ? undefined : o.layout))}>{isChosen ? 'Picked' : 'Pick this one'}</button>
+                      <ReplayButton plan={o.plan} label={`Option ${i + 1}`} />
                       <button type="button" className="btn btn-outline btn-sm" disabled={!c?.drawn} onClick={() => c && download(c)} aria-label={`Download option ${i + 1} as PNG`}>Download PNG</button>
                     </div>
                     {failed > 0 && isChosen && <p className="small cr-warn" role="status">{failed} check{failed === 1 ? '' : 's'} to fix. Change the title, the pointer, the photo or the style above.</p>}

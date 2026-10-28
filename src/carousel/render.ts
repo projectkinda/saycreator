@@ -75,6 +75,8 @@ export interface Rendered {
   png: Blob;
   lint: CarouselLintResult[];
   warnings: string[];
+  /** What the safety net changed to make the checks pass (empty when it changed nothing). */
+  repairs: string[];
   ms: number;
 }
 
@@ -111,7 +113,7 @@ class Renderer {
         const a = await this.ready();
         // A photo behind words gets a stronger overlay if the check still fails (a no-op on slides with no full photo).
         const c = await checkWithRepair(a, { id: slide.id, type: slide.type, plan: slide.plan, notes: slide.notes }, margin);
-        return { png: c.png, lint: c.lint, warnings: c.render.warnings.map((w) => w.message ?? w.code), ms: performance.now() - t0 };
+        return { png: c.png, lint: c.lint, warnings: c.render.warnings.map((w) => w.message ?? w.code), repairs: c.repairs, ms: performance.now() - t0 };
       });
       this.cache.set(key, p);
       p.catch(() => this.cache.delete(key));

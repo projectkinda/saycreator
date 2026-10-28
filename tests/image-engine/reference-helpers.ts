@@ -107,7 +107,7 @@ export interface FakeReader {
  * Stands in for the server's reader: the status route says it is there, the read route answers with what the test says.
  * `reply` gets the kind of call ("read", "retry" when it carries a previous answer, or "refine") and the nth call of that kind.
  */
-export async function fakeReader(page: Page, reply: (kind: 'read' | 'retry' | 'refine', n: number, prompt: string) => string | { status: number; body: unknown }): Promise<FakeReader> {
+export async function fakeReader(page: Page, reply: (kind: 'read' | 'retry' | 'refine', n: number, prompt: string) => string | { status: number; body: unknown }, opts: { delayMs?: number } = {}): Promise<FakeReader> {
   const rec: FakeReader = { reads: [], refines: [] };
   const counts = { read: 0, retry: 0, refine: 0 };
   await page.route('**/__reference/status', (r) => r.fulfill({ json: { available: true } }));
@@ -118,6 +118,7 @@ export async function fakeReader(page: Page, reply: (kind: 'read' | 'retry' | 'r
     const kind = refine ? 'refine' : retry ? 'retry' : 'read';
     (refine ? rec.refines : rec.reads).push({ prompt: body.prompt, images: body.images.map((i) => ({ name: i.name })) });
     const out = reply(kind, counts[kind]++, body.prompt);
+    if (opts.delayMs) await new Promise((res) => setTimeout(res, opts.delayMs));
     if (typeof out === 'string') await r.fulfill({ json: { text: out, ms: 5 } });
     else await r.fulfill({ status: out.status, json: out.body });
   });

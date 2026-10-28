@@ -2,6 +2,8 @@
 // Every action is a patch, so Undo and Redo cover all of them.
 import { useMemo, useState } from 'react';
 import { Icon } from '../components/Icon';
+import { ReplayButton } from '../live/Replay';
+import { WhyPopover } from '../live/Why';
 import { elementById, listElements, type ElementInfo } from '../image-engine/assets/library';
 import type { SlideScript } from '../image-engine/carousel/types';
 import type { StyledSlide } from '../image-engine/styles/compose';
@@ -111,6 +113,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
           </label>
           <button type="button" className="btn btn-outline btn-sm" onClick={() => setProblem(onShuffle() ? '' : 'No other pictures fit this slide.')}>Shuffle elements</button>
           <button type="button" className="btn btn-outline btn-sm" onClick={() => run(apply(patches.regenerate(index)))}>Regenerate from the plan</button>
+          <ReplayButton plan={slide.plan} label={`Slide ${index + 1}`} />
+          <WhyPopover slide={slide} lint={view?.rendered?.lint} repairs={view?.rendered?.repairs} />
           <button type="button" className="btn btn-outline btn-sm" onClick={onDownload} disabled={!view?.rendered}>
             <Icon name="upload" size={14} /> Download PNG
           </button>

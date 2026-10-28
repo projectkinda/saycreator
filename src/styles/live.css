@@ -31,3 +31,13 @@
 @media (prefers-reduced-motion: reduce) { .lv-running .lv-dot { animation: none; } }
 
 .lv-pill { position: fixed; right: 16px; bottom: 16px; z-index: 40; background: var(--page); box-shadow: 0 4px 14px rgba(0,0,0,.15); }
+
+.why { position: relative; display: inline-block; }
+.why-pop { position: absolute; z-index: 30; left: 0; top: calc(100% + 6px); width: min(420px, 80vw); padding: 12px; display: grid; gap: 6px; box-shadow: 0 8px 28px rgba(0,0,0,.2); }
+.why-list { margin: 0; padding-left: 18px; }
+.replay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: grid; place-items: center; z-index: 60; padding: 16px; }
+.replay-box { width: min(620px, 100%); max-height: 94vh; overflow: auto; padding: 16px; display: grid; gap: 10px; }
+.replay-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.replay-head h2 { margin: 0; }
+.replay-img { width: 100%; max-height: 62vh; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.replay-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

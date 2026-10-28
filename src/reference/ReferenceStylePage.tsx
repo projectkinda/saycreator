@@ -14,6 +14,7 @@ import { detectGrid, type GridResult } from './grid';
 import { bitmapOf, cut, jpegUrl, pxOfCanvas, previewOf, readerImageOf, samplePhoto } from './images';
 import { applyFeedback, keptSentence, liveRound, renderReplicas, runLoop, scoreOf, type Round, type SampleContent } from './loop';
 import { startJob, onCancel } from '../live/jobs';
+import { speed } from './speed';
 import { draftSpec } from './draft';
 import { cacheClear, cacheCount, cacheGet, cacheKey, cachePut } from './cache';
 import { meanSimilarity } from './similarity';
@@ -116,7 +117,7 @@ export default function ReferenceStylePage() {
         const pieces: { rect: Rect | null; cell?: number }[] = u.mode === 'grid' && u.grid ? u.grid.cells.flatMap((c, i) => (u.ticked[i] ? [{ rect: c, cell: i }] : [])) : u.mode === 'crop' && u.crop ? [{ rect: u.crop }] : [{ rect: null }];
         for (const p of pieces) {
           const tc = performance.now();
-          const j = await jpegUrl(u.bitmap, p.rect, 1000);
+          const j = await jpegUrl(u.bitmap, p.rect, speed.itemPx);
           splitMs += performance.now() - tc;
           list.push({ id: p.cell !== undefined ? `${u.id}#${p.cell + 1}` : u.id, name: p.cell !== undefined ? `${u.name} (slide ${p.cell + 1})` : u.name, dataUrl: j.url, width: j.width, height: j.height, learn: u.learn, source: { image: u.id, ...(p.cell !== undefined ? { cell: p.cell } : {}), ...(p.rect ? { rect: p.rect } : {}) } });
           const tm = performance.now();

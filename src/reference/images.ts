@@ -2,6 +2,7 @@
 // measured, the JPEGs the reader is sent, and the side-by-side picture of a reference and its replica. Nothing here is stored.
 import type { ReaderImage } from './reader';
 import type { Px, Rect } from './types';
+import { speed } from './speed';
 
 export async function bitmapOf(blob: Blob): Promise<ImageBitmap> {
   // 'from-image' turns a phone photo the right way up from its EXIF orientation.
@@ -55,7 +56,7 @@ export async function bitmapFromUrl(url: string): Promise<ImageBitmap> {
 /** The reader's picture of one pair: the reference on the left, our replica on the right, the same height. */
 export async function pairImage(referenceUrl: string, replica: Blob, name: string): Promise<ReaderImage> {
   const [a, b] = await Promise.all([bitmapFromUrl(referenceUrl), bitmapOf(replica)]);
-  const H = 760;
+  const H = speed.pairH;
   const wa = Math.round((a.width / a.height) * H);
   const wb = Math.round((b.width / b.height) * H);
   const c = canvasOf(wa + wb + 24, H);
