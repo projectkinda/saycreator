@@ -38,6 +38,11 @@ export function findClaudeCli(env: NodeJS.ProcessEnv = process.env, platform = p
       if (dir && fs.existsSync(p)) return p;
     }
   }
+  // The standalone install puts it in ~/.local/bin (it is not always on the PATH of a program started from an editor or a test runner).
+  for (const n of names) {
+    const p = path.join(os.homedir(), '.local', 'bin', n);
+    if (fs.existsSync(p)) return p;
+  }
   const roots: string[] = [];
   if (platform === 'win32' && env.APPDATA) roots.push(path.join(env.APPDATA, 'Claude', 'claude-code'));
   if (platform === 'darwin') roots.push(path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude-code'));
