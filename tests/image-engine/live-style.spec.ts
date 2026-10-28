@@ -208,3 +208,20 @@ test('Advanced is off by default; turned on it uses the full style read and lets
   await expect(calls(page)).toContainText(/Model calls: [2-9] of 10/, { timeout: 60_000 });
   await expect(page.getByRole('button', { name: 'Read references' })).toBeEnabled({ timeout: 60_000 });
 });
+
+test('the thumbnail target works with the labelling read: thumbnails are drawn from the detected layout and the style is saved with a thumbnail look', async ({ page }) => {
+  const rec = await fakeReader(page, labels);
+  await openStyleFromReferences(page);
+  await page.getByRole('radio', { name: 'Thumbnails', exact: true }).click();
+  await refInput(page).setInputFiles(await makeReference(page, { name: 'dark.jpg', kind: 'slide' }));
+  await expect(page.getByRole('img', { name: /^Thumbnail, .*your content in this style/ }).first()).toBeVisible({ timeout: 20_000 });
+  await page.getByLabel('Name the style').fill('Thumb');
+  await page.getByRole('button', { name: 'Read references' }).click();
+  await done(page);
+  expect(rec.reads).toHaveLength(1);
+  await page.getByRole('button', { name: 'Save as template' }).click();
+  await expect(page.getByText(/Saved “Thumb”/)).toBeVisible({ timeout: 30_000 });
+  const t = (await storedTemplates(page))[0];
+  expect(t.target).toBe('thumbnail');
+  expect((t.spec as { thumbnail?: unknown }).thumbnail, 'the saved style has a thumbnail look').toBeTruthy();
+});

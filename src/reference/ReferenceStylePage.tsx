@@ -367,7 +367,9 @@ export default function ReferenceStylePage() {
           clampNotes.push(...built.clamps);
           lists.push(applied.free.missing ?? []);
         });
-        const spec = { ...editState.spec, name, title: title.trim() || 'My style', basedOn: { cluster: 'your references', note: `Built from ${items.length === 1 ? 'one image' : `${items.length} images`}: ${items.map((i) => LEARN_LABEL[i.learn].toLowerCase()).join(', ')}.` }, free: freeBy } as StyleSpec;
+        const spec0 = { ...editState.spec, name, title: title.trim() || 'My style', basedOn: { cluster: 'your references', note: `Built from ${items.length === 1 ? 'one image' : `${items.length} images`}: ${items.map((i) => LEARN_LABEL[i.learn].toLowerCase()).join(', ')}.` }, free: freeBy } as StyleSpec;
+        // A thumbnail needs its own look block: the plain one, from the style's first palette (the reader's labels do not make one).
+        const spec = target !== 'carousel' && !spec0.thumbnail ? { ...spec0, thumbnail: defaultThumbnail(spec0) } : spec0;
         const verdict = checkSpec(spec);
         if (verdict.errors.length) throw new ReaderError('invalid', 'The layout made from the detection does not pass the checks.', verdict.errors);
         const ranked = missingRanked(lists);
