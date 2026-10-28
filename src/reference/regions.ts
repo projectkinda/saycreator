@@ -187,7 +187,10 @@ function photoBlocks(p: Px, bgRows: boolean): { mask: Uint8Array; cols: number; 
           gs.push(g);
         }
       const occupied = hist.filter((n) => n >= 3).length;
-      const top = Math.max(...hist) / (B * B);
+      const sortedH = [...hist].sort((a, b) => b - a);
+      const top = sortedH[0] / (B * B);
+      // Two tones with a soft edge between them (big letters on a box) are not a photograph: two bins hold most of the block.
+      if ((sortedH[0] + sortedH[1]) / (B * B) > 0.72) continue;
       // Photographs are busy and spread over several tones; a gradient is smooth; flat colour and text edges are one or two tones.
       if (std(gs) > (bgRows ? 0.05 : 0.07) && occupied >= 4 && top < 0.55) mask[r * cols + c] = 1;
     }
@@ -225,11 +228,71 @@ function groups(mask: Uint8Array, cols: number, rows: number, link = 1): { x0: n
   return out;
 }
 
+/** The commonest colour inside a box that is not close to the page colour (4-bit bins, averaged). */
+function dominantIn(p: Px, b: { x0: number; y0: number; x1: number; y1: number }, bg: RGB): RGB {
+  const bins = new Map<number, { n: number; s: RGB }>();
+  for (let y = b.y0; y <= b.y1; y += 2)
+    for (let x = b.x0; x <= b.x1; x += 2) {
+      const c = at(p, x, y);
+      if (l1(c, bg) < 60) continue;
+      const k = ((c[0] >> 4) << 8) | ((c[1] >> 4) << 4) | (c[2] >> 4);
+      const e = bins.get(k) ?? { n: 0, s: [0, 0, 0] as RGB };
+      e.n++;
+      e.s = [e.s[0] + c[0], e.s[1] + c[1], e.s[2] + c[2]];
+      bins.set(k, e);
+    }
+  const top = [...bins.values()].sort((a, c) => c.n - a.n)[0];
+  return top ? [top.s[0] / top.n, top.s[1] / top.n, top.s[2] / top.n] : bg;
+}
+
+/** Takes away strokes thinner than 2r+1 pixels (a square window, separable). */
+function erode(m: Uint8Array, W: number, H: number, r: number): Uint8Array {
+  const tmp = new Uint8Array(m.length);
+  const out = new Uint8Array(m.length);
+  for (let y = 0; y < H; y++) {
+    let run = 0;
+    for (let x = 0; x < W; x++) {
+      run = m[y * W + x] ? run + 1 : 0;
+      // A pixel survives when the 2r+1 pixels centred on it are all set: the run that ends at x+r is long enough.
+      if (run >= 2 * r + 1) tmp[y * W + x - r] = 1;
+    }
+  }
+  for (let x = 0; x < W; x++) {
+    let run = 0;
+    for (let y = 0; y < H; y++) {
+      run = tmp[y * W + x] ? run + 1 : 0;
+      if (run >= 2 * r + 1) out[(y - r) * W + x] = 1;
+    }
+  }
+  return out;
+}
+/** Grows the set by r pixels each way (the other half of an opening). */
+function dilate(m: Uint8Array, W: number, H: number, r: number): Uint8Array {
+  const tmp = new Uint8Array(m.length);
+  const out = new Uint8Array(m.length);
+  for (let y = 0; y < H; y++) {
+    let last = -1e9;
+    for (let x = 0; x < W + r; x++) {
+      if (x < W && m[y * W + x]) last = x;
+      if (x - r >= 0 && x - r < W && x - last <= 2 * r) tmp[y * W + x - r] = 1;
+    }
+  }
+  for (let x = 0; x < W; x++) {
+    let last = -1e9;
+    for (let y = 0; y < H + r; y++) {
+      if (y < H && tmp[y * W + x]) last = y;
+      if (y - r >= 0 && y - r < H && y - last <= 2 * r) out[(y - r) * W + x] = 1;
+    }
+  }
+  return out;
+}
+
 /** Connected components of the foreground mask (8-connected), with their box, area, mean colour and edge pixels. */
-function components(p: Px, fg: Uint8Array): Comp[] {
+function components(p: Px, fg: Uint8Array): { comps: Comp[]; labels: Int32Array } {
   const W = p.width;
   const H = p.height;
   const seen = new Uint8Array(fg.length);
+  const labels = new Int32Array(fg.length);
   const comps: Comp[] = [];
   const stack: number[] = [];
   for (let s = 0; s < fg.length; s++) {
@@ -244,6 +307,7 @@ function components(p: Px, fg: Uint8Array): Comp[] {
       const x = k % W;
       const y = (k - x) / W;
       c.x0 = Math.min(c.x0, x); c.x1 = Math.max(c.x1, x); c.y0 = Math.min(c.y0, y); c.y1 = Math.max(c.y1, y); c.area++;
+      labels[k] = comps.length + 1;
       const v = at(p, x, y);
       sum[0] += v[0]; sum[1] += v[1]; sum[2] += v[2];
       let inner = true;
@@ -264,7 +328,7 @@ function components(p: Px, fg: Uint8Array): Comp[] {
     c.rgb = [sum[0] / c.area, sum[1] / c.area, sum[2] / c.area];
     comps.push(c);
   }
-  return comps;
+  return { comps, labels };
 }
 
 const boxOf = (c: { x0: number; y0: number; x1: number; y1: number }, W: number, H: number): Box => ({ x: (c.x0 / W) * 100, y: (c.y0 / H) * 100, w: ((c.x1 - c.x0 + 1) / W) * 100, h: ((c.y1 - c.y0 + 1) / H) * 100 });
@@ -303,6 +367,10 @@ export function detectRegions(p: Px): Detected {
     const area = g.n * 36;
     if (area < W * H * 0.02) continue;
     const box = { x0: g.x0 * 6, y0: g.y0 * 6, x1: (g.x1 + 1) * 6 - 1, y1: (g.y1 + 1) * 6 - 1 };
+    // A photograph is a solid patch: a line of big letters is a thin, sparse run of cells.
+    const cellsAcross = g.x1 - g.x0 + 1;
+    const cellsDown = g.y1 - g.y0 + 1;
+    if (g.n / (cellsAcross * cellsDown) < 0.6 || Math.min(cellsAcross * 6 / W, cellsDown * 6 / H) < 0.08) continue;
     const fillRatio = area / ((box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1));
     const cover = ((box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1)) / (W * H);
     const shape: PhotoRegion['shape'] = cover > 0.85 ? 'full-bleed' : fillRatio > 0.9 ? 'rect' : fillRatio > 0.7 && Math.abs((box.x1 - box.x0) - (box.y1 - box.y0)) < 0.2 * (box.x1 - box.x0) ? 'circle' : fillRatio > 0.75 ? 'rounded' : 'rect';
@@ -315,43 +383,74 @@ export function detectRegions(p: Px): Detected {
   const fg = new Uint8Array(W * H);
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) if (!photoMask[y * W + x] && l1(at(p, x, y), bgAt(x, y)) > 70) fg[y * W + x] = 1;
-  const comps = components(p, fg).filter((c) => c.area >= 3);
   const minH = Math.max(3, H * 0.008);
 
-  // ---- flat shapes: big pieces of one colour (letters on them are holes, so the fill share is lower) ----
+  // ---- flat shapes: what is left of the foreground after thin strokes are taken away (letters are thin, boxes and bars are not) ----
+  const r = Math.max(2, Math.round(Math.min(W, H) * 0.01));
+  const core = dilate(erode(fg, W, H, r), W, H, r);
   const shapes: FlatShape[] = [];
-  const used = new Set<Comp>();
-  for (const c of comps) {
+  const shapeBoxes: { x0: number; y0: number; x1: number; y1: number; rgb: RGB }[] = [];
+  for (const c of components(p, core).comps) {
     const w = c.x1 - c.x0 + 1;
     const h = c.y1 - c.y0 + 1;
     if (w < W * 0.04 || h < H * 0.012 || w * h < W * H * 0.004) continue;
     const fill = c.area / (w * h);
     if (fill < 0.45) continue;
-    // Solid in colour: sample the box and count pixels of the shape colour.
+    // The colour of the shape is the commonest colour in its box that is not the page's (the mean would mix in the letters on it).
+    const dom = dominantIn(p, c, bgRgb);
+    // Solid in colour: the box is mostly this colour, and its edge all round is.
     let same = 0;
     let n = 0;
     for (let y = c.y0; y <= c.y1; y += 2)
       for (let x = c.x0; x <= c.x1; x += 2) {
         n++;
-        if (l1(at(p, x, y), c.rgb) < 50) same++;
+        if (l1(at(p, x, y), dom) < 50) same++;
       }
-    if (same / n < 0.45) continue;
+    let edgeSame = 0;
+    let edgeN = 0;
+    for (let x = c.x0 + 2; x < c.x1 - 1; x += 2)
+      for (const y of [c.y0 + 2, c.y1 - 2]) {
+        edgeN++;
+        if (l1(at(p, x, y), dom) < 60) edgeSame++;
+      }
+    for (let y = c.y0 + 2; y < c.y1 - 1; y += 2)
+      for (const x of [c.x0 + 2, c.x1 - 2]) {
+        edgeN++;
+        if (l1(at(p, x, y), dom) < 60) edgeSame++;
+      }
+    const straight = edgeN > 0 && edgeSame / edgeN > 0.6;
+    if (same / n < 0.3 || (!straight && same / n < 0.5 && !(fill > 0.6 && same / n >= 0.35))) continue;
     const thin = Math.min(w, h) < Math.min(W, H) * 0.03;
     const circle = Math.abs(w - h) < 0.15 * Math.max(w, h) && fill > 0.65 && fill < 0.85;
     const pill = !thin && fill > 0.78 && fill < 0.94 && w > h * 1.6;
-    const kind: FlatShape['kind'] = thin ? 'bar' : circle ? 'circle' : pill ? 'pill' : fill > 0.93 ? 'rect' : 'rounded';
-    shapes.push({ id: `shape${shapes.length + 1}`, box: roundBox(boxOf(c, W, H)), colour: hex(c.rgb), kind });
-    used.add(c);
+    const kind: FlatShape['kind'] = thin ? 'bar' : circle ? 'circle' : pill ? 'pill' : fill > 0.93 || straight ? 'rect' : 'rounded';
+    shapes.push({ id: `shape${shapes.length + 1}`, box: roundBox(boxOf(c, W, H)), colour: hex(dom), kind });
+    shapeBoxes.push({ x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, rgb: dom });
   }
 
+  // ---- text pixels: the foreground minus the shapes' own colour, plus whatever on a shape is unlike the shape (letters the colour of the page too) ----
+  const fgText = new Uint8Array(W * H);
+  for (let i = 0; i < fg.length; i++) if (fg[i]) fgText[i] = 1;
+  for (const s of shapeBoxes) {
+    for (let y = Math.max(0, s.y0 - 2); y <= Math.min(H - 1, s.y1 + 2); y++)
+      for (let x = Math.max(0, s.x0 - 2); x <= Math.min(W - 1, s.x1 + 2); x++) {
+        const i = y * W + x;
+        if (photoMask[i]) continue;
+        const inBox = x >= s.x0 && x <= s.x1 && y >= s.y0 && y <= s.y1;
+        const d = l1(at(p, x, y), s.rgb);
+        if (d < 60) fgText[i] = 0;
+        else if (inBox && d > 80) fgText[i] = 1;
+        else if (!inBox && fg[i] && d < 120) fgText[i] = 0;
+      }
+  }
+  const rest = components(p, fgText).comps.filter((c) => c.area >= 3);
+
   // ---- letters and graphics ----
-  const rest = comps.filter((c) => !used.has(c));
-  // Pieces inside a shape that are not the shape's own colour are text on it.
   const letters: Comp[] = [];
   const graphics: Graphic[] = [];
   const heights = rest.map((c) => c.y1 - c.y0 + 1).filter((h) => h >= minH);
   const typical = median(heights) || minH;
-  const lonely = (c: Comp) => !rest.some((o) => o !== c && Math.min(c.y1, o.y1) - Math.max(c.y0, o.y0) > 0.5 * Math.min(c.y1 - c.y0, o.y1 - o.y0) && Math.max(c.x0, o.x0) - Math.min(c.x1, o.x1) < 2.5 * Math.max(c.y1 - c.y0 + 1, typical));
+  const lonely = (c: Comp) => !rest.some((o) => o !== c && Math.min(c.y1, o.y1) - Math.max(c.y0, o.y0) > 0.5 * Math.min(c.y1 - c.y0, o.y1 - o.y0) && Math.max(c.x0, o.x0) - Math.min(c.x1, o.x1) < 1.0 * Math.max(c.y1 - c.y0 + 1, typical));
   for (const c of rest) {
     const w = c.x1 - c.x0 + 1;
     const h = c.y1 - c.y0 + 1;
@@ -364,21 +463,37 @@ export function detectRegions(p: Px): Detected {
   }
 
   // ---- lines then blocks ----
-  letters.sort((a, b) => (a.y0 + a.y1) - (b.y0 + b.y1));
   interface Line { comps: Comp[]; x0: number; y0: number; x1: number; y1: number }
-  const lines: Line[] = [];
+  letters.sort((a, b) => (a.y0 + a.y1) - (b.y0 + b.y1));
+  // Rows first (the pieces whose centres are at the same height), then a row is split where there is a wide gap (columns).
+  const rowsOf: Comp[][] = [];
   for (const c of letters) {
     const h = c.y1 - c.y0 + 1;
-    const line = lines.find((l) => {
-      const lh = l.y1 - l.y0 + 1;
-      const ov = Math.min(c.y1, l.y1) - Math.max(c.y0, l.y0) + 1;
-      const gap = c.x0 > l.x1 ? c.x0 - l.x1 : l.x0 > c.x1 ? l.x0 - c.x1 : 0;
-      return ov > 0.45 * Math.min(h, lh) && gap < 1.6 * Math.max(h, lh);
+    const cy = (c.y0 + c.y1) / 2;
+    const row = rowsOf.find((r) => {
+      const rh = median(r.map((k) => k.y1 - k.y0 + 1));
+      const rcy = mean(r.map((k) => (k.y0 + k.y1) / 2));
+      return Math.abs(cy - rcy) < 0.5 * Math.max(h, rh) && Math.max(h, rh) / Math.max(1, Math.min(h, rh)) < 3.5;
     });
-    if (line) {
-      line.comps.push(c);
-      line.x0 = Math.min(line.x0, c.x0); line.x1 = Math.max(line.x1, c.x1); line.y0 = Math.min(line.y0, c.y0); line.y1 = Math.max(line.y1, c.y1);
-    } else lines.push({ comps: [c], x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 });
+    if (row) row.push(c);
+    else rowsOf.push([c]);
+  }
+  const lines: Line[] = [];
+  for (const r of rowsOf) {
+    r.sort((a, b) => a.x0 - b.x0);
+    const rh = median(r.map((k) => k.y1 - k.y0 + 1));
+    let cur: Comp[] = [r[0]];
+    const flush = () => {
+      lines.push({ comps: cur, x0: Math.min(...cur.map((c) => c.x0)), x1: Math.max(...cur.map((c) => c.x1)), y0: Math.min(...cur.map((c) => c.y0)), y1: Math.max(...cur.map((c) => c.y1)) });
+    };
+    for (const c of r.slice(1)) {
+      const prevX1 = Math.max(...cur.map((k) => k.x1));
+      if (c.x0 - prevX1 > 2.5 * Math.max(rh, minH)) {
+        flush();
+        cur = [c];
+      } else cur.push(c);
+    }
+    flush();
   }
   // A "line" of one tiny piece is a speck, not text.
   const realLines = lines.filter((l) => l.comps.length >= 2 || (l.y1 - l.y0 + 1 >= minH * 1.6 && l.x1 - l.x0 + 1 >= minH * 1.6));
@@ -392,7 +507,8 @@ export function detectRegions(p: Px): Detected {
       const bh = last.y1 - last.y0 + 1;
       const overlapX = Math.min(l.x1, last.x1) - Math.max(l.x0, last.x0);
       const near = Math.abs(l.x0 - last.x0) < W * 0.12 || Math.abs((l.x0 + l.x1) / 2 - (last.x0 + last.x1) / 2) < W * 0.12 || Math.abs(l.x1 - last.x1) < W * 0.12;
-      return gap >= -bh * 0.3 && gap < 1.0 * Math.max(lh, bh) && (overlapX > 0 || near);
+      const ratio = Math.max(lh, bh) / Math.max(1, Math.min(lh, bh));
+      return gap >= -bh * 0.3 && gap < 0.7 * Math.min(lh, bh) && ratio < 2.5 && (overlapX > 0 || near);
     });
     if (blk) blk.push(l);
     else blocksOf.push([l]);
@@ -446,16 +562,18 @@ export function detectRegions(p: Px): Detected {
     // A shape behind the block: a highlight box when it hugs the words, otherwise text on a pill, label or block.
     const sh = shapes.find((s) => {
       const sb = { x0: (s.box.x / 100) * W, y0: (s.box.y / 100) * H, x1: ((s.box.x + s.box.w) / 100) * W, y1: ((s.box.y + s.box.h) / 100) * H };
-      return inside({ x0, y0, x1, y1 }, sb, 3) && !s.holds;
+      return !s.holds && s.kind !== 'bar' && ls.some((l) => inside(l, sb, 3));
     });
     if (sh) {
       sh.holds = `text${bi + 1}`;
-      const hug = sh.box.h / box.h < 1.5 && (sh.box.w / box.w) < 1.4;
-      treatments.push({ kind: hug && ls.length === 1 ? 'highlight-box' : 'on-shape', detail: `${hug && ls.length === 1 ? 'a box behind the words' : `text on a ${sh.kind}`} (${sh.colour})`, colour: sh.colour, supported: true });
+      const sb = { x0: (sh.box.x / 100) * W, y0: (sh.box.y / 100) * H, x1: ((sh.box.x + sh.box.w) / 100) * W, y1: ((sh.box.y + sh.box.h) / 100) * H };
+      const held = ls.filter((l) => inside(l, sb, 3));
+      const hug = ((sh.box.h / 100) * H) / Math.max(1, Math.max(...held.map((l) => l.y1 - l.y0 + 1))) < 1.6 && held.length === 1;
+      treatments.push({ kind: hug ? 'highlight-box' : 'on-shape', detail: `${hug ? 'a box behind the words' : `text on a ${sh.kind}`} (${sh.colour})`, colour: sh.colour, supported: true });
     }
     // An underline: a thin wide bar just under a line.
     const under = shapes.find((s) => s.kind === 'bar' && s.box.w > box.w * 0.4 && s.box.w < box.w * 1.3 && s.box.y > box.y + box.h - 1 && s.box.y < box.y + box.h + box.h * 0.35 && s.box.x > box.x - 5 && s.box.x < box.x + box.w * 0.5);
-    if (under && !sh) treatments.push({ kind: 'underline', detail: `a line under the text (${under.colour})`, colour: under.colour, supported: true });
+    if (under) treatments.push({ kind: 'underline', detail: `a line under the text (${under.colour})`, colour: under.colour, supported: true });
     // A ring drawn round the block or a word of it.
     const circled = graphics.find((g) => g.kind === 'ring' && g.box.x <= box.x + box.w && g.box.x + g.box.w >= box.x && g.box.y <= box.y + box.h && g.box.y + g.box.h >= box.y);
     if (circled) treatments.push({ kind: 'circled', detail: `a ring round a word (${circled.colour})`, colour: circled.colour, supported: true });
@@ -476,7 +594,7 @@ export function detectRegions(p: Px): Detected {
       if (steps.every((s) => Math.abs(s) > W * 0.03) && std(ls.map((l) => l.x0)) > W * 0.05) treatments.push({ kind: 'staggered', detail: 'each line starts further along', supported: false });
     }
     // Two tones: the pieces fall into two colours that are far apart.
-    const cols = allComps.map((c) => c.rgb);
+    const cols = allComps.filter((c) => !shapes.some((sh) => c.x0 >= (sh.box.x / 100) * W - 2 && c.x1 <= ((sh.box.x + sh.box.w) / 100) * W + 2 && c.y0 >= (sh.box.y / 100) * H - 2 && c.y1 <= ((sh.box.y + sh.box.h) / 100) * H + 2)).map((c) => c.rgb);
     const far = cols.filter((c) => l1(c, colour) > 120);
     if (far.length >= 2 && far.length < cols.length * 0.7) treatments.push({ kind: 'two-tone', detail: 'some words in another colour', supported: false });
     // Over a photo.

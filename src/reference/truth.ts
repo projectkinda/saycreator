@@ -47,7 +47,7 @@ export function groundTruth(plan: Plan): Truth {
   for (const l of plan.layers) {
     if (!visible(l)) continue;
     const box: Box = { x: pct(l.x, W), y: pct(l.y, H), w: pct(l.width, W), h: pct(l.height, H) };
-    if (l.kind === 'text' && l.text.trim().length >= 2 && l.style.size >= 28 && l.role !== 'decor') {
+    if (l.kind === 'text' && l.text.trim().length >= 2 && l.style.size >= 14) {
       const ink = inkOf(l, W, H);
       out.texts.push({ box: ink.box, lines: ink.lines, align: l.style.align === 'center' ? 'centre' : l.style.align, size: ink.size, highlight: !!l.highlight && ((l.highlight.words?.length ?? 0) > 0 || (l.highlight.lines?.length ?? 0) > 0), outline: !!l.style.stroke && l.style.stroke.width >= 2, shadow: !!l.style.shadow, tilt: Math.abs(l.rotation) >= 3, chars: l.text.length });
     } else if (l.kind === 'image' && box.w * box.h > 150) out.photos.push(box);
@@ -82,12 +82,14 @@ export interface TruthScore {
   tilt: [number, number];
   /** Boxes the detection invented: text blocks that overlap no real text. */
   extraText: number;
+  /** A few misses, in words, for tuning. */
+  misses: string[];
 }
-export const emptyScore = (): TruthScore => ({ textFound: [0, 0], textBox: [0, 0], align: [0, 0], size: [0, 0], photoFound: [0, 0], shapeFound: [0, 0], graphicFound: [0, 0], background: [0, 0], highlight: [0, 0], outline: [0, 0], shadow: [0, 0], tilt: [0, 0], extraText: 0 });
+export const emptyScore = (): TruthScore => ({ textFound: [0, 0], textBox: [0, 0], align: [0, 0], size: [0, 0], photoFound: [0, 0], shapeFound: [0, 0], graphicFound: [0, 0], background: [0, 0], highlight: [0, 0], outline: [0, 0], shadow: [0, 0], tilt: [0, 0], extraText: 0, misses: [] });
 
 /** Adds one slide's result to the totals: [right, out of]. */
 export function compare(t: Truth, d: Detected, s: TruthScore) {
-  const bump = (k: keyof Omit<TruthScore, 'extraText'>, ok: boolean) => {
+  const bump = (k: keyof Omit<TruthScore, 'extraText' | 'misses'>, ok: boolean) => {
     s[k][1]++;
     if (ok) s[k][0]++;
   };
@@ -102,7 +104,11 @@ export function compare(t: Truth, d: Detected, s: TruthScore) {
       const pxGt = gt.size;
       bump('size', best.b.fontPx / 1.0 > 0 && best.b.fontPx >= pxGt * 0.72 && best.b.fontPx <= pxGt * 1.4);
       const kinds = best.b.treatments.map((x) => x.kind);
-      if (gt.highlight) bump('highlight', kinds.includes('highlight-box') || kinds.includes('on-shape'));
+      if (gt.highlight) {
+        const ok = kinds.includes('highlight-box') || kinds.includes('on-shape');
+        bump('highlight', ok);
+        if (!ok && s.misses.length < 10) s.misses.push(`highlight not found: block ${JSON.stringify(best.b.box)} kinds ${kinds.join(',')} shapes ${d.shapes.map((x) => x.kind + JSON.stringify(x.box)).join(' ')} gt ${JSON.stringify(gt.box)}`);
+      }
       if (gt.outline) bump('outline', kinds.includes('outline'));
       if (gt.shadow) bump('shadow', kinds.includes('shadow'));
       if (gt.tilt) bump('tilt', kinds.includes('tilt'));
