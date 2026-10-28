@@ -16,7 +16,7 @@ test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 const SETS: { id: string; label: string; file: string; keep?: number[] }[] = [
   { id: 'deck-a', label: 'Deck A (6 of 12 slides)', file: '44937935e682165c1f93e99a11a47123.jpg', keep: [1, 2, 3, 5, 8, 11] },
   { id: 'deck-b', label: 'Deck B (6 of 9 slides)', file: '58d68b12ac74ce8cc0f8d2f9df45e6de.jpg', keep: [1, 2, 4, 5, 7, 9] },
-  { id: 'deck-c', label: 'Deck C, the yellow posters (6 of 12 slides)', file: '05bedfc0.jpg', 'dfc030d7d').slice(0, 36) + '.jpg', keep: [1, 2, 3, 5, 8, 11] },
+  { id: 'deck-c', label: 'Deck C, the yellow posters (6 of 12 slides)', file: '05bedfc0.jpg', keep: [1, 2, 3, 5, 8, 11] },
   { id: 'single', label: 'One slide on its own', file: '1503c1de8dded2a7cbe333f061c7131a.jpg', keep: [1] },
   { id: 'laptop', label: 'The laptop slide', file: '9885e1020f38cd3f6c18df82813e7699.jpg', keep: [2] },
 ];
