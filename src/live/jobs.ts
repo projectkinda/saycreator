@@ -58,6 +58,8 @@ export interface Job {
   message?: string;
   /** A finished plan, for Replay. */
   hasPlan?: boolean;
+  /** What the job cost in model use: calls made, pictures sent, tokens if the reader reported them (otherwise null: not reported). */
+  cost?: { calls: number; images: number; tokens: number | null };
 }
 
 let current: Job | null = null;
@@ -98,6 +100,7 @@ export interface JobHandle {
   cached(): void;
   finish(status: 'done' | 'failed' | 'cancelled', message?: string): void;
   plan(): void;
+  cost(c: { calls: number; images: number; tokens: number | null }): void;
   /** A stage that was done before the job started (splitting and measuring happen when the pictures are added): its seconds and a note. */
   preDone(id: string, seconds: number, note?: string): void;
   /** The seconds of a stage, for the timing log. */
@@ -141,6 +144,7 @@ export function startJob(kind: JobKind, title: string, stages: { id: string; lab
     note: (text) => patch((j) => ({ ...j, note: text })),
     cached: () => patch((j) => ({ ...j, cached: true })),
     plan: () => patch((j) => ({ ...j, hasPlan: true })),
+    cost: (c) => patch((j) => ({ ...j, cost: c })),
     finish: (status, message) => {
       if (!mine()) return;
       // Anything still waiting or running when the job ends is said to be skipped or failed, never left spinning.

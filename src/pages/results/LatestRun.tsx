@@ -16,6 +16,7 @@ export default function LatestRun() {
       {jobs.slice(0, 3).map((j) => (
         <article key={j.id} className="card" aria-label={`${JOB_LABEL[j.kind]}, ${new Date(j.startedAt).toLocaleString()}`} style={{ padding: 12, marginBottom: 8 }}>
           <p className="small"><b>{JOB_LABEL[j.kind]}</b>: {j.title}. {j.status}, {Math.round((((j.endedAt ?? j.startedAt) - j.startedAt) / 1000) * 10) / 10} s{j.cached ? ', read from cache' : ''}.</p>
+          {j.cost && <p className="small">Model calls: {j.cost.calls}, pictures sent: {j.cost.images}, tokens: {j.cost.tokens === null ? 'not reported' : j.cost.tokens}.</p>}
           <table className="small">
             <thead><tr><th>Stage</th><th>Seconds</th><th>Share</th></tr></thead>
             <tbody>{timingTable(j).map((r) => <tr key={r.stage}><td>{r.stage}</td><td>{r.seconds}</td><td>{r.share}%</td></tr>)}</tbody>

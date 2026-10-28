@@ -20,8 +20,10 @@ const usual = (kind: string, n: number) => {
   return refineAnswer({ patches: [], score: 70, stop: true });
 };
 
-async function run(page: Page, name = 'My bold look', target?: string) {
+/** Presses Read references. The older tests exercise the multi-round path, so they switch Advanced on; `simple` leaves it off (the default screen). */
+async function run(page: Page, name = 'My bold look', target?: string, simple = false) {
   await page.getByLabel('Name the style').fill(name);
+  if (!simple) await page.getByRole('checkbox', { name: /^Advanced:/ }).check();
   if (target) await page.getByRole('radio', { name: target, exact: true }).click();
   await page.getByRole('button', { name: 'Read references' }).click();
   await loopDone(page);
@@ -111,7 +113,9 @@ test('two bad answers in a row: a plain message with the reasons, and nothing is
   const alert = page.getByRole('alert').filter({ hasText: 'neither answer was a style that passes the checks' });
   await expect(alert).toBeVisible({ timeout: 60_000 });
   await expect(alert).toContainText('marker must be one of');
-  await expect(page.getByRole('heading', { name: /Save as a template/ })).toHaveCount(0);
+  // The instant draft (measured numbers only) is still on screen and can be saved, but nothing was saved by itself and no reader answer was used.
+  expect(await storedTemplates(page)).toHaveLength(0);
+  await expect(page.getByRole('img', { name: /^Cover, your content in this style/ })).toBeVisible();
 });
 
 test('an answer that is not JSON, then a good one: the retry fixes it', async ({ page }) => {
@@ -158,7 +162,7 @@ test('the person’s feedback becomes patches the same way and adds a round', as
   await run(page);
   const before = await page.getByRole('list', { name: 'Rounds' }).getByRole('listitem').count();
   await page.getByLabel('Your feedback').fill('bigger title');
-  await page.getByRole('button', { name: 'Adjust' }).click();
+  await page.getByRole('button', { name: /^Improve/ }).click();
   await expect(page.getByRole('list', { name: 'Rounds' }).getByRole('listitem')).toHaveCount(before + 1, { timeout: 60_000 });
   const last = page.getByRole('list', { name: 'Rounds' }).getByRole('listitem').last();
   await expect(last).toContainText('Your feedback: “bigger title”');
@@ -429,8 +433,9 @@ test('process fixes: values the toolbox cannot draw are moved, and the closeness
   await run(page, 'Clamped');
   const list = page.getByRole('list', { name: 'Clamped values' });
   await expect(list).toContainText('shape.radius was 1000, lowered to 120');
-  await expect(list).toContainText('spacing.margin was 10, raised to 48');
-  await expect(list).toContainText('type.headline was 12, raised to 32');
+  // The margin and the type sizes are measured by the code and stay as measured: the reader is not asked for them, so its 10 px margin and 12 px title are ignored, not clamped.
+  await expect(list).not.toContainText('spacing.margin');
+  await expect(list).not.toContainText('type.headline')
 });
 
 test('a reader that asks for marks gets them drawn, and one that asks for a mark we do not have is told in plain words', async ({ page }) => {

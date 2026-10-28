@@ -399,7 +399,7 @@ function drawOne(m: MarkSpec, i: number, c: MarkCtx, out: MarkLayers) {
 export function drawMarks(marks: MarkSpec[], c: MarkCtx): MarkLayers {
   const out: MarkLayers = { under: [], over: [], notes: [] };
   marks.forEach((m, i) => {
-    if (m.types && !m.types.includes(c.type)) return;
+    if (m.off || (m.types && !m.types.includes(c.type))) return;
     try {
       drawOne(m, i, c, out);
     } catch (e) {

@@ -81,6 +81,7 @@ export default function LiveView() {
       </header>
       <p className="small muted">{job.title}{job.cached ? ' · from cache' : ''}</p>
       {job.note && <p className="small muted">{job.note}</p>}
+      {job.cost && <p className="small" role="status">Model calls: {job.cost.calls} · pictures sent: {job.cost.images} · tokens: {job.cost.tokens === null ? 'not reported' : job.cost.tokens}</p>}
       {job.waiting && running && <p className="small lv-wait" role="status">Waiting on {job.waiting.label}, {clock(now - job.waiting.since)}</p>}
       {job.message && <p className="small cr-warn" role="status">{job.message}</p>}
       <StageList job={job} now={now} />

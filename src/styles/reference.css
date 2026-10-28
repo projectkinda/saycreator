@@ -180,3 +180,34 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* One screen: the reference on the left, the person's own content in the middle, the result on the right. */
+.rf-three { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+@media (min-width: 1250px) { .rf-three { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.25fr); } }
+.rf-three > section { margin: 0; }
+.rf-result { display: grid; gap: 8px; }
+.rf-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.rf-shots figure { margin: 0; }
+.rf-shots img { width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); display: block; }
+.rf-shot-main { grid-column: 1 / -1; max-width: 360px; }
+.rf-drag { position: relative; cursor: ns-resize; touch-action: none; }
+.rf-drag-mark { position: absolute; left: 8px; font-size: 11px; font-weight: 700; background: var(--accent); color: var(--on-accent); padding: 1px 8px; border-radius: 999px; pointer-events: none; }
+.rf-drag-top { top: 8%; } .rf-drag-middle { top: 46%; } .rf-drag-bottom { bottom: 12%; }
+.rf-editor { display: grid; gap: 8px; }
+.rf-fs { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: grid; gap: 6px; }
+.rf-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.rf-swatch { display: inline-flex; align-items: center; gap: 4px; }
+.rf-swatch input[type="color"] { width: 32px; height: 28px; padding: 0; border: 1px solid var(--line-strong); border-radius: 6px; background: none; }
+.rf-toggle { display: flex; gap: 6px; align-items: center; }
+.rf-origin { font-size: 10px; }
+.rf-origin-measured { background: var(--ok-bg); color: var(--ok-text); }
+.rf-origin-person { background: var(--surface); }
+.rf-layers { margin-top: 4px; }
+.rf-layer-list { list-style: none; padding: 0; margin: 4px 0; max-height: 180px; overflow: auto; display: grid; gap: 2px; }
+.rf-layer-preview { width: 160px; border: 1px solid var(--line); border-radius: 6px; }
+.rf-own, .rf-others { list-style: none; padding: 0; margin: 4px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.rf-others li { display: grid; gap: 2px; }
+.rf-others img { height: auto; border-radius: 6px; border: 1px solid var(--line); }
+.rf-three .rf-upload { grid-template-columns: 1fr; }
+.rf-three .rf-uploads { min-width: 0; }
+.rf-three > section { min-width: 0; overflow-wrap: anywhere; }

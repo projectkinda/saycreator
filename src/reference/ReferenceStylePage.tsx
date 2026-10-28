@@ -12,16 +12,20 @@ import { ensureTemplatesLoaded, saveTemplate, styleNameFor, templateProblem, use
 import { closenessOf, rankMissing, SINGLE_IMAGE_NOTE } from './closeness';
 import { detectGrid, type GridResult } from './grid';
 import { bitmapOf, cut, jpegUrl, pxOfCanvas, previewOf, readerImageOf, samplePhoto } from './images';
-import { applyFeedback, keptSentence, liveRound, renderReplicas, runLoop, scoreOf, type Round, type SampleContent } from './loop';
+import { applyFeedback, keptSentence, runLoop, type Round, type SampleContent } from './loop';
 import { startJob, onCancel } from '../live/jobs';
-import { speed } from './speed';
+import { setProfile, speed } from './speed';
 import { draftSpec } from './draft';
 import { cacheClear, cacheCount, cacheGet, cacheKey, cachePut } from './cache';
-import { meanSimilarity } from './similarity';
+import { applyToPhotos, renderOwn, type OwnShot } from './own';
+import { changedPaths, edit as editSpec, redo as redoEdit, replaceSpec, startEdit, undo as undoEdit, type EditState, type Origin } from './edit';
+import { ADVANCED_CAP, counted, DEFAULT_CAP, freshCost, type Cost } from './cost';
+import { Editor, ResultPanel } from './LiveEditor';
+import { coverPlaced } from './edit';
 import { BLANK_NAME, blankStyle } from './blank';
 import { describeMeasured, measure } from './measure';
 import { detectReaders, ReaderError, readStyle, type ReferenceReader } from './reader';
-import { sectionsFor } from './spec';
+import { applyPatches, defaultThumbnail, sectionsFor } from './spec';
 import { LEARN_LABEL, TARGET_LABEL, type LearnFrom, type Measured, type MissingTool, type Rect, type ReferenceItem, type Target } from './types';
 import '../styles/carousel.css';
 import '../styles/reference.css';
@@ -45,6 +49,9 @@ interface Upload {
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'style';
+
+// The pictures sent to the reader are the smaller size (720 px): step 14c measured no drop in the result at that size, and nothing is gained by more.
+setProfile('small');
 
 export default function ReferenceStylePage() {
   useDocumentTitle('New style from references');
@@ -144,16 +151,29 @@ export default function ReferenceStylePage() {
   const baseOptions = useMemo(() => [blankStyle(), ...getStyles().styles.filter((s) => !s.spec.name.startsWith('mine-')).map((s) => s.spec)], [tplVersion]);
   const [baseName, setBaseName] = useState(BLANK_NAME);
   const [sampleTitle, setSampleTitle] = useState('Ride before sunrise');
-  const [samplePic, setSamplePic] = useState<{ id: string; url: string; width: number; height: number; name: string } | null>(null);
-  const pickSample = async (f: File | undefined) => {
-    if (!f) return;
-    try {
-      const bm = await bitmapOf(f);
-      const j = await jpegUrl(bm, null, 1600);
-      setSamplePic({ id: 'sample-own', url: j.url, width: j.width, height: j.height, name: f.name });
-    } catch {
-      setNotice(`“${f.name}” could not be read as a picture.`);
+  /** The person's own photos (in memory only). The first one is the one drawn in the result; the rest show the saved template applied. */
+  const [ownPics, setOwnPics] = useState<{ id: string; url: string; width: number; height: number; name: string }[]>([]);
+  const [builtin, setBuiltin] = useState<{ id: string; url: string; width: number; height: number } | null>(null);
+  useEffect(() => {
+    let live = true;
+    void samplePhoto().then((p) => live && setBuiltin({ ...p, id: 'sample-builtin' }));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const samplePic = ownPics[0] ?? null;
+  const addOwnPics = async (files: File[]) => {
+    const next: typeof ownPics = [];
+    for (const f of files.slice(0, 8 - ownPics.length)) {
+      try {
+        const bm = await bitmapOf(f);
+        const j = await jpegUrl(bm, null, 1600);
+        next.push({ id: `own-${ownPics.length + next.length + 1}-${f.name}`, url: j.url, width: j.width, height: j.height, name: f.name });
+      } catch {
+        setNotice(`“${f.name}” could not be read as a picture.`);
+      }
     }
+    if (next.length) setOwnPics((p) => [...p, ...next]);
   };
 
   // ----- readers -----
@@ -186,10 +206,89 @@ export default function ReferenceStylePage() {
   const ctx = useRef<{ content: SampleContent; spec: StyleSpec; name: string; photoItems: Set<string>; readClamps: string[] } | null>(null);
   const [keptText, setKeptText] = useState('');
 
+  // ----- the instant draft and the live result (no model) -----
+  const [editState, setEditState] = useState<EditState | null>(null);
+  const [shots, setShots] = useState<OwnShot[]>([]);
+  const [ownBusy, setOwnBusy] = useState(false);
+  const [draftSeconds, setDraftSeconds] = useState<number | null>(null);
+  const [advanced, setAdvanced] = useState(false);
+  const [costShown, setCostShown] = useState<Cost>(freshCost());
+  const cost = useRef<Cost>(costShown);
+  const parked = useRef<Record<string, unknown[]>>({});
+  const [, setParkTick] = useState(0);
+  const draftT0 = useRef(0);
+  const renderToken = useRef(0);
+  const ownContent = useMemo(() => (builtin ? { title: sampleTitle.trim() || 'Your title here', photo: ownPics[0] ?? builtin } : null), [builtin, ownPics, sampleTitle]);
+  const withThumb = (spec: StyleSpec) => (target !== 'carousel' && !spec.thumbnail ? { ...spec, thumbnail: defaultThumbnail(spec) } : spec);
+
+  // The measured numbers alone make a style the moment the references are measured: this is drawn straight away on the person's own content.
+  useEffect(() => {
+    if (preparing || items.length === 0 || measured.length === 0) {
+      setEditState(null);
+      setShots([]);
+      setDraftSeconds(null);
+      return;
+    }
+    const d = draftSpec(measured[0]);
+    draftT0.current = performance.now();
+    setDraftSeconds(null);
+    setEditState(startEdit(d.spec, Object.fromEntries(d.values.map((v) => [v.path, 'MEASURED' as Origin]))));
+    setSaved(null);
+    setOthers(null);
+    parked.current = {};
+  }, [items, measured, preparing, target]);
+
+  // Every change of the style, the title or the photo redraws the person's content at once.
+  useEffect(() => {
+    if (!editState || !ownContent) return;
+    const token = ++renderToken.current;
+    setOwnBusy(true);
+    const timer = setTimeout(async () => {
+      try {
+        await renderOwn({
+          spec: withThumb(editState.spec),
+          target,
+          content: ownContent,
+          onShot: (shot, i) => {
+            if (token !== renderToken.current) return;
+            setShots((prev) => {
+              if (i === 0) prev.forEach((p) => URL.revokeObjectURL(p.url));
+              return i === 0 ? [shot] : [...prev, shot];
+            });
+            if (i === 0 && draftT0.current) {
+              setDraftSeconds(Math.round(((performance.now() - draftT0.current) / 1000) * 100) / 100);
+              draftT0.current = 0;
+            }
+          },
+        });
+      } catch (e) {
+        if (token === renderToken.current) setProblem({ message: `This style could not be drawn: ${(e as Error).message}`, details: [] });
+      } finally {
+        if (token === renderToken.current) setOwnBusy(false);
+      }
+    }, 120);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editState?.spec, ownContent, target]);
+
+  const doEdit = (label: string, patches: { path: string; value: unknown }[]): string | null => {
+    if (!editState) return 'There is nothing to edit yet.';
+    const r = editSpec(editState, label, patches, 'PERSON', target);
+    if (!r.ok) return r.reasons[0];
+    setEditState(r.state);
+    return null;
+  };
+
   const canRead = items.length > 0 && !!readers?.length && !busy && !preparing;
   const read = async () => {
-    const reader = readers![0];
-    const base = baseOptions.find((s) => s.name === baseName) ?? baseOptions[0];
+    const rawReader = readers![0];
+    // One job, two calls at most: the first read, and one Improve the person asks for. The Advanced toggle raises the cap.
+    cost.current = freshCost(advanced ? ADVANCED_CAP : DEFAULT_CAP);
+    setCostShown(cost.current);
+    const reader = counted(rawReader, cost, setCostShown);
+    const picked = baseOptions.find((s) => s.name === baseName) ?? baseOptions[0];
+    const draftBase = editState?.spec ?? picked;
+    const base = baseName === BLANK_NAME ? draftBase : picked;
     const name = styleNameFor(title || 'style');
     abort.current = new AbortController();
     setBusy(true);
@@ -197,43 +296,28 @@ export default function ReferenceStylePage() {
     setRounds([]);
     setPicked(0);
     setSaved(null);
+    setOthers(null);
     const t0 = performance.now();
     const job = startJob('style-from-references', `${items.length} reference piece${items.length === 1 ? '' : 's'}, target: ${TARGET_LABEL[target]}`, [
       { id: 'split', label: 'Split collage' },
       { id: 'measure', label: 'Measure colours, layout and type' },
-      { id: 'draft', label: 'Quick draft from the measurements' },
-      { id: 'reader', label: 'Ask the reader' },
+      { id: 'draft', label: 'Instant draft from the measurements' },
+      { id: 'reader', label: 'Ask the reader (one call)' },
       { id: 'validate', label: 'Validate and clamp' },
     ]);
     onCancel(job.id, () => abort.current?.abort());
     job.references(items.map((it) => ({ name: it.name, url: it.dataUrl })));
     job.preDone('split', prep.current.split, 'done when the pictures were added');
     job.preDone('measure', prep.current.measure, 'done when the pictures were added');
-    job.note('Up to 3 things run at once: the quick draft is drawn while the reader reads. The reader’s own rounds run one after another, because each round depends on the one before.');
+    job.preDone('draft', draftSeconds ?? 0, 'drawn on your content when the pictures were added, no model');
+    job.note(advanced ? 'Advanced: the reader may refine over several rounds (up to the call limit shown).' : 'One model call to read, and one more only if you press Improve. No automatic rounds.');
     try {
       setPhase('The reader is looking at your references…');
       const images = items.map((it, i) => readerImageOf(it.dataUrl, `ref${i + 1}.jpg`));
-      const photo = samplePic ?? { ...(await samplePhoto()), id: 'sample-builtin' };
+      const photo = ownContent?.photo ?? { ...(await samplePhoto()), id: 'sample-builtin' };
       const content: SampleContent = { title: sampleTitle.trim() || 'Your title here', photo };
-      // A quick draft from the measured numbers alone, drawn while the reader reads, so there is a picture within a couple of seconds.
-      const draftDone = (async () => {
-        if (target === 'thumbnail' || measured.length === 0) return job.skip('draft', target === 'thumbnail' ? 'thumbnails take longer than a quick draft' : 'nothing measured');
-        job.begin('draft');
-        try {
-          const spec = draftSpec(measured[0]);
-          const n = Math.min(items.length, 4);
-          const reps = await renderReplicas({ spec, target, items: items.slice(0, n), measured: measured.slice(0, n), seen: ['cover'], content, photoItems: new Set() });
-          const sim = meanSimilarity(reps.map((r) => r.similarity));
-          const p = spec.palettes.plain as unknown as Record<string, string>;
-          const draft = { n: -1, label: 'Quick draft', spec, replicas: reps, similarity: sim, judgement: null, patchesOut: [], refused: [], madeBy: [], clamped: [], score: scoreOf(sim, null), ms: 0 } as unknown as Round;
-          job.round(await liveRound(draft, [
-            { text: `background → ${p.bg}`, source: 'MEASURED' }, { text: `text → ${p.text}`, source: 'MEASURED' }, { text: `margin → ${spec.spacing.margin} px`, source: 'MEASURED' }, { text: `title → ${spec.type.headline} px`, source: 'MEASURED' },
-          ], { draft: true }));
-          job.end('draft');
-        } catch (e) {
-          job.fail('draft', (e as Error).message);
-        }
-      })();
+      const draft = draftSpec(measured[0]);
+      const fixed = draft.values.filter((v) => /^(palettes|spacing|type)\./.test(v.path)).map((v) => v.text);
       // The same references, learn-from choices, target and reader version were read before: use that answer.
       const key = await cacheKey({ dataUrls: items.map((i) => i.dataUrl), learn: items.map((i) => i.learn), target, baseName, readerId: reader.id }).catch(() => '');
       const hit = key ? await cacheGet(key) : null;
@@ -246,7 +330,7 @@ export default function ReferenceStylePage() {
       } else {
         job.waiting('the reader');
         try {
-          out = await readStyle({ reader, items, images, target, base, baseName, measured, name, title: title.trim() || 'My style', signal: abort.current.signal, onPhase: (p) => setPhase(p === 'reading' ? 'The reader is looking at your references…' : 'The reader’s first answer did not pass the checks, so it is asked once more…') });
+          out = await readStyle({ reader, items, images, target, base, baseName, measured, name, title: title.trim() || 'My style', narrow: baseName === BLANK_NAME ? { fixed } : undefined, signal: abort.current.signal, onPhase: (p) => setPhase(p === 'reading' ? 'The reader is looking at your references…' : 'The reader’s first answer was not usable, asking once more…') });
         } finally {
           job.waiting(null);
         }
@@ -254,18 +338,22 @@ export default function ReferenceStylePage() {
         if (key) void cachePut(key, out);
       }
       job.begin('validate');
+      // What the code measured stays as measured: the reader decides what code cannot (fonts, marks, layout type, shapes).
+      const protectedPatches = draft.values.filter((v) => /^(palettes|spacing|type)\./.test(v.path)).map((v) => ({ path: v.path, value: v.path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)[k], draft.spec) }));
+      const kept = baseName === BLANK_NAME ? applyPatches(out.spec, protectedPatches, target).spec : out.spec;
+      out = { ...out, spec: kept };
       job.end('validate', out.clamps.length ? `${out.clamps.length} value${out.clamps.length === 1 ? '' : 's'} moved to what the toolbox supports` : 'nothing had to be moved');
-      await draftDone;
+      if (editState) setEditState(replaceSpec(editState, kept, Object.fromEntries(changedPaths(editState.spec, kept).map((p) => [p, 'READER' as Origin]))));
       setSeen(out.result.seenSlideTypes);
       setMissing(out.result.missingTools);
       setNotes(out.result.notes);
       setAttempts(out.attempts);
-      // The references that show a photo, a person, a device or an object get a photo in their sample.
       const photoItems = new Set(items.filter((_, i) => out.result.photoImages.includes(`ref${i + 1}.jpg`)).map((i) => i.id));
       ctx.current = { content, spec: out.spec, name, photoItems, readClamps: out.clamps };
       const all: Round[] = [];
       const result = await runLoop({
-        reader,
+        // Without Advanced there is no reader here: the first replica is drawn (for the closeness panel) and the loop ends. No automatic rounds.
+        reader: advanced ? reader : null,
         spec: out.spec,
         target,
         sections: sectionsFor(items.map((i) => i.learn)),
@@ -275,6 +363,7 @@ export default function ReferenceStylePage() {
         photoItems,
         readClamps: out.clamps,
         content,
+        maxRounds: advanced ? 3 : 0,
         signal: abort.current.signal,
         onRound: (r) => {
           const at = all.findIndex((x) => x.n === r.n);
@@ -285,14 +374,20 @@ export default function ReferenceStylePage() {
         onPhase: setPhase,
         job,
       });
+      job.cost({ calls: cost.current.calls, images: cost.current.images, tokens: cost.current.tokens });
       job.finish(result.stopped === 'cancelled' ? 'cancelled' : 'done', result.stopped === 'cancelled' ? 'Cancelled.' : undefined);
       setPicked(result.best);
-      setKeptText(keptSentence(result.rounds, result.best, result.stopped));
+      if (advanced) {
+        setKeptText(keptSentence(result.rounds, result.best, result.stopped));
+        const bestSpec = result.rounds[result.best]?.spec;
+        if (bestSpec) setEditState((cur) => (cur ? replaceSpec(cur, bestSpec, Object.fromEntries(changedPaths(cur.spec, bestSpec).map((p) => [p, 'READER' as Origin]))) : cur));
+      } else setKeptText('');
       const sum = (f: (r: Round) => number) => (result.rounds.reduce((a, r) => a + f(r), 0) / 1000).toFixed(0);
-      setTiming(`Read and refined in ${((performance.now() - t0) / 1000).toFixed(0)} s (${result.rounds.length} round${result.rounds.length === 1 ? '' : 's'} drawn). Where it went: the first read by the reader ${(out.ms / 1000).toFixed(0)} s, drawing and measuring ${sum((r) => r.timing.renderMs)} s, making the pictures for the reader ${sum((r) => r.timing.prepMs)} s, the reader looking at them ${sum((r) => r.timing.lookMs)} s.`);
+      setTiming(`Read in ${((performance.now() - t0) / 1000).toFixed(0)} s with ${cost.current.calls} model call${cost.current.calls === 1 ? '' : 's'}. Where it went: the reader ${(out.ms / 1000).toFixed(0)} s, drawing and measuring ${sum((r) => r.timing.renderMs)} s.`);
       setPhase('');
     } catch (e) {
       setPhase('');
+      job.cost({ calls: cost.current.calls, images: cost.current.images, tokens: cost.current.tokens });
       job.finish(e instanceof ReaderError && e.kind === 'cancelled' ? 'cancelled' : 'failed', e instanceof Error ? e.message : undefined);
       if (e instanceof ReaderError) setProblem({ message: e.kind === 'cancelled' ? 'Cancelled.' : e.message, details: e.problems });
       else setProblem({ message: e instanceof Error ? e.message : 'Something went wrong while reading the references.', details: [] });
@@ -301,24 +396,28 @@ export default function ReferenceStylePage() {
     }
   };
 
+  /** Improve: the person's own words become changes, with one model call. Built on the style as it is now, including the person's edits. */
   const adjust = async () => {
     const text = feedback.trim();
     const c = ctx.current;
-    if (!text || !c || !readers?.length || busy) return;
+    if (!text || !c || !readers?.length || busy || !editState || rounds.length === 0) return;
+    if (cost.current.calls >= cost.current.cap) return setProblem({ message: `The limit of ${cost.current.cap} model calls for this job is reached. Turn on Advanced to allow more.`, details: [] });
+    const reader = counted(readers[0], cost, setCostShown);
     abort.current = new AbortController();
     setBusy(true);
     setProblem(null);
     setPhase('The reader is turning your words into changes…');
     try {
-      const from = rounds[picked];
+      const from = { ...rounds[picked], spec: editState.spec };
       const r = await applyFeedback(
-        { reader: readers[0], spec: from.spec, target, sections: sectionsFor(items.map((i) => i.learn)), items, measured, seen, photoItems: c.photoItems, readClamps: c.readClamps, content: c.content, signal: abort.current.signal, onRound: () => undefined },
+        { reader, spec: from.spec, target, sections: sectionsFor(items.map((i) => i.learn)), items, measured, seen, photoItems: c.photoItems, readClamps: c.readClamps, content: c.content, signal: abort.current.signal, onRound: () => undefined },
         from,
         rounds.length,
         text,
       );
       setRounds((all) => [...all, r]);
       setPicked(rounds.length);
+      setEditState((cur) => (cur ? replaceSpec(cur, r.spec, Object.fromEntries(changedPaths(cur.spec, r.spec).map((p) => [p, 'READER' as Origin]))) : cur));
       setFeedback('');
     } catch (e) {
       setProblem({ message: e instanceof ReaderError ? e.message : 'The feedback could not be applied.', details: e instanceof ReaderError ? e.problems : [] });
@@ -332,12 +431,24 @@ export default function ReferenceStylePage() {
   const [saved, setSaved] = useState<{ id: string; name: string } | null>(null);
   const chosen = rounds[picked] ?? null;
   const close = chosen ? closenessOf(chosen, { itemCount: items.length, seen, target, missing, clamped: chosen.clamped }) : null;
+  /** The saved template applied to the person's photos: instant, with no model. */
+  const [others, setOthers] = useState<{ items: { id: string; url: string; seconds: number; name: string }[]; seconds: number } | null>(null);
   const save = async () => {
-    if (!chosen) return;
+    if (!editState) return;
     const name = title.trim() || 'My style';
-    const preview = chosen.replicas[0] ? await previewOf(chosen.replicas[0].blob) : '';
-    const t = await saveTemplate({ name, target, spec: { ...chosen.spec, name: ctx.current?.name ?? chosen.spec.name }, preview, singleImage: items.length === 1, extrapolated: close?.extrapolated, missing: missing.map((m) => m.tool) });
+    // The style and the layout recipe only: marks switched off in the editor are not kept, and no reference picture is in it.
+    const clean = withThumb({ ...editState.spec, ...(editState.spec.marks ? { marks: editState.spec.marks.filter((m) => !m.off) } : {}) });
+    if (clean.marks && clean.marks.length === 0) delete (clean as { marks?: unknown }).marks;
+    const preview = shots[0] ? await previewOf(shots[0].blob) : '';
+    const t = await saveTemplate({ name, target, spec: { ...clean, name: ctx.current?.name ?? styleNameFor(title || 'style') }, preview, singleImage: items.length === 1, extrapolated: close?.extrapolated, missing: missing.map((m) => m.tool) });
     setSaved({ id: t.id, name: t.name });
+    // Show it on the person's photos (all of them, or the built-in one if there are none): what applying a template to something new looks like.
+    const pics = ownPics.length ? ownPics : builtin ? [{ ...builtin, name: 'built-in sample' }] : [];
+    const t0 = performance.now();
+    const done = await applyToPhotos(t.spec, target, sampleTitle.trim() || 'Your title here', pics);
+    const total = Math.round(((performance.now() - t0) / 1000) * 100) / 100;
+    setOthers({ items: done.map((d) => ({ ...d, name: pics.find((p) => p.id === d.id)?.name ?? '' })), seconds: total });
+    (window as unknown as { __template?: unknown }).__template = { applySeconds: total, photos: done.length, modelCalls: 0 };
   };
 
   const showRounds = rounds.length > 0;
@@ -351,6 +462,7 @@ export default function ReferenceStylePage() {
         </div>
       </header>
 
+      <div className="rf-three">
       <section className="card rf-sec" aria-labelledby="rf-refs-h">
         <h2 id="rf-refs-h" className="h3">1. Your references</h2>
         <p className="small muted">{REFERENCES_PRIVACY}</p>
@@ -468,16 +580,26 @@ export default function ReferenceStylePage() {
           </select>
         </label>
         <label className="tn-field">
-          <span className="field-label">Sample title for thumbnails</span>
+          <span className="field-label">Your title (drawn on the cover and the thumbnail)</span>
           <input className="input" value={sampleTitle} maxLength={60} onChange={(e) => setSampleTitle(e.target.value)} />
         </label>
         <div className="cr-photo-actions">
           <label className="btn btn-outline btn-sm">
-            {samplePic ? `Sample photo: ${samplePic.name}` : 'Use my own photo for the samples (optional)'}
-            <input type="file" accept="image/*" className="visually-hidden" aria-label="Choose a photo for the samples" onChange={(e) => { void pickSample(e.target.files?.[0]); e.target.value = ''; }} />
+            {ownPics.length ? `Add more of my photos (${ownPics.length})` : 'Add my own photos (optional)'}
+            <input type="file" multiple accept="image/*" className="visually-hidden" aria-label="Choose a photo for the samples" onChange={(e) => { void addOwnPics([...(e.target.files ?? [])]); e.target.value = ''; }} />
           </label>
-          <span className="small muted">{samplePic ? 'It stays in memory only.' : 'Without one, a built-in drawn landscape is used.'}</span>
+          <span className="small muted">{samplePic ? 'Your photos stay in memory only. The first one is drawn in the result; the others show the saved template applied.' : 'Without one, a built-in drawn landscape is used.'}</span>
         </div>
+        {ownPics.length > 0 && (
+          <ul className="rf-own" aria-label="Your photos">
+            {ownPics.map((p) => (
+              <li key={p.id}><img src={p.url} alt={`Your photo ${p.name}`} width={56} /> <button type="button" className="btn btn-outline btn-sm" aria-label={`Remove your photo ${p.name}`} onClick={() => setOwnPics((l) => l.filter((x) => x.id !== p.id))}>Remove</button></li>
+            ))}
+          </ul>
+        )}
+        <label className="small rf-toggle">
+          <input type="checkbox" checked={advanced} disabled={busy} onChange={(e) => setAdvanced(e.target.checked)} /> Advanced: let the reader refine over several rounds (uses more model calls, up to {ADVANCED_CAP}). Off by default: {DEFAULT_CAP} calls at most.
+        </label>
         {readers && readers.length === 0 && <p className="small cr-warn" role="status">No reader is connected, so “Read references” is off. Start the app with the dev server (it uses Claude Code on this computer) or give the server an API key (see the server notes).</p>}
         {readers && readers.length > 0 && <p className="small muted" role="status">Reader: {readers[0].label}.</p>}
         <div className="cr-photo-actions">
@@ -493,6 +615,30 @@ export default function ReferenceStylePage() {
           </div>
         )}
       </section>
+
+      <section className="card rf-sec" aria-labelledby="rf-result-h">
+        <h2 id="rf-result-h" className="h3">Your content in this style</h2>
+        <p className="small" role="status" aria-label="Model calls">Model calls: {costShown.calls} of {costShown.cap} · pictures sent: {costShown.images} · tokens: {costShown.tokens === null ? 'not reported' : costShown.tokens}</p>
+        {!editState ? (
+          <p className="small muted">Add a reference and the style appears here at once, drawn on your own content. That first draft is made by the code alone from what it measures, with no model.</p>
+        ) : (
+          <>
+            <ResultPanel state={editState} shots={shots} drawing={ownBusy} secondsToFirst={draftSeconds} onPlace={(p) => doEdit(`Put the title at the ${p}`, [coverPlaced(editState.spec, p)])} />
+            <Editor state={editState} target={target} onEdit={doEdit} onUndo={() => setEditState((c) => (c ? undoEdit(c) : c))} onRedo={() => setEditState((c) => (c ? redoEdit(c) : c))} parked={parked} onPark={() => setParkTick((n) => n + 1)} />
+            {rounds.length > 0 && (
+              <div className="rf-feedback">
+                <label className="tn-field">
+                  <span className="field-label">Tell it what to change (for example “bigger title”, “less blur”, “more space”)</span>
+                  <input className="input" value={feedback} onChange={(e) => setFeedback(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void adjust()} aria-label="Your feedback" />
+                </label>
+                <button type="button" className="btn btn-outline btn-sm" disabled={!feedback.trim() || busy || !readers?.length || costShown.calls >= costShown.cap} onClick={() => void adjust()}>Improve (one model call)</button>
+                {costShown.calls >= costShown.cap && <span className="small muted" role="status">The limit of {costShown.cap} model calls is reached.</span>}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+      </div>
 
       {items.length > 0 && (
         <section className="card rf-sec" aria-labelledby="rf-measured-h">
@@ -548,15 +694,6 @@ export default function ReferenceStylePage() {
               </li>
             ))}
           </ol>
-          {rounds.length > 0 && (
-            <div className="rf-feedback">
-              <label className="tn-field">
-                <span className="field-label">Tell it what to change (for example “bigger title”, “less blur”, “more space”)</span>
-                <input className="input" value={feedback} onChange={(e) => setFeedback(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void adjust()} aria-label="Your feedback" />
-              </label>
-              <button type="button" className="btn btn-outline btn-sm" disabled={!feedback.trim() || busy || !readers?.length} onClick={() => void adjust()}>Adjust</button>
-            </div>
-          )}
         </section>
       )}
 
@@ -590,7 +727,7 @@ export default function ReferenceStylePage() {
         </section>
       )}
 
-      {chosen && (
+      {editState && (
         <section className="card rf-sec" aria-labelledby="rf-save-h">
           <h2 id="rf-save-h" className="h3">6. Save as a template</h2>
           <p className="small muted">Saves the style (not your references) in this browser with a preview. It then shows up in the style pickers for {target === 'carousel' ? 'carousels' : target === 'thumbnail' ? 'Make a thumbnail' : 'carousels and Make a thumbnail'}, tagged “Mine”.</p>
@@ -598,6 +735,13 @@ export default function ReferenceStylePage() {
             <button type="button" className="btn btn-primary btn-sm" disabled={!!saved || busy} onClick={() => void save()}>Save as template</button>
             {saved && <span className="small" role="status">Saved “{saved.name}”. <Link to="/images/styles">See your templates</Link>.</span>}
           </div>
+          {others && (
+            <div aria-label="The template applied to your photos">
+              <p className="small" role="status">Applied to {others.items.length} photo{others.items.length === 1 ? '' : 's'} in {others.seconds} s with 0 model calls.</p>
+              <ul className="rf-others">{others.items.map((o) => <li key={o.id}><img src={o.url} alt={`Template applied to ${o.name || 'the sample photo'}`} width={120} /><span className="small muted">{o.seconds} s</span></li>)}</ul>
+              {ownPics.length < 2 && <p className="small muted">Add more of your photos above to see it on them too.</p>}
+            </div>
+          )}
           {templateProblem() && <p className="small cr-problem" role="alert">{templateProblem()}</p>}
         </section>
       )}

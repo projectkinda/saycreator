@@ -89,8 +89,11 @@ const SYSTEM_RULES = [
 
 const fileName = (i: number) => `ref${i + 1}.jpg`;
 
-export function buildReadPrompt(o: { items: ReferenceItem[]; target: Target; base: StyleSpec; baseName: string; measured: Measured[] }): string {
-  const sections = sectionsFor(o.items.map((i) => i.learn));
+/** What a short read may decide: only what the code cannot measure. The colours, margins and title size are measured and stay as they are. */
+export const NARROW_SECTIONS = ['fonts', 'caseStyle', 'headlineLineHeight', 'shape', 'layouts', 'photo', 'marks', 'elements', 'thumbnail', 'description'];
+
+export function buildReadPrompt(o: { items: ReferenceItem[]; target: Target; base: StyleSpec; baseName: string; measured: Measured[]; narrow?: { fixed: string[] } }): string {
+  const sections = sectionsFor(o.items.map((i) => i.learn)).filter((s) => !o.narrow || NARROW_SECTIONS.includes(s));
   const single = o.items.length === 1;
   const lines = o.items.map((it, i) => `- ${fileName(i)}: learn from "${LEARN_LABEL[it.learn]}"${it.source.cell !== undefined ? ` (one slide of a collage)` : ''}. Measured: ${measuredLine(o.measured[i])}`);
   return [
@@ -102,6 +105,7 @@ export function buildReadPrompt(o: { items: ReferenceItem[]; target: Target; bas
     `Target: ${TARGET_LABEL[o.target]}. ${o.target === 'carousel' ? 'Write layouts for all 8 slide types.' : o.target === 'thumbnail' ? 'Write the "thumbnail" block (and a palette, fonts and type that suit it).' : 'Write layouts for all 8 slide types and the "thumbnail" block.'}`,
     `The style is laid over a base style (${o.baseName}); give only the sections you want to change. You may only change these sections: ${sections.join(', ')}. Each image only says what its "learn from" allows: "Colours and type only" gives palettes, fonts, type, case and shape; "Layout only" gives layouts, spacing, chrome and the thumbnail layout; "Photo treatment only" gives the photo treatments.`,
     `The base style is BLANK: plain white, no decorations, no elements (no stickers, tape, bulbs, squiggles), no photo treatments. Anything you do not state stays blank. Add decorations ("elements") and photo treatments only when a reference really has them, and give the slide types that show a photo a rule with "when": {"photo": true} that uses a photo layout (cover-photo-full, cover-photo-split, cover-photo-shape, content-photo-frame, content-photo-strip, stat-photo or quote-photo-blur) and a "treatment" param naming an entry of photo.treatments.`,
+    o.narrow ? `THIS IS A SHORT JOB, ONE CALL. The code has already measured these values and put them in the style, so do not give them again and do not change them: ${o.narrow.fixed.join('; ')}. Decide only what code cannot: the font family and case, shapes (radius, outline, badges), marks and textures (badges, stamps, stripes, halftone, grain, tape, arrows), small pictures (elements), which layout suits each slide type, and the look of photos. Keep the answer short: give only the sections you need to change.` : '',
     single ? 'Only ONE image is given: build the style from its look and extrapolate the other slide types from it. In "seen_slide_types" list only the slide types the image really shows.' : '',
     '',
     'The measured values are facts from the pixels. Use colours close to the measured palette, sizes close to the measured shares (a title that is 12% of the frame height on a 1350 high slide is about 160 px of type), and margins close to the measured margins.',
@@ -205,9 +209,9 @@ export interface ReadOutcome {
 const retryPrompt = (first: string, previous: string, errors: string[]) => [first, '', 'Your previous answer was:', previous.slice(0, 7000), '', 'It cannot be used, for these reasons:', ...errors.slice(0, 14).map((e) => `- ${e}`), '', 'Answer again with ONE JSON object that fixes every one of these.'].join('\n');
 
 /** Reads the references: ask, check the answer with the style validator, and if it is not valid ask once more with the problems. */
-export async function readStyle(o: { reader: ReferenceReader; items: ReferenceItem[]; images: ReaderImage[]; target: Target; base: StyleSpec; baseName: string; measured: Measured[]; name: string; title: string; signal: AbortSignal; onPhase?: (p: 'reading' | 'retrying') => void }): Promise<ReadOutcome> {
-  const prompt = buildReadPrompt({ items: o.items, target: o.target, base: o.base, baseName: o.baseName, measured: o.measured });
-  const sections = sectionsFor(o.items.map((i) => i.learn));
+export async function readStyle(o: { reader: ReferenceReader; items: ReferenceItem[]; images: ReaderImage[]; target: Target; base: StyleSpec; baseName: string; measured: Measured[]; name: string; title: string; signal: AbortSignal; narrow?: { fixed: string[] }; onPhase?: (p: 'reading' | 'retrying') => void }): Promise<ReadOutcome> {
+  const prompt = buildReadPrompt({ items: o.items, target: o.target, base: o.base, baseName: o.baseName, measured: o.measured, narrow: o.narrow });
+  const sections = sectionsFor(o.items.map((i) => i.learn)).filter((s) => !o.narrow || NARROW_SECTIONS.includes(s));
   const note = `${o.items.length === 1 ? 'Built from one image' : `Built from ${o.items.length} images`}: ${o.items.map((i) => `${i.name} (${LEARN_LABEL[i.learn].toLowerCase()})`).join(', ')}.`;
   const attempt = (text: string): { spec: StyleSpec; result: ReadResult; errors: string[]; warnings: string[]; clamps: string[] } => {
     const p = parseRead(text);

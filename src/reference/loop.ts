@@ -79,7 +79,7 @@ const loaded = (spec: StyleSpec): LoadedStyle => ({ spec, assets: {}, warnings: 
 const kindOf = (item: ReferenceItem, target: Target): 'slide' | 'thumbnail' => (target === 'carousel' ? 'slide' : target === 'thumbnail' ? 'thumbnail' : item.width / item.height > 1.3 ? 'thumbnail' : 'slide');
 const slideOf = (seen: SlideType[], i: number): SlideType => seen[i % Math.max(1, seen.length)] ?? 'cover';
 
-async function toPx(blob: Blob): Promise<Measured> {
+export async function toPx(blob: Blob): Promise<Measured> {
   const bm = await bitmapOf(blob);
   const m = measure(pxOfCanvas(cut(bm, null, 420)));
   bm.close();
@@ -88,7 +88,7 @@ async function toPx(blob: Blob): Promise<Measured> {
 
 const analysed = new Map<string, Promise<PhotoInput>>();
 /** The sample photo with the numbers the layouts use to keep words readable over it. Read once per picture. */
-const sampleInput = (p: SampleContent['photo']): Promise<PhotoInput> => {
+export const sampleInput = (p: SampleContent['photo']): Promise<PhotoInput> => {
   let a = analysed.get(p.url);
   if (!a) {
     a = analysePhoto(p.url, p.id, { label: 'sample' });
