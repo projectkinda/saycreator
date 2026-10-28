@@ -212,7 +212,7 @@ const retryPrompt = (first: string, previous: string, errors: string[]) => [firs
 export async function readStyle(o: { reader: ReferenceReader; items: ReferenceItem[]; images: ReaderImage[]; target: Target; base: StyleSpec; baseName: string; measured: Measured[]; name: string; title: string; signal: AbortSignal; narrow?: { fixed: string[] }; onPhase?: (p: 'reading' | 'retrying') => void }): Promise<ReadOutcome> {
   const prompt = buildReadPrompt({ items: o.items, target: o.target, base: o.base, baseName: o.baseName, measured: o.measured, narrow: o.narrow });
   const sections = sectionsFor(o.items.map((i) => i.learn)).filter((s) => !o.narrow || NARROW_SECTIONS.includes(s));
-  const note = `${o.items.length === 1 ? 'Built from one image' : `Built from ${o.items.length} images`}: ${o.items.map((i) => `${i.name} (${LEARN_LABEL[i.learn].toLowerCase()})`).join(', ')}.`;
+  const note = `${o.items.length === 1 ? 'Built from one image' : `Built from ${o.items.length} images`}: ${o.items.map((i) => LEARN_LABEL[i.learn].toLowerCase()).join(', ')}.`;
   const attempt = (text: string): { spec: StyleSpec; result: ReadResult; errors: string[]; warnings: string[]; clamps: string[] } => {
     const p = parseRead(text);
     if (!p.ok) return { spec: o.base, result: { style: {}, seenSlideTypes: [], photoImages: [], missingTools: [], notes: '' }, errors: p.errors, warnings: [], clamps: [] };
