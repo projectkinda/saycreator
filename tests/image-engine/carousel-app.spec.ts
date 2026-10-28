@@ -370,7 +370,8 @@ test('refresh and recover: the script, the edits, the style and the undo history
   await page.reload();
   await allDrawn(page);
   await expect(slideCard(page, 2).getByLabel('Headline')).toHaveValue('Say who you help');
-  expect(await page.getByRole('list', { name: 'Styles' }).getByRole('button', { pressed: true }).innerText()).toBe(styleName);
+  // The chosen style's button may still carry a passing "Drawing…" note right after a reload, so wait for the name rather than read it once.
+  await expect.poll(async () => (await page.getByRole('list', { name: 'Styles' }).getByRole('button', { pressed: true }).innerText()).replace(/Drawing…s*/, '').trim()).toBe(styleName.replace(/Drawing…s*/, '').trim());
   await expect(undoBtn(page)).toContainText('Change style to');
   await undoBtn(page).click();
   await undoBtn(page).click();
