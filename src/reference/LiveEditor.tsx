@@ -159,6 +159,9 @@ export function Editor({ state, target, onEdit, onUndo, onRedo, parked, onPark }
         ))}
       </fieldset>
 
+      {state.spec.free && (
+        <p className="small">Layout boxes from your reference ({Object.keys(state.spec.free).join(', ')}): <OriginChip origin={originOf(state.prov, 'free.cover') ?? originOf(state.prov, 'free')} /> Edit them under “What I detected”.</p>
+      )}
       <fieldset className="rf-fs"><legend className="small"><b>Text size and place</b></legend>
         {([['type.headline', 'Title size', 32, 220], ['type.cover', 'Cover title size', 32, 260], ['spacing.margin', 'Margin', 48, 200]] as const).map(([path, label, lo, hi]) => {
           const v = Number((spec[path.split('.')[0]] as Record<string, unknown>)[path.split('.')[1]]);

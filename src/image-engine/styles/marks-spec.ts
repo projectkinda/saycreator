@@ -37,6 +37,8 @@ export interface MarkSpec {
   font?: 'headline' | 'body';
   /** Only on these slide types (all if left out). */
   types?: string[];
+  /** Placed at this box (percent of the canvas) instead of in a zone; the size is then the box's width. Used by free layouts. */
+  box?: { x: number; y: number; w: number; h: number };
   /** Switched off in the editor: kept in the list so it can be switched on again, but not drawn. */
   off?: boolean;
 }
@@ -69,6 +71,10 @@ export function validateMarks(raw: unknown, roles: readonly string[], slideTypes
     if (o.points !== undefined && (!num(o.points) || o.points < 4 || o.points > 24 || !Number.isInteger(o.points))) err(`${w}.points must be a whole number from 4 to 24.`);
     if (o.opacity !== undefined && (!num(o.opacity) || o.opacity < 0.05 || o.opacity > 1)) err(`${w}.opacity must be 0.05 to 1.`);
     if (o.bleed !== undefined && typeof o.bleed !== 'boolean') err(`${w}.bleed must be true or false.`);
+    if (o.box !== undefined) {
+      const b = o.box as Record<string, unknown>;
+      if (typeof b !== 'object' || b === null || !['x', 'y', 'w', 'h'].every((k) => num(b[k]))) err(`${w}.box must have x, y, w and h (percent of the canvas).`);
+    }
     if (o.off !== undefined && typeof o.off !== 'boolean') err(`${w}.off must be true or false.`);
     if (o.font !== undefined && o.font !== 'headline' && o.font !== 'body') err(`${w}.font must be "headline" or "body".`);
     if (o.types !== undefined && !(Array.isArray(o.types) && o.types.every((t) => slideTypes.includes(t as string)))) err(`${w}.types must be a list of slide types (${slideTypes.join(', ')}).`);

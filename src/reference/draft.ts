@@ -4,6 +4,8 @@ import type { StyleSpec } from '../image-engine/styles/format';
 import type { Treatment } from '../image-engine/types';
 import { blankStyle } from './blank';
 import type { Measured } from './types';
+import { buildFree } from './free';
+import type { Detected } from './regions';
 
 const clampN = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -36,7 +38,8 @@ function coverLayoutFor(place: string | null): string {
 }
 
 /** The blank style with the first reference's measured values, and the list of what was measured. */
-export function draftSpec(m: Measured): { spec: StyleSpec; values: DraftValue[] } {
+export function draftSpec(m: Measured, d?: Detected | null): { spec: StyleSpec; values: DraftValue[]; clamps: string[] } {
+  const clamps: string[] = [];
   const s = blankStyle();
   const values: DraftValue[] = [];
   const p = s.palettes.plain as unknown as Record<string, unknown>;
@@ -74,5 +77,12 @@ export function draftSpec(m: Measured): { spec: StyleSpec; values: DraftValue[] 
     s.photo = { ...(s.photo ?? { treatments: {} }), treatments: { ...(s.photo?.treatments ?? {}), plain: steps } };
     values.push({ path: 'photo.treatments.plain', text: `photo look → ${steps.map((t) => t.op).join(' + ')}` });
   }
-  return { spec: s, values };
+  // The measured boxes: where every text block, photo, shape and graphic is, so the replica starts from the reference's own layout.
+  if (d) {
+    const b = buildFree(d);
+    s.free = { cover: b.free };
+    clamps.push(...b.clamps);
+    values.push({ path: 'free.cover', text: `layout → ${b.free.slots.length} text boxes, ${b.free.shapes.length} shapes, ${b.free.photos.length} photo regions, ${b.free.background.kind} background (boxes in percent of the picture)` });
+  }
+  return { spec: s, values, clamps };
 }

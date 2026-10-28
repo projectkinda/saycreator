@@ -23,9 +23,9 @@ export type LearnFrom = 'everything' | 'colours-type' | 'layout' | 'photo';
 export const LEARN_LABEL: Record<LearnFrom, string> = { everything: 'Everything', 'colours-type': 'Colours and type only', layout: 'Layout only', photo: 'Photo treatment only' };
 /** The parts of a style spec each choice may change. Anything not listed stays as it is in the base style. */
 export const LEARN_SECTIONS: Record<LearnFrom, string[]> = {
-  everything: ['palettes', 'rhythm', 'byType', 'fonts', 'type', 'caseStyle', 'headlineLineHeight', 'bodyLineHeight', 'shape', 'spacing', 'chrome', 'layouts', 'photo', 'elements', 'marks', 'thumbnail', 'description'],
+  everything: ['palettes', 'rhythm', 'byType', 'fonts', 'type', 'caseStyle', 'headlineLineHeight', 'bodyLineHeight', 'shape', 'spacing', 'chrome', 'layouts', 'free', 'photo', 'elements', 'marks', 'thumbnail', 'description'],
   'colours-type': ['palettes', 'rhythm', 'byType', 'fonts', 'type', 'caseStyle', 'headlineLineHeight', 'bodyLineHeight', 'shape'],
-  layout: ['spacing', 'chrome', 'layouts', 'elements', 'marks', 'thumbnail'],
+  layout: ['spacing', 'chrome', 'layouts', 'free', 'elements', 'marks', 'thumbnail'],
   photo: ['photo', 'thumbnail'],
 };
 

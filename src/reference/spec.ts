@@ -82,7 +82,7 @@ function mergeSection(key: string, base: unknown, over: unknown): unknown {
     const b = isObj(base) ? base : {};
     return { ...b, ...over, treatments: { ...(isObj(b.treatments) ? b.treatments : {}), ...(isObj(over.treatments) ? over.treatments : {}) } };
   }
-  if (key === 'thumbnail' || key === 'elements' || key === 'marks' || key === 'rhythm' || key === 'byType') return over;
+  if (key === 'thumbnail' || key === 'elements' || key === 'marks' || key === 'free' || key === 'rhythm' || key === 'byType') return over;
   return { ...(isObj(base) ? base : {}), ...over };
 }
 

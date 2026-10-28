@@ -103,12 +103,25 @@ test('the reader’s first answer does not pass the checks: it is asked once mor
   expect(rec.reads[1].prompt).toMatch(/marker must be one of box, underline, brush/);
 });
 
-test('two bad answers in a row: a plain message with the reasons, and nothing is saved', async ({ page }) => {
+test('two bad answers in a row (labels): a plain message with the reasons, the draft stays, and nothing is saved', async ({ page }) => {
+  // The default read asks only for labels, so an answer that labels nothing is refused twice.
+  await fakeReader(page, () => JSON.stringify({ roles: { nonsense: 'title' } }));
+  await openStyleFromReferences(page);
+  await refInput(page).setInputFiles(await makeReference(page, { name: 's.jpg', kind: 'slide' }));
+  await page.getByRole('button', { name: 'Read references' }).click();
+  const alert = page.getByRole('alert').filter({ hasText: 'neither answer could be used as labels' });
+  await expect(alert).toBeVisible({ timeout: 60_000 });
+  await expect(alert).toContainText('No text box was given a valid role');
+  expect(await storedTemplates(page)).toHaveLength(0);
+});
+
+test('two bad answers in a row (Advanced, full style): a plain message with the reasons, and nothing is saved', async ({ page }) => {
   const bad = JSON.parse(readAnswer()) as { style: { shape: Record<string, unknown> } };
   bad.style.shape.marker = 'neon-glow';
   await fakeReader(page, () => JSON.stringify(bad));
   await openStyleFromReferences(page);
   await refInput(page).setInputFiles(await makeReference(page, { name: 's.jpg', kind: 'slide' }));
+  await page.getByRole('checkbox', { name: /^Advanced:/ }).check();
   await page.getByRole('button', { name: 'Read references' }).click();
   const alert = page.getByRole('alert').filter({ hasText: 'neither answer was a style that passes the checks' });
   await expect(alert).toBeVisible({ timeout: 60_000 });

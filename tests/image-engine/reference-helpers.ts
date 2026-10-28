@@ -93,6 +93,13 @@ export function readAnswer(o: { accent?: string; layouts?: boolean; photo?: bool
   return JSON.stringify({ style, seen_slide_types: o.seen ?? ['cover'], ...(o.photoImages ? { images_with_photos: o.photoImages } : {}), missing_tools: o.missing ?? [{ tool: '3D renders', why: 'The reference has a glossy 3D object; we can only draw flat shapes and pictures from the library.', images: ['ref1.jpg'] }, { tool: 'Fonts we do not bundle', why: 'The reference uses a condensed grotesque; we only have two families.' }], notes: 'Heavy caps, one hot accent, flat shapes.' });
 }
 
+/** A valid labels answer (the default read): the first text box is the title, the rest body text, and graphics are called asterisks. The ids are read from the prompt. */
+export function labelsAnswer(prompt: string, o: { seen?: string[]; photoImages?: string[] } = {}) {
+  const text = [...new Set(prompt.match(/r\d+T\d+/g) ?? [])];
+  const graphics = [...new Set(prompt.match(/r\d+G\d+/g) ?? [])];
+  return JSON.stringify({ roles: Object.fromEntries(text.map((id, i) => [id, i === 0 ? 'title' : i === 1 ? 'subtitle' : 'body'])), graphics: Object.fromEntries(graphics.map((id) => [id, 'asterisk'])), emphasis: {}, seen_slide_types: o.seen ?? ['cover'], images_with_photos: o.photoImages ?? [], missing: [{ tool: 'Device mockups', why: 'The reference shows a phone.' }], notes: 'Plain slide with a big title.' });
+}
+
 /** A valid answer to a refinement round. */
 export function refineAnswer(o: { patches?: { path: string; value: unknown }[]; score?: number; stop?: boolean } = {}) {
   return JSON.stringify({ patches: o.patches ?? [], judgement: { score: o.score ?? 60, matched: ['dark ground', 'heavy caps'], approximated: ['accent colour'], missing: ['the 3D object'] }, stop: o.stop ?? false });

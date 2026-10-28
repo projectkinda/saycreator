@@ -18,6 +18,7 @@ import type { Treatment } from '../types';
 import { placeElements, type TestAsset } from './elements';
 import { labelText, pageNumber } from './tools';
 import { drawMarks } from './marks';
+import { freeMarks, freeSlide } from './layouts-free';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Layout = (c: LCtx, s: any) => void;
@@ -210,10 +211,15 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
       photoPool: pool, photoPick: typeof ov?.photo?.id === 'string' ? ov.photo.id : s.photo, photoHint: s.photo_hint, slots: [],
       ...(ov?.photo && (ov.photo.treatments || ov.photo.focal) ? { photoOverride: { treatments: ov.photo.treatments, focal: ov.photo.focal } } : {}),
     };
-    LAYOUTS[rule.use](c, s);
+    // A free layout (from a reference) takes the place of the stored layouts for its slide type, unless the person picked a layout by hand.
+    const free = style.free?.[s.type];
+    const usedFree = !!free && !ov?.layout;
+    if (usedFree) freeSlide(c, s, free!);
+    else LAYOUTS[rule.use](c, s);
     // Badges, stamps and textures the style draws in code: textures right above the background, the rest over the content.
-    if (style.marks?.length) {
-      const dm = drawMarks(style.marks, { theme: c.theme, pal, W, H, M, top: area.top, bottom: area.bottom, type: s.type, seed: `${script.id}-${style.name}-${i}` });
+    const allMarks = [...(style.marks ?? []), ...(usedFree ? freeMarks(free!) : [])];
+    if (allMarks.length) {
+      const dm = drawMarks(allMarks, { theme: c.theme, pal, W, H, M, top: area.top, bottom: area.bottom, type: s.type, seed: `${script.id}-${style.name}-${i}` });
       const at = c.layers.findIndex((l) => l.id === 'bg');
       c.layers.splice(at >= 0 ? at + 1 : 0, 0, ...dm.under);
       add(c, ...dm.over);
@@ -279,6 +285,6 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
       elementLinks = placed.links;
     }
     const plan: Plan = { schema: 1, revision: 1, canvas: { width: W, height: H, background: solidOf(pal.bg) }, layers: c.layers, ...(s.element_tags || c.keepClear.length || c.slots.length ? { meta: { ...(s.element_tags ? { elementTags: s.element_tags } : {}), ...(c.keepClear.length ? { keepClear: c.keepClear } : {}), ...(c.slots.length ? { photoSlots: c.slots } : {}) } } : {}) };
-    return { id: `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`, type: s.type, plan, notes: c.notes, style: style.name, layout: rule.use, rule: at, palette: palName, because, elementsUsed, layoutChoices: choices, ...(s.element_tags ? { elementTags: s.element_tags } : {}), ...(elementLinks ? { elementLinks } : {}) };
+    return { id: `${script.id}-${style.name}-${String(i + 1).padStart(2, '0')}`, type: s.type, plan, notes: c.notes, style: style.name, layout: usedFree ? 'free' : rule.use, rule: at, palette: palName, because, elementsUsed, layoutChoices: choices, ...(s.element_tags ? { elementTags: s.element_tags } : {}), ...(elementLinks ? { elementLinks } : {}) };
   });
 }

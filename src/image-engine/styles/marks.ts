@@ -44,7 +44,8 @@ function rng(seed: string) {
   };
 }
 
-const colourOf = (pal: Palette, role: string): string => (role === 'bg' ? solidOf(pal.bg) : ((pal as unknown as Record<string, string>)[role] ?? pal.accent));
+/** A palette role name, or a hex colour (free layouts carry the colour they measured). */
+const colourOf = (pal: Palette, role: string): string => (role.startsWith('#') ? role : role === 'bg' ? solidOf(pal.bg) : ((pal as unknown as Record<string, string>)[role] ?? pal.accent));
 
 /** The box a texture fills: the whole slide, or a part of it. */
 function regionOf(zone: MarkSpec['zone'], c: MarkCtx) {
@@ -123,8 +124,10 @@ function drawOne(m: MarkSpec, i: number, c: MarkCtx, out: MarkLayers) {
   const id = `mark${i + 1}-${m.kind}`;
   const col = colourOf(c.pal, m.colour);
   const col2 = colourOf(c.pal, m.colour2 ?? (m.colour === 'accent' ? 'onAccent' : 'text'));
-  const s = m.size;
+  const s = m.box ? Math.max(40, Math.round((m.box.w / 100) * c.W)) : m.size;
   const rot = m.rotate ?? 0;
+  // A mark with a box goes exactly there; one with a zone goes where the zone says.
+  const place = (w: number, h: number) => (m.box ? { x: (m.box.x / 100) * c.W, y: (m.box.y / 100) * c.H } : placeBox(m.zone, w, h, bleed, c));
   const bleed = m.bleed === true;
   const stroke = (w: number) => ({ color: col, width: Math.max(2, r1(w)), cap: 'round' as const, join: 'round' as const });
   const fontPick = m.font === 'body' ? { font: c.theme.fonts.body, weight: c.theme.fonts.strong } : { font: c.theme.fonts.headline, weight: c.theme.fonts.headlineWeight };
@@ -209,14 +212,14 @@ function drawOne(m: MarkSpec, i: number, c: MarkCtx, out: MarkLayers) {
       const a = (k / n) * 2 * PI - PI / 2;
       d += `M ${r1(s / 2)} ${r1(s / 2)} L ${r1(s / 2 + (Math.cos(a) * s) / 2)} ${r1(s / 2 + (Math.sin(a) * s) / 2)} `;
     }
-    const p = placeBox(m.zone, s, s, bleed, c);
+    const p = place(s, s);
     out.over.push(pathLayer(id, 'decor', p.x, p.y, s, s, d.trim(), { stroke: stroke(s * 0.1), opacity: m.opacity ?? 1, rotation: rot }));
     return;
   }
   if (m.kind === 'sparkle') {
     const k = s / 2;
     const d = `M ${k} 0 Q ${k} ${k} ${s} ${k} Q ${k} ${k} ${k} ${s} Q ${k} ${k} 0 ${k} Q ${k} ${k} ${k} 0 Z`;
-    const p = placeBox(m.zone, s, s, bleed, c);
+    const p = place(s, s);
     out.over.push(pathLayer(id, 'decor', p.x, p.y, s, s, d, { fill: col, opacity: m.opacity ?? 1, rotation: rot }));
     // A smaller companion, up and to the right.
     const s2 = Math.round(s * 0.4);
@@ -225,7 +228,7 @@ function drawOne(m: MarkSpec, i: number, c: MarkCtx, out: MarkLayers) {
     return;
   }
   if (m.kind === 'round-badge' || m.kind === 'starburst-badge') {
-    const p = placeBox(m.zone, s, s, bleed, c);
+    const p = place(s, s);
     if (m.kind === 'round-badge') out.over.push(ellipse(id, 'container', p.x, p.y, s, s, col, { opacity: m.opacity ?? 1 }));
     else {
       const n = m.points ?? 16;
@@ -246,7 +249,7 @@ function drawOne(m: MarkSpec, i: number, c: MarkCtx, out: MarkLayers) {
   if (m.kind === 'circular-text') {
     const fs = Math.max(24, Math.round(s * 0.11));
     const Rr = s / 2 - fs * 0.8;
-    const p = placeBox(m.zone, s, s, bleed, c);
+    const p = place(s, s);
     const cx = p.x + s / 2;
     const cy = p.y + s / 2;
     const unitText = `${m.text!.toUpperCase()} • `;
@@ -276,7 +279,7 @@ function drawOne(m: MarkSpec, i: number, c: MarkCtx, out: MarkLayers) {
   if (m.kind === 'stamp') {
     const w = s;
     const h = Math.round(s * 0.4);
-    const p = placeBox(m.zone, w, h, bleed, c);
+    const p = place(w, h);
     const sw = Math.max(3, s * 0.022);
     out.over.push({ ...rect(id, 'container', p.x, p.y, w, h, TRANSPARENT, { radius: s * 0.04, stroke: { color: col, width: sw }, opacity: m.opacity ?? 1, rotation: rot || -8 }) });
     out.over.push({ ...rect(`${id}-inner`, 'decor', p.x + s * 0.03, p.y + s * 0.03, w - s * 0.06, h - s * 0.06, TRANSPARENT, { radius: s * 0.025, stroke: { color: col, width: Math.max(2, sw / 2) }, opacity: m.opacity ?? 1, rotation: rot || -8 }) });
@@ -287,7 +290,7 @@ function drawOne(m: MarkSpec, i: number, c: MarkCtx, out: MarkLayers) {
   if (m.kind === 'ticket' || m.kind === 'label') {
     const w = s;
     const h = Math.round(s * (m.kind === 'ticket' ? 0.42 : 0.34));
-    const p = placeBox(m.zone, w, h, bleed, c);
+    const p = place(w, h);
     let d: string;
     if (m.kind === 'ticket') {
       const r = h * 0.17;
@@ -318,7 +321,7 @@ function drawOne(m: MarkSpec, i: number, c: MarkCtx, out: MarkLayers) {
   if (m.kind === 'outline-button') {
     const fs = Math.max(28, Math.min(80, Math.round(s * 0.13)));
     const probe = outlinePill(c.theme, c.pal, id, 0, 0, m.text!, { arrow: true, size: fs });
-    const p = placeBox(m.zone, probe.width, probe.height, bleed, c);
+    const p = place(probe.width, probe.height);
     const pill = outlinePill(c.theme, c.pal, id, p.x, p.y, m.text!, { arrow: true, size: fs });
     // The button is drawn in the colour asked for, not the style's line colour.
     out.over.push(...pill.layers.map((l) => (l.kind === 'shape' ? { ...l, stroke: l.stroke ? { ...l.stroke, color: col } : l.stroke } : l.kind === 'path' ? { ...l, stroke: l.stroke ? { ...l.stroke, color: col } : l.stroke } : l.kind === 'text' ? { ...l, style: { ...l.style, color: col } } : l)));
@@ -327,7 +330,7 @@ function drawOne(m: MarkSpec, i: number, c: MarkCtx, out: MarkLayers) {
   if (m.kind === 'arrow') {
     const w = s;
     const h = Math.round(s * 0.6);
-    const p = placeBox(m.zone, w, h, bleed, c);
+    const p = place(w, h);
     const ex = w * 0.92;
     const ey = h * 0.62;
     const c2x = w * 0.62;
@@ -344,7 +347,7 @@ function drawOne(m: MarkSpec, i: number, c: MarkCtx, out: MarkLayers) {
   if (m.kind === 'scribble-circle') {
     const w = s;
     const h = Math.round(s * 0.5);
-    const p = placeBox(m.zone, w, h, bleed, c);
+    const p = place(w, h);
     const pts: [number, number][] = [];
     const turns = 1.18;
     const steps = 46;
@@ -377,7 +380,7 @@ function drawOne(m: MarkSpec, i: number, c: MarkCtx, out: MarkLayers) {
   if (m.kind === 'tape') {
     const w = s;
     const h = Math.round(s * 0.3);
-    const p = placeBox(m.zone, w, h, bleed, c);
+    const p = place(w, h);
     const d = `M 0 0 L ${w} 0 L ${r1(w * 0.985)} ${r1(h * 0.25)} L ${w} ${r1(h * 0.5)} L ${r1(w * 0.985)} ${r1(h * 0.75)} L ${w} ${h} L 0 ${h} L ${r1(w * 0.015)} ${r1(h * 0.75)} L 0 ${r1(h * 0.5)} L ${r1(w * 0.015)} ${r1(h * 0.25)} Z`;
     out.over.push(pathLayer(id, 'decor', p.x, p.y, w, h, d, { fill: col, opacity: m.opacity ?? 0.8, rotation: rot || -10 }));
     return;

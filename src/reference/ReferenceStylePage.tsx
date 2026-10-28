@@ -25,8 +25,14 @@ import { coverPlaced } from './edit';
 import { BLANK_NAME, blankStyle } from './blank';
 import { describeMeasured, measure } from './measure';
 import { detectReaders, ReaderError, readStyle, type ReferenceReader } from './reader';
-import { applyPatches, defaultThumbnail, sectionsFor } from './spec';
-import { LEARN_LABEL, TARGET_LABEL, type LearnFrom, type Measured, type MissingTool, type Rect, type ReferenceItem, type Target } from './types';
+import { applyPatches, checkSpec, defaultThumbnail, sectionsFor } from './spec';
+import { detectRegions, type Detected } from './regions';
+import { buildFree, missingRanked } from './free';
+import { applyLabels, labelReference, type Labels } from './labels';
+import { overlayImage } from './overlay';
+import { DetectOverlay } from './DetectOverlay';
+import { meanOf, pctText, scoreLayout, type LayoutScore } from './score';
+import { LEARN_SECTIONS, LEARN_LABEL, TARGET_LABEL, type LearnFrom, type Measured, type MissingTool, type Rect, type ReferenceItem, type Target } from './types';
 import '../styles/carousel.css';
 import '../styles/reference.css';
 
@@ -68,6 +74,8 @@ export default function ReferenceStylePage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<ReferenceItem[]>([]);
   const [measured, setMeasured] = useState<Measured[]>([]);
+  /** What the code found in each piece: boxes in percent, treatments (see regions.ts). Aligned with `items` and `measured`. */
+  const [detected, setDetected] = useState<Detected[]>([]);
   /** The pieces are being cut and measured again after a change: Read references waits for them. */
   const [preparing, setPreparing] = useState(false);
   /** How long cutting the pieces and measuring them took (seconds), for the Live view's timing. */
@@ -118,6 +126,7 @@ export default function ReferenceStylePage() {
     (async () => {
       const list: ReferenceItem[] = [];
       const ms: Measured[] = [];
+      const dets: Detected[] = [];
       let splitMs = 0;
       let measureMs = 0;
       for (const u of uploads) {
@@ -128,7 +137,9 @@ export default function ReferenceStylePage() {
           splitMs += performance.now() - tc;
           list.push({ id: p.cell !== undefined ? `${u.id}#${p.cell + 1}` : u.id, name: p.cell !== undefined ? `${u.name} (slide ${p.cell + 1})` : u.name, dataUrl: j.url, width: j.width, height: j.height, learn: u.learn, source: { image: u.id, ...(p.cell !== undefined ? { cell: p.cell } : {}), ...(p.rect ? { rect: p.rect } : {}) } });
           const tm = performance.now();
-          ms.push(measure(pxOfCanvas(cut(u.bitmap, p.rect, 420))));
+          const px = pxOfCanvas(cut(u.bitmap, p.rect, 420));
+          ms.push(measure(px));
+          dets.push(detectRegions(px));
           measureMs += performance.now() - tm;
         }
       }
@@ -136,6 +147,7 @@ export default function ReferenceStylePage() {
         prep.current = { split: Math.round((splitMs + gridMs.current) / 100) / 10, measure: Math.round(measureMs / 100) / 10 };
         setItems(list);
         setMeasured(ms);
+        setDetected(dets);
         setPreparing(false);
       }
     })();
@@ -212,6 +224,8 @@ export default function ReferenceStylePage() {
   const [ownBusy, setOwnBusy] = useState(false);
   const [draftSeconds, setDraftSeconds] = useState<number | null>(null);
   const [advanced, setAdvanced] = useState(false);
+  const [showDetected, setShowDetected] = useState(false);
+  const [detItem, setDetItem] = useState(0);
   const [costShown, setCostShown] = useState<Cost>(freshCost());
   const cost = useRef<Cost>(costShown);
   const parked = useRef<Record<string, unknown[]>>({});
@@ -229,14 +243,14 @@ export default function ReferenceStylePage() {
       setDraftSeconds(null);
       return;
     }
-    const d = draftSpec(measured[0]);
+    const d = draftSpec(measured[0], detected[0]);
     draftT0.current = performance.now();
     setDraftSeconds(null);
     setEditState(startEdit(d.spec, Object.fromEntries(d.values.map((v) => [v.path, 'MEASURED' as Origin]))));
     setSaved(null);
     setOthers(null);
     parked.current = {};
-  }, [items, measured, preparing, target]);
+  }, [items, measured, detected, preparing, target]);
 
   // Every change of the style, the title or the photo redraws the person's content at once.
   useEffect(() => {
@@ -316,13 +330,70 @@ export default function ReferenceStylePage() {
       const images = items.map((it, i) => readerImageOf(it.dataUrl, `ref${i + 1}.jpg`));
       const photo = ownContent?.photo ?? { ...(await samplePhoto()), id: 'sample-builtin' };
       const content: SampleContent = { title: sampleTitle.trim() || 'Your title here', photo };
-      const draft = draftSpec(measured[0]);
+      let out: Awaited<ReturnType<typeof readStyle>>;
+      let draft = draftSpec(measured[0], detected[0]);
+      if (!advanced && editState) {
+        // The reader only labels: the boxes, sizes and colours are the code's, and the reader says what each box is. One call.
+        const key = await cacheKey({ dataUrls: items.map((i) => i.dataUrl), learn: items.map((i) => i.learn), target, baseName: 'labels', readerId: reader.id }).catch(() => '');
+        const hit = key ? ((await cacheGet(key)) as unknown as { labels?: Labels; problems: string[]; ms: number; attempts: 1 | 2 } | null) : null;
+        job.begin('reader');
+        let lab: { labels: Labels; problems: string[]; ms: number; attempts: 1 | 2 };
+        if (hit?.labels) {
+          lab = hit as typeof lab;
+          job.cached();
+          job.end('reader', 'from cache');
+        } else {
+          const pics = await Promise.all(items.map((it, i) => overlayImage(it.dataUrl, detected[i], i + 1, `ref${i + 1}.jpg`)));
+          job.waiting('the reader');
+          try {
+            lab = await labelReference({ reader, ds: detected, names: items.map((_, i) => `ref${i + 1}.jpg`), images: pics, signal: abort.current.signal });
+          } finally {
+            job.waiting(null);
+          }
+          job.end('reader', lab.attempts === 2 ? 'the first answer needed a second try' : undefined);
+          if (key) void cachePut(key, lab as unknown as never);
+        }
+        job.begin('validate');
+        const freeBy: Record<string, import('../image-engine/styles/free-spec').FreeLayout> = {};
+        const clampNotes: string[] = [];
+        const lists: string[][] = [];
+        items.forEach((it, i) => {
+          if (!LEARN_SECTIONS[it.learn].includes('free')) return;
+          const type = lab.labels.seenSlideTypes[i] ?? (i === 0 ? 'cover' : 'content');
+          if (freeBy[type]) return;
+          const built = buildFree(detected[i]);
+          const applied = applyLabels(built.free, detected[i], i + 1, lab.labels);
+          freeBy[type] = applied.free;
+          clampNotes.push(...built.clamps);
+          lists.push(applied.free.missing ?? []);
+        });
+        const spec = { ...editState.spec, name, title: title.trim() || 'My style', basedOn: { cluster: 'your references', note: `Built from ${items.length === 1 ? 'one image' : `${items.length} images`}: ${items.map((i) => LEARN_LABEL[i.learn].toLowerCase()).join(', ')}.` }, free: freeBy } as StyleSpec;
+        const verdict = checkSpec(spec);
+        if (verdict.errors.length) throw new ReaderError('invalid', 'The layout made from the detection does not pass the checks.', verdict.errors);
+        const ranked = missingRanked(lists);
+        out = {
+          spec,
+          result: {
+            style: {},
+            seenSlideTypes: lab.labels.seenSlideTypes.length ? lab.labels.seenSlideTypes : ['cover'],
+            photoImages: lab.labels.photoImages,
+            missingTools: [...lab.labels.missing, ...ranked.map((m) => ({ tool: m.what, why: `the code found this in ${m.count} of your references; the drawing cannot do it` }))],
+            notes: lab.labels.notes,
+          },
+          attempts: lab.attempts,
+          ms: lab.ms,
+          warnings: lab.problems,
+          clamps: clampNotes,
+        };
+        job.end('validate', clampNotes.length ? `${clampNotes.length} value${clampNotes.length === 1 ? '' : 's'} moved to what the toolbox supports` : 'nothing had to be moved');
+        setEditState((cur) => (cur ? replaceSpec(cur, spec, { 'free.cover': 'READER' as Origin, ...Object.fromEntries(Object.keys(freeBy).map((t) => [`free.${t}`, 'READER' as Origin])) }) : cur));
+      } else {
+      draft = draftSpec(measured[0], detected[0]);
       const fixed = draft.values.filter((v) => /^(palettes|spacing|type)\./.test(v.path)).map((v) => v.text);
       // The same references, learn-from choices, target and reader version were read before: use that answer.
       const key = await cacheKey({ dataUrls: items.map((i) => i.dataUrl), learn: items.map((i) => i.learn), target, baseName, readerId: reader.id }).catch(() => '');
       const hit = key ? await cacheGet(key) : null;
       job.begin('reader');
-      let out: Awaited<ReturnType<typeof readStyle>>;
       if (hit) {
         out = { ...hit, spec: { ...hit.spec, name, title: title.trim() || 'My style' } };
         job.cached();
@@ -344,6 +415,7 @@ export default function ReferenceStylePage() {
       out = { ...out, spec: kept };
       job.end('validate', out.clamps.length ? `${out.clamps.length} value${out.clamps.length === 1 ? '' : 's'} moved to what the toolbox supports` : 'nothing had to be moved');
       if (editState) setEditState(replaceSpec(editState, kept, Object.fromEntries(changedPaths(editState.spec, kept).map((p) => [p, 'READER' as Origin]))));
+      }
       setSeen(out.result.seenSlideTypes);
       setMissing(out.result.missingTools);
       setNotes(out.result.notes);
@@ -450,6 +522,31 @@ export default function ReferenceStylePage() {
     setOthers({ items: done.map((d) => ({ ...d, name: pics.find((p) => p.id === d.id)?.name ?? '' })), seconds: total });
     (window as unknown as { __template?: unknown }).__template = { applySeconds: total, photos: done.length, modelCalls: 0 };
   };
+
+  /** Layout overlap of each reference with its replica: both detected the same way. */
+  const [layoutScores, setLayoutScores] = useState<LayoutScore[]>([]);
+  useEffect(() => {
+    let live = true;
+    if (!chosen || busy || detected.length === 0) {
+      setLayoutScores([]);
+      return;
+    }
+    void (async () => {
+      const out: LayoutScore[] = [];
+      for (const rep of chosen.replicas.slice(0, 4)) {
+        const i = items.findIndex((x) => x.id === rep.itemId);
+        if (i < 0 || !detected[i]) continue;
+        const bm = await bitmapOf(rep.blob);
+        out.push(scoreLayout(detected[i], detectRegions(pxOfCanvas(cut(bm, null, 420)))));
+        bm.close();
+      }
+      if (live) setLayoutScores(out);
+    })();
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chosen, busy]);
 
   const showRounds = rounds.length > 0;
   return (
@@ -640,6 +737,32 @@ export default function ReferenceStylePage() {
       </section>
       </div>
 
+      {editState && detected.length > 0 && (
+        <section className="card rf-sec" aria-labelledby="rf-det-h">
+          <h2 id="rf-det-h" className="h3">What I detected</h2>
+          <p className="small muted">The code found these boxes in your reference, with no model. Correct them here and your content redraws at once.</p>
+          <button type="button" className="btn btn-outline btn-sm" aria-pressed={showDetected} onClick={() => setShowDetected((v) => !v)}>Show what I detected</button>
+          {showDetected && (() => {
+            const i = Math.min(detItem, items.length - 1);
+            const type = (seen[i] ?? (i === 0 ? 'cover' : 'content')) as SlideType;
+            const free = editState.spec.free?.[type];
+            return (
+              <>
+                {items.length > 1 && (
+                  <div className="rf-row" role="group" aria-label="Which reference">
+                    {items.map((it, k) => <button key={it.id} type="button" className="btn btn-outline btn-sm" aria-pressed={k === i} onClick={() => setDetItem(k)}>{k + 1}</button>)}
+                  </div>
+                )}
+                {free ? (
+                  <DetectOverlay url={items[i].dataUrl} name={items[i].name} free={free} texts={detected[i]?.texts ?? []} onChange={(next, label) => void doEdit(label, [{ path: `free.${type}`, value: next }])} />
+                ) : (
+                  <p className="small muted">This reference does not give a layout ({LEARN_LABEL[items[i].learn]}), so there is nothing to show.</p>
+                )}
+              </>
+            );
+          })()}
+        </section>
+      )}
       {items.length > 0 && (
         <section className="card rf-sec" aria-labelledby="rf-measured-h">
           <h2 id="rf-measured-h" className="h3">3. What the code measured <span className="chip chip-tag">MEASURED</span></h2>
@@ -718,6 +841,19 @@ export default function ReferenceStylePage() {
             <div>
               <h3 className="h4">Moved to what the toolbox supports</h3>
               <ul aria-label="Clamped values">{close.clamped.length ? close.clamped.map((m) => <li key={m} className="small">{m}</li>) : <li className="small muted">Nothing had to be moved.</li>}</ul>
+            </div>
+            <div>
+              <h3 className="h4">Layout overlap with the reference <span className="chip chip-tag">MEASURED</span></h3>
+              {layoutScores.length === 0 ? <p className="small muted">Being measured…</p> : (
+                <ul aria-label="Layout overlap">
+                  <li className="small">Text regions: {pctText(meanOf(layoutScores.map((l) => l.text)))}</li>
+                  <li className="small">Photo regions: {pctText(meanOf(layoutScores.map((l) => l.photo)))}</li>
+                  <li className="small">Shapes: {pctText(meanOf(layoutScores.map((l) => l.shapes)))}</li>
+                  <li className="small">Graphics: {pctText(meanOf(layoutScores.map((l) => l.graphics)))}</li>
+                  <li className="small">Title size: {pctText(meanOf(layoutScores.map((l) => l.titleRatio)))} of the reference</li>
+                  <li className="small">Text treatments reproduced: {layoutScores.reduce((a, l) => a + l.treatments.reproduced, 0)} of {layoutScores.reduce((a, l) => a + l.treatments.found, 0)} found{layoutScores.some((l) => l.treatments.missing.length) ? ` (not reproduced: ${[...new Set(layoutScores.flatMap((l) => l.treatments.missing))].slice(0, 5).join('; ')})` : ''}</li>
+                </ul>
+              )}
             </div>
             <div>
               <h3 className="h4">Missing: what our toolbox cannot draw</h3>
