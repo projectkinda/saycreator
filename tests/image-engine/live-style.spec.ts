@@ -210,6 +210,8 @@ test('Advanced is off by default; turned on it allows the reader to refine over 
   await page.getByLabel('Name the style').fill('Adv');
   await page.getByRole('button', { name: 'Read references' }).click();
   await expect(page.getByRole('heading', { name: '5. How close it got' })).toBeVisible({ timeout: 120_000 });
-  expect(rec.refines.length).toBeGreaterThanOrEqual(1);
-  await expect(calls(page)).toContainText(/Model calls: [2-9] of 10/);
+  // The closeness panel shows after the first replica; the refining rounds follow, so wait for them.
+  await expect.poll(() => rec.refines.length, { timeout: 60_000 }).toBeGreaterThanOrEqual(1);
+  await expect(calls(page)).toContainText(/Model calls: [2-9] of 10/, { timeout: 60_000 });
+  await expect(page.getByRole('button', { name: 'Read references' })).toBeEnabled({ timeout: 60_000 });
 });
