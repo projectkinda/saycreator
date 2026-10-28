@@ -17,3 +17,7 @@ export function setProfile(p: ProfileName) {
   speed.itemPx = PROFILES[p].itemPx;
 }
 if (typeof window !== 'undefined') (window as unknown as { __speed: unknown }).__speed = { speed, setProfile };
+
+/** Switches used by the real before-and-after measurement: the free layout (boxes from the detection) can be turned off to get the old behaviour. */
+export const flags = { free: true };
+if (typeof window !== 'undefined') (window as unknown as { __flags: unknown }).__flags = flags;

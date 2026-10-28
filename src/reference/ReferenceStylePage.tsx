@@ -14,7 +14,7 @@ import { detectGrid, type GridResult } from './grid';
 import { bitmapOf, cut, jpegUrl, pxOfCanvas, previewOf, readerImageOf, samplePhoto } from './images';
 import { applyFeedback, keptSentence, runLoop, type Round, type SampleContent } from './loop';
 import { startJob, onCancel } from '../live/jobs';
-import { setProfile, speed } from './speed';
+import { flags, setProfile, speed } from './speed';
 import { draftSpec } from './draft';
 import { cacheClear, cacheCount, cacheGet, cacheKey, cachePut } from './cache';
 import { applyToPhotos, renderOwn, type OwnShot } from './own';
@@ -243,7 +243,7 @@ export default function ReferenceStylePage() {
       setDraftSeconds(null);
       return;
     }
-    const d = draftSpec(measured[0], detected[0]);
+    const d = draftSpec(measured[0], flags.free ? detected[0] : null);
     draftT0.current = performance.now();
     setDraftSeconds(null);
     setEditState(startEdit(d.spec, Object.fromEntries(d.values.map((v) => [v.path, 'MEASURED' as Origin]))));
@@ -388,7 +388,7 @@ export default function ReferenceStylePage() {
         job.end('validate', clampNotes.length ? `${clampNotes.length} value${clampNotes.length === 1 ? '' : 's'} moved to what the toolbox supports` : 'nothing had to be moved');
         setEditState((cur) => (cur ? replaceSpec(cur, spec, { 'free.cover': 'READER' as Origin, ...Object.fromEntries(Object.keys(freeBy).map((t) => [`free.${t}`, 'READER' as Origin])) }) : cur));
       } else {
-      draft = draftSpec(measured[0], detected[0]);
+      draft = draftSpec(measured[0], flags.free ? detected[0] : null);
       const fixed = draft.values.filter((v) => /^(palettes|spacing|type)\./.test(v.path)).map((v) => v.text);
       // The same references, learn-from choices, target and reader version were read before: use that answer.
       const key = await cacheKey({ dataUrls: items.map((i) => i.dataUrl), learn: items.map((i) => i.learn), target, baseName, readerId: reader.id }).catch(() => '');
@@ -412,7 +412,7 @@ export default function ReferenceStylePage() {
       // What the code measured stays as measured: the reader decides what code cannot (fonts, marks, layout type, shapes).
       const protectedPatches = draft.values.filter((v) => /^(palettes|spacing|type)\./.test(v.path)).map((v) => ({ path: v.path, value: v.path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)[k], draft.spec) }));
       const kept = baseName === BLANK_NAME ? applyPatches(out.spec, protectedPatches, target).spec : out.spec;
-      out = { ...out, spec: kept };
+      out = { ...out, spec: flags.free ? kept : (({ free: _free, ...rest }) => rest as StyleSpec)(kept as StyleSpec & { free?: unknown }) };
       job.end('validate', out.clamps.length ? `${out.clamps.length} value${out.clamps.length === 1 ? '' : 's'} moved to what the toolbox supports` : 'nothing had to be moved');
       if (editState) setEditState(replaceSpec(editState, kept, Object.fromEntries(changedPaths(editState.spec, kept).map((p) => [p, 'READER' as Origin]))));
       }
