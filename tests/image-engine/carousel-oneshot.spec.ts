@@ -74,7 +74,7 @@ test('paste text, press Generate: progress is shown, then the full editable caro
   await shot(page, 'start');
   await generate(page).click();
   await expect(progress(page)).toContainText('Writing the script');
-  await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+  await expect(page.locator('#main').getByRole('button', { name: 'Cancel' })).toBeVisible();
   await shot(page, 'writing');
   await expect(progress(page)).toContainText(/Drawing slide \d of 7/, { timeout: 15_000 });
   await allDrawn(page);
@@ -173,7 +173,7 @@ test('cancel while writing: the request is abandoned, the text is kept, and noth
   await source(page).fill(TEXT);
   await generate(page).click();
   await expect(progress(page)).toContainText('Writing the script');
-  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.locator('#main').getByRole('button', { name: 'Cancel' }).click();
   await expect(progress(page)).toContainText('Cancelled. Your text is kept.');
   await expect(generate(page)).toBeEnabled();
   await expect(source(page)).toHaveValue(TEXT);
@@ -187,7 +187,7 @@ test('cancel while drawing: the generated slides are taken back and the earlier 
   await source(page).fill(TEXT);
   await generate(page).click();
   await expect(progress(page)).toContainText(/Drawing slide/, { timeout: 15_000 });
-  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.locator('#main').getByRole('button', { name: 'Cancel' }).click();
   await expect(progress(page)).toContainText('Cancelled');
   await expect(page.locator('.cr-card')).toHaveCount(0);
   await expect(source(page)).toHaveValue(TEXT);
