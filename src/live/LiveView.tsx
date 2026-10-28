@@ -60,6 +60,8 @@ export default function LiveView() {
   // A new job opens the panel again and follows the newest round.
   useEffect(() => setPickRound(null), [job?.id, job?.rounds.length]);
   if (!job || closed === job.id) return null;
+  // A thumbnail redraws on every edit: its panel appears only when it takes long enough to notice.
+  if (job.kind === 'thumbnail' && (job.endedAt ?? now) - job.startedAt < 1500) return null;
   if (job.status !== 'running' && open !== job.id)
     return (
       <button type="button" className="lv-pill btn btn-outline btn-sm" aria-label="Open the Live view" data-status={job.status} onClick={() => setOpen(job.id)}>

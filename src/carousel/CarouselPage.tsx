@@ -19,6 +19,7 @@ import type { AddFiles } from './PhotoControls';
 import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, useLibraryVersion, type PictureMeta } from './photoLibrary';
 import { SlideCard, type SlideView } from './SlideCard';
 import { PASTE_KEY, readStore, useProject, writeStore } from './useProject';
+import { onCancel, startJob, type JobHandle } from '../live/jobs';
 import '../styles/carousel.css';
 
 const DEFAULT_STYLE = 'editorial-collage';
@@ -154,6 +155,8 @@ export default function CarouselPage() {
   const [exporting, setExporting] = useState('');
   const [open, setOpen] = useState<number | null>(null);
   const [gen, setGen] = useState<GenState>({ phase: 'idle' });
+  /** The Live view's record of a generation: writing, checking, then drawing the slides. */
+  const genJob = useRef<JobHandle | null>(null);
   const providers = useWriters();
   const provider = providers?.[0] ?? null;
   const abort = useRef<AbortController | null>(null);
@@ -326,9 +329,22 @@ export default function CarouselPage() {
     };
     setGen({ phase: 'writing' });
     setNotice('');
+    const job = startJob('one-shot-carousel', `Carousel from ${doc.topic.trim().split(/s+/).length} words of text, ${options.slides} slides`, [{ id: 'write', label: 'Ask the writer for the script' }, { id: 'apply', label: 'Check the script and pick a style' }, { id: 'draw', label: 'Draw the slides' }]);
+    genJob.current = job;
+    onCancel(job.id, () => ctl.abort());
+    job.begin('write');
+    job.waiting('the writer');
     const r = await runGenerate(req, provider, ctl.signal, (phase) => setGen({ phase }));
+    job.waiting(null);
     abort.current = null;
-    if (!r.ok) return setGen(r.state);
+    if (!r.ok) {
+      job.fail('write', r.state.message ?? 'the writer did not answer');
+      job.finish(r.state.message?.startsWith('Cancelled') ? 'cancelled' : 'failed', r.state.message);
+      genJob.current = null;
+      return setGen(r.state);
+    }
+    job.end('write', r.result.attempts === 2 ? 'needed a second try' : undefined);
+    job.begin('apply');
     const { result } = r;
     const known = carouselStyles().map((x) => x.spec.name);
     // "Pick for me": scored from the tone, the words of the text and the slide types; the writer's own suggestion counts one point.
@@ -336,12 +352,21 @@ export default function CarouselPage() {
     const style = pick ? pick.name : null;
     const withHandle = { ...result.script, brand: { ...result.script.brand, handle: options.handle.trim() || result.script.brand.handle } };
     const done = apply(patches.generate(withHandle, style, GEN_LABEL));
-    if (!done.ok) return setGen({ phase: 'error', message: 'The script could not be used: ' + done.reasons[0] + ' Your text is kept.' });
+    if (!done.ok) {
+      job.fail('apply', done.reasons[0]);
+      job.finish('failed', done.reasons[0]);
+      genJob.current = null;
+      return setGen({ phase: 'error', message: 'The script could not be used: ' + done.reasons[0] + ' Your text is kept.' });
+    }
+    job.end('apply', pick ? `style: ${pick.name}` : undefined);
+    job.begin('draw');
     setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…`, styleWhy: pick?.why });
   };
   const cancel = () => {
     if (gen.phase === 'drawing') {
       if (past[past.length - 1]?.label === GEN_LABEL) undo();
+      genJob.current?.finish('cancelled', 'Cancelled while drawing.');
+      genJob.current = null;
       setGen({ phase: 'idle', message: 'Cancelled. Your text is kept and the previous slides are back.' });
       return;
     }
@@ -353,6 +378,12 @@ export default function CarouselPage() {
   useEffect(() => {
     if (gen.phase !== 'drawing' || slides.length === 0) return;
     if (drawnCount >= slides.length) {
+      if (genJob.current) {
+        genJob.current.end('draw', `${slides.length} slides`);
+        genJob.current.plan();
+        genJob.current.finish('done');
+        genJob.current = null;
+      }
       const note = gen.note ? ` Note from the writer: ${gen.note}` : '';
       const retry = gen.attempts === 2 ? ' It needed a second try.' : '';
       const why = gen.styleWhy ? ` Style: ${gen.styleWhy}` : '';

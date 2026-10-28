@@ -13,6 +13,10 @@ import { sizeOf, urlOf } from '../carousel/photoLibrary';
 import { yieldToBrowser } from '../carousel/export';
 import { AUTO_STYLE, type ThumbDoc } from './doc';
 import { targetOfStyle } from '../reference/templates';
+import { startJob, type JobHandle } from '../live/jobs';
+
+/** The job being timed: composing the options, then drawing and checking each (the Live view shows it when it takes long enough to notice). */
+let thumbJob: { job: JobHandle; pending: number } | null = null;
 
 /** The styles that have a thumbnail look, in a steady order. */
 export const thumbStyles = (): LoadedStyle[] => getStyles().styles.filter((s) => s.spec.thumbnail && targetOfStyle(s.spec.name) !== 'carousel');
@@ -69,9 +73,15 @@ export async function composeProject(doc: ThumbDoc): Promise<Composed | null> {
   const url = urlOf(doc.photoId);
   const picked = styleFor(doc);
   if (!main || !url || !picked) return null;
+  const job = startJob('thumbnail', `Thumbnail: ${doc.title.trim().slice(0, 40)}`, [{ id: 'fonts', label: 'Load fonts' }, { id: 'subject', label: 'Find the subject in the photo' }, { id: 'compose', label: 'Compose the layout options' }, { id: 'draw', label: 'Draw and check each option' }]);
+  thumbJob = null;
+  job.begin('fonts');
   await loadFonts();
+  job.end('fonts');
   const t0 = performance.now();
+  job.begin('subject');
   const subject: SubjectPoint = doc.subject ?? (await guessFor(doc.photoId));
+  job.end('subject', doc.subject ? 'set by hand' : undefined);
   const second = doc.secondId && urlOf(doc.secondId) && sizeOf(doc.secondId) ? { id: doc.secondId, url: urlOf(doc.secondId)!, size: sizeOf(doc.secondId)! } : null;
   const object = doc.objectId && urlOf(doc.objectId) && sizeOf(doc.objectId) ? { id: doc.objectId, src: urlOf(doc.objectId)!, ...sizeOf(doc.objectId)! } : null;
   const emphasis = doc.emphasis?.trim() || undefined;
@@ -86,7 +96,19 @@ export async function composeProject(doc: ThumbDoc): Promise<Composed | null> {
     ...(object ? { object } : {}),
     ...(second ? { second: { photo: { id: second.id, src: second.url, width: second.size.width, height: second.size.height }, subject: doc.secondSubject ?? (await guessFor(second.id)) } } : {}),
   };
+  job.begin('compose');
   const options = composeThumbs(req, picked.style);
+  job.end('compose', `${options.length} options`);
+  const mine = { job, pending: 0 };
+  thumbJob = mine;
+  // Options that were all drawn before are not drawn again: nothing starts, so the job ends here instead of waiting.
+  setTimeout(() => {
+    if (thumbJob === mine && mine.pending === 0) {
+      job.skip('draw', 'every option was already drawn');
+      job.finish('done');
+      thumbJob = null;
+    }
+  }, 400);
   const tb = picked.style.spec.thumbnail!;
   const left = tb.layouts.filter((l) => !options.some((o) => o.layout === l)).map((l) => ({ layout: l, because: l === 'object-title' ? 'needs a transparent object picture' : l === 'number-badge' ? (numberIn(doc.title) ? 'did not fit' : 'needs a number in the title (it never makes one up)') : l === 'before-after' ? 'needs a second photo' : 'not available' }));
   return { options, style: picked.style, why: picked.why, subject, left, pictures: { photo: url, ...(second ? { 'photo-after': second.url } : {}) }, ms: performance.now() - t0 };
@@ -127,6 +149,11 @@ class Renderer {
     const key = JSON.stringify(option.plan) + JSON.stringify(option.subjects);
     let p = this.cache.get(key);
     if (!p) {
+      const tj = thumbJob;
+      if (tj) {
+        if (tj.pending === 0) tj.job.begin('draw');
+        tj.pending++;
+      }
       p = this.chain.then(async () => {
         await yieldToBrowser();
         const a = await this.ready();
@@ -135,6 +162,16 @@ class Renderer {
         const c = await checkThumb(a, option, src);
         return { ...c, url: URL.createObjectURL(c.png), phoneUrl: URL.createObjectURL(c.phonePng) };
       });
+      const settle = () => {
+        if (!tj) return;
+        tj.pending--;
+        if (tj.pending === 0 && thumbJob === tj) {
+          tj.job.end('draw');
+          tj.job.finish('done');
+          thumbJob = null;
+        }
+      };
+      p.then(settle, settle);
       this.chain = p.catch(() => undefined);
       this.cache.set(key, p);
       p.catch(() => this.cache.delete(key));
