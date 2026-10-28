@@ -26,6 +26,10 @@ src/image-engine/assets/packs/
 test-assets/*
 !test-assets/README.txt
 
+# TEST DATA: Crello layouts (derived boxes only), not shippable until licences are checked. Made by npm run crello:fetch and crello:build
+test-data/*
+!test-data/README.txt
+
 # Local secrets and settings (see .env.example)
 .env
 .env.*

@@ -15,6 +15,8 @@
     "style:aggregate": "node scripts/style-aggregate.mjs",
     "fetch:assets": "node scripts/fetch-assets.mjs",
     "check:test-assets": "node scripts/check-test-assets.mjs",
+    "crello:fetch": "node scripts/crello-fetch.mjs",
+    "crello:build": "node scripts/crello-build.mjs",
     "check:secrets": "node scripts/check-secrets.mjs"
   },
   "dependencies": {
@@ -30,6 +32,8 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "hyparquet": "^1.31.5",
+    "hyparquet-compressors": "^1.1.2",
     "typescript": "^7.0.2",
     "vite": "^8.3.5"
   }
