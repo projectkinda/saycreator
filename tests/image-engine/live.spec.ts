@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { openResults } from './lab-nav';
-import { fakeReader, makeReference, openStyleFromReferences, readAnswer, refineAnswer, refInput, REF_OUT, ROOT } from './reference-helpers';
+import { fakeReader, labelsAnswer, makeReference, openStyleFromReferences, readAnswer, refineAnswer, refInput, REF_OUT, ROOT } from './reference-helpers';
 
 test.describe.configure({ mode: 'serial' });
 test.use({ viewport: { width: 1300, height: 1000 } });
@@ -74,7 +74,7 @@ test('the Live view opens by itself, shows stages with seconds, the pictures, th
 });
 
 test('the same references read again come from the cache, and Clear cache empties it', async ({ page }) => {
-  const rec = await fakeReader(page, usual);
+  const rec = await fakeReader(page, (kind, n, prompt) => (kind === 'refine' ? usual(kind, n) : labelsAnswer(prompt)));
   await openStyleFromReferences(page);
   const ref = await makeReference(page, { name: 'cache.jpg', kind: 'slide' });
   await refInput(page).setInputFiles(ref);
@@ -92,7 +92,7 @@ test('the same references read again come from the cache, and Clear cache emptie
 });
 
 test('Cancel stops the job cleanly: nothing keeps running and the stages say so', async ({ page }) => {
-  await fakeReader(page, usual, { delayMs: 8000 });
+  await fakeReader(page, (kind, n, prompt) => (kind === 'refine' ? usual(kind, n) : labelsAnswer(prompt)), { delayMs: 8000 });
   await openStyleFromReferences(page);
   await refInput(page).setInputFiles(await makeReference(page, { name: 'cancel.jpg', kind: 'slide' }));
   await page.getByRole('button', { name: 'Read references' }).click();
