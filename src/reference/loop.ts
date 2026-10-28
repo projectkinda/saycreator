@@ -15,7 +15,9 @@ import { loadFonts } from '../image-engine/fonts';
 import { EXAMPLE } from '../carousel/script';
 import { renderer } from '../carousel/render';
 import { guessFor } from '../thumbnail/render';
-import { bitmapOf, cut, pairImage, pxOfCanvas } from './images';
+import { bitmapOf, cut, jpegUrl, pairImage, pxOfCanvas } from './images';
+import type { Decision, JobHandle, LiveRound } from '../live/jobs';
+import { decisionsOfPatches, decisionsOfSpec } from '../live/decisions';
 import { refineStyle, type ReferenceReader } from './reader';
 import { measure } from './measure';
 import { meanSimilarity, similarity, type Similarity } from './similarity';
@@ -161,6 +163,22 @@ export interface LoopOptions {
   signal: AbortSignal;
   onRound: (r: Round) => void;
   onPhase?: (text: string) => void;
+  /** The Live view's record of this job: stages, pictures and decisions are written to it as the loop goes. */
+  job?: JobHandle;
+}
+
+/** A round as the Live view shows it: small pictures of its replicas, the numbers and the decisions behind it. */
+export async function liveRound(r: Round, decisions: Decision[], o?: { draft?: boolean }): Promise<LiveRound> {
+  const pics = await Promise.all(r.replicas.slice(0, 6).map(async (rep) => {
+    const bm = await bitmapOf(rep.blob);
+    try {
+      return await jpegUrl(bm, null, 420);
+    } finally {
+      bm.close();
+    }
+  }));
+  const th = pics[0] ? pics[0].url : '';
+  return { n: r.n, label: r.label, thumb: th, big: pics.map((p) => p.url), measuredPct: Math.round(r.similarity.total * 100), readerScore: r.judgement ? r.judgement.score : null, score: Math.round(r.score * 100), decisions, ...(o?.draft ? { draft: true } : {}) };
 }
 
 type Judged = { judgement: Judgement | null; patchesOut: { path: string; value: unknown }[]; refused: string[]; ms: number; note?: string };
@@ -203,7 +221,11 @@ export async function runLoop(o: LoopOptions): Promise<{ rounds: Round[]; best: 
   const max = o.maxRounds ?? 3;
   const rounds: Round[] = [];
   o.onPhase?.('Drawing the first replica…');
+  o.job?.begin('draw0', 'Draw round 1');
   let current = await roundOf(o, 0, 'First replica', o.spec, null, o.readClamps);
+  o.job?.end('draw0');
+  let liveDecisions = decisionsOfSpec(o.spec, o.measured, o.readClamps);
+  if (o.job) o.job.round(await liveRound(current, liveDecisions));
   let best = 0;
   rounds.push(current);
   o.onRound(current);
@@ -215,11 +237,23 @@ export async function runLoop(o: LoopOptions): Promise<{ rounds: Round[]; best: 
       break;
     }
     o.onPhase?.(k === 0 ? 'The reader is looking at the first replica…' : `The reader is looking at round ${k}…`);
-    const look = await lookAt(o, current, k + 1);
+    o.job?.begin(`score${k}`, `Score round ${k + 1}: the reader looks at it`);
+    o.job?.waiting('the reader');
+    let look;
+    try {
+      look = await lookAt(o, current, k + 1);
+    } catch (e) {
+      o.job?.waiting(null);
+      o.job?.fail(`score${k}`, (e as Error).message);
+      throw e;
+    }
+    o.job?.waiting(null);
+    o.job?.end(`score${k}`);
     // The reader's judgement belongs to the replica it saw.
     current = { ...current, judgement: look.judgement, patchesOut: look.patches, refused: look.refused, score: scoreOf(current.similarity, look.judgement), note: look.problem ?? current.note, ms: current.ms + look.ms + look.prepMs, timing: { ...current.timing, prepMs: look.prepMs, lookMs: look.ms } };
     rounds[rounds.length - 1] = current;
     o.onRound(current);
+    if (o.job) o.job.round(await liveRound(current, liveDecisions));
     // A round is kept only when it beats the best so far; the first round that does not beat it ends the loop.
     const improved = rounds.length === 1 || current.score > rounds[best].score + 0.002;
     if (improved) best = rounds.length - 1;
@@ -244,8 +278,11 @@ export async function runLoop(o: LoopOptions): Promise<{ rounds: Round[]; best: 
       break;
     }
     o.onPhase?.(`Drawing round ${k + 1}…`);
+    o.job?.begin(`draw${k + 1}`, `Draw round ${k + 2}`);
     try {
       current = { ...(await roundOf(o, k + 1, `Round ${k + 1}`, look.spec, null, look.clamps)), madeBy: look.patches };
+      o.job?.end(`draw${k + 1}`);
+      liveDecisions = decisionsOfPatches(look.patches, look.refused, look.clamps);
     } catch (e) {
       // The patched style could not be drawn: keep what we have, and say why this round is missing.
       rounds[rounds.length - 1] = { ...rounds[rounds.length - 1], note: `The reader’s next changes could not be drawn, so the loop stopped here. ${(e as Error).message}` };
@@ -255,6 +292,12 @@ export async function runLoop(o: LoopOptions): Promise<{ rounds: Round[]; best: 
     }
     rounds.push(current);
     o.onRound(current);
+    if (o.job) o.job.round(await liveRound(current, liveDecisions));
+  }
+  if (o.job) {
+    o.job.begin('keep', 'Keep the best round');
+    o.job.keep(rounds[best].n);
+    o.job.end('keep', keptSentence(rounds, best, stopped));
   }
   return { rounds, best, stopped };
 }

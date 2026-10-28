@@ -12,7 +12,11 @@ import { ensureTemplatesLoaded, saveTemplate, styleNameFor, templateProblem, use
 import { closenessOf, rankMissing, SINGLE_IMAGE_NOTE } from './closeness';
 import { detectGrid, type GridResult } from './grid';
 import { bitmapOf, cut, jpegUrl, pxOfCanvas, previewOf, readerImageOf, samplePhoto } from './images';
-import { applyFeedback, keptSentence, runLoop, type Round, type SampleContent } from './loop';
+import { applyFeedback, keptSentence, liveRound, renderReplicas, runLoop, scoreOf, type Round, type SampleContent } from './loop';
+import { startJob, onCancel } from '../live/jobs';
+import { draftSpec } from './draft';
+import { cacheClear, cacheCount, cacheGet, cacheKey, cachePut } from './cache';
+import { meanSimilarity } from './similarity';
 import { BLANK_NAME, blankStyle } from './blank';
 import { describeMeasured, measure } from './measure';
 import { detectReaders, ReaderError, readStyle, type ReferenceReader } from './reader';
@@ -58,6 +62,10 @@ export default function ReferenceStylePage() {
   const [measured, setMeasured] = useState<Measured[]>([]);
   /** The pieces are being cut and measured again after a change: Read references waits for them. */
   const [preparing, setPreparing] = useState(false);
+  /** How long cutting the pieces and measuring them took (seconds), for the Live view's timing. */
+  const prep = useRef({ split: 0, measure: 0 });
+  /** Time spent finding the grids when the pictures were added (ms). */
+  const gridMs = useRef(0);
 
   const addFiles = async (files: File[]) => {
     const room = MAX_IMAGES - uploads.length;
@@ -70,6 +78,7 @@ export default function ReferenceStylePage() {
         const bm = await bitmapOf(f);
         // Thin gutters can vanish at one size and show at another, so look at three sizes and take the first grid found.
         let grid: GridResult | null = null;
+        const tg = performance.now();
         for (const size of [1400, 900, 600]) {
           const small = cut(bm, null, size);
           const g = detectGrid(pxOfCanvas(small));
@@ -79,6 +88,7 @@ export default function ReferenceStylePage() {
             break;
           }
         }
+        gridMs.current += performance.now() - tg;
         const t = await jpegUrl(bm, null, 520);
         next.push({ id: `img${uploads.length + next.length + 1}`, name: f.name, bitmap: bm, thumb: t.url, width: bm.width, height: bm.height, grid, mode: grid ? 'grid' : 'single', ticked: grid ? grid.cells.map(() => true) : [], crop: null, learn: 'everything' });
       } catch {
@@ -100,15 +110,22 @@ export default function ReferenceStylePage() {
     (async () => {
       const list: ReferenceItem[] = [];
       const ms: Measured[] = [];
+      let splitMs = 0;
+      let measureMs = 0;
       for (const u of uploads) {
         const pieces: { rect: Rect | null; cell?: number }[] = u.mode === 'grid' && u.grid ? u.grid.cells.flatMap((c, i) => (u.ticked[i] ? [{ rect: c, cell: i }] : [])) : u.mode === 'crop' && u.crop ? [{ rect: u.crop }] : [{ rect: null }];
         for (const p of pieces) {
+          const tc = performance.now();
           const j = await jpegUrl(u.bitmap, p.rect, 1000);
+          splitMs += performance.now() - tc;
           list.push({ id: p.cell !== undefined ? `${u.id}#${p.cell + 1}` : u.id, name: p.cell !== undefined ? `${u.name} (slide ${p.cell + 1})` : u.name, dataUrl: j.url, width: j.width, height: j.height, learn: u.learn, source: { image: u.id, ...(p.cell !== undefined ? { cell: p.cell } : {}), ...(p.rect ? { rect: p.rect } : {}) } });
+          const tm = performance.now();
           ms.push(measure(pxOfCanvas(cut(u.bitmap, p.rect, 420))));
+          measureMs += performance.now() - tm;
         }
       }
       if (live) {
+        prep.current = { split: Math.round((splitMs + gridMs.current) / 100) / 10, measure: Math.round(measureMs / 100) / 10 };
         setItems(list);
         setMeasured(ms);
         setPreparing(false);
@@ -151,6 +168,10 @@ export default function ReferenceStylePage() {
   // ----- reading and the loop -----
   const [phase, setPhase] = useState('');
   const [busy, setBusy] = useState(false);
+  const [cached, setCached] = useState(0);
+  useEffect(() => {
+    void cacheCount().then(setCached);
+  }, [busy]);
   const [problem, setProblem] = useState<{ message: string; details: string[] } | null>(null);
   const [rounds, setRounds] = useState<Round[]>([]);
   const [picked, setPicked] = useState(0);
@@ -176,16 +197,68 @@ export default function ReferenceStylePage() {
     setPicked(0);
     setSaved(null);
     const t0 = performance.now();
+    const job = startJob('style-from-references', `${items.length} reference piece${items.length === 1 ? '' : 's'}, target: ${TARGET_LABEL[target]}`, [
+      { id: 'split', label: 'Split collage' },
+      { id: 'measure', label: 'Measure colours, layout and type' },
+      { id: 'draft', label: 'Quick draft from the measurements' },
+      { id: 'reader', label: 'Ask the reader' },
+      { id: 'validate', label: 'Validate and clamp' },
+    ]);
+    onCancel(job.id, () => abort.current?.abort());
+    job.references(items.map((it) => ({ name: it.name, url: it.dataUrl })));
+    job.preDone('split', prep.current.split, 'done when the pictures were added');
+    job.preDone('measure', prep.current.measure, 'done when the pictures were added');
+    job.note('Up to 3 things run at once: the quick draft is drawn while the reader reads. The reader’s own rounds run one after another, because each round depends on the one before.');
     try {
       setPhase('The reader is looking at your references…');
       const images = items.map((it, i) => readerImageOf(it.dataUrl, `ref${i + 1}.jpg`));
-      const out = await readStyle({ reader, items, images, target, base, baseName, measured, name, title: title.trim() || 'My style', signal: abort.current.signal, onPhase: (p) => setPhase(p === 'reading' ? 'The reader is looking at your references…' : 'The reader’s first answer did not pass the checks, so it is asked once more…') });
+      const photo = samplePic ?? { ...(await samplePhoto()), id: 'sample-builtin' };
+      const content: SampleContent = { title: sampleTitle.trim() || 'Your title here', photo };
+      // A quick draft from the measured numbers alone, drawn while the reader reads, so there is a picture within a couple of seconds.
+      const draftDone = (async () => {
+        if (target === 'thumbnail' || measured.length === 0) return job.skip('draft', target === 'thumbnail' ? 'thumbnails take longer than a quick draft' : 'nothing measured');
+        job.begin('draft');
+        try {
+          const spec = draftSpec(measured[0]);
+          const n = Math.min(items.length, 4);
+          const reps = await renderReplicas({ spec, target, items: items.slice(0, n), measured: measured.slice(0, n), seen: ['cover'], content, photoItems: new Set() });
+          const sim = meanSimilarity(reps.map((r) => r.similarity));
+          const p = spec.palettes.plain as unknown as Record<string, string>;
+          const draft = { n: -1, label: 'Quick draft', spec, replicas: reps, similarity: sim, judgement: null, patchesOut: [], refused: [], madeBy: [], clamped: [], score: scoreOf(sim, null), ms: 0 } as unknown as Round;
+          job.round(await liveRound(draft, [
+            { text: `background → ${p.bg}`, source: 'MEASURED' }, { text: `text → ${p.text}`, source: 'MEASURED' }, { text: `margin → ${spec.spacing.margin} px`, source: 'MEASURED' }, { text: `title → ${spec.type.headline} px`, source: 'MEASURED' },
+          ], { draft: true }));
+          job.end('draft');
+        } catch (e) {
+          job.fail('draft', (e as Error).message);
+        }
+      })();
+      // The same references, learn-from choices, target and reader version were read before: use that answer.
+      const key = await cacheKey({ dataUrls: items.map((i) => i.dataUrl), learn: items.map((i) => i.learn), target, baseName, readerId: reader.id }).catch(() => '');
+      const hit = key ? await cacheGet(key) : null;
+      job.begin('reader');
+      let out: Awaited<ReturnType<typeof readStyle>>;
+      if (hit) {
+        out = { ...hit, spec: { ...hit.spec, name, title: title.trim() || 'My style' } };
+        job.cached();
+        job.end('reader', 'from cache');
+      } else {
+        job.waiting('the reader');
+        try {
+          out = await readStyle({ reader, items, images, target, base, baseName, measured, name, title: title.trim() || 'My style', signal: abort.current.signal, onPhase: (p) => setPhase(p === 'reading' ? 'The reader is looking at your references…' : 'The reader’s first answer did not pass the checks, so it is asked once more…') });
+        } finally {
+          job.waiting(null);
+        }
+        job.end('reader', out.attempts === 2 ? 'the first answer needed a second try' : undefined);
+        if (key) void cachePut(key, out);
+      }
+      job.begin('validate');
+      job.end('validate', out.clamps.length ? `${out.clamps.length} value${out.clamps.length === 1 ? '' : 's'} moved to what the toolbox supports` : 'nothing had to be moved');
+      await draftDone;
       setSeen(out.result.seenSlideTypes);
       setMissing(out.result.missingTools);
       setNotes(out.result.notes);
       setAttempts(out.attempts);
-      const photo = samplePic ?? { ...(await samplePhoto()), id: 'sample-builtin' };
-      const content: SampleContent = { title: sampleTitle.trim() || 'Your title here', photo };
       // The references that show a photo, a person, a device or an object get a photo in their sample.
       const photoItems = new Set(items.filter((_, i) => out.result.photoImages.includes(`ref${i + 1}.jpg`)).map((i) => i.id));
       ctx.current = { content, spec: out.spec, name, photoItems, readClamps: out.clamps };
@@ -209,7 +282,9 @@ export default function ReferenceStylePage() {
           setRounds([...all]);
         },
         onPhase: setPhase,
+        job,
       });
+      job.finish(result.stopped === 'cancelled' ? 'cancelled' : 'done', result.stopped === 'cancelled' ? 'Cancelled.' : undefined);
       setPicked(result.best);
       setKeptText(keptSentence(result.rounds, result.best, result.stopped));
       const sum = (f: (r: Round) => number) => (result.rounds.reduce((a, r) => a + f(r), 0) / 1000).toFixed(0);
@@ -217,6 +292,7 @@ export default function ReferenceStylePage() {
       setPhase('');
     } catch (e) {
       setPhase('');
+      job.finish(e instanceof ReaderError && e.kind === 'cancelled' ? 'cancelled' : 'failed', e instanceof Error ? e.message : undefined);
       if (e instanceof ReaderError) setProblem({ message: e.kind === 'cancelled' ? 'Cancelled.' : e.message, details: e.problems });
       else setProblem({ message: e instanceof Error ? e.message : 'Something went wrong while reading the references.', details: [] });
     } finally {
@@ -406,6 +482,7 @@ export default function ReferenceStylePage() {
         <div className="cr-photo-actions">
           <button type="button" className="btn btn-primary btn-sm" disabled={!canRead} onClick={() => void read()}>Read references</button>
           {busy && <button type="button" className="btn btn-outline btn-sm" onClick={() => abort.current?.abort()}>Cancel</button>}
+          <button type="button" className="btn btn-outline btn-sm" disabled={busy || cached === 0} onClick={() => void cacheClear().then(() => setCached(0))}>Clear cache{cached ? ` (${cached})` : ''}</button>
         </div>
         {phase && <p className="small" role="status" aria-live="polite">{phase}</p>}
         {problem && (

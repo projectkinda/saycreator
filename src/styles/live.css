@@ -1,0 +1,33 @@
+/* The Live view: a panel docked at the bottom right while a long job runs. */
+.lv { position: fixed; right: 16px; bottom: 16px; width: min(440px, calc(100vw - 32px)); max-height: 82vh; overflow: auto; background: var(--page); border: 1px solid var(--line-strong); border-radius: var(--radius-card); box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 14px; z-index: 40; display: grid; gap: 8px; }
+.lv-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lv-head h2 { margin: 0; flex: 1 1 auto; }
+.lv-stages { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.lv-stage { display: grid; grid-template-columns: 14px 1fr auto auto; gap: 8px; align-items: baseline; font-size: 14px; }
+.lv-stage .lv-note { grid-column: 2 / -1; }
+.lv-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line-strong); align-self: center; }
+.lv-running .lv-dot { background: var(--accent); animation: lvpulse 1s infinite; }
+.lv-done .lv-dot { background: var(--ok-text); }
+.lv-failed .lv-dot { background: var(--error); }
+.lv-skipped .lv-dot { background: var(--warn-dot); }
+.lv-state { color: var(--text-2); font-size: 12px; }
+.lv-secs { font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; }
+.lv-pic { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lv-pic figure { margin: 0; }
+.lv-pic img { width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); display: block; }
+.lv-rounds { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.lv-thumb { display: grid; gap: 2px; justify-items: center; background: none; border: 2px solid transparent; border-radius: 8px; padding: 2px; cursor: pointer; font: inherit; color: var(--text); }
+.lv-thumb[aria-pressed="true"] { border-color: var(--accent); }
+.lv-thumb img { width: 56px; height: auto; border-radius: 4px; border: 1px solid var(--line); }
+.lv-decisions { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.lv-src { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line-strong); }
+.lv-src-measured { background: var(--ok-bg); color: var(--ok-text); }
+.lv-src-reader { background: var(--surface); }
+.lv-src-clamped, .lv-src-rejected { background: var(--warn-bg); color: var(--warn-text); }
+.lv-wait { color: var(--warn-text); }
+.lv-table table { border-collapse: collapse; width: 100%; }
+.lv-table th, .lv-table td { text-align: left; padding: 2px 8px 2px 0; }
+@keyframes lvpulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .lv-running .lv-dot { animation: none; } }
+
+.lv-pill { position: fixed; right: 16px; bottom: 16px; z-index: 40; background: var(--page); box-shadow: 0 4px 14px rgba(0,0,0,.15); }

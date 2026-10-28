@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Icon } from './Icon';
 import { Logo, Sidebar } from './Sidebar';
+import LiveView from '../live/LiveView';
 
 export function Shell() {
   const [open, setOpen] = useState(false);
@@ -42,6 +43,7 @@ export function Shell() {
       <main id="main" className="content" tabIndex={-1}>
         <Outlet />
       </main>
+      <LiveView />
     </div>
   );
 }
