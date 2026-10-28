@@ -6,7 +6,7 @@ import type { Target } from './types';
 
 const DB = 'creator-reader-cache';
 /** Bump when the prompt, the vocabulary or the checks change, so old answers are not reused for a different question. */
-export const READER_VERSION = 'v5-14e';
+export const READER_VERSION = 'v6-14e';
 
 /** Opens the cache, but never waits on it for long: a cache that cannot be opened (blocked, or storage off) is the same as no cache. */
 const open = () =>

@@ -186,7 +186,7 @@ export function photoBlocks(p: Px, _gradient: boolean): { mask: Uint8Array; cols
           const v = at(p, c * B + x, r * B + y);
           seen.add(((v[0] >> 2) << 12) | ((v[1] >> 2) << 6) | (v[2] >> 2));
         }
-      if (seen.size >= 18) mask[r * cols + c] = 1;
+      if (seen.size >= 30) mask[r * cols + c] = 1;
     }
   return { mask, cols, rows };
 }
@@ -364,7 +364,7 @@ export function detectRegions(p: Px): Detected {
     // A photograph is a solid patch: a line of big letters is a thin, sparse run of cells.
     const cellsAcross = g.x1 - g.x0 + 1;
     const cellsDown = g.y1 - g.y0 + 1;
-    if (g.n / (cellsAcross * cellsDown) < 0.5 || Math.min(cellsAcross * PHOTO_BLOCK / W, cellsDown * PHOTO_BLOCK / H) < 0.08) continue;
+    if (g.n / (cellsAcross * cellsDown) < 0.7 || Math.min(cellsAcross * PHOTO_BLOCK / W, cellsDown * PHOTO_BLOCK / H) < 0.12) continue;
     const fillRatio = area / ((box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1));
     const cover = ((box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1)) / (W * H);
     const shape: PhotoRegion['shape'] = cover > 0.85 ? 'full-bleed' : fillRatio > 0.9 ? 'rect' : fillRatio > 0.7 && Math.abs((box.x1 - box.x0) - (box.y1 - box.y0)) < 0.2 * (box.x1 - box.x0) ? 'circle' : fillRatio > 0.75 ? 'rounded' : 'rect';
