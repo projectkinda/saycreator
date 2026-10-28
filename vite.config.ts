@@ -285,8 +285,32 @@ function carouselWriters(): Plugin {
   };
 }
 
+/**
+ * The layout test set (TEST DATA: Crello, not shippable until licences are checked) is served from the git-ignored test-data/ folder by the dev server
+ * only. A production build has no such address and the folder is outside public/, so it can never be copied into dist/.
+ */
+function layoutTestData(): Plugin {
+  return {
+    name: 'layout-test-data',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__layouts/crello', (_req, res) => {
+        const f = path.join(process.cwd(), 'test-data/crello/layouts.json');
+        if (!fs.existsSync(f)) {
+          res.statusCode = 404;
+          res.end('No layout test set. Run npm run crello:fetch and npm run crello:build.');
+          return;
+        }
+        res.setHeader('content-type', 'application/json');
+        res.setHeader('cache-control', 'no-store');
+        res.end(fs.readFileSync(f));
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), labEndpoints(), carouselWriters()],
+  plugins: [react(), labEndpoints(), carouselWriters(), layoutTestData()],
   optimizeDeps: { include: ['onnxruntime-web/webgpu'] },
   worker: { format: 'es' },
   // Cross-origin isolation lets the WASM backend use several threads. 'credentialless' keeps

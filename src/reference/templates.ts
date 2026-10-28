@@ -4,6 +4,7 @@
 import { useSyncExternalStore } from 'react';
 import type { LoadedStyle } from '../image-engine/styles/load';
 import type { StyleSpec } from '../image-engine/styles/format';
+import type { FreeLayout } from '../image-engine/styles/free-spec';
 import { checkSpec } from './spec';
 import { TARGET_LABEL, type Target } from './types';
 
@@ -23,6 +24,8 @@ export interface Template {
   extrapolated?: string[];
   /** Plain words from the closeness panel, kept so the template remembers what it could not do. */
   missing?: string[];
+  /** A stored layout of a shape the carousel and thumbnail screens cannot draw (not 4:5): kept in the template, not applied, never stretched. */
+  layoutKept?: { id: string; ratio: string; w: number; h: number; free: FreeLayout };
 }
 
 const DB = 'creator-style-templates';
@@ -101,10 +104,10 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 /** A unique style name for a new template. */
 export const styleNameFor = (title: string) => `${TEMPLATE_PREFIX}${slug(title)}-${newId().slice(0, 4)}`;
 
-export async function saveTemplate(o: { name: string; target: Target; spec: StyleSpec; preview: string; singleImage?: boolean; extrapolated?: string[]; missing?: string[] }): Promise<Template> {
+export async function saveTemplate(o: { name: string; target: Target; spec: StyleSpec; preview: string; singleImage?: boolean; extrapolated?: string[]; missing?: string[]; layoutKept?: Template['layoutKept'] }): Promise<Template> {
   await ensureTemplatesLoaded();
   const now = Date.now();
-  const t: Template = { id: newId(), name: o.name.trim() || 'My style', target: o.target, spec: { ...o.spec, title: o.name.trim() || 'My style' }, preview: o.preview, createdAt: now, updatedAt: now, ...(o.singleImage ? { singleImage: true } : {}), ...(o.extrapolated ? { extrapolated: o.extrapolated } : {}), ...(o.missing ? { missing: o.missing } : {}) };
+  const t: Template = { id: newId(), name: o.name.trim() || 'My style', target: o.target, spec: { ...o.spec, title: o.name.trim() || 'My style' }, preview: o.preview, createdAt: now, updatedAt: now, ...(o.singleImage ? { singleImage: true } : {}), ...(o.extrapolated ? { extrapolated: o.extrapolated } : {}), ...(o.missing ? { missing: o.missing } : {}), ...(o.layoutKept ? { layoutKept: o.layoutKept } : {}) };
   list = [t, ...list];
   bump();
   await persist(t);
@@ -124,7 +127,7 @@ export async function duplicateTemplate(id: string): Promise<Template | null> {
   const t = templateById(id);
   if (!t) return null;
   const name = `${t.name} (copy)`;
-  return saveTemplate({ name, target: t.target, spec: { ...t.spec, name: styleNameFor(name) }, preview: t.preview, singleImage: t.singleImage, extrapolated: t.extrapolated, missing: t.missing });
+  return saveTemplate({ name, target: t.target, spec: { ...t.spec, name: styleNameFor(name) }, preview: t.preview, singleImage: t.singleImage, extrapolated: t.extrapolated, missing: t.missing, layoutKept: t.layoutKept });
 }
 export async function deleteTemplate(id: string) {
   list = list.filter((x) => x.id !== id);
@@ -172,7 +175,7 @@ export async function importTemplates(text: string): Promise<{ added: Template[]
       rejected.push(`${label}: ${c.errors[0]}`);
       continue;
     }
-    added.push(await saveTemplate({ name: label, target: item.target as Target, spec, preview: typeof item.preview === 'string' ? item.preview : '', singleImage: item.singleImage, extrapolated: item.extrapolated, missing: item.missing }));
+    added.push(await saveTemplate({ name: label, target: item.target as Target, spec, preview: typeof item.preview === 'string' ? item.preview : '', singleImage: item.singleImage, extrapolated: item.extrapolated, missing: item.missing, layoutKept: item.layoutKept }));
   }
   return { added, rejected };
 }

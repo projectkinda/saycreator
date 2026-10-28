@@ -19,6 +19,7 @@ import { Placeholder } from './pages/Placeholder';
 const CarouselPage = lazy(() => import('./carousel/CarouselPage'));
 const ThumbnailPage = lazy(() => import('./thumbnail/ThumbnailPage'));
 const StylesPage = lazy(() => import('./reference/StylesPage'));
+const LayoutsPage = lazy(() => import('./layouts/LayoutsPage'));
 const ReferenceStylePage = lazy(() => import('./reference/ReferenceStylePage'));
 
 // Dev-only lab for judging the image engine. Not built into production.
@@ -73,6 +74,14 @@ export default function App() {
             element={
               <Suspense fallback={<p className="page" role="status">Loading…</p>}>
                 <ReferenceStylePage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="images/layouts"
+            element={
+              <Suspense fallback={<p className="page" role="status">Loading the layouts…</p>}>
+                <LayoutsPage />
               </Suspense>
             }
           />

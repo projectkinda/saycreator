@@ -1,0 +1,76 @@
+/* Images > Layouts: the gallery of stored layouts (a test set). */
+.lg-test-banner {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--border, #b9a);
+  border-radius: 8px;
+  background: var(--surface-2, #fff7e6);
+  font-size: 0.9rem;
+}
+.lg-content,
+.lg-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.lg-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 40px;
+}
+.lg-photo-thumb {
+  max-height: 64px;
+  max-width: 100%;
+  border-radius: 6px;
+}
+.lg-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.lg-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+.lg-frames {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lg-drawing,
+.lg-fitted {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 4px;
+}
+.lg-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: start;
+}
+.lg-cat {
+  margin: 0;
+}
+.lg-star {
+  border: 0;
+  background: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  color: inherit;
+}
+.lg-star.on {
+  color: #d99a00;
+}

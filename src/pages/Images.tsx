@@ -223,6 +223,7 @@ export default function Images() {
           )}
           <Link to="/images/thumbnail" className="btn btn-outline btn-lg">Make a thumbnail</Link>
           <Link to="/images/styles" className="btn btn-outline btn-lg">Styles</Link>
+          <Link to="/images/layouts" className="btn btn-outline btn-lg">Layouts</Link>
         <button
           type="button"
           className="btn btn-primary btn-lg"
