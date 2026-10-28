@@ -35,7 +35,7 @@ function scriptOf(content: SampleContent, withPhoto: boolean): CarouselScript {
 }
 
 /** Draws the content in the style, calling `onShot` as each picture is ready (the first one is the quickest). */
-export async function renderOwn(o: { spec: StyleSpec; target: Target; content: SampleContent; withPhoto?: boolean; onShot?: (s: OwnShot, i: number) => void }): Promise<OwnShot[]> {
+export async function renderOwn(o: { spec: StyleSpec; target: Target; content: SampleContent; withPhoto?: boolean; /** Run the phone checks and the safety net too (slower). Previews skip them. */ checks?: boolean; /** Stop after this many pictures (applying a template to a photo needs only the first). */ limit?: number; onShot?: (s: OwnShot, i: number) => void }): Promise<OwnShot[]> {
   await loadFonts();
   const out: OwnShot[] = [];
   const push = (s: OwnShot) => {
@@ -48,16 +48,18 @@ export async function renderOwn(o: { spec: StyleSpec; target: Target; content: S
     const photo = withPhoto ? await sampleInput(o.content.photo) : null;
     const slides = composeStyled(scriptOf(o.content, withPhoto), style, { width: 1080, height: 1350, handle: '@yourname', elements: 'shippable', ...(photo ? { photos: [photo] } : {}) }, false);
     for (const kind of SHOWN) {
+      if (o.limit !== undefined && out.length >= o.limit) break;
       const s = slides.find((x) => x.type === kind);
       if (!s) continue;
       const t0 = performance.now();
-      const r = await renderer.render(s, o.spec.spacing.margin);
-      push({ label: kind === 'cover' ? 'Cover' : kind === 'content' ? 'A content slide' : 'A number slide', url: URL.createObjectURL(r.png), blob: r.png, plan: s.plan, seconds: Math.round((performance.now() - t0) / 10) / 100 });
+      // A preview: drawn at half size without the phone checks and the safety net (those take about 1.5 s a slide and run when a carousel is made with the style).
+      const png = o.checks ? (await renderer.render(s, o.spec.spacing.margin)).png : await renderer.preview(s.plan, 0.5);
+      push({ label: kind === 'cover' ? 'Cover' : kind === 'content' ? 'A content slide' : 'A number slide', url: URL.createObjectURL(png), blob: png, plan: s.plan, seconds: Math.round((performance.now() - t0) / 10) / 100 });
     }
   }
   if (o.target !== 'carousel' && o.spec.thumbnail) {
     const subject = await guessFor(o.content.photo.id).catch(() => ({ x: 0.5, y: 0.5 }));
-    const opts = composeThumbs({ aspect: '16:9', title: o.content.title, photo: { id: o.content.photo.id, src: o.content.photo.url, width: o.content.photo.width, height: o.content.photo.height }, subject, seed: 'own' }, style).slice(0, 3);
+    const opts = composeThumbs({ aspect: '16:9', title: o.content.title, photo: { id: o.content.photo.id, src: o.content.photo.url, width: o.content.photo.width, height: o.content.photo.height }, subject, seed: 'own' }, style).slice(0, o.limit !== undefined ? Math.max(0, o.limit - out.length) : 3);
     const adapter = new FabricAdapter();
     await adapter.mount(null);
     try {
@@ -80,7 +82,7 @@ export async function applyToPhotos(spec: StyleSpec, target: Target, title: stri
   const out: { id: string; url: string; seconds: number }[] = [];
   for (const photo of photos) {
     const t0 = performance.now();
-    const shots = await renderOwn({ spec, target, content: { title, photo }, withPhoto: true });
+    const shots = await renderOwn({ spec, target, content: { title, photo }, withPhoto: true, limit: 1 });
     const first = shots[0];
     if (first) out.push({ id: photo.id, url: first.url, seconds: Math.round(((performance.now() - t0) / 1000) * 100) / 100 });
   }
