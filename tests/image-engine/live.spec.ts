@@ -2,6 +2,7 @@
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { openResults } from './lab-nav';
 import { fakeReader, makeReference, openStyleFromReferences, readAnswer, refineAnswer, refInput, REF_OUT, ROOT } from './reference-helpers';
 
 test.describe.configure({ mode: 'serial' });
@@ -138,4 +139,19 @@ test('"Why this slide" says the style, the layout and why, the checks, and what 
   await expect(pop).toContainText('Why this layout:');
   await expect(pop).toContainText(/Checks: \d+ passed/);
   await expect(pop).toContainText('What the safety net changed');
+});
+
+test('Results shows the latest run: the stage times, their share, and the rounds, as saved by the Live view', async ({ page }) => {
+  await fakeReader(page, usual);
+  await openStyleFromReferences(page);
+  await refInput(page).setInputFiles(await makeReference(page, { name: 'latest.jpg', kind: 'slide' }));
+  await page.getByRole('button', { name: 'Read references' }).click();
+  await expect(page.getByRole('button', { name: 'Open the Live view' })).toBeVisible({ timeout: 120_000 });
+  await openResults(page, 'Style from references');
+  const latest = page.getByRole('region', { name: 'Latest run' });
+  await expect(latest).toBeVisible();
+  await expect(latest.getByRole('article').first()).toContainText('Style from references');
+  await expect(latest.getByRole('row', { name: /Ask the reader/ })).toContainText('%');
+  expect(await latest.getByRole('list', { name: 'Rounds of this run' }).first().getByRole('listitem').count()).toBeGreaterThanOrEqual(3);
+  await page.screenshot({ path: path.join(OUT, '4-results-latest.png'), fullPage: true });
 });
