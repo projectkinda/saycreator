@@ -32,6 +32,7 @@ import { applyLabels, labelReference, type Labels } from './labels';
 import { overlayImage } from './overlay';
 import { DetectOverlay } from './DetectOverlay';
 import { meanOf, pctText, scoreLayout, type LayoutScore } from './score';
+import { clearActiveReference, setActiveReference, setShowDetected as storeShowDetected, useActiveReference } from './active';
 import { LEARN_SECTIONS, LEARN_LABEL, TARGET_LABEL, type LearnFrom, type Measured, type MissingTool, type Rect, type ReferenceItem, type Target } from './types';
 import '../styles/carousel.css';
 import '../styles/reference.css';
@@ -59,8 +60,17 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 // The pictures sent to the reader are the smaller size (720 px): step 14c measured no drop in the result at that size, and nothing is gained by more.
 setProfile('small');
 
-export default function ReferenceStylePage() {
-  useDocumentTitle('New style from references');
+export interface EmbedProps {
+  /** Inside a working screen: the screen's target, its title and its photo are used, and the result is applied to the screen. */
+  embedded?: boolean;
+  target?: Target;
+  title?: string;
+  photo?: { url: string; width: number; height: number; name: string };
+}
+
+export default function ReferenceStylePage({ embedded = false, target: forcedTarget, title: forcedTitle, photo: forcedPhoto }: EmbedProps = {}) {
+  useDocumentTitle(embedded ? document.title : 'New style from references');
+  const activeRef = useActiveReference();
   const tplVersion = useTemplatesVersion();
   useEffect(() => {
     void ensureTemplatesLoaded();
@@ -157,12 +167,18 @@ export default function ReferenceStylePage() {
   }, [uploads]);
 
   // ----- target, name, base -----
-  const [target, setTarget] = useState<Target>('carousel');
+  const [target, setTarget] = useState<Target>(forcedTarget ?? 'carousel');
   const [title, setTitle] = useState('');
   // The base is blank (plain white, nothing added) unless the person picks a stored style to start from.
   const baseOptions = useMemo(() => [blankStyle(), ...getStyles().styles.filter((s) => !s.spec.name.startsWith('mine-')).map((s) => s.spec)], [tplVersion]);
   const [baseName, setBaseName] = useState(BLANK_NAME);
-  const [sampleTitle, setSampleTitle] = useState('Ride before sunrise');
+  const [sampleTitle, setSampleTitle] = useState(forcedTitle?.trim() || 'Ride before sunrise');
+  useEffect(() => {
+    if (embedded && forcedTitle?.trim()) setSampleTitle(forcedTitle.trim());
+  }, [embedded, forcedTitle]);
+  useEffect(() => {
+    if (embedded && forcedTarget) setTarget(forcedTarget);
+  }, [embedded, forcedTarget]);
   /** The person's own photos (in memory only). The first one is the one drawn in the result; the rest show the saved template applied. */
   const [ownPics, setOwnPics] = useState<{ id: string; url: string; width: number; height: number; name: string }[]>([]);
   const [builtin, setBuiltin] = useState<{ id: string; url: string; width: number; height: number } | null>(null);
@@ -173,6 +189,10 @@ export default function ReferenceStylePage() {
       live = false;
     };
   }, []);
+  // Inside a screen the person's own photo is the one drawn.
+  useEffect(() => {
+    if (embedded && forcedPhoto) setOwnPics([{ id: 'own-screen', ...forcedPhoto }]);
+  }, [embedded, forcedPhoto?.url]);
   const samplePic = ownPics[0] ?? null;
   const addOwnPics = async (files: File[]) => {
     const next: typeof ownPics = [];
@@ -550,9 +570,71 @@ export default function ReferenceStylePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chosen, busy]);
 
+  // ----- inside a working screen -----
+  // The style goes to the screen: the draft first, then the reader's answer, then every live edit.
+  useEffect(() => {
+    if (!embedded) return;
+    if (!editState || items.length === 0 || uploads.length === 0) {
+      clearActiveReference();
+      return;
+    }
+    const d = detected[0];
+    const ph = d ? [...d.photos].sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h)[0] : undefined;
+    const share = ph && d ? { x: ph.box.x / d.size.width, y: ph.box.y / d.size.height, width: ph.box.w / d.size.width, height: ph.box.h / d.size.height } : null;
+    const want = target === 'carousel' ? 4 / 5 : 16 / 9;
+    const off = uploads.filter((u) => Math.abs(Math.log(u.width / u.height / want)) > 0.12).length;
+    setActiveReference({
+      spec: withThumb(editState.spec),
+      thumb: uploads[0].thumb,
+      learn: items[0].learn,
+      target,
+      ratioNote: off ? `${off === 1 ? 'The reference is' : 'Some references are'} not ${target === 'carousel' ? '4:5' : '16:9'}; they are fitted into it, not stretched.` : null,
+      photoRegion: share && share.width * share.height < 0.8 ? share : null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedded, editState, items, uploads, detected, target]);
+  // The chip's X removes the reference: the page forgets its pictures too. The chip's toggle and the page's own toggle are the same switch.
+  const lastRemoved = useRef(activeRef.removed);
+  useEffect(() => {
+    if (embedded && activeRef.removed !== lastRemoved.current) {
+      lastRemoved.current = activeRef.removed;
+      setUploads([]);
+    }
+  }, [embedded, activeRef.removed]);
+  useEffect(() => {
+    if (embedded) setShowDetected(activeRef.showDetected);
+  }, [embedded, activeRef.showDetected]);
+  useEffect(() => {
+    if (embedded) storeShowDetected(showDetected);
+  }, [embedded, showDetected]);
+  // Paste (Ctrl+V) adds the pictures on the clipboard, unless the person is typing.
+  useEffect(() => {
+    const on = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && /^(input|textarea|select)$/i.test(t.tagName)) return;
+      const fs = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+      if (fs.length === 0) return;
+      e.preventDefault();
+      void addFiles(fs);
+    };
+    document.addEventListener('paste', on);
+    return () => document.removeEventListener('paste', on);
+  });
+  // Inside a screen the one reader call follows the instant draft by itself (once per set of references; the call cap and the cache apply as before).
+  const autoKey = useRef('');
+  useEffect(() => {
+    if (!embedded || !canRead || !editState || draftSeconds === null) return;
+    const key = items.map((i) => i.id + i.learn).join('|') + target;
+    if (autoKey.current === key) return;
+    autoKey.current = key;
+    void read();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedded, canRead, editState, draftSeconds, items, target]);
+
   const showRounds = rounds.length > 0;
   return (
-    <div className="page cr-page rf-page">
+    <div className={`page cr-page rf-page${embedded ? ' rf-embedded' : ''}`}>
+      {!embedded && (
       <header className="page-header">
         <div className="page-header-text">
           <p className="small"><Link to="/images/styles">← Styles</Link></p>
@@ -560,6 +642,7 @@ export default function ReferenceStylePage() {
           <p className="lead">Add pictures of looks you like. The app measures them, a reader describes them in our style vocabulary, and the app draws your own content in that style next to them. It gets as close as our toolbox allows and tells you what it could not do.</p>
         </div>
       </header>
+      )}
 
       <div className="rf-three">
       <section className="card rf-sec" aria-labelledby="rf-refs-h">
@@ -656,7 +739,7 @@ export default function ReferenceStylePage() {
         </ul>
       </section>
 
-      <section className="card rf-sec" aria-labelledby="rf-set-h">
+      <section className="card rf-sec rf-set" aria-labelledby="rf-set-h">
         <h2 id="rf-set-h" className="h3">2. What it is for</h2>
         <div className="tn-field">
           <span className="field-label" id="rf-target-l">Make it for</span>

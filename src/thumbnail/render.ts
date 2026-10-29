@@ -3,7 +3,7 @@
 import { FabricAdapter } from '../image-engine/fabric-adapter';
 import { loadFonts } from '../image-engine/fonts';
 import { checkThumb, loadImage, type CheckedThumb, type Source } from '../image-engine/thumbnail/v2/check';
-import { composeThumbs, numberIn, type ThumbOption, type ThumbRequest } from '../image-engine/thumbnail/v2/compose';
+import { THUMB_SIZES, composeThumbs, numberIn, type ThumbOption, type ThumbRequest } from '../image-engine/thumbnail/v2/compose';
 import { guessSubject, type SubjectPoint } from '../image-engine/thumbnail/v2/subject';
 import type { LoadedStyle } from '../image-engine/styles/load';
 import { pickStyle } from '../carousel/pickStyle';
@@ -17,6 +17,7 @@ import type { VariantLook, VariantSpec } from '../image-engine/thumbnail/v2/back
 import { targetOfStyle } from '../reference/templates';
 import { startJob, type JobHandle } from '../live/jobs';
 import { variantUrl } from '../image-engine/cutout/look';
+import { ACTIVE_STYLE, activeReference } from '../reference/active';
 
 /** The job being timed: composing the options, then drawing and checking each (the Live view shows it when it takes long enough to notice). */
 let thumbJob: { job: JobHandle; pending: number } | null = null;
@@ -192,6 +193,12 @@ async function requestFor(doc: ThumbDoc, picked: { style: LoadedStyle }, base: {
   const { subject, second, main, url } = base;
   const tbc = picked.style.spec.thumbnail?.cutout;
   const merged: CutoutLook = { ...lookOf(tbc?.look), ...(doc.objectLook ?? {}), ...(v ? lookOf(v.look) : {}) };
+  // With a reference active, the cutout goes into the reference's photo region when one was detected; otherwise the layout's own slot is used.
+  const region = picked.style.spec.name === ACTIVE_STYLE ? activeReference()?.photoRegion : null;
+  if (region && doc.objectId && merged.x === undefined && merged.y === undefined && merged.scale === undefined) {
+    const { width: W, height: H } = THUMB_SIZES[doc.aspect];
+    Object.assign(merged, { x: region.x + region.width / 2, y: region.y + region.height / 2, scale: Math.min(2, Math.max(0.4, Math.min(region.width * W, region.height * H) / (W * 0.5))) });
+  }
   const look = Object.keys(merged).length ? merged : undefined;
   // The cutout with the flip and the outline the person asked for baked in, and a copy with an outline for the outline combination.
     const objSrc = doc.objectId ? urlOf(doc.objectId) : null;

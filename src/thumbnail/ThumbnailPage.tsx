@@ -2,6 +2,8 @@
 // options each checked at phone size, pick one, edit it and export it. Pictures stay in this browser. Stills only: not video frames.
 import { ReplayButton } from '../live/Replay';
 import { BackdropPanel } from './BackdropPanel';
+import { MatchPanel } from '../reference/MatchPanel';
+import { ACTIVE_STYLE, useActiveReference } from '../reference/active';
 import { styleSpecOf } from './render';
 import { saveTemplate, styleNameFor } from '../reference/templates';
 import type { VariantSpec } from '../image-engine/thumbnail/v2/backdrop';
@@ -19,7 +21,7 @@ import { downloadBlob, exportAllAsZip } from '../carousel/export';
 import { FocalPicker } from '../carousel/PhotoControls';
 import { LintBadges } from '../carousel/parts';
 import { TREATMENT_CHOICES } from '../carousel/photoChoices';
-import { PRIVACY_LINE, PictureError, addPicture, currentStorageProblem, hydrate, isMissing, removePicture, storageRoomNote, urlOf, useLibraryVersion } from '../carousel/photoLibrary';
+import { PRIVACY_LINE, PictureError, addPicture, currentStorageProblem, hydrate, isMissing, removePicture, storageRoomNote, sizeOf, urlOf, useLibraryVersion } from '../carousel/photoLibrary';
 import { WriterError, detectProviders, type WriteProvider } from '../carousel/writer';
 import { AUTO_STYLE, thumbPatches } from './doc';
 import { forgetGuess, composeProject, guessFor, thumbRenderer, thumbStyles, type Composed, type Drawn } from './render';
@@ -46,6 +48,7 @@ export default function ThumbnailPage() {
   const { doc, past, future } = project;
   const libVersion = useLibraryVersion();
   const tplVersion = useTemplatesVersion();
+  const refVersion = useActiveReference().version;
   useEffect(() => {
     void ensureTemplatesLoaded();
   }, []);
@@ -255,7 +258,7 @@ export default function ThumbnailPage() {
     }, 200);
     return () => window.clearTimeout(timer);
     // The options depend on everything in the doc except the topic and the history; libVersion covers pictures coming back after a refresh.
-  }, [tplVersion, doc.aspect, doc.style, doc.title, doc.emphasis, doc.photoId, doc.objectId, doc.objectLook, doc.backdrop, doc.palette, doc.titlePlace, doc.secondId, doc.subject, doc.secondSubject, doc.treatment, libVersion, doc.topic]);
+  }, [tplVersion, refVersion, doc.aspect, doc.style, doc.title, doc.emphasis, doc.photoId, doc.objectId, doc.objectLook, doc.backdrop, doc.palette, doc.titlePlace, doc.secondId, doc.subject, doc.secondSubject, doc.treatment, libVersion, doc.topic]);
 
   const ready = cards.length > 0 && cards.every((c) => c.status === 'ready');
   const size = THUMB_SIZES[doc.aspect];
@@ -343,6 +346,7 @@ export default function ThumbnailPage() {
         {editing && <CutoutEditor record={editing} onSave={(r) => void saveEdited(r)} onClose={() => setEditing(null)} />}
         {proj.saveFailed && <p className="small cr-problem" role="alert">This browser would not save the project. Download your thumbnails before you leave.</p>}
 
+        <MatchPanel target="thumbnail" title={doc.title} photo={doc.photoId && photoUrl && sizeOf(doc.photoId) ? { url: photoUrl, name: 'photo', ...sizeOf(doc.photoId)! } : null} current={doc.style} onUse={() => apply(thumbPatches.style(ACTIVE_STYLE))} onRemove={() => apply(thumbPatches.style(AUTO_STYLE))} />
         {doc.objectId && (
           <BackdropPanel doc={doc} apply={apply} addPhoto={(f) => void addFiles([f], 'photo', 'backdrop')} onSaveLook={saveLook} />
         )}

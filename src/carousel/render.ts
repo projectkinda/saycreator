@@ -14,14 +14,16 @@ import { yieldToBrowser } from './export';
 import { treatmentsFor } from './photoChoices';
 import { objectInputs, photoInputs } from './photoLibrary';
 import { targetOfStyle, userStyles } from '../reference/templates';
+import { activeStyle } from '../reference/active';
 
 let styles: { styles: LoadedStyle[]; problems: { folder: string; messages: string[] }[] } | null = null;
-let merged: { user: LoadedStyle[]; value: { styles: LoadedStyle[]; problems: { folder: string; messages: string[] }[] } } | null = null;
+let merged: { user: LoadedStyle[]; active: LoadedStyle | null; value: { styles: LoadedStyle[]; problems: { folder: string; messages: string[] }[] } } | null = null;
 /** The stored styles (one folder each under src/image-engine/styles/), then the person's own templates. A new folder appears here by itself. */
 export const getStyles = () => {
   const base = (styles ??= loadStyles());
   const user = userStyles();
-  if (!merged || merged.user !== user) merged = { user, value: { styles: [...base.styles, ...user], problems: base.problems } };
+  const active = activeStyle();
+  if (!merged || merged.user !== user || merged.active !== active) merged = { user, active, value: { styles: [...base.styles, ...user, ...(active ? [active] : [])], problems: base.problems } };
   return merged.value;
 };
 /** The styles a carousel can use: a template made for thumbnails only is not offered here. */

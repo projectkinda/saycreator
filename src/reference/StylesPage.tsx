@@ -54,7 +54,8 @@ export default function StylesPage() {
           <p className="lead">Your own templates, made from references. They appear in the style pickers for carousels and thumbnails, tagged “Mine”.</p>
         </div>
         <div className="row-actions">
-          <Link to="/images/styles/new" className="btn btn-primary btn-lg">New style from references</Link>
+          <Link to="/images/thumbnail" className="btn btn-primary btn-lg">Match a reference in Make a thumbnail</Link>
+          <Link to="/images/carousel" className="btn btn-outline btn-lg">Match a reference in the carousel</Link>
         </div>
       </header>
 
@@ -86,7 +87,7 @@ export default function StylesPage() {
         {list.length === 0 && (
           <div className="card empty">
             <strong>No templates yet</strong>
-            <span className="muted">Press “New style from references”, add a picture you like, and save what the app makes of it.</span>
+            <span className="muted">Open Make a thumbnail or the carousel, use “Match a reference” there, and save what the app makes of it as a template.</span>
           </div>
         )}
         <ul className="rf-templates" aria-label="Templates">

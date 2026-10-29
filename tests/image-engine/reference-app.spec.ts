@@ -35,7 +35,8 @@ test('the screen: reached from Images, says references stay on the device, and R
   await page.getByRole('link', { name: 'Styles', exact: true }).click();
   await expect(page).toHaveURL(/\/images\/styles$/);
   await expect(page.getByText('No templates yet')).toBeVisible();
-  await page.getByRole('link', { name: 'New style from references' }).click();
+  await expect(page.getByRole('link', { name: 'Match a reference in Make a thumbnail' })).toBeVisible();
+  await page.goto('/images/styles/new');
   await expect(page).toHaveURL(/\/images\/styles\/new$/);
   await expect(page.getByText(/Your references stay on this device/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Read references' })).toBeDisabled();

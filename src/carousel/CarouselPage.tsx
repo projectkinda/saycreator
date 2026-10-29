@@ -12,6 +12,9 @@ import { pickStyle } from './pickStyle';
 import { type WriteRequest } from './writerPrompt';
 import { downloadBlob, exportAllAsZip, slideFileName, zipFileName } from './export';
 import { carouselStyles, composeDoc, getStyles, pickShuffleSalt, renderer, styleByName, type Rendered } from './render';
+import { MatchPanel } from '../reference/MatchPanel';
+import { ACTIVE_STYLE, useActiveReference } from '../reference/active';
+import { sizeOf as sizeOfPic, urlOf as urlOfPic } from './photoLibrary';
 import { ensureTemplatesLoaded, isUserStyle, targetWarning, useTemplatesVersion } from '../reference/templates';
 import { platformOf, platformWarning } from './platform';
 import { PhotosStrip } from './PhotosStrip';
@@ -137,6 +140,7 @@ export default function CarouselPage() {
   const pictures = doc.photos ?? [];
   const libVersion = useLibraryVersion();
   const tplVersion = useTemplatesVersion();
+  const refVersion = useActiveReference().version;
   useEffect(() => {
     void ensureTemplatesLoaded();
   }, []);
@@ -234,7 +238,7 @@ export default function CarouselPage() {
     // Slides that are being redrawn keep their old picture until the new one is ready.
     setViews((v) => Object.fromEntries(Object.entries(v).filter(([k]) => Number(k) < composed.slides.length).map(([k, x]) => [k, { ...x, status: 'drawing' as const }])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.script, doc.style, doc.format, doc.choices, doc.photos, libVersion, tplVersion]);
+  }, [doc.script, doc.style, doc.format, doc.choices, doc.photos, libVersion, tplVersion, refVersion]);
 
   /** Adds files to the project's pictures. Unusable files are reported in plain words and skipped; the rest are added. */
   /** Remove background: the cutout is made by the cutout provider, the original and the cutout are kept in IndexedDB, and the cutout is added as an object. */
@@ -456,7 +460,7 @@ export default function CarouselPage() {
         onCancel={cancel}
         provider={provider}
         providers={providers}
-        styles={<><StylePicker format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} />{targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}</>}
+        styles={<><StylePicker format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} />{targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}<MatchPanel target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} /></>}
       />
 
       <details className="card ws-card cr-advanced" open={advanced} onToggle={(e) => setAdvanced((e.target as HTMLDetailsElement).open)}>

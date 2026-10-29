@@ -223,3 +223,10 @@
 .rf-box-grip { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; background: #fff; border: 2px solid #111; border-radius: 3px; cursor: nwse-resize; }
 .rf-detect-side { display: grid; gap: 8px; }
 .rf-detect-sel { display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+
+/* Inside a working screen: the target, name, base and sample title come from the screen. */
+.rf-embedded #rf-set-h,
+.rf-embedded .rf-set > .tn-field { display: none; }
+.rf-embedded.page { padding: 0; }
+.rf-chip-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.rf-chip-bar img { border-radius: 6px; }
