@@ -109,3 +109,14 @@ body:has(.cr-studio) .lv { right: var(--sp-4); bottom: 0; max-height: 46vh; bord
 .cr-group-body .tn-more > :not(summary) + :not(summary) { margin-top: var(--sp-4); }
 .cr-group-body .tn-more > summary + * { margin-top: var(--sp-3); }
 .cr-group-body .rf-recreate > * + * { margin-top: 0; }
+
+/* "Match" inside the Reference group: the three sections stack in the one column, each with room inside and between. */
+.cr-group-body .rf-embedded .rf-three { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); }
+.cr-group-body .rf-embedded .rf-sec { padding: var(--sp-4) var(--sp-5); display: grid; gap: var(--sp-3); align-content: start; min-width: 0; margin: 0; }
+.cr-group-body .rf-embedded .rf-sec > * { margin: 0; }
+.cr-group-body .rf-embedded .rf-sec .h3 { font-size: 16px; }
+.cr-group-body .rf-embedded .rf-sec .cr-photo-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.cr-group-body .rf-embedded .rf-sec label.small, .cr-group-body .rf-embedded .rf-sec .rf-toggle { display: flex; align-items: flex-start; gap: var(--sp-2); }
+.cr-group-body .rf-embedded .rf-sec select { width: 100%; }
+.cr-group-body .rf-embedded .page-header { display: none; }
+.cr-group-body .rf-embedded.page { display: grid; gap: var(--sp-5); }
