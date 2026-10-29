@@ -11,7 +11,9 @@ import { getStyles } from '../carousel/render';
 import { treatmentsFor } from '../carousel/photoChoices';
 import { sizeOf, urlOf } from '../carousel/photoLibrary';
 import { yieldToBrowser } from '../carousel/export';
-import { AUTO_STYLE, type ThumbDoc } from './doc';
+import { AUTO_STYLE, type DocBackdrop, type ThumbDoc } from './doc';
+import type { CutoutLook } from '../image-engine/cutout/look';
+import type { VariantLook, VariantSpec } from '../image-engine/thumbnail/v2/backdrop';
 import { targetOfStyle } from '../reference/templates';
 import { startJob, type JobHandle } from '../live/jobs';
 import { variantUrl } from '../image-engine/cutout/look';
@@ -84,25 +86,7 @@ export async function composeProject(doc: ThumbDoc): Promise<Composed | null> {
   const subject: SubjectPoint = doc.subject ?? (await guessFor(doc.photoId));
   job.end('subject', doc.subject ? 'set by hand' : undefined);
   const second = doc.secondId && urlOf(doc.secondId) && sizeOf(doc.secondId) ? { id: doc.secondId, url: urlOf(doc.secondId)!, size: sizeOf(doc.secondId)! } : null;
-  // The cutout with the flip and the outline the person asked for baked in, and a copy with an outline for the outline combination.
-  const look = doc.objectLook;
-  const objSrc = doc.objectId ? urlOf(doc.objectId) : null;
-  const accent = String((picked.style.spec.palettes[picked.style.spec.thumbnail?.palette ?? ''] as unknown as Record<string, unknown> | undefined)?.accent ?? '#ffffff');
-  const object = doc.objectId && objSrc && sizeOf(doc.objectId)
-    ? { id: doc.objectId, src: await variantUrl(objSrc, { flip: look?.flip, outline: look?.outline }), outlinedSrc: await variantUrl(objSrc, { flip: look?.flip, outline: look?.outline ?? { color: /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : '#ffffff', width: 14 } }), ...sizeOf(doc.objectId)!, ...(look ? { look } : {}) }
-    : null;
-  const emphasis = doc.emphasis?.trim() || undefined;
-  const req: ThumbRequest = {
-    aspect: doc.aspect,
-    title: doc.title,
-    emphasis,
-    photo: { id: doc.photoId, src: url, width: main.width, height: main.height },
-    subject,
-    treatments: treatmentsFor(doc.treatment),
-    seed: doc.photoId,
-    ...(object ? { object } : {}),
-    ...(second ? { second: { photo: { id: second.id, src: second.url, width: second.size.width, height: second.size.height }, subject: doc.secondSubject ?? (await guessFor(second.id)) } } : {}),
-  };
+  const req = await requestFor(doc, picked, { subject, second, main, url });
   job.begin('compose');
   const options = composeThumbs(req, picked.style);
   job.end('compose', `${options.length} options`);
@@ -118,7 +102,7 @@ export async function composeProject(doc: ThumbDoc): Promise<Composed | null> {
   }, 400);
   const tb = picked.style.spec.thumbnail!;
   const left = tb.layouts.filter((l) => !options.some((o) => o.layout === l)).map((l) => ({ layout: l, because: l === 'object-title' ? 'needs a transparent object picture' : l === 'number-badge' ? (numberIn(doc.title) ? 'did not fit' : 'needs a number in the title (it never makes one up)') : l === 'before-after' ? 'needs a second photo' : 'not available' }));
-  return { options, style: picked.style, why: picked.why, subject, left, pictures: { photo: url, ...(second ? { 'photo-after': second.url } : {}) }, ms: performance.now() - t0 };
+  return { options, style: picked.style, why: picked.why, subject, left, pictures: picturesOf(req, url), ms: performance.now() - t0 };
 }
 
 export interface Drawn extends CheckedThumb {
@@ -200,3 +184,66 @@ class Renderer {
   }
 }
 export const thumbRenderer = new Renderer();
+
+const lookOf = (l: VariantLook | undefined): CutoutLook => ({ ...(l?.fx ? { fx: l.fx } : {}), ...(l?.outline ? { outline: { color: '#ffffff', width: 12 } } : {}), ...(l?.textBehind ? { textBehind: true } : {}) });
+
+/** The request for the project (or for one of the More looks, which override the background, the cutout dressing, the palette and the title place). */
+async function requestFor(doc: ThumbDoc, picked: { style: LoadedStyle }, base: { subject: SubjectPoint; second: { id: string; url: string; size: { width: number; height: number } } | null; main: { width: number; height: number }; url: string }, v?: VariantSpec): Promise<ThumbRequest> {
+  const { subject, second, main, url } = base;
+  const tbc = picked.style.spec.thumbnail?.cutout;
+  const merged: CutoutLook = { ...lookOf(tbc?.look), ...(doc.objectLook ?? {}), ...(v ? lookOf(v.look) : {}) };
+  const look = Object.keys(merged).length ? merged : undefined;
+  // The cutout with the flip and the outline the person asked for baked in, and a copy with an outline for the outline combination.
+    const objSrc = doc.objectId ? urlOf(doc.objectId) : null;
+  const accent = String((picked.style.spec.palettes[picked.style.spec.thumbnail?.palette ?? ''] as unknown as Record<string, unknown> | undefined)?.accent ?? '#ffffff');
+  const object = doc.objectId && objSrc && sizeOf(doc.objectId)
+    ? { id: doc.objectId, src: await variantUrl(objSrc, { flip: look?.flip, outline: look?.outline }), outlinedSrc: await variantUrl(objSrc, { flip: look?.flip, outline: look?.outline ?? { color: /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : '#ffffff', width: 14 } }), ...sizeOf(doc.objectId)!, ...(look ? { look } : {}) }
+    : null;
+  const emphasis = doc.emphasis?.trim() || undefined;
+  const req: ThumbRequest = {
+    aspect: doc.aspect,
+    title: doc.title,
+    emphasis,
+    photo: { id: doc.photoId!, src: url, width: main.width, height: main.height },
+    subject,
+    treatments: treatmentsFor(doc.treatment),
+    seed: doc.photoId,
+    ...(object ? { object } : {}),
+    ...(second ? { second: { photo: { id: second.id, src: second.url, width: second.size.width, height: second.size.height }, subject: doc.secondSubject ?? (await guessFor(second.id)) } } : {}),
+  };
+
+  const bd: DocBackdrop | undefined = v ? { ...v.backdrop, photoId: doc.backdrop?.photoId } : doc.backdrop;
+  const bdPhoto = bd?.kind === 'photo' && bd.photoId && urlOf(bd.photoId) && sizeOf(bd.photoId) ? { id: bd.photoId, src: urlOf(bd.photoId)!, ...sizeOf(bd.photoId)! } : undefined;
+  const { photoId: _drop, ...bdRest } = bd ?? { kind: 'blur' as const };
+  void _drop;
+  return {
+    ...req,
+    ...(bd ? { backdrop: { ...bdRest, ...(bdPhoto ? { photo: bdPhoto } : {}) } } : {}),
+    ...((v?.palette ?? doc.palette) ? { palette: v?.palette ?? doc.palette } : {}),
+    ...((v?.titlePlace ?? doc.titlePlace) ? { titlePlace: v?.titlePlace ?? doc.titlePlace } : {}),
+    ...(v ? { layouts: [v.layout] } : {}),
+  };
+}
+
+const picturesOf = (req: ThumbRequest, url: string): Record<string, string> => ({ photo: url, ...(req.second ? { 'photo-after': req.second.photo.src } : {}), ...(req.backdrop?.photo ? { 'photo-backdrop': req.backdrop.photo.src } : {}) });
+
+/** What More looks needs: the palettes of the style, and whether a background photo was added. */
+export function variantInputs(doc: ThumbDoc): { palettes: string[]; hasBackPhoto: boolean } {
+  const picked = styleFor(doc);
+  return { palettes: picked ? Object.keys(picked.style.spec.palettes) : [], hasBackPhoto: !!doc.backdrop?.photoId };
+}
+/** The spec of the style in use, for saving a look into a template. */
+export const styleSpecOf = (doc: ThumbDoc) => styleFor(doc)?.style.spec ?? null;
+
+/** One of the More looks, composed (not drawn). Instant: no model. */
+export async function composeVariant(doc: ThumbDoc, v: VariantSpec): Promise<{ option: ThumbOption; pictures: Record<string, string> } | null> {
+  const picked = styleFor(doc);
+  const main = doc.photoId ? sizeOf(doc.photoId) : null;
+  const url = doc.photoId ? urlOf(doc.photoId) : null;
+  if (!doc.photoId || !doc.objectId || !doc.title.trim() || !picked || !main || !url) return null;
+  await loadFonts();
+  const subject: SubjectPoint = doc.subject ?? (await guessFor(doc.photoId));
+  const req = await requestFor(doc, picked, { subject, second: null, main, url }, v);
+  const option = composeThumbs(req, picked.style)[0];
+  return option ? { option, pictures: picturesOf(req, url) } : null;
+}

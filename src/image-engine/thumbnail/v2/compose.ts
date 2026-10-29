@@ -16,6 +16,9 @@ import type { LoadedStyle } from '../../styles/load';
 import { circleTouchesBox, fitSubject, fitSubjectZoom, subjectRadius, type Box, type Pt, type SubjectPoint } from './subject';
 import { CUTOUT_COMBOS, THUMB_LAYOUTS, type ThumbLayoutId, type ThumbSpec } from './spec';
 import type { CutoutLook } from '../../cutout/look';
+import { treatmentsOf, type Backdrop, type TitlePlace } from './backdrop';
+import { drawMarks } from '../../styles/marks';
+import type { MarkSpec } from '../../styles/marks-spec';
 
 export const THUMB_SIZES = { '16:9': { width: 1280, height: 720 }, '9:16': { width: 1080, height: 1920 } } as const;
 
@@ -25,7 +28,18 @@ export interface ThumbObject extends ObjectInput {
   outlinedSrc?: string;
 }
 
+/** A background behind the cutout; for the photo kind, the other photo. */
+export interface ThumbBackdrop extends Backdrop {
+  photo?: PhotoInput;
+}
+
 export interface ThumbRequest {
+  /** What is behind a cutout (the cutout layouts only). Left out: the style's own, then a blurred copy of the photo. */
+  backdrop?: ThumbBackdrop;
+  /** A palette of the style, in place of the thumbnail's own. */
+  palette?: string;
+  /** Where the title goes in the cutout layouts. */
+  titlePlace?: TitlePlace;
   aspect: ThumbnailAspect;
   /** Up to 4 words are expected; more are drawn and fail the title-length check. */
   title: string;
@@ -326,22 +340,21 @@ const glassCard = (c: Ctx, b: Box): Layer[] => {
 const objectTitle: Layout = (c) => {
   const { W, H, m } = c;
   const o = c.req.object!;
-  const back: Treatment[] = [...c.treatments, { op: 'blur', radius: 16 }, { op: 'wash', color: tok(c.pal, 'bg'), amount: 0.55 }];
-  putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: 0.5, y: 0.5 }, back);
   // The photo's own subject is not what this layout is about: the object is. The photo's circle is dropped.
   c.subjects.length = 0;
   c.keep.length = 0;
   const side = c.portrait ? Math.round(W * 0.62) : Math.round(H * 0.7);
   const cx = c.portrait ? W / 2 : Math.round(W * 0.72);
   const cy = c.portrait ? Math.round(H * 0.3) : Math.round(H * 0.5);
+  drawBackdrop(c, { cx, cy });
   const lk = o.look ?? {};
-  const layer = objectLayer(W, H, { id: o.id, scale: lk.scale ?? side / (W * 0.5), rotation: lk.tilt ?? 0, x: lk.x ?? cx / W, y: lk.y ?? cy / H, fx: lk.fx ?? 'glow' }, o, tok(c.pal, 'accent'));
+  const layer = objectLayer(W, H, { id: o.id, scale: lk.scale ?? side / (W * 0.5), rotation: lk.tilt ?? 0, x: lk.x ?? cx / W, y: lk.y ?? cy / H, fx: lk.fx ?? 'glow' }, { ...o, src: objSrc(c, o) }, glowOf(c));
   c.layers.push(layer);
   const r = Math.round(side / 2);
   c.subjects.push({ x: cx, y: cy, r: Math.min(subjectRadius(W, H) * 2, r), of: 'object' });
   c.keep.push({ x: cx - r, y: cy - r, width: 2 * r, height: 2 * r });
   const box: Box = c.portrait ? { x: m, y: Math.round(H * 0.52), width: Math.round(W * 0.78) - m, height: Math.round(H * 0.24) } : { x: m, y: m, width: Math.round(W * 0.46) - m, height: H - 2 * m };
-  setTitle(c, box, { on: 'photo', valign: 'middle' });
+  setTitle(c, placeTitle(c, box), { on: 'photo', valign: 'middle', ...plateOpt(c) });
   // The title behind the subject: the subject's layer goes after the title's.
   if (lk.textBehind) {
     const at = c.layers.findIndex((l) => l.id === layer.id);
@@ -409,46 +422,114 @@ const beforeAfter: Layout = (c) => {
   setTitle(c, box, { on: 'photo', valign: 'middle', forcePlate: true, size: c.portrait ? 120 : 110, minSize: 72, align: 'left' });
 };
 
+/** The effective background recipe: the person's, then the style's, then nothing (a blurred copy of the photo, as before). */
+const backdropOf = (c: Ctx): ThumbBackdrop | undefined => c.req.backdrop ?? (c.tb.cutout?.backdrop as ThumbBackdrop | undefined);
+const place = (c: Ctx): TitlePlace | undefined => c.req.titlePlace ?? c.tb.cutout?.titlePlace;
+/** A colour: hex, or a palette name like "$accent". */
+const col = (c: Ctx, v: string | undefined, dflt: string) => resolveColor(v ?? dflt, c.pal as unknown as Record<string, unknown>);
+/** The title safety net: on a background that is not a darkened photo the title goes on a plate, so it is readable whatever is behind it. */
+const plateNeeded = (bd: ThumbBackdrop | undefined) => !!bd && (bd.kind === 'colour' || bd.kind === 'gradient' || bd.kind === 'pattern' || bd.kind === 'block' || (bd.kind === 'photo' && !bd.treat?.darken));
+const plateOpt = (c: Ctx): { forcePlate?: true } => (plateNeeded(backdropOf(c)) ? { forcePlate: true } : {});
+/** The colour of the background, for the glow when the subject is matched to it (null for a photo). */
+const backdropColour = (c: Ctx): string | null => {
+  const bd = backdropOf(c);
+  if (!bd) return null;
+  if (bd.kind === 'colour' || bd.kind === 'block' || bd.kind === 'gradient' || bd.kind === 'pattern') return col(c, bd.colour, '$accent');
+  return col(c, '$bg', '$bg');
+};
+const glowOf = (c: Ctx): string => (backdropOf(c)?.match ? backdropColour(c) : null) ?? tok(c.pal, 'accent');
+/** The cutout picture to use: with the outline when the style asks for it. */
+const objSrc = (c: Ctx, o: ThumbObject) => (c.tb.cutout?.look?.outline ? (o.outlinedSrc ?? o.src) : o.src);
+
+/** The title box where the person or the style wants it, or the layout's own. */
+function placeTitle(c: Ctx, own: Box): Box {
+  const p = place(c);
+  const { W, H, m } = c;
+  if (!p) return own;
+  if (p === 'left') return c.portrait ? { x: m, y: m, width: W - 2 * m, height: Math.round(H * 0.34) } : { x: m, y: m, width: Math.round(W * 0.44) - m, height: H - 2 * m };
+  if (p === 'right') return c.portrait ? { x: m, y: Math.round(H * 0.62), width: W - 2 * m, height: Math.round(H * 0.3) } : { x: Math.round(W * 0.56), y: m, width: Math.round(W * 0.44) - m, height: H - 2 * m };
+  if (p === 'top') return { x: m, y: m, width: W - 2 * m, height: Math.round(H * (c.portrait ? 0.26 : 0.3)) };
+  if (p === 'bottom') return { x: m, y: Math.round(H * (c.portrait ? 0.7 : 0.66)), width: W - 2 * m, height: Math.round(H * (c.portrait ? 0.24 : 0.3)) };
+  return { x: Math.round(W * 0.1), y: Math.round(H * 0.3), width: Math.round(W * 0.8), height: Math.round(H * 0.4) };
+}
+
+/** What sits behind the cutout. `at` is where the subject will be, for the colour block it overlaps. */
+function drawBackdrop(c: Ctx, at: { cx: number; cy: number }) {
+  const { W, H } = c;
+  const bd = backdropOf(c);
+  const raw = c.pal as unknown as Record<string, unknown>;
+  const usePhoto = (photo: PhotoInput, focal: Pt, list: Treatment[], id: string) => putPhoto(c, id, photo, focal, full(c), { x: 0.5, y: 0.5 }, resolveTreatments(list, raw));
+  if (!bd || bd.kind === 'blur' || (bd.kind === 'photo' && !bd.photo)) {
+    // A blurred, darkened copy of the original photo (the layouts' own look unless the person chose treatments).
+    const list: Treatment[] = bd?.treat ? treatmentsOf({ blur: true, ...bd.treat }) : [{ op: 'blur', radius: 16 }, { op: 'wash', color: tok(c.pal, 'bg'), amount: 0.55 }];
+    putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: 0.5, y: 0.5 }, [...c.treatments, ...resolveTreatments(list, raw)]);
+    return;
+  }
+  if (bd.kind === 'photo') {
+    usePhoto(bd.photo!, bd.focal ?? { x: 0.5, y: 0.5 }, treatmentsOf(bd.treat), 'photo-backdrop');
+    return;
+  }
+  // The plain backgrounds cover the whole photo, which is still the first layer: the checker reads its pixels and its box.
+  putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: 0.5, y: 0.5 }, []);
+  if (bd.kind === 'colour') c.layers.push(rect('backdrop', 'decor', 0, 0, W, H, col(c, bd.colour, '$accent')));
+  else if (bd.kind === 'gradient') c.layers.push(rect('backdrop', 'decor', 0, 0, W, H, { type: 'linear', angle: bd.angle ?? 160, stops: [{ at: 0, color: col(c, bd.colour, '$bg') }, { at: 1, color: col(c, bd.to, '$accent') }] }));
+  else if (bd.kind === 'pattern') {
+    c.layers.push(rect('backdrop', 'decor', 0, 0, W, H, col(c, bd.colour, '$bg')));
+    const kind = ({ halftone: 'halftone-field', dots: 'dot-grid', stripes: 'stripes', grain: 'grain' } as const)[bd.pattern ?? 'halftone'];
+    const mark: MarkSpec = { kind, zone: 'full', size: { 'halftone-field': 34, 'dot-grid': 30, stripes: 44, grain: 12 }[kind], colour: col(c, bd.ink, '$accent'), opacity: 0.5, ...(kind === 'stripes' ? { rotate: 35 } : {}) };
+    c.layers.push(...drawMarks([mark], { theme: c.theme, pal: c.pal, W, H, M: c.m, top: c.m, bottom: H - c.m, type: 'cover', seed: `backdrop|${kind}` }).under);
+  } else {
+    // A colour block with the subject overlapping it: a band behind the subject, wider than the subject's middle but not its edges.
+    c.layers.push(rect('backdrop', 'decor', 0, 0, W, H, tok(c.pal, 'bg')));
+    const band = c.portrait ? { x: 0, y: Math.round(at.cy - H * 0.17), w: W, h: Math.round(H * 0.34) } : { x: Math.round(at.cx - W * 0.17), y: Math.round(H * 0.06), w: Math.round(W * 0.34), h: Math.round(H * 0.88) };
+    c.layers.push(rect('backdrop-block', 'decor', band.x, band.y, band.w, band.h, col(c, bd.colour, '$accent')));
+  }
+}
+
 /** The cutout where the person put it, or where the combination wants it. */
-function placedObject(c: Ctx, o: ThumbObject, own: { cx: number; cy: number; side: number }, fx: 'none' | 'contact' | 'drop' | 'glow') {
+function placedObject(c: Ctx, o: ThumbObject, own: { cx: number; cy: number; side: number }, fx: 'none' | 'contact' | 'drop' | 'glow', src = objSrc(c, o)) {
   const { W, H } = c;
   const lk = o.look ?? {};
   const scale = lk.scale ?? own.side / (W * 0.5);
   const cx = (lk.x ?? own.cx / W) * W;
   const cy = (lk.y ?? own.cy / H) * H;
-  const layer = objectLayer(W, H, { id: o.id, scale, rotation: lk.tilt ?? 0, x: cx / W, y: cy / H, fx: lk.fx ?? fx }, o, tok(c.pal, 'accent'));
+  const layer = objectLayer(W, H, { id: o.id, scale, rotation: lk.tilt ?? 0, x: cx / W, y: cy / H, fx: lk.fx ?? c.tb.cutout?.look?.fx ?? fx }, { ...o, src }, glowOf(c));
   return { layer, cx, cy, r: Math.round((W * 0.5 * scale) / 2) };
 }
-const blurredBack = (c: Ctx) => {
-  const back: Treatment[] = [...c.treatments, { op: 'blur', radius: 18 }, { op: 'wash', color: tok(c.pal, 'bg'), amount: 0.6 }];
-  putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: 0.5, y: 0.5 }, back);
-  c.subjects.length = 0;
-  c.keep.length = 0;
-};
 const keepObject = (c: Ctx, p: { cx: number; cy: number; r: number }) => {
   c.subjects.push({ x: p.cx, y: p.cy, r: Math.min(subjectRadius(c.W, c.H) * 2, p.r), of: 'object' });
   c.keep.push({ x: p.cx - p.r, y: p.cy - p.r, width: 2 * p.r, height: 2 * p.r });
+};
+const clearSubjects = (c: Ctx) => {
+  c.subjects.length = 0;
+  c.keep.length = 0;
 };
 
 /** Ready combination 1: the subject with an outline and a glow, the title beside it. */
 const comboOutlineGlow: Layout = (c) => {
   const { W, H, m } = c;
   const o = c.req.object!;
-  blurredBack(c);
+  clearSubjects(c);
   const side = c.portrait ? Math.round(W * 0.72) : Math.round(H * 0.84);
-  const p = placedObject(c, { ...o, src: o.outlinedSrc ?? o.src }, { cx: c.portrait ? W / 2 : Math.round(W * 0.7), cy: c.portrait ? Math.round(H * 0.32) : Math.round(H * 0.5), side }, 'glow');
+  const own = { cx: c.portrait ? W / 2 : Math.round(W * 0.7), cy: c.portrait ? Math.round(H * 0.32) : Math.round(H * 0.5), side };
+  drawBackdrop(c, own);
+  const p = placedObject(c, o, own, 'glow', o.outlinedSrc ?? o.src);
   c.layers.push(p.layer);
   keepObject(c, p);
   const box: Box = c.portrait ? { x: m, y: Math.round(H * 0.56), width: W - 2 * m, height: Math.round(H * 0.22) } : { x: m, y: m, width: Math.round(W * 0.44) - m, height: H - 2 * m };
-  setTitle(c, box, { on: 'photo', valign: 'middle' });
+  setTitle(c, placeTitle(c, box), { on: 'photo', valign: 'middle', ...plateOpt(c) });
 };
 /** Ready combination 2: a big title across the thumbnail with the subject in front of it. */
 const comboOverText: Layout = (c) => {
   const { W, H, m } = c;
   const o = c.req.object!;
-  blurredBack(c);
-  setTitle(c, { x: m, y: Math.round(H * 0.08), width: W - 2 * m, height: Math.round(H * (c.portrait ? 0.46 : 0.66)) }, { on: 'photo', valign: 'middle', align: 'center', size: c.portrait ? 200 : 240, minSize: 90 });
-  const p = placedObject(c, o, { cx: W / 2, cy: Math.round(H * (c.portrait ? 0.7 : 0.64)), side: Math.round(c.portrait ? W * 0.8 : H * 0.92) }, 'contact');
+  clearSubjects(c);
+  const own = { cx: W / 2, cy: Math.round(H * (c.portrait ? 0.7 : 0.64)), side: Math.round(c.portrait ? W * 0.8 : H * 0.92) };
+  drawBackdrop(c, own);
+  const p0 = place(c);
+  const top = p0 === 'top' ? 0.04 : p0 === 'bottom' ? (c.portrait ? 0.3 : 0.28) : 0.08;
+  setTitle(c, { x: m, y: Math.round(H * top), width: W - 2 * m, height: Math.round(H * (c.portrait ? 0.46 : 0.66)) }, { on: 'photo', valign: 'middle', align: 'center', size: c.portrait ? 200 : 240, minSize: 90, ...plateOpt(c) });
+  const p = placedObject(c, o, own, 'contact');
   c.layers.push(p.layer);
   keepObject(c, p);
 };
@@ -456,15 +537,19 @@ const comboOverText: Layout = (c) => {
 const comboOnBlock: Layout = (c) => {
   const { W, H, m } = c;
   const o = c.req.object!;
-  blurredBack(c);
+  clearSubjects(c);
   const role = c.tb.block ?? 'accent';
   const b: Box = c.portrait ? { x: 0, y: Math.round(H * 0.42), width: W, height: H - Math.round(H * 0.42) } : { x: Math.round(W * 0.5), y: 0, width: W - Math.round(W * 0.5), height: H };
-  c.layers.push(rect('block', 'decor', b.x, b.y, b.width, b.height, tok(c.pal, role)));
-  const p = placedObject(c, o, { cx: b.x + b.width / 2, cy: b.y + b.height / 2, side: Math.round(Math.min(b.width, b.height) * 0.92) }, 'drop');
+  const own = { cx: b.x + b.width / 2, cy: b.y + b.height / 2, side: Math.round(Math.min(b.width, b.height) * 0.92) };
+  const bd = backdropOf(c);
+  // The person's own background replaces the blurred photo; the colour block is always there unless the background is itself a block.
+  drawBackdrop(c, own);
+  if (bd?.kind !== 'block') c.layers.push(rect('block', 'decor', b.x, b.y, b.width, b.height, tok(c.pal, role)));
+  const p = placedObject(c, o, own, 'drop');
   c.layers.push(p.layer);
   keepObject(c, p);
   const box: Box = c.portrait ? { x: m, y: m, width: W - 2 * m, height: Math.round(H * 0.36) } : { x: m, y: m, width: Math.round(W * 0.46) - m, height: H - 2 * m };
-  setTitle(c, box, { on: 'photo', valign: 'middle' });
+  setTitle(c, placeTitle(c, box), { on: 'photo', valign: 'middle', ...plateOpt(c) });
 };
 
 const LAYOUT_FN: Record<ThumbLayoutId, Layout> = {
@@ -494,7 +579,8 @@ export function composeThumbs(req: ThumbRequest, style: LoadedStyle): ThumbOptio
   const text = req.title.trim().replace(/\s+/g, ' ');
   if (!text) throw new Error('A thumbnail needs a title.');
   const { width: W, height: H } = THUMB_SIZES[req.aspect];
-  const pal = style.spec.palettes[tb.palette];
+  const palName = req.palette && style.spec.palettes[req.palette] ? req.palette : req.object && tb.cutout?.palette && style.spec.palettes[tb.cutout.palette] ? tb.cutout.palette : tb.palette;
+  const pal = style.spec.palettes[palName];
   // With an object, the three ready cutout combinations are offered whatever the style lists.
   const wanted = [...new Set([...(req.layouts ?? tb.layouts), ...(!req.layouts && req.object ? CUTOUT_COMBOS : [])])].filter((l) => (THUMB_LAYOUTS as readonly string[]).includes(l));
   const out: ThumbOption[] = [];

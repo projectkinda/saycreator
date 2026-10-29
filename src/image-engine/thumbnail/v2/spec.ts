@@ -25,7 +25,17 @@ export const THUMB_LAYOUT_LABEL: Record<ThumbLayoutId, string> = {
 export const TITLE_LOOKS = ['plain', 'outline', 'marker', 'plate'] as const;
 export type TitleLook = (typeof TITLE_LOOKS)[number];
 
+/** How a style dresses a cutout when the person has not chosen: a background recipe (colours as palette names, never a picture), cutout treatment, palette and title place. Saved looks live here. */
+export interface CutoutDefaults {
+  backdrop?: import('./backdrop').Backdrop;
+  look?: import('./backdrop').VariantLook;
+  palette?: string;
+  titlePlace?: import('./backdrop').TitlePlace;
+}
+
 export interface ThumbSpec {
+  /** Optional: the cutout look this style uses by default. */
+  cutout?: CutoutDefaults;
   /** The palette the thumbnail uses (a name in the style's "palettes"). */
   palette: string;
   title: {

@@ -1,6 +1,10 @@
 // Images > Make a thumbnail: upload a photo, point at the subject, give a title (or have titles written), choose a style, see several
 // options each checked at phone size, pick one, edit it and export it. Pictures stay in this browser. Stills only: not video frames.
 import { ReplayButton } from '../live/Replay';
+import { BackdropPanel } from './BackdropPanel';
+import { styleSpecOf } from './render';
+import { saveTemplate, styleNameFor } from '../reference/templates';
+import type { VariantSpec } from '../image-engine/thumbnail/v2/backdrop';
 import { CutoutEditor, type CutoutSaved } from '../carousel/CutoutEditor';
 import { cutoutPicture, useCutoutIds } from '../carousel/cutoutAction';
 import { listCutouts, type CutoutRecord } from '../image-engine/cutout/cutoutStore';
@@ -101,7 +105,22 @@ export default function ThumbnailPage() {
   };
 
   /** Adds files, reports unusable ones in plain words, and puts the first good one in the slot asked for. */
-  const addFiles = async (files: File[], kind: 'photo' | 'object', slot: 'photo' | 'second' | 'object') => {
+  /** Saves a look as a template: the style with this look as its cutout default. Colours and treatments only; no photo goes in. */
+  const saveLook = async (v: VariantSpec, preview: string): Promise<string> => {
+    const spec = styleSpecOf(doc);
+    if (!spec?.thumbnail) return 'There is no style to save this look into.';
+    const name = `${spec.title} cutout look ${v.id.replace('variant-', '')}`;
+    const blob = await (await fetch(preview)).blob();
+    const data = await new Promise<string>((res) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result));
+      r.readAsDataURL(blob);
+    });
+    await saveTemplate({ name, target: 'thumbnail', spec: { ...spec, name: styleNameFor(name), thumbnail: { ...spec.thumbnail, cutout: { backdrop: v.backdrop, look: v.look, palette: v.palette, titlePlace: v.titlePlace } } }, preview: data });
+    return `Saved “${name}” as a template (style only, no photos).`;
+  };
+
+  const addFiles = async (files: File[], kind: 'photo' | 'object', slot: 'photo' | 'second' | 'object' | 'backdrop') => {
     if (files.length === 0) return;
     setBusy(true);
     setMessages(files.length > 1 ? `Adding ${files.length} files…` : 'Adding…');
@@ -119,7 +138,7 @@ export default function ThumbnailPage() {
     if (added.length) {
       setPhotos((before) => [...before, ...added]);
       const first = added[0];
-      apply(slot === 'photo' ? thumbPatches.photo(first.id) : slot === 'second' ? thumbPatches.second(first.id) : thumbPatches.object(first.id));
+      apply(slot === 'backdrop' ? thumbPatches.backdrop({ ...(doc.backdrop ?? {}), kind: 'photo', photoId: first.id, treat: doc.backdrop?.treat ?? { darken: true } }, 'Use a photo as the background') : slot === 'photo' ? thumbPatches.photo(first.id) : slot === 'second' ? thumbPatches.second(first.id) : thumbPatches.object(first.id));
     }
     const prob = currentStorageProblem();
     if (prob) msgs.push(prob);
@@ -236,7 +255,7 @@ export default function ThumbnailPage() {
     }, 200);
     return () => window.clearTimeout(timer);
     // The options depend on everything in the doc except the topic and the history; libVersion covers pictures coming back after a refresh.
-  }, [tplVersion, doc.aspect, doc.style, doc.title, doc.emphasis, doc.photoId, doc.objectId, doc.objectLook, doc.secondId, doc.subject, doc.secondSubject, doc.treatment, libVersion, doc.topic]);
+  }, [tplVersion, doc.aspect, doc.style, doc.title, doc.emphasis, doc.photoId, doc.objectId, doc.objectLook, doc.backdrop, doc.palette, doc.titlePlace, doc.secondId, doc.subject, doc.secondSubject, doc.treatment, libVersion, doc.topic]);
 
   const ready = cards.length > 0 && cards.every((c) => c.status === 'ready');
   const size = THUMB_SIZES[doc.aspect];
@@ -324,6 +343,9 @@ export default function ThumbnailPage() {
         {editing && <CutoutEditor record={editing} onSave={(r) => void saveEdited(r)} onClose={() => setEditing(null)} />}
         {proj.saveFailed && <p className="small cr-problem" role="alert">This browser would not save the project. Download your thumbnails before you leave.</p>}
 
+        {doc.objectId && (
+          <BackdropPanel doc={doc} apply={apply} addPhoto={(f) => void addFiles([f], 'photo', 'backdrop')} onSaveLook={saveLook} />
+        )}
         <details className="tn-more">
           <summary className="small">Also add an object, or a second photo for before and after</summary>
           <div className="tn-extras">
@@ -500,7 +522,17 @@ export default function ThumbnailPage() {
         {composed && (
           <>
             {composed.left.length > 0 && <p className="small muted">Left out for now: {composed.left.map((l) => `${THUMB_LAYOUT_LABEL[l.layout as ThumbLayoutId] ?? l.layout} (${l.because})`).join('; ')}.</p>}
-            <ol className="tn-grid" aria-label={`${cards.length} thumbnail options`}>
+            <ol
+              className="tn-grid"
+              aria-label={`${cards.length} thumbnail options`}
+              data-testid="thumb-options"
+              onDragOver={(e) => doc.objectId && e.preventDefault()}
+              onDrop={(e) => {
+                if (!doc.objectId) return;
+                e.preventDefault();
+                void addFiles(imageFiles(e.dataTransfer.files).slice(0, 1), 'photo', 'backdrop');
+              }}
+            >
               {composed.options.map((o, i) => {
                 const c = cards[i];
                 const failed = c?.drawn?.lint.filter((l) => !l.pass).length ?? 0;
@@ -508,7 +540,7 @@ export default function ThumbnailPage() {
                 return (
                   <li key={o.id} className={`card tn-card${isChosen ? ' chosen' : ''}`} aria-label={`Option ${i + 1}: ${THUMB_LAYOUT_LABEL[o.layout]}`} data-status={c?.status ?? 'drawing'} data-layout={o.layout}>
                     <div className="tn-pic" style={{ aspectRatio: `${size.width} / ${size.height}` }}>
-                      {c?.drawn ? <img src={c.drawn.url} alt={`${doc.title}, ${THUMB_LAYOUT_LABEL[o.layout]}, ${composed.style.spec.title}`} /> : <span className="small muted" role="status">{c?.status === 'error' ? 'Could not draw this one' : 'Drawing…'}</span>}
+                      {c?.drawn ? <img src={c.drawn.url} alt={`${doc.title}, ${THUMB_LAYOUT_LABEL[o.layout]}, ${composed.style.spec.title}`} /> : <span className="small muted" role="status">{c?.status === 'error' ? `Could not draw this one${c.error ? `: ${c.error}` : ''}` : 'Drawing…'}</span>}
                     </div>
                     <h3 className="h4">{THUMB_LAYOUT_LABEL[o.layout]}</h3>
                     <p className="small muted">{composed.style.spec.title}</p>
