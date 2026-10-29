@@ -104,3 +104,8 @@ body:has(.cr-studio) .lv { right: var(--sp-4); bottom: 0; max-height: 46vh; bord
 .cr-group-body .rf-recreate { gap: var(--sp-4); }
 .cr-group-body .rf-recreate > p.small, .cr-group-body .tn-more > p.small { margin: 0; line-height: 1.5; }
 .cr-group-body .rf-describe > p, .cr-group-body .rf-describe > div { margin: 0; }
+
+/* A <details> does not lay its content out as a grid, so the space between its blocks is a margin. */
+.cr-group-body .tn-more > :not(summary) + :not(summary) { margin-top: var(--sp-4); }
+.cr-group-body .tn-more > summary + * { margin-top: var(--sp-3); }
+.cr-group-body .rf-recreate > * + * { margin-top: 0; }
