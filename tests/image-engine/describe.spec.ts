@@ -34,7 +34,7 @@ test('describe the look: one call draws it on the content, follow-ups are small 
   await expect(box).not.toHaveValue('');
   const calls = page.getByRole('status', { name: 'Describe model calls' });
   await expect(calls).toHaveText('Model calls: 0 of 3');
-  await page.getByRole('button', { name: 'Generate' }).click();
+  await page.getByRole('button', { name: 'Generate layout' }).click();
   await expect(calls).toHaveText('Model calls: 1 of 3', { timeout: 30_000 });
   expect(rec.reads).toHaveLength(1);
   expect(rec.reads[0].prompt).toContain('BACK TO FRONT');

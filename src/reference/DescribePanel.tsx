@@ -159,7 +159,7 @@ export function DescribePanel({ target, title, canvas, hasPhoto, hasCutout, getP
         <p className="small">Starting from layout {skeleton.id} of the Layouts gallery. <button type="button" className="btn btn-outline btn-sm" onClick={() => { setSkeleton(null); try { sessionStorage.removeItem(SKELETON_KEY); } catch { /* ignore */ } }}>Don’t start from it</button></p>
       )}
       <div className="row-actions">
-        <button type="button" className="btn btn-primary btn-sm" disabled={!text.trim() || busy || noReader || calls >= DESCRIBE_CAP} onClick={() => void generate()}>{busy && !scene ? 'Working…' : 'Generate'}</button>
+        <button type="button" className="btn btn-primary btn-sm" disabled={!text.trim() || busy || noReader || calls >= DESCRIBE_CAP} onClick={() => void generate()}>{busy && !scene ? 'Working…' : 'Generate layout'}</button>
         <span className="small" role="status" aria-label="Describe model calls">Model calls: {calls} of {DESCRIBE_CAP}</span>
         {busy && <button type="button" className="btn btn-outline btn-sm" onClick={() => abort.current?.abort()}>Cancel</button>}
       </div>
