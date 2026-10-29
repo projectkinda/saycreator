@@ -90,3 +90,17 @@ body:has(.cr-studio) .lv { right: var(--sp-4); bottom: 0; max-height: 46vh; bord
 .cr-group-body .cr-drop { display: grid; gap: var(--sp-2); justify-items: start; padding: var(--sp-3) var(--sp-4); }
 .cr-group-body .rf-recreate { display: grid; gap: var(--sp-3); }
 .cr-group-body .rf-describe .row-actions, .cr-group-body .rf-recreate .row-actions { align-items: center; }
+
+/* Looser: more air inside the Reference panels (24 around, 16 between blocks, 12 between buttons). */
+.cr-group-body .tn-more { padding: var(--sp-4) var(--sp-5); gap: var(--sp-4); }
+.cr-group-body .tn-more > summary { font-weight: 600; padding-bottom: var(--sp-1); }
+.cr-group-body .rf-match { gap: var(--sp-5); }
+.cr-group-body .tn-field { gap: var(--sp-2); }
+.cr-group-body .tn-more .row-actions, .cr-group-body .rf-recreate .row-actions { gap: var(--sp-3); row-gap: var(--sp-3); }
+.cr-group-body .tn-field[role='radiogroup'] { gap: var(--sp-3); }
+.cr-group-body .rf-describe .row-actions[aria-label='Examples'] { gap: var(--sp-3); }
+.cr-group-body .tn-more .btn { padding-left: var(--sp-4); padding-right: var(--sp-4); }
+.cr-group-body .cr-drop { padding: var(--sp-4) var(--sp-5); gap: var(--sp-3); }
+.cr-group-body .rf-recreate { gap: var(--sp-4); }
+.cr-group-body .rf-recreate > p.small, .cr-group-body .tn-more > p.small { margin: 0; line-height: 1.5; }
+.cr-group-body .rf-describe > p, .cr-group-body .rf-describe > div { margin: 0; }
