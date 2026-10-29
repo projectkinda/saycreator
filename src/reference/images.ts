@@ -108,6 +108,15 @@ export async function samplePhoto(): Promise<{ url: string; width: number; heigh
   g.fill();
   g.fillStyle = '#1b2733';
   g.fillRect(0, H * 0.82, W, H * 0.18);
+  // Fine film grain, so the sample reads as a photograph (a smooth drawing has no texture and the detection would not call it a photo).
+  const px = g.getImageData(0, 0, W, H);
+  let seed = 12345;
+  for (let i = 0; i < px.data.length; i += 4)
+    for (let k = 0; k < 3; k++) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      px.data[i + k] = Math.max(0, Math.min(255, px.data[i + k] + ((seed >>> 24) % 41) - 20));
+    }
+  g.putImageData(px, 0, 0);
   const blob = await c.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
   return { url: URL.createObjectURL(blob), width: W, height: H };
 }

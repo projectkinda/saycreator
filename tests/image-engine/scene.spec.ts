@@ -62,3 +62,34 @@ test('a scene answer is validated, snapped to the measured boxes, noise dropped,
   expect(r.labels).toMatchObject({ r1T1: 'title', r1T2: 'subtitle' });
   expect(r.legacy, 'the older labels answer still works').toBe(true);
 });
+
+test('read mode toggle: whole picture first, the other way costs one more call, and switching back re-applies the cached read with no call', async ({ page }) => {
+  const { fakeReader, labelsAnswer, makeReference, openStyleFromReferences, refInput, refineAnswer } = await import('./reference-helpers');
+  const rec = await fakeReader(page, (kind: string, _n: number, prompt: string) => (kind === 'refine' ? refineAnswer() : labelsAnswer(prompt)));
+  await openStyleFromReferences(page);
+  await refInput(page).setInputFiles(await makeReference(page, { name: 'dark.jpg', kind: 'slide' }));
+  const mode = page.getByRole('radiogroup', { name: 'Read mode' });
+  await expect(mode.getByRole('radio', { name: /^Whole picture/ })).toHaveAttribute('aria-checked', 'true');
+  const calls = page.getByRole('status', { name: 'Model calls' });
+  const done = () => expect(page.getByRole('heading', { name: '5. How close it got' })).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByText(/^Instant draft:/)).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Read references' }).click();
+  await done();
+  await expect(calls).toContainText('Model calls: 1 of 2');
+  expect(rec.reads[0].prompt).toContain('describe the scene');
+  // The other way has not been read: switching only says so, and costs nothing.
+  await mode.getByRole('radio', { name: /^Labels/ }).click();
+  await expect(page.getByText('Not read this way yet')).toBeVisible();
+  await expect(calls).toContainText('Model calls: 1 of 2');
+  await page.getByRole('button', { name: 'Read references' }).click();
+  await expect.poll(() => rec.reads.length, { timeout: 120_000 }).toBe(2);
+  await done();
+  expect(rec.reads).toHaveLength(2);
+  expect(rec.reads[1].prompt).toContain('You label the parts of reference slides');
+  // Both were read: switching back re-applies the cached read, no new call.
+  await mode.getByRole('radio', { name: /^Whole picture/ }).click();
+  await expect(page.getByRole('status', { name: 'Model calls' })).toContainText('Model calls: 0 of 2');
+  await page.waitForTimeout(1500);
+  expect(rec.reads).toHaveLength(2);
+  expect(await page.evaluate(() => localStorage.getItem('creator.readMode'))).toBe('scene');
+});

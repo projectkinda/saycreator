@@ -240,7 +240,7 @@ const median = (v: number[]) => [...v].sort((a, b) => a - b)[Math.floor(v.length
 /** Matches the described layers to the measured boxes, snaps them, drops measured noise, and enforces the relationships. */
 export function reconcile(scene: Scene, d: Detected, ref: number, margin?: number): ReconScene {
   const pool: { id: string; type: LayerType; box: Box; keep: boolean }[] = [
-    ...d.texts.map((t) => ({ id: t.id, type: 'text' as const, box: t.box, keep: t.box.h >= 1.5 && t.box.w >= 8 })),
+    ...d.texts.map((t) => ({ id: t.id, type: 'text' as const, box: t.box, keep: t.box.h >= 1.2 && t.box.w >= 6 })),
     ...d.photos.map((p) => ({ id: p.id, type: 'photo' as const, box: p.box, keep: true })),
     ...d.shapes.map((s) => ({ id: s.id, type: 'shape' as const, box: s.box, keep: true })),
     ...d.graphics.map((g) => ({ id: g.id, type: 'graphic' as const, box: g.box, keep: true })),
@@ -267,7 +267,9 @@ export function reconcile(scene: Scene, d: Detected, ref: number, margin?: numbe
   for (const m of pool) {
     if (used.has(m.id)) continue;
     // Only a measured TEXT box can be noise the reader left out; a shape, photo or graphic stays unless a described layer of about its size covers it.
-    const covered = m.type !== 'text' && scene.layers.some((l) => l.box.w * l.box.h <= 3 * m.box.w * m.box.h && inter(l.box, m.box) >= 0.6 * m.box.w * m.box.h);
+    // Marks inside a photograph the reader described are the picture, not words.
+    const inPhoto = m.type === 'text' && scene.layers.some((l) => l.type === 'photo' && inter(l.box, m.box) >= 0.7 * m.box.w * m.box.h);
+    const covered = inPhoto || m.type !== 'text' && scene.layers.some((l) => l.box.w * l.box.h <= 3 * m.box.w * m.box.h && inter(l.box, m.box) >= 0.6 * m.box.w * m.box.h);
     if (m.keep && !covered) layers.push({ id: `m:${m.id}`, type: m.type, measured: m.id, box: { ...m.box }, approx: false, order: ++extra, confidence: 0.4 });
     else dropped.push(m.id);
   }
@@ -352,7 +354,7 @@ export function applyScene(free: FreeLayout, d: Detected, rec: ReconScene): Free
     if (l.type === 'text' && template && slots.length < MAX_SLOTS) {
       const lines = Math.max(1, Math.min(6, Math.round(l.box.h / 4)));
       slots.push({ ...template, id: `approx${++n}`, role: l.role ?? 'body', box: l.box, maxLines: lines, sizePx: Math.max(32, Math.round(((l.box.h / 100) * 1350) / lines / 1.25)), treatments: [] });
-    } else if (l.type === 'photo' && photos.some((p) => inter(l.box, p.box) >= 0.5 * l.box.w * l.box.h)) continue;
+    } else if (l.type === 'photo' && (photos.some((p) => inter(l.box, p.box) >= 0.5 * l.box.w * l.box.h) || [...shapes, ...free.graphics].some((s) => inter(l.box, s.box) >= 0.3 * s.box.w * s.box.h))) continue;
     else if (l.type === 'photo' && photos.length < MAX_PHOTOS) photos.push({ id: `approx${++n}`, box: l.box, shape: 'rect' });
     else missing.push(`${l.type} ${l.id} (${l.role ?? l.graphic ?? 'no role'}) was described by the reader but not measured: APPROX at ${fmt(l.box)}, not drawn`);
   }
