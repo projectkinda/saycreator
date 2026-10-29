@@ -190,3 +190,21 @@ test('Swap graphic: a drawing group becomes a library element, recolours and res
   await expect(layers.getByRole('listitem', { name: 'Layer drawing' })).toContainText('drawing,');
   expect(rec.reads.length, 'no model call for any of it').toBe(reads);
 });
+
+test('a path with neither fill nor line is left out and said, so the plan can always be drawn', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const r = await page.evaluate(async () => {
+    const R = await import('/src/reference/recreate.ts');
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 686 857"><rect width="686" height="857" fill="#112233"/><g id="ghost"><path d="M10 10 L50 50 L10 90" fill="none"/><line x1="0" y1="0" x2="9" y2="9"/><rect x="5" y="5" width="9" height="9" fill="none"/></g><path d="M100 100 L200 200" stroke="#fff" stroke-width="4" fill="none"/><text x="20" y="40" font-size="30" fill="#fff">Hi</text></svg>';
+    const a = await R.answerToLayers(svg, { w: 1080, h: 1350, ownRoles: [] });
+    if (!a.ok) return { ok: false };
+    const C = await import('/src/carousel/render.ts');
+    const plan = { schema: 1 as const, revision: 1, canvas: { width: 1080, height: 1350, background: '#FFF' }, layers: R.resolveTokens(a.result.layers, a.result.palette) };
+    const blob = await C.renderer.preview(plan as never, 0.2);
+    return { ok: true, kinds: a.result.layers.map((l) => l.kind), notes: a.result.notes, bytes: blob.size };
+  });
+  expect(r.ok).toBe(true);
+  expect(r.kinds!.filter((k) => k === 'path')).toHaveLength(1);
+  expect(r.notes!.join(' ')).toMatch(/neither a fill nor a line/);
+  expect(r.bytes).toBeGreaterThan(500);
+});

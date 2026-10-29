@@ -412,6 +412,7 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
   const texts: { x: number; y: number; size: number; weight: number; font: FontFamily; fill: string; anchor: string; line: string; role?: string; gid: string; ls: number; textLength?: number; opacity: number; parent: Element }[] = [];
   let n = 0;
   let effects = 0;
+  let invisible = 0;
   const walk = (el: Element, M: Mat, inh: Inh) => {
     const tag = el.localName.toLowerCase();
     if (['defs', 'lineargradient', 'radialgradient', 'clippath', 'mask', 'pattern', 'filter'].includes(tag)) return;
@@ -443,6 +444,10 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
       const pw = w * Math.hypot(m[0], m[1]);
       const ph = h * Math.hypot(m[2], m[3]);
       const fill = fillOf(cur.fill) ?? 'rgba(0,0,0,0)';
+      if (fill === 'rgba(0,0,0,0)' && !stroke) {
+        invisible++;
+        return;
+      }
       const full = tag === 'rect' && pw >= W * 0.97 && ph >= H * 0.97;
       layers.push({ kind: 'shape', id: full && !layers.some((l) => l.id === 'bg') ? 'bg' : `shape${++n}`, name: full ? 'background' : cur.gid || 'shape', role: full ? 'decor' : 'content', x: cx - pw / 2, y: cy - ph / 2, width: pw, height: ph, rotation: Math.round((Math.atan2(m[1], m[0]) * 180) / Math.PI * 10) / 10, opacity: cur.opacity, shape: tag === 'rect' ? 'rect' : 'ellipse', fill, ...(stroke ? { stroke } : {}), ...(tag === 'rect' && num('rx') ? { radius: num('rx') * scaleOf(m) } : {}) } as RLayer);
     } else if (tag === 'path' || tag === 'line' || tag === 'polyline' || tag === 'polygon') {
@@ -463,6 +468,11 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
           const y0 = Math.min(...ys);
           const moved = transformSegs(segs, [1, 0, 0, 1, -x0, -y0]);
           const fill = fillOf(cur.fill);
+          // A path with neither a fill nor a stroke draws nothing (and the plan refuses it): it is left out and counted.
+          if (!(typeof fill === 'string' && tag !== 'line') && !stroke) {
+            invisible++;
+            return;
+          }
           layers.push({ kind: 'path', id: `${cur.gid || 'path'}:${++n}`, name: cur.gid || 'drawing', role: 'decor', x: x0, y: y0, width: Math.max(1, Math.max(...xs) - x0), height: Math.max(1, Math.max(...ys) - y0), rotation: 0, opacity: cur.opacity, d: segsToD(moved), ...(typeof fill === 'string' && tag !== 'line' ? { fill } : {}), ...(stroke ? { stroke: { ...stroke, cap: (cur.cap === 'butt' ? 'butt' : 'round') as 'round' | 'butt', join: (cur.join === 'miter' ? 'miter' : 'round') as 'round' | 'miter' } } : {}) } as RLayer);
         }
       }
@@ -509,6 +519,7 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
     layers.push({ kind: 'text', id, name: role, role: 'content', x, y: top, width: w, height: Math.ceil(t.size * lh * b.length + t.size * 0.2), rotation: 0, opacity: t.opacity, text: b.map((l) => l.line).join('\n'), style: { font: t.font, weight: nearestWeight(t.font, t.weight), size: Math.round(t.size), color: t.fill, align: t.anchor === 'middle' ? 'center' : t.anchor === 'end' ? 'right' : 'left', valign: 'top', lineHeight: Math.round(lh * 100) / 100 }, autoFit: { minSize: Math.min(Math.round(t.size), 32) } } as RLayer);
     if (t.ls) notes.push(`Letter spacing on the ${role} text is not drawn (the toolbox has none).`);
   }
+  if (invisible) notes.push(`${invisible} part${invisible === 1 ? '' : 's'} of the picture had neither a fill nor a line, so nothing was drawn for ${invisible === 1 ? 'it' : 'them'}.`);
   if (effects) notes.push(`${effects} filter effect${effects === 1 ? '' : 's'} (blur, shadow, grain) in the picture ${effects === 1 ? 'was' : 'were'} not applied to the layers.`);
   // Graphics first, text on top (the order of the picture is kept within each).
   layers.sort((a, b) => (a.kind === 'text' ? 1 : 0) - (b.kind === 'text' ? 1 : 0));
