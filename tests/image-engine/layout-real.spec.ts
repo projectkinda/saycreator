@@ -47,10 +47,10 @@ async function run(page: Page, set: (typeof SETS)[number], mode: 'before' | 'aft
     out.overlap = await page.getByRole('list', { name: 'Layout overlap' }).getByRole('listitem').allInnerTexts();
     out.calls = (await page.getByRole('status', { name: 'Model calls' }).innerText()).replace(/\s+/g, ' ');
     out.missing = await page.getByRole('list', { name: 'Missing tools' }).getByRole('listitem').allInnerTexts();
-    await page.locator('section[aria-labelledby="rf-result-h"]').screenshot({ path: path.join(OUT, `${set.id}-${mode}-result.png`) });
+    if (!process.env.NO_SHOTS) await page.locator('section[aria-labelledby="rf-result-h"]').screenshot({ path: path.join(OUT, `${set.id}-${mode}-result.png`) });
     if (mode === 'after') {
       await page.getByRole('button', { name: 'Show what I detected' }).click();
-      await page.locator('.rf-detect').screenshot({ path: path.join(OUT, `${set.id}-detected.png`) });
+      if (!process.env.NO_SHOTS) await page.locator('.rf-detect').screenshot({ path: path.join(OUT, `${set.id}-detected.png`) });
       out.boxes = await page.getByLabel('What I detected').getByRole('button', { name: /^(Text box|Photo region|Shape|Graphic)/ }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
       out.notDrawn = await page.getByRole('list', { name: 'Missing for this reference' }).getByRole('listitem').allInnerTexts().catch(() => []);
     }

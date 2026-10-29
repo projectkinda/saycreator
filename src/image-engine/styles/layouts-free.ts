@@ -119,7 +119,7 @@ export function freeSlide(c: LCtx, s: SlideScript, f: FreeLayout) {
     const size = Math.max(32, Math.round(sl.sizePx * (H / 1350)));
     // A headline fills its box: the text is fitted to the largest size that stays inside it (up to 1.8 times the measured size), so shorter words than the
     // reference's still take up the reference's space. Other text stays near its measured size.
-    const maxSize = Math.round(size * (sl.role === 'title' || sl.role === 'number' ? 1.8 : 1.15));
+    const maxSize = Math.min(600, Math.round(size * (sl.role === 'title' || sl.role === 'number' ? 1.8 : 1.15)));
     const built = buildText({ id: `free-${sl.id}`, x: b.x, y: b.y, width: Math.max(40, b.w), text, font, weight, size: maxSize, minSize: 32, maxHeight: Math.max(40, b.h), color: sl.colour ?? c.pal.text, lineHeight: c.style.headlineLineHeight || 1.05, align: sl.align === 'centre' ? 'center' : sl.align, role: 'content', upper: !!on('caps') || (c.style.caseStyle === 'upper' && headline), balance: false });
     const y = sl.anchor === 'middle' ? b.y + (b.h - built.height) / 2 : sl.anchor === 'bottom' ? b.y + b.h - built.height : b.y;
     const layer = { ...built.layer, y: Math.round(y * 10) / 10 };
