@@ -5,13 +5,15 @@ import { PRIVACY_LINE, isMissing, urlOf, type PictureMeta } from './photoLibrary
 
 const mb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-export function PhotosStrip({ pictures, supported, styleTitle, addFiles, onRemove, usedOn, storageProblem, lowRoom }: {
+export function PhotosStrip({ pictures, supported, styleTitle, addFiles, onRemove, onCutout, usedOn, storageProblem, lowRoom }: {
   pictures: PictureMeta[];
   /** The chosen style has photo layouts. */
   supported: boolean;
   styleTitle: string;
   addFiles: AddFiles;
   onRemove: (id: string) => void;
+  /** Makes a cutout of a photo (the original is kept) and adds it as an object; resolves to a sentence for the person. */
+  onCutout?: (id: string) => Promise<string>;
   /** How many slides each picture is on. */
   usedOn: (id: string) => number;
   storageProblem: string;
@@ -22,6 +24,7 @@ export function PhotosStrip({ pictures, supported, styleTitle, addFiles, onRemov
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
+  const [cutting, setCutting] = useState<string | null>(null);
   const go = async (files: File[], kind: 'photo' | 'object') => {
     if (files.length === 0) return;
     setBusy(true);
@@ -70,6 +73,9 @@ export function PhotosStrip({ pictures, supported, styleTitle, addFiles, onRemov
                   {url ? <img src={url} alt="" draggable={false} /> : <span className="cr-strip-gone small">Not in storage</span>}
                   <span className="small cr-strip-name" title={p.name}>{p.name}</span>
                   <span className="small muted">{p.width}×{p.height} · {mb(p.bytes)}{p.kind === 'object' ? ' · object' : n ? ` · on ${n} slide${n === 1 ? '' : 's'}` : keptForStrip(p.id) ? ' · kept for the 3-up strip (drag it onto a slide to use it there)' : ''}</span>
+                  {onCutout && p.kind === 'photo' && url && (
+                    <button type="button" className="btn btn-outline btn-sm" disabled={cutting !== null} aria-label={`Remove the background of ${p.name}`} onClick={async () => { setCutting(p.id); setStatus(`Removing the background of ${p.name}…`); setStatus(await onCutout(p.id)); setCutting(null); }}>{cutting === p.id ? 'Working…' : 'Remove background'}</button>
+                  )}
                   <button type="button" className="btn btn-outline btn-sm" onClick={() => onRemove(p.id)} aria-label={`Remove ${p.name} from the project`}>Remove</button>
                 </li>
               );

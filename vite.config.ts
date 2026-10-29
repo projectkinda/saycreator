@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { carouselHandler } from './server/carousel-writer';
 import { referenceHandler } from './server/reference-reader';
+import { cutoutHandler } from './server/cutout-dev';
 
 /** Dev-only JSON endpoints for the /lab page: the test pictures and the Step 2 thumbnail outputs with their checks. */
 function labEndpoints(): Plugin {
@@ -281,6 +282,8 @@ function carouselWriters(): Plugin {
       // The reference reader (a model with vision): the same two providers, for reading the look of reference images.
       server.middlewares.use('/__reference', referenceHandler('dev-cli', { env }));
       server.middlewares.use('/api/reference', referenceHandler('api', { env }));
+      // Background removal on this computer (BiRefNet_lite through onnxruntime-node). Dev only: a production build has no such address.
+      server.middlewares.use('/__cutout', cutoutHandler({ env }));
     },
   };
 }

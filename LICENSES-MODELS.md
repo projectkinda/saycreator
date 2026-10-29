@@ -57,3 +57,19 @@ Where the font files came from: the `@fontsource/schibsted-grotesk` and `@fontso
 **Unclear or to watch**
 - The fontsource files are the upstream fonts subsetted by a third party. The OFL allows that, and the upstream OFL text is shipped next to the files, but I did not diff the glyph outlines against the upstream TTFs.
 - Latin subset only. Cyrillic, Greek, Vietnamese and most symbols (including the right arrow →) fall back to a system font. If a brand needs them, add the `latin-ext` or other subsets from the same packages.
+
+## Cutout models compared (Step 15b-1), checked at the source on 2026-10-29
+
+| Model | Code licence | Weights licence | Commercial use | Size | Used |
+|---|---|---|---|---|---|
+| **BiRefNet_lite** (`ZhengPeng7/BiRefNet`) | MIT (repository LICENSE) | MIT (model card `license: mit`) | allowed by MIT; the training-data caveat under "BiRefNet_lite: MIT" above still stands | 213.6 MB ONNX (224,005,088 bytes), 44.4M parameters | **yes: the only one downloaded and run** |
+| **BEN2** (`PramaLLC/BEN2`) | MIT (the repository shows an MIT licence file; its text was not readable to me) | the model card metadata says `license: mit`, but the card gives no licence text for the weights and says only "Our Base model is open source" | **unclear**: the card says a separate commercial model is sold ("email sales@backgrounderase.com") and states no terms for the Base weights | not stated on the card (not downloaded, so not measured) | **no: not confirmed, so not downloaded** |
+| **U2Net / U2Netp** (`xuebinqin/U-2-Net`) | the README states no licence (the repository may carry a LICENSE file; I did not confirm one) | **not stated**; trained on DUTS-TR, whose own terms the README does not give | unclear | u2net 176.3 MB, u2netp 4.7 MB (from the README) | **no: not confirmed, so not downloaded** |
+
+Why BiRefNet_lite and not the other two: it is the only one of the three whose code and weights licences are explicit at the source, and it was already approved in Step 4. BEN2 and U2Net stay out until a licence for their weights is stated by their authors.
+
+### The local cutout provider
+
+- `CutoutProvider` (`src/image-engine/cutout/provider.ts`) is an interface like the reference reader, with a fake for tests and a local one that runs BiRefNet_lite through a dev-only route (`server/cutout-dev.ts`, `/__cutout/status` and `/__cutout/infer`). The browser prepares the picture and turns the model answer into a transparent PNG; the route only runs the network on the CPU.
+- **The weights are not in the repository.** The route looks for `birefnet-lite.onnx` in `CUTOUT_MODEL` (a path), then `~/.creator-models/`, then the git-ignored `public/models/` (where `npm run fetch:models` puts it). Put a copy in `~/.creator-models/` to keep it clear of the project folder altogether.
+- **onnxruntime-node 1.22.0** (MIT, the same version as onnxruntime-web) is a dev dependency, used only by the dev route. It is not part of the production build.
