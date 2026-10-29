@@ -172,7 +172,7 @@ function backgroundOf(p: Px, bg: RGB): Background {
 /** Blocks that look like a photograph: a photograph is made of many slightly different colours (even a dark, smooth one), where flat colour, a soft
  *  gradient and the edge of a letter have only a few. Counts the distinct colours (6-bit) in each 8 by 8 block. */
 export const PHOTO_BLOCK = 8;
-export function photoBlocks(p: Px, _gradient: boolean): { mask: Uint8Array; cols: number; rows: number } {
+export function photoBlocks(p: Px, _gradient: boolean, texture = 30): { mask: Uint8Array; cols: number; rows: number } {
   const B = PHOTO_BLOCK;
   const cols = Math.floor(p.width / B);
   const rows = Math.floor(p.height / B);
@@ -186,9 +186,22 @@ export function photoBlocks(p: Px, _gradient: boolean): { mask: Uint8Array; cols
           const v = at(p, c * B + x, r * B + y);
           seen.add(((v[0] >> 2) << 12) | ((v[1] >> 2) << 6) | (v[2] >> 2));
         }
-      if (seen.size >= 30) mask[r * cols + c] = 1;
+      if (seen.size >= texture) mask[r * cols + c] = 1;
     }
   return { mask, cols, rows };
+}
+
+/** Fills gaps of up to 2r cells in a grid of cells without eating into the picture's own edges (the grid's edge counts as more of the same). */
+function closeCells(m: Uint8Array, cols: number, rows: number, r: number): Uint8Array {
+  const pc = cols + 2 * r;
+  const pr = rows + 2 * r;
+  const pad = new Uint8Array(pc * pr);
+  for (let y = 0; y < pr; y++)
+    for (let x = 0; x < pc; x++) pad[y * pc + x] = m[Math.min(rows - 1, Math.max(0, y - r)) * cols + Math.min(cols - 1, Math.max(0, x - r))];
+  const done = erode(dilate(pad, pc, pr, r), pc, pr, r);
+  const out = new Uint8Array(cols * rows);
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) out[y * cols + x] = done[(y + r) * pc + x + r];
+  return out;
 }
 
 /** Connected groups of marked cells, as boxes in cell units, with the number of cells. */
@@ -354,22 +367,85 @@ export function detectRegions(p: Px): Detected {
   };
 
   // ---- photo regions ----
+  // Seeds: blocks with many distinct colours (words never have them, a photograph has them in patches). The seeds are closed so a smooth sky or a dark
+  // corner between them does not split the picture, then each group is cut at the empty gaps (flat page colour all the way across) and only the parts that
+  // are really photographic are kept: a list beside a photo is not.
   const pb = photoBlocks(p, background.kind === 'gradient');
+  // A photograph without much colour (a grey or two-tone one) has few colours per block but still some texture in nearly every block.
+  const tex = photoBlocks(p, false, 10);
+  const closedSeeds = closeCells(pb.mask, pb.cols, pb.rows, 3);
   const photos: PhotoRegion[] = [];
   const photoMask = new Uint8Array(W * H);
-  for (const g of groups(pb.mask, pb.cols, pb.rows, 1)) {
-    const area = g.n * PHOTO_BLOCK * PHOTO_BLOCK;
-    if (area < W * H * 0.02) continue;
-    const box = { x0: g.x0 * PHOTO_BLOCK, y0: g.y0 * PHOTO_BLOCK, x1: (g.x1 + 1) * PHOTO_BLOCK - 1, y1: (g.y1 + 1) * PHOTO_BLOCK - 1 };
-    // A photograph is a solid patch: a line of big letters is a thin, sparse run of cells.
-    const cellsAcross = g.x1 - g.x0 + 1;
-    const cellsDown = g.y1 - g.y0 + 1;
-    if (g.n / (cellsAcross * cellsDown) < 0.7 || Math.min(cellsAcross * PHOTO_BLOCK / W, cellsDown * PHOTO_BLOCK / H) < 0.12) continue;
-    const fillRatio = area / ((box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1));
-    const cover = ((box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1)) / (W * H);
-    const shape: PhotoRegion['shape'] = cover > 0.85 ? 'full-bleed' : fillRatio > 0.9 ? 'rect' : fillRatio > 0.7 && Math.abs((box.x1 - box.x0) - (box.y1 - box.y0)) < 0.2 * (box.x1 - box.x0) ? 'circle' : fillRatio > 0.75 ? 'rounded' : 'rect';
-    photos.push({ id: `photo${photos.length + 1}`, box: roundBox(boxOf(box, W, H)), shape });
-    for (let y = box.y0; y <= box.y1 && y < H; y++) for (let x = box.x0; x <= box.x1 && x < W; x++) photoMask[y * W + x] = 1;
+  const flatLike = (x: number, y: number) => l1(at(p, x, y), bgAt(x, y)) < 24;
+  /** Cuts [lo, hi] at runs of at least `minRun` empty lines; the pieces are trimmed of empty lines at both ends. */
+  const cut = (lo: number, hi: number, empty: (i: number) => boolean, minRun: number): [number, number][] => {
+    const pieces: [number, number][] = [];
+    let start = -1;
+    let gap = 0;
+    for (let i = lo; i <= hi + 1; i++) {
+      const e = i > hi ? true : empty(i);
+      if (!e) {
+        if (start < 0) start = i;
+        gap = 0;
+      } else if (start >= 0) {
+        gap++;
+        if (gap >= minRun || i > hi) {
+          pieces.push([start, i - gap]);
+          start = -1;
+        }
+      }
+    }
+    return pieces;
+  };
+  for (const g of groups(closedSeeds, pb.cols, pb.rows, 1)) {
+    if (g.n * PHOTO_BLOCK * PHOTO_BLOCK < W * H * 0.02) continue;
+    const gx0 = g.x0 * PHOTO_BLOCK;
+    const gx1 = Math.min(W - 1, (g.x1 + 1) * PHOTO_BLOCK - 1);
+    const gy0 = g.y0 * PHOTO_BLOCK;
+    const gy1 = Math.min(H - 1, (g.y1 + 1) * PHOTO_BLOCK - 1);
+    const colEmpty = (lo: number, hi: number) => (x: number) => {
+      let n = 0;
+      for (let y = lo; y <= hi; y += 2) if (flatLike(x, y)) n++;
+      return n / Math.ceil((hi - lo + 1) / 2) > 0.85;
+    };
+    const rowEmpty = (lo: number, hi: number) => (y: number) => {
+      let n = 0;
+      for (let x = lo; x <= hi; x += 2) if (flatLike(x, y)) n++;
+      return n / Math.ceil((hi - lo + 1) / 2) > 0.85;
+    };
+    for (const [x0, x1] of cut(gx0, gx1, colEmpty(gy0, gy1), Math.max(2, Math.round(W * 0.004))))
+      for (const [y0, y1] of cut(gy0, gy1, rowEmpty(x0, x1), Math.max(2, Math.round(H * 0.004)))) {
+        const box = { x0, y0, x1, y1 };
+        const bw = x1 - x0 + 1;
+        const bh = y1 - y0 + 1;
+        if (Math.min(bw / W, bh / H) < 0.12 || bw * bh < W * H * 0.02) continue;
+        // How much of the part is photographic: seeds per cell, and how much of it is plain page colour (words and gaps).
+        let seeds = 0;
+        let cells = 0;
+        let closed = 0;
+        let textured = 0;
+        for (let cy = Math.floor(y0 / PHOTO_BLOCK); cy <= Math.floor(y1 / PHOTO_BLOCK) && cy < pb.rows; cy++)
+          for (let cx = Math.floor(x0 / PHOTO_BLOCK); cx <= Math.floor(x1 / PHOTO_BLOCK) && cx < pb.cols; cx++) {
+            cells++;
+            seeds += pb.mask[cy * pb.cols + cx];
+            closed += closedSeeds[cy * pb.cols + cx];
+            textured += tex.mask[cy * pb.cols + cx];
+          }
+        if (seeds / cells < 0.3 && !(seeds / cells >= 0.12 && textured / cells >= 0.7 && bw * bh >= W * H * 0.15)) continue;
+        let flat = 0;
+        let nn = 0;
+        for (let y = y0; y <= y1; y += 3)
+          for (let x = x0; x <= x1; x += 3) {
+            nn++;
+            if (flatLike(x, y)) flat++;
+          }
+        if (flat / nn > 0.45) continue;
+        const fillRatio = closed / cells;
+        const cover = (bw * bh) / (W * H);
+        const shape: PhotoRegion['shape'] = cover > 0.85 ? 'full-bleed' : fillRatio > 0.9 ? 'rect' : fillRatio > 0.7 && Math.abs(bw - bh) < 0.2 * bw ? 'circle' : fillRatio > 0.75 ? 'rounded' : 'rect';
+        photos.push({ id: `photo${photos.length + 1}`, box: roundBox(boxOf(box, W, H)), shape });
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) photoMask[y * W + x] = 1;
+      }
   }
   if (photos.length === 1 && photos[0].shape === 'full-bleed') background.kind = 'photo';
 
@@ -427,6 +503,39 @@ export function detectRegions(p: Px): Detected {
     const pill = !thin && fill > 0.78 && fill < 0.94 && w > h * 1.6;
     const kind: FlatShape['kind'] = thin ? 'bar' : circle ? 'circle' : pill ? 'pill' : fill > 0.93 || straight ? 'rect' : 'rounded';
     shapes.push({ id: `shape${shapes.length + 1}`, box: roundBox(boxOf(c, W, H)), colour: hex(dom), kind });
+    shapeBoxes.push({ x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, rgb: dom });
+  }
+
+  // ---- soft shapes: a box only a little unlike the page (a pale highlight, a tinted label) is below the foreground threshold above ----
+  const soft = new Uint8Array(W * H);
+  for (let i = 0; i < soft.length; i++) {
+    if (photoMask[i]) continue;
+    const d = l1(at(p, i % W, Math.floor(i / W)), bgAt(i % W, Math.floor(i / W)));
+    if (d > 28 && d <= 70) soft[i] = 1;
+  }
+  const softCore = dilate(erode(soft, W, H, r), W, H, r);
+  for (const c of components(p, softCore).comps) {
+    const w = c.x1 - c.x0 + 1;
+    const h = c.y1 - c.y0 + 1;
+    if (w < W * 0.04 || h < H * 0.012 || w * h < W * H * 0.004 || w > W * 0.97 || c.area / (w * h) < 0.55) continue;
+    // Not one already found, and not a patch of the page's own shading: the box is one colour all round.
+    if (shapeBoxes.some((o) => Math.min(o.x1, c.x1) - Math.max(o.x0, c.x0) > 0.5 * Math.min(w, o.x1 - o.x0 + 1) && Math.min(o.y1, c.y1) - Math.max(o.y0, c.y0) > 0.5 * Math.min(h, o.y1 - o.y0 + 1))) continue;
+    const dom = dominantIn(p, c, bgRgb);
+    let edgeSame = 0;
+    let edgeN = 0;
+    for (let x = c.x0 + 2; x < c.x1 - 1; x += 2)
+      for (const y of [c.y0 + 2, c.y1 - 2]) {
+        edgeN++;
+        if (l1(at(p, x, y), dom) < 24) edgeSame++;
+      }
+    for (let y = c.y0 + 2; y < c.y1 - 1; y += 2)
+      for (const x of [c.x0 + 2, c.x1 - 2]) {
+        edgeN++;
+        if (l1(at(p, x, y), dom) < 24) edgeSame++;
+      }
+    if (edgeN === 0 || edgeSame / edgeN < 0.8) continue;
+    const thin = Math.min(w, h) < Math.min(W, H) * 0.03;
+    shapes.push({ id: `shape${shapes.length + 1}`, box: roundBox(boxOf(c, W, H)), colour: hex(dom), kind: thin ? 'bar' : 'rect' });
     shapeBoxes.push({ x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, rgb: dom });
   }
 
@@ -564,12 +673,12 @@ export function detectRegions(p: Px): Detected {
     // A shape behind the block: a highlight box when it hugs the words, otherwise text on a pill, label or block.
     const sh = shapes.find((s) => {
       const sb = { x0: (s.box.x / 100) * W, y0: (s.box.y / 100) * H, x1: ((s.box.x + s.box.w) / 100) * W, y1: ((s.box.y + s.box.h) / 100) * H };
-      return !s.holds && s.kind !== 'bar' && ls.some((l) => inside(l, sb, 3));
+      return !s.holds && s.kind !== 'bar' && ls.some((l) => inside(l, sb, 3) || (Math.min(l.y1, sb.y1) - Math.max(l.y0, sb.y0) > 0.7 * (sb.y1 - sb.y0) && sb.x0 >= l.x0 - 3 && sb.x1 <= l.x1 + 3 && sb.y1 - sb.y0 < 1.8 * (l.y1 - l.y0 + 1)));
     });
     if (sh) {
       sh.holds = `text${bi + 1}`;
       const sb = { x0: (sh.box.x / 100) * W, y0: (sh.box.y / 100) * H, x1: ((sh.box.x + sh.box.w) / 100) * W, y1: ((sh.box.y + sh.box.h) / 100) * H };
-      const held = ls.filter((l) => inside(l, sb, 3));
+      const held = ls.filter((l) => inside(l, sb, 3) || (Math.min(l.y1, sb.y1) - Math.max(l.y0, sb.y0) > 0.7 * (sb.y1 - sb.y0) && sb.x0 >= l.x0 - 3 && sb.x1 <= l.x1 + 3));
       const hug = ((sh.box.h / 100) * H) / Math.max(1, Math.max(...held.map((l) => l.y1 - l.y0 + 1))) < 1.6 && held.length === 1;
       treatments.push({ kind: hug ? 'highlight-box' : 'on-shape', detail: `${hug ? 'a box behind the words' : `text on a ${sh.kind}`} (${sh.colour})`, colour: sh.colour, supported: true });
     }

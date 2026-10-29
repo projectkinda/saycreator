@@ -22,7 +22,8 @@ test('detection against the plans of our own styles', async ({ page }) => {
     const { composeStyled } = await import('/src/image-engine/styles/compose.ts');
     const { loadFonts } = await import('/src/image-engine/fonts.ts');
     const { EXAMPLE } = await import('/src/carousel/script.ts');
-    const { detectRegions } = await import('/src/reference/regions.ts');
+    const { detectRegions, photoBlocks, PHOTO_BLOCK } = await import('/src/reference/regions.ts');
+    const diag: unknown[] = [];
     const { groundTruth, compare, emptyScore } = await import('/src/reference/truth.ts');
     const I = await import('/src/reference/images.ts');
     await loadFonts();
@@ -81,6 +82,12 @@ test('detection against the plans of our own styles', async ({ page }) => {
         const bm = await I.bitmapOf(blob);
         const px = I.pxOfCanvas(I.cut(bm, null, 420));
         const d = detectRegions(px);
+        for (const g of groundTruth(s.plan).photos) {
+          const pbk = photoBlocks(px, false);
+          let n = 0, tot = 0;
+          for (let r = Math.floor((g.y / 100) * pbk.rows); r < Math.min(pbk.rows, Math.ceil(((g.y + g.h) / 100) * pbk.rows)); r++) for (let c = Math.floor((g.x / 100) * pbk.cols); c < Math.min(pbk.cols, Math.ceil(((g.x + g.w) / 100) * pbk.cols)); c++) { tot++; n += pbk.mask[r * pbk.cols + c]; }
+          diag.push({ style: st.spec.name, type: s.type, gt: [g.x, g.y, g.w, g.h].map(Math.round), cover: Math.round((100 * n) / Math.max(1, tot)), found: d.photos.map((q) => [q.box.x, q.box.y, q.box.w, q.box.h].map(Math.round)) });
+        }
         const hasImg = s.plan.layers.some((l: { kind: string }) => l.kind === 'image');
         if ((drawn.length < 14 && !hasImg && (s.type === 'cover' || s.type === 'content')) || (hasImg && drawn.filter((x) => x.name.endsWith('-photo')).length < 5)) drawn.push({ name: `${st.spec.name}-${s.type}${hasImg ? '-photo' : ''}`, b64: await overlay(bm, d) });
         bm.close();
@@ -95,7 +102,7 @@ test('detection against the plans of our own styles', async ({ page }) => {
       perStyle[st.spec.name] = sc;
       merge(total, sc);
     }
-    return { total, perStyle, drawn, samples: samples.map((s) => ({ style: s.style, type: s.type, detected: s.detected })) };
+    return { diag, total, perStyle, drawn, samples: samples.map((s) => ({ style: s.style, type: s.type, detected: s.detected })) };
   }, photoB64);
   for (const d of report.drawn) fs.writeFileSync(path.join(OUT, `${d.name}.png`), Buffer.from(d.b64, 'base64'));
   const pctOf = (v: [number, number]) => (v[1] ? Math.round((v[0] / v[1]) * 100) : null);
@@ -103,6 +110,7 @@ test('detection against the plans of our own styles', async ({ page }) => {
   for (const [k, v] of Object.entries(report.total)) summary[k] = Array.isArray(v) ? `${v[0]}/${v[1]} (${pctOf(v as [number, number])}%)` : String(v);
   const styles = Object.entries(report.perStyle).map(([n, s]) => ({ style: n, ...Object.fromEntries(Object.entries(s).map(([k, v]) => [k, Array.isArray(v) ? `${v[0]}/${v[1]}` : v])) }));
   fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify({ summary, styles }, null, 2));
+  console.log('DIAG', JSON.stringify(report.diag));
   console.log('TRUTH', JSON.stringify(summary));
   console.log('MISSES', JSON.stringify(report.total.misses));
   const ratio = (v: [number, number]) => v[0] / Math.max(1, v[1]);
@@ -113,6 +121,8 @@ test('detection against the plans of our own styles', async ({ page }) => {
   expect(ratio(t.textBox), 'text boxes right').toBeGreaterThan(0.7);
   expect(ratio(t.size), 'type size right').toBeGreaterThan(0.75);
   expect(ratio(t.align), 'alignment right').toBeGreaterThan(0.7);
-  expect(ratio(t.shapeFound), 'shapes found').toBeGreaterThan(0.85);
+  expect(ratio(t.photoFound), "photo regions found").toBeGreaterThan(0.7);
+  expect(ratio(t.highlight), "highlight boxes found").toBeGreaterThan(0.6);
+  expect(ratio(t.shapeFound), "shapes found").toBeGreaterThan(0.85);
   expect(ratio(t.background), 'background kind right').toBeGreaterThan(0.85);
 });
