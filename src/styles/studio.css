@@ -1,0 +1,80 @@
+/* "Make a carousel": two columns, a sticky preview, four control groups. One spacing scale (4 8 12 16 24 32), one control height (36, 44 on touch), the existing tokens. */
+.cr-studio { --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --ctl: 36px; max-width: 1240px; padding-bottom: 64px; }
+.cr-grid { display: grid; grid-template-columns: minmax(300px, 5fr) minmax(0, 7fr); gap: var(--sp-6); align-items: start; }
+.cr-preview { position: sticky; top: var(--sp-4); max-height: calc(100vh - 32px); overflow: auto; display: grid; gap: var(--sp-3); align-content: start; }
+.cr-preview .cr-toolbar { position: static; padding: 0; gap: var(--sp-2); }
+.cr-preview .cr-toolbar h2 { margin: 0; font-size: 16px; }
+.cr-controls { display: grid; gap: var(--sp-3); min-width: 0; }
+
+/* The stage */
+.cr-stage { display: grid; gap: var(--sp-2); }
+.cr-stage-pic { display: grid; place-items: center; width: 100%; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); overflow: hidden; cursor: zoom-in; min-height: 160px; }
+.cr-stage-pic img { display: block; width: 100%; height: auto; max-height: calc(100vh - 260px); object-fit: contain; }
+.cr-stage-n { margin: 0; text-align: center; font-variant-numeric: tabular-nums; }
+.cr-film { list-style: none; margin: 0; padding: 0 0 var(--sp-1); display: flex; gap: var(--sp-2); overflow-x: auto; }
+.cr-film-btn { flex: none; width: 56px; min-height: 56px; padding: 0; border: 2px solid transparent; border-radius: var(--radius-thumb); background: var(--surface); overflow: hidden; display: grid; place-items: center; cursor: pointer; }
+.cr-film-btn img { display: block; width: 100%; height: auto; }
+.cr-film-btn[aria-pressed='true'] { border-color: var(--accent); }
+.cr-stage-empty { display: grid; gap: var(--sp-1); place-content: center; text-align: center; min-height: 240px; padding: var(--sp-5); border: 1px dashed var(--line-strong); border-radius: var(--radius-card); background: var(--surface-tint); }
+
+/* The groups */
+.cr-group { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--page); }
+.cr-group-bar { display: flex; align-items: baseline; gap: var(--sp-3); padding: 0 var(--sp-4); }
+.cr-group-h { margin: 0; flex: none; }
+.cr-group-btn { all: unset; box-sizing: border-box; cursor: pointer; padding: var(--sp-3) 0; min-height: var(--ctl); font: inherit; font-weight: 700; display: inline-flex; align-items: center; gap: var(--sp-2); }
+.cr-group-btn::before { content: '▸' / ''; font-size: 12px; transition: transform 0.12s; }
+.cr-group-btn[aria-expanded='true']::before { transform: rotate(90deg); }
+.cr-group-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cr-group-body { padding: 0 var(--sp-4) var(--sp-4); display: grid; gap: var(--sp-4); }
+.cr-group-body[hidden] { display: none; }
+.cr-group-body > .page-header, .cr-group-body .card { margin: 0; }
+.cr-group-body .ws-card { border: 0; box-shadow: none; padding: 0; background: none; }
+.cr-group-body .create-form { padding: 0; }
+.cr-group-body .row-actions { gap: var(--sp-2); }
+.cr-group-body .field-label, .cr-preview .field-label { font-size: 13px; }
+.cr-group-body .tn-more { border: 1px solid var(--line); border-radius: var(--radius-thumb); padding: var(--sp-2) var(--sp-3); }
+.cr-groups-tools { display: flex; justify-content: flex-end; }
+.cr-quiet { background: none; border-color: transparent; color: var(--text-2); }
+.cr-quiet:hover:not(:disabled) { background: var(--surface); color: var(--text); }
+.cr-more { position: relative; }
+.cr-more > summary { list-style: none; cursor: pointer; }
+.cr-more > summary::-webkit-details-marker { display: none; }
+.cr-more[open] > :not(summary) { margin-top: var(--sp-2); }
+
+/* Consistent states */
+.cr-studio :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cr-studio :disabled { opacity: 0.5; cursor: not-allowed; }
+.cr-studio .btn, .cr-studio .chip-btn { min-height: var(--ctl); }
+.cr-studio .small.muted[role='status'] { line-height: 1.4; }
+
+/* Layers and the detected-box overlay */
+.rf-layers { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-1); }
+.rf-layers > li { display: grid; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius-thumb); }
+.rf-layers > li:focus-within, .rf-layers > li:hover { border-color: var(--accent); background: var(--surface-tint); }
+.rf-layers > li .row-actions { opacity: 0.35; transition: opacity 0.12s; }
+.rf-layers > li:hover .row-actions, .rf-layers > li:focus-within .row-actions { opacity: 1; }
+.rf-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
+.rf-legend li { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.rf-legend i { display: inline-block; width: 12px; height: 12px; border: 2px solid; border-radius: 3px; }
+
+/* The Live view: a slim bar at the bottom right, over the controls only; the preview stays free. */
+body:has(.cr-studio) .lv-pill { right: var(--sp-4); bottom: 0; border-radius: var(--radius-thumb) var(--radius-thumb) 0 0; min-height: var(--ctl); box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1); }
+body:has(.cr-studio) .lv { right: var(--sp-4); bottom: 0; max-height: 46vh; border-radius: var(--radius-card) var(--radius-card) 0 0; }
+
+@media (max-width: 899px) {
+  .cr-grid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+  .cr-preview { position: static; max-height: none; overflow: visible; }
+  .cr-stage-pic img { max-height: 60vh; }
+  .cr-studio .btn, .cr-studio .chip-btn, .cr-studio select, .cr-studio input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), .cr-group-btn { min-height: 44px; }
+  .cr-film-btn { min-width: 44px; }
+  .cr-group-hint { display: none; }
+  .rf-layers > li .row-actions { opacity: 1; }
+  body:has(.cr-studio) .lv-pill, body:has(.cr-studio) .lv { left: var(--sp-2); right: var(--sp-2); width: auto; }
+}
+@media (hover: none) { .rf-layers > li .row-actions { opacity: 1; } }
+
+/* Nothing may be wider than its column (a long unbroken word or a row of chips must wrap, never push the page sideways). */
+.cr-studio, .cr-grid, .cr-controls, .cr-preview, .cr-group, .cr-group-body, .cr-group-bar { min-width: 0; max-width: 100%; }
+.cr-studio { overflow-wrap: anywhere; }
+.cr-group-body > *, .cr-controls > * { min-width: 0; }
+.cr-studio .chip-group, .cr-studio .row-actions { flex-wrap: wrap; }

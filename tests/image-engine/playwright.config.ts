@@ -8,7 +8,7 @@ export default defineConfig({
   workers: 1,
   timeout: 60_000,
   reporter: [['list']],
-  use: { baseURL: 'http://localhost:5199', channel: 'chrome', viewport: { width: 900, height: 700 } },
+  use: { baseURL: 'http://localhost:5199', channel: 'chrome', viewport: { width: 900, height: 700 }, storageState: { cookies: [], origins: [{ origin: 'http://localhost:5199', localStorage: [{ name: 'creator.groups', value: 'all' }] }] } },
   webServer: {
     command: 'npx vite --port 5199 --strictPort',
     cwd: '../..',

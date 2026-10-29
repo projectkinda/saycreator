@@ -69,7 +69,7 @@ async function fake(page: Page, answer: (prompt: string) => string) {
 }
 const open = async (page: Page) => {
   await page.goto('/images/carousel');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
   await page.reload();
   await expect(page.getByTestId('writer-label')).toContainText('Claude Code');
 };

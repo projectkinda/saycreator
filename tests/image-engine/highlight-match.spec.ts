@@ -147,7 +147,7 @@ test.describe('on the slide card (the app)', () => {
       ],
     };
     await page.goto('/images/carousel');
-    await page.evaluate(() => localStorage.clear());
+    await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
     await page.reload();
     await page.getByText('Advanced: write the script yourself').click();
     await page.getByLabel('Paste the script Claude wrote (JSON)').fill(JSON.stringify(script));

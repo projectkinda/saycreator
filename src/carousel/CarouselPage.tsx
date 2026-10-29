@@ -24,6 +24,7 @@ import { listCutouts, putCutout, type CutoutRecord } from '../image-engine/cutou
 import type { AddFiles } from './PhotoControls';
 import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, useLibraryVersion, type PictureMeta } from './photoLibrary';
 import { SlideCard, type SlideView } from './SlideCard';
+import { Group, PreviewStage, useGroups } from './Studio';
 import { PASTE_KEY, readStore, useProject, writeStore } from './useProject';
 import { onCancel, startJob, type JobHandle } from '../live/jobs';
 import '../styles/carousel.css';
@@ -205,6 +206,8 @@ export default function CarouselPage() {
 
   // ---------- compose and draw ----------
   const [views, setViews] = useState<Record<number, SlideView>>({});
+  const g = useGroups();
+  const [sel, setSel] = useState(0);
   const [slides, setSlides] = useState<StyledSlide[]>([]);
   const [margin, setMargin] = useState(80);
   const urls = useRef(new Map<Blob, string>());
@@ -430,7 +433,7 @@ export default function CarouselPage() {
   const hasWork = !!doc.script;
 
   return (
-    <div className="page page-tight">
+    <div className="page page-tight cr-studio">
       <header className="page-header">
         <div className="page-header-text">
           <p className="small"><Link to="/images">← Back to Images</Link></p>
@@ -440,6 +443,60 @@ export default function CarouselPage() {
       </header>
       <p className="visually-hidden" role="status" aria-live="polite">{notice}</p>
 
+      <div className="cr-grid">
+        <aside className="cr-preview" aria-label="Preview">
+          <section aria-labelledby="cr-slides-h" className="cr-slides-sec">
+        <div className="cr-toolbar">
+          <h2 id="cr-slides-h" className="h3">{hasWork ? `Your ${doc.format === 'quote' ? 'cards' : 'slides'}` : '4. Your slides'}</h2>
+          <div className="row-actions" role="toolbar" aria-label="Project actions">
+            <button type="button" className="btn btn-outline btn-sm cr-quiet" onClick={undo} disabled={past.length === 0} title="Ctrl+Z (when no text field is focused)">
+              Undo{lastLabel ? `: ${lastLabel}` : ''}
+            </button>
+            <button type="button" className="btn btn-outline btn-sm cr-quiet" onClick={redo} disabled={future.length === 0} title="Shift+Ctrl+Z">
+              Redo{nextLabel ? `: ${nextLabel}` : ''}
+            </button>
+            <button type="button" className="btn btn-dark btn-sm" onClick={downloadAll} disabled={!ready || !!exporting}>
+              <Icon name="upload" size={14} /> Download all (zip)
+            </button>
+            <details className="cr-more" open={g.all}>
+              <summary className="btn btn-outline btn-sm cr-quiet">More</summary>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={!hasWork && !doc.topic}
+              onClick={() => {
+                if (window.confirm('Start over? This removes the script, every edit and your pictures from this browser.')) {
+                  pictures.forEach((p) => void removePicture(p.id));
+                  startOver(doc.style);
+                  setNotice('Started over.');
+                }
+              }}
+            >
+              Start over
+            </button>
+            </details>
+          </div>
+        </div>
+        <p className="small muted" role="status" aria-live="polite">
+          {exporting || (proj.saveFailed ? 'This browser would not save the project. Download your slides before you leave.' : proj.saved)}
+          {hasWork && ready && !exporting && ` ${failing === 0 ? 'Every slide passes the phone-size check.' : `${failing} of ${slides.length} slides have something to fix at phone size.`}`}
+        </p>
+
+            <PreviewStage count={hasWork ? slides.length : 0} items={slides.map((_, i) => views[i] ?? { status: 'drawing' })} selected={sel} onSelect={setSel} onOpen={setOpen} />
+          </section>
+        </aside>
+        <div className="cr-controls">
+      {error && (
+        <div className="notice notice-error" role="alert">
+          <strong>Something went wrong</strong>
+          <span>{error}</span>
+        </div>
+      )}
+
+          <div className="cr-groups-tools">
+            <button type="button" className="btn btn-outline btn-sm cr-quiet" aria-pressed={g.all} onClick={() => g.setAll(!g.all)}>{g.all ? 'One group at a time' : 'Open all groups'}</button>
+          </div>
+          <Group id="content" title="Content" hint="Text, format, photos" g={g}>
       <MakeIt
         doc={doc}
         options={options}
@@ -460,7 +517,7 @@ export default function CarouselPage() {
         onCancel={cancel}
         provider={provider}
         providers={providers}
-        styles={<><StylePicker format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} />{targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}<MatchPanel target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} describe={{ canvas: { w: 1080, h: 1350 }, hasCutout: false }} /></>}
+        styles={null}
       />
 
       <details className="card ws-card cr-advanced" open={advanced} onToggle={(e) => setAdvanced((e.target as HTMLDetailsElement).open)}>
@@ -515,50 +572,17 @@ export default function CarouselPage() {
         </div>
       </details>
 
-      {error && (
-        <div className="notice notice-error" role="alert">
-          <strong>Something went wrong</strong>
-          <span>{error}</span>
-        </div>
-      )}
-
       <PhotosStrip pictures={pictures} supported={hasPhotoStyle} styleTitle={style?.spec.title ?? 'This style'} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onCutout={makeCutout} editableCutouts={cutouts.ids} onEditCutout={(id) => void editCutout(id)} usedOn={usedOn} storageProblem={currentStorageProblem()} lowRoom={lowRoom} />
       {editing && <CutoutEditor record={editing} onSave={(r) => void saveEdited(r)} onClose={() => setEditing(null)} />}
 
-      <section aria-labelledby="cr-slides-h" className="cr-slides-sec">
-        <div className="cr-toolbar">
-          <h2 id="cr-slides-h" className="h3">{hasWork ? `Your ${doc.format === 'quote' ? 'cards' : 'slides'}` : '4. Your slides'}</h2>
-          <div className="row-actions" role="toolbar" aria-label="Project actions">
-            <button type="button" className="btn btn-outline btn-sm" onClick={undo} disabled={past.length === 0} title="Ctrl+Z (when no text field is focused)">
-              Undo{lastLabel ? `: ${lastLabel}` : ''}
-            </button>
-            <button type="button" className="btn btn-outline btn-sm" onClick={redo} disabled={future.length === 0} title="Shift+Ctrl+Z">
-              Redo{nextLabel ? `: ${nextLabel}` : ''}
-            </button>
-            <button type="button" className="btn btn-dark btn-sm" onClick={downloadAll} disabled={!ready || !!exporting}>
-              <Icon name="upload" size={14} /> Download all (zip)
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              disabled={!hasWork && !doc.topic}
-              onClick={() => {
-                if (window.confirm('Start over? This removes the script, every edit and your pictures from this browser.')) {
-                  pictures.forEach((p) => void removePicture(p.id));
-                  startOver(doc.style);
-                  setNotice('Started over.');
-                }
-              }}
-            >
-              Start over
-            </button>
-          </div>
-        </div>
-        <p className="small muted" role="status" aria-live="polite">
-          {exporting || (proj.saveFailed ? 'This browser would not save the project. Download your slides before you leave.' : proj.saved)}
-          {hasWork && ready && !exporting && ` ${failing === 0 ? 'Every slide passes the phone-size check.' : `${failing} of ${slides.length} slides have something to fix at phone size.`}`}
-        </p>
-
+          </Group>
+          <Group id="style" title="Style" hint="Styles and templates" g={g}>
+            <><StylePicker format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} />{targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}</>
+          </Group>
+          <Group id="reference" title="Reference" hint="Match a reference, describe the look" g={g}>
+            <MatchPanel target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} describe={{ canvas: { w: 1080, h: 1350 }, hasCutout: false }} />
+          </Group>
+          <Group id="edit" title="Edit" hint="Each slide, its layers and photos" g={g}>
         {!hasWork && (
           <div className="card empty">
             <strong>No script yet</strong>
@@ -597,7 +621,9 @@ export default function CarouselPage() {
             ))}
           </ol>
         )}
-      </section>
+          </Group>
+        </div>
+      </div>
 
       <FullSize items={openItems} at={open} onClose={() => setOpen(null)} onMove={setOpen} />
     </div>

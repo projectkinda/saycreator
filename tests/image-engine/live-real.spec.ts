@@ -88,7 +88,7 @@ test('one-shot carousel with the real writer', async ({ page }) => {
   test.setTimeout(900_000);
   const text = fs.readFileSync(path.join(ROOT, 'sample-inputs', 'creator.txt'), 'utf8');
   await page.goto('/images/carousel');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
   await page.reload();
   await expect(page.getByTestId('writer-label')).toContainText(/Claude Code|Claude API/);
   await page.getByLabel('Your text, idea or article').fill(text);

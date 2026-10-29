@@ -50,7 +50,7 @@ test('REAL: three generations on the sample texts, through the real Generate but
   for (const inp of INPUTS.filter((i) => !process.env.REAL_ONLY || process.env.REAL_ONLY.split(',').includes(i.id))) {
     const text = fs.readFileSync(path.join(ROOT, 'sample-inputs', inp.file), 'utf8');
     await page.goto('/images/carousel');
-    await page.evaluate(() => localStorage.clear());
+    await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
     await page.reload();
     await expect(page.getByTestId('writer-label')).toContainText(/Claude Code|Claude API/);
     const writerLabel = await page.getByTestId('writer-label').innerText();
@@ -113,7 +113,7 @@ test('REAL: one quote card set (3 cards) from a text with named speakers', async
   fs.mkdirSync(out, { recursive: true });
   const text = fs.readFileSync(path.join(ROOT, 'sample-inputs/quotes.txt'), 'utf8');
   await page.goto('/images/carousel');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
   await page.reload();
   await expect(page.getByTestId('writer-label')).toContainText(/Claude Code|Claude API/);
   await page.getByLabel('Your text, idea or article').fill(text);

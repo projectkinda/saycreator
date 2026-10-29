@@ -26,7 +26,7 @@ test('each sample script loads in the app and draws in every style; phone-check 
   const report: { script: string; style: string; failing: { slide: number; reasons: string[] }[] }[] = [];
   for (const f of FILES) {
     await page.goto('/images/carousel');
-    await page.evaluate(() => localStorage.clear());
+    await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
     await page.reload();
     await page.getByText('Advanced: write the script yourself').click();
     await page.getByLabel('Paste the script Claude wrote (JSON)').fill(fs.readFileSync(path.join(DIR, f), 'utf8'));

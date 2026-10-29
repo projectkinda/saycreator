@@ -166,10 +166,12 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
           </p>
         )}
 
-        <div>
-          <h3 className="h4">Style</h3>
-          {styles}
-        </div>
+        {styles ? (
+          <div>
+            <h3 className="h4">Style</h3>
+            {styles}
+          </div>
+        ) : null}
 
         <div className="row-actions">
           {!busy && (

@@ -169,6 +169,13 @@ export function DetectOverlay({ url, name, free, texts, scene, onChange }: {
         </div>
       </div>
       <div className="rf-detect-side">
+        <ul className="rf-legend small" aria-label="Colours of the boxes">
+          <li><i style={{ borderColor: COLOUR.slot }} /> Text</li>
+          <li><i style={{ borderColor: COLOUR.photo }} /> Photo</li>
+          <li><i style={{ borderColor: COLOUR.shape }} /> Shape</li>
+          <li><i style={{ borderColor: COLOUR.graphic }} /> Graphic</li>
+          {scene && <li><i style={{ borderColor: '#f59e0b', borderStyle: 'dashed' }} /> Approximate (not measured)</li>}
+        </ul>
         {scene && (
           <div className="small" aria-label="The scene">
             <p>Layers back to front: {scene.layers.map((l) => `${l.order}. ${l.type}${l.role ? ` (${l.role})` : ''}${l.approx ? ' APPROX' : ''}`).join(' · ')}.</p>
