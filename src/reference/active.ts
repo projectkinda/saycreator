@@ -18,6 +18,10 @@ export interface ActiveReference {
   ratioNote: string | null;
   /** The biggest photo found in the first reference, as shares of that reference (0 to 1). Null when none, or when it covers nearly everything. */
   photoRegion: { x: number; y: number; width: number; height: number } | null;
+  /** Where the style came from: references the person added, or a description they typed. Left out: references. */
+  source?: 'reference' | 'description';
+  /** The layout of a description (the thumbnail maker draws it itself; carousels get it as the style's free layouts). */
+  free?: import('../image-engine/styles/free-spec').FreeLayout;
 }
 
 let current: (ActiveReference & { style: LoadedStyle }) | null = null;
@@ -37,7 +41,8 @@ export function setActiveReference(a: ActiveReference) {
   current = { ...a, spec, style: { spec, assets: {}, warnings: c.warnings } };
   bump();
 }
-export function clearActiveReference(removed = false) {
+export function clearActiveReference(removed = false, only?: 'reference' | 'description') {
+  if (only && (current?.source ?? 'reference') !== only) return;
   if (!current && !removed) return;
   current = null;
   if (removed) clears++;

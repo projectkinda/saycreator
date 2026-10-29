@@ -346,7 +346,7 @@ export default function ThumbnailPage() {
         {editing && <CutoutEditor record={editing} onSave={(r) => void saveEdited(r)} onClose={() => setEditing(null)} />}
         {proj.saveFailed && <p className="small cr-problem" role="alert">This browser would not save the project. Download your thumbnails before you leave.</p>}
 
-        <MatchPanel target="thumbnail" title={doc.title} photo={doc.photoId && photoUrl && sizeOf(doc.photoId) ? { url: photoUrl, name: 'photo', ...sizeOf(doc.photoId)! } : null} current={doc.style} onUse={() => apply(thumbPatches.style(ACTIVE_STYLE))} onRemove={() => apply(thumbPatches.style(AUTO_STYLE))} />
+        <MatchPanel target="thumbnail" title={doc.title} photo={doc.photoId && photoUrl && sizeOf(doc.photoId) ? { url: photoUrl, name: 'photo', ...sizeOf(doc.photoId)! } : null} current={doc.style} onUse={() => apply(thumbPatches.style(ACTIVE_STYLE))} onRemove={() => apply(thumbPatches.style(AUTO_STYLE))} describe={{ canvas: { w: size.width, h: size.height }, hasCutout: !!doc.objectId, getPreview: async () => { const u = cards.find((x) => x.drawn)?.drawn?.url; if (!u) return null; const b = await (await fetch(u)).blob(); return await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(b); }); } }} />
         {doc.objectId && (
           <BackdropPanel doc={doc} apply={apply} addPhoto={(f) => void addFiles([f], 'photo', 'backdrop')} onSaveLook={saveLook} />
         )}

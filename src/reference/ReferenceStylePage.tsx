@@ -619,7 +619,7 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
   useEffect(() => {
     if (!embedded) return;
     if (!editState || items.length === 0 || uploads.length === 0) {
-      clearActiveReference();
+      clearActiveReference(false, 'reference');
       return;
     }
     const d = detected[0];

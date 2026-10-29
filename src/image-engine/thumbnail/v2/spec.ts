@@ -4,12 +4,13 @@
 import type { Treatment } from '../../types';
 
 /** The arrangements a thumbnail can have. A style lists the ones it suits, best first. */
-export const THUMB_LAYOUTS = ['face-left-title-right', 'title-over-photo', 'split-colour', 'object-title', 'number-badge', 'before-after', 'cutout-outline-glow', 'cutout-over-text', 'cutout-on-block'] as const;
+export const THUMB_LAYOUTS = ['face-left-title-right', 'title-over-photo', 'split-colour', 'object-title', 'number-badge', 'before-after', 'cutout-outline-glow', 'cutout-over-text', 'cutout-on-block', 'described'] as const;
 /** The three ready combinations for a cutout: offered with any style when the person has added an object. */
 export const CUTOUT_COMBOS = ['cutout-outline-glow', 'cutout-over-text', 'cutout-on-block'] as const;
 export type ThumbLayoutId = (typeof THUMB_LAYOUTS)[number];
 
 export const THUMB_LAYOUT_LABEL: Record<ThumbLayoutId, string> = {
+  described: 'Your described layout',
   'face-left-title-right': 'Subject on one side, title on the other',
   'title-over-photo': 'Big title over the photo',
   'split-colour': 'Photo and colour block',

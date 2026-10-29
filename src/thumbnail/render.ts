@@ -200,6 +200,7 @@ async function requestFor(doc: ThumbDoc, picked: { style: LoadedStyle }, base: {
     Object.assign(merged, { x: region.x + region.width / 2, y: region.y + region.height / 2, scale: Math.min(2, Math.max(0.4, Math.min(region.width * W, region.height * H) / (W * 0.5))) });
   }
   const look = Object.keys(merged).length ? merged : undefined;
+  const described = picked.style.spec.name === ACTIVE_STYLE && activeReference()?.source === 'description' ? activeReference()!.free : undefined;
   // The cutout with the flip and the outline the person asked for baked in, and a copy with an outline for the outline combination.
     const objSrc = doc.objectId ? urlOf(doc.objectId) : null;
   const accent = String((picked.style.spec.palettes[picked.style.spec.thumbnail?.palette ?? ''] as unknown as Record<string, unknown> | undefined)?.accent ?? '#ffffff');
@@ -229,6 +230,7 @@ async function requestFor(doc: ThumbDoc, picked: { style: LoadedStyle }, base: {
     ...((v?.palette ?? doc.palette) ? { palette: v?.palette ?? doc.palette } : {}),
     ...((v?.titlePlace ?? doc.titlePlace) ? { titlePlace: v?.titlePlace ?? doc.titlePlace } : {}),
     ...(v ? { layouts: [v.layout] } : {}),
+    ...(described && !v ? { free: described } : {}),
   };
 }
 

@@ -17,6 +17,7 @@ import { circleTouchesBox, fitSubject, fitSubjectZoom, subjectRadius, type Box, 
 import { CUTOUT_COMBOS, THUMB_LAYOUTS, type ThumbLayoutId, type ThumbSpec } from './spec';
 import type { CutoutLook } from '../../cutout/look';
 import { treatmentsOf, type Backdrop, type TitlePlace } from './backdrop';
+import { freeMarks } from '../../styles/layouts-free';
 import { drawMarks } from '../../styles/marks';
 import type { MarkSpec } from '../../styles/marks-spec';
 
@@ -34,6 +35,8 @@ export interface ThumbBackdrop extends Backdrop {
 }
 
 export interface ThumbRequest {
+  /** A layout the person described (or a stored free layout): drawn by the "described" layout. */
+  free?: import('../../styles/free-spec').FreeLayout;
   /** What is behind a cutout (the cutout layouts only). Left out: the style's own, then a blurred copy of the photo. */
   backdrop?: ThumbBackdrop;
   /** A palette of the style, in place of the thumbnail's own. */
@@ -552,7 +555,53 @@ const comboOnBlock: Layout = (c) => {
   setTitle(c, placeTitle(c, box), { on: 'photo', valign: 'middle', ...plateOpt(c) });
 };
 
+/** The described layout: its background, photo region, shapes, marks and title box, drawn on the person's own title, photo and cutout. */
+const describedLayout: Layout = (c) => {
+  const f = c.req.free!;
+  const { W, H } = c;
+  const px = (b: { x: number; y: number; w: number; h: number }): Box => ({ x: Math.round((b.x / 100) * W), y: Math.round((b.y / 100) * H), width: Math.round((b.w / 100) * W), height: Math.round((b.h / 100) * H) });
+  clearSubjects(c);
+  const cols = f.background.colours;
+  const bgFill = f.background.kind === 'gradient' && cols.length >= 2 ? { type: 'linear' as const, angle: f.background.direction === 'horizontal' ? 90 : 180, stops: [{ at: 0, color: cols[0] }, { at: 1, color: cols[1] }] } : (cols[0] ?? '#ffffff');
+  const bgRect = () => c.layers.push(rect('described-bg', 'decor', 0, 0, W, H, bgFill));
+  const slot = f.photos[0];
+  if (slot) {
+    bgRect();
+    putPhoto(c, 'photo', c.req.photo, c.req.subject, slot.shape === 'full-bleed' ? full(c) : px(slot.box), { x: 0.5, y: 0.5 }, c.treatments);
+  } else {
+    // The photo is still the first layer (the checker reads it); the background covers it.
+    putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: 0.5, y: 0.5 }, []);
+    bgRect();
+  }
+  for (const sh of f.shapes) {
+    const b = px(sh.box);
+    const r = sh.kind === 'pill' || sh.kind === 'circle' ? Math.min(b.width, b.height) / 2 : sh.kind === 'rounded' ? 24 : 0;
+    if (sh.kind === 'ring') continue;
+    c.layers.push(rect(`described-${sh.id}`, 'decor', b.x, b.y, b.width, b.height, sh.colour, { radius: Math.round(r) }));
+  }
+  const marks = drawMarks(freeMarks(f).map((m) => ({ ...m, size: Math.max(24, Math.round((m.size * W) / 1080)) })), { theme: c.theme, pal: c.pal, W, H, M: c.m, top: c.m, bottom: H - c.m, type: 'cover', seed: 'described' });
+  c.layers.push(...marks.under);
+  if (c.req.object) {
+    const own = slot ? { cx: px(slot.box).x + px(slot.box).width / 2, cy: px(slot.box).y + px(slot.box).height / 2, side: Math.round(Math.min(px(slot.box).width, px(slot.box).height) * 0.95) } : { cx: Math.round(W * 0.7), cy: Math.round(H * 0.5), side: Math.round(H * 0.84) };
+    const p = placedObject(c, c.req.object, own, 'drop');
+    c.layers.push(p.layer);
+    keepObject(c, p);
+  }
+  const t = f.slots.find((x) => x.role === 'title') ?? f.slots[0];
+  const lum = (hex: string) => {
+    const h = hex.replace('#', '');
+    const v = h.length === 3 ? h.split('').map((x) => parseInt(x + x, 16)) : [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    return (0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]) / 255;
+  };
+  const bgL = /^#/.test(String(cols[0])) && !slot ? lum(String(cols[0])) : 0.5;
+  const textL = lum(String(solidOf(c.pal.text as never)).startsWith('#') ? String(solidOf(c.pal.text as never)) : '#111111');
+  const needPlate = !!slot || Math.abs(bgL - textL) < 0.45;
+  if (t) setTitle(c, px(t.box), { on: 'photo', valign: t.anchor === 'top' ? 'top' : t.anchor === 'bottom' ? 'bottom' : 'middle', align: t.align === 'centre' ? 'center' : 'left', ...(needPlate ? { forcePlate: true as const } : {}) });
+  c.layers.push(...marks.over);
+};
+
 const LAYOUT_FN: Record<ThumbLayoutId, Layout> = {
+  described: describedLayout,
   'face-left-title-right': faceLeft,
   'title-over-photo': titleOverPhoto,
   'split-colour': splitColour,
@@ -582,7 +631,7 @@ export function composeThumbs(req: ThumbRequest, style: LoadedStyle): ThumbOptio
   const palName = req.palette && style.spec.palettes[req.palette] ? req.palette : req.object && tb.cutout?.palette && style.spec.palettes[tb.cutout.palette] ? tb.cutout.palette : tb.palette;
   const pal = style.spec.palettes[palName];
   // With an object, the three ready cutout combinations are offered whatever the style lists.
-  const wanted = [...new Set([...(req.layouts ?? tb.layouts), ...(!req.layouts && req.object ? CUTOUT_COMBOS : [])])].filter((l) => (THUMB_LAYOUTS as readonly string[]).includes(l));
+  const wanted = [...new Set([...(!req.layouts && req.free ? (['described'] as ThumbLayoutId[]) : []), ...(req.layouts ?? tb.layouts), ...(!req.layouts && req.object ? CUTOUT_COMBOS : [])])].filter((l) => (THUMB_LAYOUTS as readonly string[]).includes(l));
   const out: ThumbOption[] = [];
   for (const layout of wanted) {
     if (out.length >= 9) break;

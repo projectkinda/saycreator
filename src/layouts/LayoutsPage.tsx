@@ -208,6 +208,7 @@ export default function LayoutsPage() {
                   </div>
                   <p className="small muted lg-cat">{CATEGORY_WORDS(l.category)}{l.keywords.length ? ` · ${l.keywords.slice(0, 4).join(', ')}` : ''}</p>
                   <div className="cr-photo-actions">
+                    <Link to="/images/thumbnail" className="btn btn-outline btn-sm" onClick={() => { try { sessionStorage.setItem('creator.skeleton', l.id); } catch { /* not remembered */ } }} aria-label={`Use layout ${l.id} as a starting layout in Describe the look`}>Use as a starting layout</Link>
                     <button type="button" className="btn btn-outline btn-sm" disabled={t?.status === 'busy'} onClick={() => void tryIt(l)} aria-label={`Try layout ${l.id} with my content`}>{t?.status === 'busy' ? 'Fitting…' : t?.status === 'done' ? 'Try again' : 'Try with my content'}</button>
                     {t?.status === 'done' && <button type="button" className="btn btn-outline btn-sm" onClick={() => void saveIt(l, t.fitted)} aria-label={`Save layout ${l.id} as a template`}>Save as template</button>}
                   </div>
