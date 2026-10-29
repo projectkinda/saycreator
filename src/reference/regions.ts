@@ -444,7 +444,9 @@ export function detectRegions(p: Px): Detected {
         const cover = (bw * bh) / (W * H);
         const shape: PhotoRegion['shape'] = cover > 0.85 ? 'full-bleed' : fillRatio > 0.9 ? 'rect' : fillRatio > 0.7 && Math.abs(bw - bh) < 0.2 * bw ? 'circle' : fillRatio > 0.75 ? 'rounded' : 'rect';
         photos.push({ id: `photo${photos.length + 1}`, box: roundBox(boxOf(box, W, H)), shape });
-        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) photoMask[y * W + x] = 1;
+        // Only a part that is photographic all over limits the words to white and black; a poster's picture with coloured headlines on it is still reported as a photo
+        // but its pixels are read as before, so no text is lost there.
+        if (seeds / cells >= 0.75) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) photoMask[y * W + x] = 1;
       }
   }
   if (photos.length === 1 && photos[0].shape === 'full-bleed') background.kind = 'photo';
