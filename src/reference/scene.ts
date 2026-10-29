@@ -220,11 +220,19 @@ const iou = (a: Box, b: Box) => {
   return (w * h) / (a.w * a.h + b.w * b.h - w * h);
 };
 const centre = (b: Box) => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
+/** How much of the smaller box lies inside the other (1: one is inside the other). */
+const inter = (a: Box, b: Box) => {
+  const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  return w > 0 && h > 0 ? w * h : 0;
+};
+const contained = (a: Box, b: Box) => inter(a, b) / Math.max(0.01, Math.min(a.w * a.h, b.w * b.h));
 const score = (a: Box, b: Box) => {
   const ca = centre(a);
   const cb = centre(b);
   const dist = Math.hypot(ca.x - cb.x, ca.y - cb.y);
-  return iou(a, b) + (dist < 12 ? 0.5 * (1 - dist / 12) : 0);
+  const cont = contained(a, b);
+  return iou(a, b) + (dist < 18 ? 0.5 * (1 - dist / 18) : 0) + (cont >= 0.6 ? 0.3 * cont : 0);
 };
 const SNAP = 3.5;
 const median = (v: number[]) => [...v].sort((a, b) => a - b)[Math.floor(v.length / 2)];
@@ -233,16 +241,16 @@ const median = (v: number[]) => [...v].sort((a, b) => a - b)[Math.floor(v.length
 export function reconcile(scene: Scene, d: Detected, ref: number, margin?: number): ReconScene {
   const pool: { id: string; type: LayerType; box: Box; keep: boolean }[] = [
     ...d.texts.map((t) => ({ id: t.id, type: 'text' as const, box: t.box, keep: t.box.h >= 1.5 && t.box.w >= 8 })),
-    ...d.photos.map((p) => ({ id: p.id, type: 'photo' as const, box: p.box, keep: p.box.w * p.box.h >= 500 })),
-    ...d.shapes.map((s) => ({ id: s.id, type: 'shape' as const, box: s.box, keep: !!s.holds })),
-    ...d.graphics.map((g) => ({ id: g.id, type: 'graphic' as const, box: g.box, keep: false })),
+    ...d.photos.map((p) => ({ id: p.id, type: 'photo' as const, box: p.box, keep: true })),
+    ...d.shapes.map((s) => ({ id: s.id, type: 'shape' as const, box: s.box, keep: true })),
+    ...d.graphics.map((g) => ({ id: g.id, type: 'graphic' as const, box: g.box, keep: true })),
   ];
   const used = new Set<string>();
   const order = new Map(scene.layers.map((l, i) => [l.id, i + 1]));
   const layers: ReconLayer[] = [];
   for (const l of [...scene.layers].sort((a, b) => b.confidence - a.confidence)) {
     let best: (typeof pool)[number] | null = null;
-    let bs = 0.15;
+    let bs = 0.12;
     for (const m of pool) {
       if (m.type !== l.type || used.has(m.id)) continue;
       const s = score(l.box, m.box);
@@ -258,7 +266,9 @@ export function reconcile(scene: Scene, d: Detected, ref: number, margin?: numbe
   let extra = scene.layers.length;
   for (const m of pool) {
     if (used.has(m.id)) continue;
-    if (m.keep) layers.push({ id: `m:${m.id}`, type: m.type, measured: m.id, box: { ...m.box }, approx: false, order: ++extra, confidence: 0.4 });
+    // Only a measured TEXT box can be noise the reader left out; a shape, photo or graphic stays unless a described layer of about its size covers it.
+    const covered = m.type !== 'text' && scene.layers.some((l) => l.box.w * l.box.h <= 3 * m.box.w * m.box.h && inter(l.box, m.box) >= 0.6 * m.box.w * m.box.h);
+    if (m.keep && !covered) layers.push({ id: `m:${m.id}`, type: m.type, measured: m.id, box: { ...m.box }, approx: false, order: ++extra, confidence: 0.4 });
     else dropped.push(m.id);
   }
   layers.sort((a, b) => a.order - b.order);
@@ -342,7 +352,8 @@ export function applyScene(free: FreeLayout, d: Detected, rec: ReconScene): Free
     if (l.type === 'text' && template && slots.length < MAX_SLOTS) {
       const lines = Math.max(1, Math.min(6, Math.round(l.box.h / 4)));
       slots.push({ ...template, id: `approx${++n}`, role: l.role ?? 'body', box: l.box, maxLines: lines, sizePx: Math.max(32, Math.round(((l.box.h / 100) * 1350) / lines / 1.25)), treatments: [] });
-    } else if (l.type === 'photo' && photos.length < MAX_PHOTOS) photos.push({ id: `approx${++n}`, box: l.box, shape: 'rect' });
+    } else if (l.type === 'photo' && photos.some((p) => inter(l.box, p.box) >= 0.5 * l.box.w * l.box.h)) continue;
+    else if (l.type === 'photo' && photos.length < MAX_PHOTOS) photos.push({ id: `approx${++n}`, box: l.box, shape: 'rect' });
     else missing.push(`${l.type} ${l.id} (${l.role ?? l.graphic ?? 'no role'}) was described by the reader but not measured: APPROX at ${fmt(l.box)}, not drawn`);
   }
   return { ...free, slots, photos, shapes, missing: [...new Set(missing)] };

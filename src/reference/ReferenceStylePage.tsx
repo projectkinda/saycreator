@@ -28,7 +28,8 @@ import { detectReaders, ReaderError, readStyle, type ReferenceReader } from './r
 import { applyPatches, checkSpec, defaultThumbnail, sectionsFor } from './spec';
 import { detectRegions, type Detected } from './regions';
 import { buildFree, missingRanked } from './free';
-import { applyLabels } from './labels';
+import { applyLabels, labelReference } from './labels';
+import { overlayImage } from './overlay';
 import { applyScene, labelsOf, readScene, reconcile, type DeckRead, type ReconScene, type SceneRead } from './scene';
 import { DetectOverlay } from './DetectOverlay';
 import { meanOf, pctText, scoreLayout, type LayoutScore } from './score';
@@ -246,6 +247,15 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
   const [advanced, setAdvanced] = useState(false);
   const [showDetected, setShowDetected] = useState(false);
   const [scenes, setScenes] = useState<Record<string, ReconScene>>({});
+  // How the reader is asked: to label the boxes the code found (14e), or to describe the whole picture (14g). Remembered in this browser.
+  const [readMode, setReadMode] = useState<'labels' | 'scene'>(() => {
+    try {
+      return localStorage.getItem('creator.readMode') === 'labels' ? 'labels' : 'scene';
+    } catch {
+      return 'scene';
+    }
+  });
+  const [modeNote, setModeNote] = useState('');
   const [deckRead, setDeckRead] = useState<DeckRead | null>(null);
   const [detItem, setDetItem] = useState(0);
   const [costShown, setCostShown] = useState<Cost>(freshCost());
@@ -315,8 +325,25 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
     return null;
   };
 
+  /** Switching the read mode shows the answer already read that way (no model call); reading the other way costs one call, so it waits for the button. */
+  const pickMode = async (m: 'labels' | 'scene') => {
+    if (m === readMode) return;
+    setReadMode(m);
+    try {
+      localStorage.setItem('creator.readMode', m);
+    } catch {
+      /* not remembered */
+    }
+    setModeNote('');
+    const reader = readers?.[0];
+    if (!reader || items.length === 0 || !editState) return;
+    const key = await cacheKey({ dataUrls: items.map((i) => i.dataUrl), learn: items.map((i) => i.learn), target, baseName: m, readerId: reader.id }).catch(() => '');
+    if (key && (await cacheGet(key))) void read(m);
+    else setModeNote('Not read this way yet: press Read references (one model call).');
+  };
   const canRead = items.length > 0 && !!readers?.length && !busy && !preparing;
-  const read = async () => {
+  const read = async (modeOverride?: 'labels' | 'scene') => {
+    const mode = modeOverride ?? readMode;
     const rawReader = readers![0];
     // One job, two calls at most: the first read, and one Improve the person asks for. The Advanced toggle raises the cap.
     cost.current = freshCost(advanced ? ADVANCED_CAP : DEFAULT_CAP);
@@ -356,7 +383,7 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
       let draft = draftSpec(measured[0], detected[0]);
       if (!advanced && editState) {
         // The reader only labels: the boxes, sizes and colours are the code's, and the reader says what each box is. One call.
-        const key = await cacheKey({ dataUrls: items.map((i) => i.dataUrl), learn: items.map((i) => i.learn), target, baseName: 'scene', readerId: reader.id }).catch(() => '');
+        const key = await cacheKey({ dataUrls: items.map((i) => i.dataUrl), learn: items.map((i) => i.learn), target, baseName: mode, readerId: reader.id }).catch(() => '');
         const hit = key ? ((await cacheGet(key)) as unknown as SceneRead | null) : null;
         job.begin('reader');
         let raw: SceneRead;
@@ -367,7 +394,15 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
         } else {
           job.waiting('the reader');
           try {
-            raw = await readScene({ reader, ds: detected, names: items.map((_, i) => `ref${i + 1}.jpg`), images, signal: abort.current.signal });
+              const replay = (window as unknown as { __sceneReplay?: SceneRead }).__sceneReplay;
+          if (replay) raw = replay;
+          else if (mode === 'scene') raw = await readScene({ reader, ds: detected, names: items.map((_, i) => `ref${i + 1}.jpg`), images, signal: abort.current.signal });
+          else {
+            const pics = await Promise.all(items.map((it, i) => overlayImage(it.dataUrl, detected[i], i + 1, `ref${i + 1}.jpg`)));
+            const l = await labelReference({ reader, ds: detected, names: items.map((_, i) => `ref${i + 1}.jpg`), images: pics, signal: abort.current.signal });
+            raw = { answer: null, labels: l.labels, problems: l.problems, ms: l.ms, attempts: l.attempts };
+          }
+          (window as unknown as { __sceneDump?: unknown }).__sceneDump = { mode, raw, detected: detected.map((d) => ({ texts: d.texts.map((t) => t.box), photos: d.photos.map((p) => p.box), shapes: d.shapes.map((s) => s.box), graphics: d.graphics.map((g) => g.box) })) };
           } finally {
             job.waiting(null);
           }
@@ -793,6 +828,13 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
         </label>
         {readers && readers.length === 0 && <p className="small cr-warn" role="status">No reader is connected, so “Read references” is off. Start the app with the dev server (it uses Claude Code on this computer) or give the server an API key (see the server notes).</p>}
         {readers && readers.length > 0 && <p className="small muted" role="status">Reader: {readers[0].label}.</p>}
+        <div className="tn-field" role="radiogroup" aria-label="Read mode">
+          <span className="field-label">Read</span>
+          {([['labels', 'Labels (the code finds the boxes, the reader names them)'], ['scene', 'Whole picture (the reader describes the scene, the code snaps it)']] as const).map(([m, l]) => (
+            <button key={m} type="button" role="radio" aria-checked={readMode === m} className="chip-btn" disabled={busy} onClick={() => void pickMode(m)}>{l}</button>
+          ))}
+        </div>
+        {modeNote && <p className="small" role="status">{modeNote}</p>}
         <div className="cr-photo-actions">
           <button type="button" className="btn btn-primary btn-sm" disabled={!canRead} onClick={() => void read()}>Read references</button>
           {busy && <button type="button" className="btn btn-outline btn-sm" onClick={() => abort.current?.abort()}>Cancel</button>}
