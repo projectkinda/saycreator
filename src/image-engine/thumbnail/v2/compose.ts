@@ -14,9 +14,16 @@ import { asTheme } from '../../styles/compose';
 import { placeElements } from '../../styles/elements';
 import type { LoadedStyle } from '../../styles/load';
 import { circleTouchesBox, fitSubject, fitSubjectZoom, subjectRadius, type Box, type Pt, type SubjectPoint } from './subject';
-import { THUMB_LAYOUTS, type ThumbLayoutId, type ThumbSpec } from './spec';
+import { CUTOUT_COMBOS, THUMB_LAYOUTS, type ThumbLayoutId, type ThumbSpec } from './spec';
+import type { CutoutLook } from '../../cutout/look';
 
 export const THUMB_SIZES = { '16:9': { width: 1280, height: 720 }, '9:16': { width: 1080, height: 1920 } } as const;
+
+/** The object picture for a thumbnail, with how the person placed and dressed it, and a copy with an outline for the outline combination. */
+export interface ThumbObject extends ObjectInput {
+  look?: CutoutLook;
+  outlinedSrc?: string;
+}
 
 export interface ThumbRequest {
   aspect: ThumbnailAspect;
@@ -28,7 +35,7 @@ export interface ThumbRequest {
   /** Where the subject is on the photo (the person's pointer, or a guess). */
   subject: SubjectPoint;
   /** A transparent object picture, for the "object and title" layout. */
-  object?: ObjectInput;
+  object?: ThumbObject;
   /** A second photo (and its subject), for "before and after". */
   second?: { photo: PhotoInput; subject: SubjectPoint };
   /** A number to show big in the number badge. Left out: the first number in the title, if there is one. */
@@ -327,13 +334,19 @@ const objectTitle: Layout = (c) => {
   const side = c.portrait ? Math.round(W * 0.62) : Math.round(H * 0.7);
   const cx = c.portrait ? W / 2 : Math.round(W * 0.72);
   const cy = c.portrait ? Math.round(H * 0.3) : Math.round(H * 0.5);
-  const layer = objectLayer(W, H, { id: o.id, scale: side / (W * 0.5), rotation: 0, x: cx / W, y: cy / H, fx: 'glow' }, o, tok(c.pal, 'accent'));
+  const lk = o.look ?? {};
+  const layer = objectLayer(W, H, { id: o.id, scale: lk.scale ?? side / (W * 0.5), rotation: lk.tilt ?? 0, x: lk.x ?? cx / W, y: lk.y ?? cy / H, fx: lk.fx ?? 'glow' }, o, tok(c.pal, 'accent'));
   c.layers.push(layer);
   const r = Math.round(side / 2);
   c.subjects.push({ x: cx, y: cy, r: Math.min(subjectRadius(W, H) * 2, r), of: 'object' });
   c.keep.push({ x: cx - r, y: cy - r, width: 2 * r, height: 2 * r });
   const box: Box = c.portrait ? { x: m, y: Math.round(H * 0.52), width: Math.round(W * 0.78) - m, height: Math.round(H * 0.24) } : { x: m, y: m, width: Math.round(W * 0.46) - m, height: H - 2 * m };
   setTitle(c, box, { on: 'photo', valign: 'middle' });
+  // The title behind the subject: the subject's layer goes after the title's.
+  if (lk.textBehind) {
+    const at = c.layers.findIndex((l) => l.id === layer.id);
+    if (at >= 0) c.layers.push(...c.layers.splice(at, 1));
+  }
 };
 
 /** A big number in a badge of the style's colour; the rest of the title beside or under it. The number is the one in the title. */
@@ -396,6 +409,64 @@ const beforeAfter: Layout = (c) => {
   setTitle(c, box, { on: 'photo', valign: 'middle', forcePlate: true, size: c.portrait ? 120 : 110, minSize: 72, align: 'left' });
 };
 
+/** The cutout where the person put it, or where the combination wants it. */
+function placedObject(c: Ctx, o: ThumbObject, own: { cx: number; cy: number; side: number }, fx: 'none' | 'contact' | 'drop' | 'glow') {
+  const { W, H } = c;
+  const lk = o.look ?? {};
+  const scale = lk.scale ?? own.side / (W * 0.5);
+  const cx = (lk.x ?? own.cx / W) * W;
+  const cy = (lk.y ?? own.cy / H) * H;
+  const layer = objectLayer(W, H, { id: o.id, scale, rotation: lk.tilt ?? 0, x: cx / W, y: cy / H, fx: lk.fx ?? fx }, o, tok(c.pal, 'accent'));
+  return { layer, cx, cy, r: Math.round((W * 0.5 * scale) / 2) };
+}
+const blurredBack = (c: Ctx) => {
+  const back: Treatment[] = [...c.treatments, { op: 'blur', radius: 18 }, { op: 'wash', color: tok(c.pal, 'bg'), amount: 0.6 }];
+  putPhoto(c, 'photo', c.req.photo, c.req.subject, full(c), { x: 0.5, y: 0.5 }, back);
+  c.subjects.length = 0;
+  c.keep.length = 0;
+};
+const keepObject = (c: Ctx, p: { cx: number; cy: number; r: number }) => {
+  c.subjects.push({ x: p.cx, y: p.cy, r: Math.min(subjectRadius(c.W, c.H) * 2, p.r), of: 'object' });
+  c.keep.push({ x: p.cx - p.r, y: p.cy - p.r, width: 2 * p.r, height: 2 * p.r });
+};
+
+/** Ready combination 1: the subject with an outline and a glow, the title beside it. */
+const comboOutlineGlow: Layout = (c) => {
+  const { W, H, m } = c;
+  const o = c.req.object!;
+  blurredBack(c);
+  const side = c.portrait ? Math.round(W * 0.72) : Math.round(H * 0.84);
+  const p = placedObject(c, { ...o, src: o.outlinedSrc ?? o.src }, { cx: c.portrait ? W / 2 : Math.round(W * 0.7), cy: c.portrait ? Math.round(H * 0.32) : Math.round(H * 0.5), side }, 'glow');
+  c.layers.push(p.layer);
+  keepObject(c, p);
+  const box: Box = c.portrait ? { x: m, y: Math.round(H * 0.56), width: W - 2 * m, height: Math.round(H * 0.22) } : { x: m, y: m, width: Math.round(W * 0.44) - m, height: H - 2 * m };
+  setTitle(c, box, { on: 'photo', valign: 'middle' });
+};
+/** Ready combination 2: a big title across the thumbnail with the subject in front of it. */
+const comboOverText: Layout = (c) => {
+  const { W, H, m } = c;
+  const o = c.req.object!;
+  blurredBack(c);
+  setTitle(c, { x: m, y: Math.round(H * 0.08), width: W - 2 * m, height: Math.round(H * (c.portrait ? 0.46 : 0.66)) }, { on: 'photo', valign: 'middle', align: 'center', size: c.portrait ? 200 : 240, minSize: 90 });
+  const p = placedObject(c, o, { cx: W / 2, cy: Math.round(H * (c.portrait ? 0.7 : 0.64)), side: Math.round(c.portrait ? W * 0.8 : H * 0.92) }, 'contact');
+  c.layers.push(p.layer);
+  keepObject(c, p);
+};
+/** Ready combination 3: the subject on a block of the style's colour, the title on the other side. */
+const comboOnBlock: Layout = (c) => {
+  const { W, H, m } = c;
+  const o = c.req.object!;
+  blurredBack(c);
+  const role = c.tb.block ?? 'accent';
+  const b: Box = c.portrait ? { x: 0, y: Math.round(H * 0.42), width: W, height: H - Math.round(H * 0.42) } : { x: Math.round(W * 0.5), y: 0, width: W - Math.round(W * 0.5), height: H };
+  c.layers.push(rect('block', 'decor', b.x, b.y, b.width, b.height, tok(c.pal, role)));
+  const p = placedObject(c, o, { cx: b.x + b.width / 2, cy: b.y + b.height / 2, side: Math.round(Math.min(b.width, b.height) * 0.92) }, 'drop');
+  c.layers.push(p.layer);
+  keepObject(c, p);
+  const box: Box = c.portrait ? { x: m, y: m, width: W - 2 * m, height: Math.round(H * 0.36) } : { x: m, y: m, width: Math.round(W * 0.46) - m, height: H - 2 * m };
+  setTitle(c, box, { on: 'photo', valign: 'middle' });
+};
+
 const LAYOUT_FN: Record<ThumbLayoutId, Layout> = {
   'face-left-title-right': faceLeft,
   'title-over-photo': titleOverPhoto,
@@ -403,11 +474,14 @@ const LAYOUT_FN: Record<ThumbLayoutId, Layout> = {
   'object-title': objectTitle,
   'number-badge': numberBadge,
   'before-after': beforeAfter,
+  'cutout-outline-glow': comboOutlineGlow,
+  'cutout-over-text': comboOverText,
+  'cutout-on-block': comboOnBlock,
 };
 
 /** Why a layout cannot be made from what the person gave, or null when it can. */
 export function layoutUnavailable(layout: ThumbLayoutId, req: ThumbRequest): string | null {
-  if (layout === 'object-title' && !req.object) return 'needs a transparent object picture';
+  if ((layout === 'object-title' || (CUTOUT_COMBOS as readonly string[]).includes(layout)) && !req.object) return 'needs a transparent object picture';
   if (layout === 'number-badge' && !(req.badge ?? numberIn(req.title))) return 'needs a number in the title (it never makes one up)';
   if (layout === 'before-after' && !req.second) return 'needs a second photo';
   return null;
@@ -421,10 +495,11 @@ export function composeThumbs(req: ThumbRequest, style: LoadedStyle): ThumbOptio
   if (!text) throw new Error('A thumbnail needs a title.');
   const { width: W, height: H } = THUMB_SIZES[req.aspect];
   const pal = style.spec.palettes[tb.palette];
-  const wanted = (req.layouts ?? tb.layouts).filter((l) => (THUMB_LAYOUTS as readonly string[]).includes(l));
+  // With an object, the three ready cutout combinations are offered whatever the style lists.
+  const wanted = [...new Set([...(req.layouts ?? tb.layouts), ...(!req.layouts && req.object ? CUTOUT_COMBOS : [])])].filter((l) => (THUMB_LAYOUTS as readonly string[]).includes(l));
   const out: ThumbOption[] = [];
   for (const layout of wanted) {
-    if (out.length >= 6) break;
+    if (out.length >= 9) break;
     if (layoutUnavailable(layout, req)) continue;
     const words = text.split(' ');
     const stressed = req.emphasis?.trim() || words[words.length - 1];

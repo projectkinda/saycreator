@@ -5,7 +5,7 @@ import { PRIVACY_LINE, isMissing, urlOf, type PictureMeta } from './photoLibrary
 
 const mb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-export function PhotosStrip({ pictures, supported, styleTitle, addFiles, onRemove, onCutout, usedOn, storageProblem, lowRoom }: {
+export function PhotosStrip({ pictures, supported, styleTitle, addFiles, onRemove, onCutout, editableCutouts, onEditCutout, usedOn, storageProblem, lowRoom }: {
   pictures: PictureMeta[];
   /** The chosen style has photo layouts. */
   supported: boolean;
@@ -14,6 +14,9 @@ export function PhotosStrip({ pictures, supported, styleTitle, addFiles, onRemov
   onRemove: (id: string) => void;
   /** Makes a cutout of a photo (the original is kept) and adds it as an object; resolves to a sentence for the person. */
   onCutout?: (id: string) => Promise<string>;
+  /** The object pictures that came from a cutout (they can be edited), and the editor opener. */
+  editableCutouts?: Set<string>;
+  onEditCutout?: (id: string) => void;
   /** How many slides each picture is on. */
   usedOn: (id: string) => number;
   storageProblem: string;
@@ -75,6 +78,9 @@ export function PhotosStrip({ pictures, supported, styleTitle, addFiles, onRemov
                   <span className="small muted">{p.width}×{p.height} · {mb(p.bytes)}{p.kind === 'object' ? ' · object' : n ? ` · on ${n} slide${n === 1 ? '' : 's'}` : keptForStrip(p.id) ? ' · kept for the 3-up strip (drag it onto a slide to use it there)' : ''}</span>
                   {onCutout && p.kind === 'photo' && url && (
                     <button type="button" className="btn btn-outline btn-sm" disabled={cutting !== null} aria-label={`Remove the background of ${p.name}`} onClick={async () => { setCutting(p.id); setStatus(`Removing the background of ${p.name}…`); setStatus(await onCutout(p.id)); setCutting(null); }}>{cutting === p.id ? 'Working…' : 'Remove background'}</button>
+                  )}
+                  {onEditCutout && p.kind === 'object' && editableCutouts?.has(p.id) && (
+                    <button type="button" className="btn btn-outline btn-sm" aria-label={`Edit the cutout ${p.name}`} onClick={() => onEditCutout(p.id)}>Edit cutout</button>
                   )}
                   <button type="button" className="btn btn-outline btn-sm" onClick={() => onRemove(p.id)} aria-label={`Remove ${p.name} from the project`}>Remove</button>
                 </li>

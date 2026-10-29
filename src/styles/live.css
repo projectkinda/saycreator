@@ -41,3 +41,10 @@
 .replay-head h2 { margin: 0; }
 .replay-img { width: 100%; max-height: 62vh; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .replay-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* The cutout editor. */
+.cutout-box { width: min(920px, 100%); }
+.cutout-pics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+@media (max-width: 700px) { .cutout-pics { grid-template-columns: 1fr; } }
+.cutout-pics figure { margin: 0; }
+.cutout-canvas { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #eee; display: block; }

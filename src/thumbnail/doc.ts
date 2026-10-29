@@ -22,6 +22,8 @@ export interface ThumbDoc {
   /** The ids of the pictures in use (the pictures are in the browser's storage). */
   photoId?: string;
   objectId?: string;
+  /** How the object (a cutout) is placed and dressed: place, size, flip, tilt, outline, glow or shadow, title behind. */
+  objectLook?: import('../image-engine/cutout/look').CutoutLook;
   secondId?: string;
   /** The person's pointer on each photo, as a share of the photo. Left out: a guess from where the detail is. */
   subject?: { x: number; y: number };
@@ -92,7 +94,8 @@ export const thumbPatches = {
   subject: (s: { x: number; y: number } | undefined): DocPatch => ({ label: s ? 'Move the subject pointer' : 'Use the guessed subject', coalesce: 'subject', ops: [{ path: ['subject'], value: s }] }),
   secondSubject: (s: { x: number; y: number } | undefined): DocPatch => ({ label: 'Move the second subject pointer', coalesce: 'subject2', ops: [{ path: ['secondSubject'], value: s }] }),
   photo: (id: string | undefined): DocPatch => ({ label: id ? 'Use a photo' : 'Remove the photo', ops: [{ path: ['photoId'], value: id }, { path: ['subject'], value: undefined }] }),
-  object: (id: string | undefined): DocPatch => set(id ? 'Use an object' : 'Remove the object', 'objectId', id),
+  object: (id: string | undefined): DocPatch => ({ label: id ? 'Use an object' : 'Remove the object', ops: [{ path: ['objectId'], value: id }, { path: ['objectLook'], value: undefined }] }),
+  objectLook: (look: import('../image-engine/cutout/look').CutoutLook | undefined, label = 'Change the cutout'): DocPatch => ({ label, coalesce: `objectLook:${label}`, ops: [{ path: ['objectLook'], value: look }] }),
   second: (id: string | undefined): DocPatch => ({ label: id ? 'Use a second photo' : 'Remove the second photo', ops: [{ path: ['secondId'], value: id }, { path: ['secondSubject'], value: undefined }] }),
   select: (layout: string | undefined): DocPatch => set('Pick an option', 'selected', layout),
 };

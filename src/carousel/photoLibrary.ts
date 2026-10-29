@@ -94,6 +94,8 @@ interface Live {
   meta: PictureMeta;
   url: string;
   work: Blob;
+  /** The file as added (a photo's work copy is a JPEG, so a transparent background is only visible here). */
+  original: Blob;
   stats?: PhotoInput['stats'];
   /** Kept only in this tab: the browser would not store it. */
   memoryOnly: boolean;
@@ -120,7 +122,7 @@ async function statsOf(work: Blob): Promise<PhotoInput['stats']> {
 }
 
 function toLive(p: StoredPicture, memoryOnly: boolean): Live {
-  return { meta: { id: p.id, kind: p.kind, name: p.name, width: p.width, height: p.height, bytes: p.original.size }, url: URL.createObjectURL(p.work), work: p.work, memoryOnly, workWidth: p.workWidth, workHeight: p.workHeight };
+  return { meta: { id: p.id, kind: p.kind, name: p.name, width: p.width, height: p.height, bytes: p.original.size }, url: URL.createObjectURL(p.work), work: p.work, original: p.original, memoryOnly, workWidth: p.workWidth, workHeight: p.workHeight };
 }
 
 /** Adds a picture. Resolves with its meta, whether the browser kept it, and notes; rejects with a PictureError for an unusable file. */
@@ -192,6 +194,7 @@ export function objectInputs(metas: PictureMeta[]): ObjectInput[] {
 }
 export const urlOf = (id: string) => live.get(id)?.url ?? null;
 export const workBlobOf = (id: string) => live.get(id)?.work ?? null;
+export const originalBlobOf = (id: string) => live.get(id)?.original ?? null;
 export const sizeOf = (id: string) => (live.get(id) ? { width: live.get(id)!.meta.width, height: live.get(id)!.meta.height } : null);
 export const nameOf = (id: string) => live.get(id)?.meta.name ?? null;
 

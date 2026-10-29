@@ -14,6 +14,7 @@ import { yieldToBrowser } from '../carousel/export';
 import { AUTO_STYLE, type ThumbDoc } from './doc';
 import { targetOfStyle } from '../reference/templates';
 import { startJob, type JobHandle } from '../live/jobs';
+import { variantUrl } from '../image-engine/cutout/look';
 
 /** The job being timed: composing the options, then drawing and checking each (the Live view shows it when it takes long enough to notice). */
 let thumbJob: { job: JobHandle; pending: number } | null = null;
@@ -83,7 +84,13 @@ export async function composeProject(doc: ThumbDoc): Promise<Composed | null> {
   const subject: SubjectPoint = doc.subject ?? (await guessFor(doc.photoId));
   job.end('subject', doc.subject ? 'set by hand' : undefined);
   const second = doc.secondId && urlOf(doc.secondId) && sizeOf(doc.secondId) ? { id: doc.secondId, url: urlOf(doc.secondId)!, size: sizeOf(doc.secondId)! } : null;
-  const object = doc.objectId && urlOf(doc.objectId) && sizeOf(doc.objectId) ? { id: doc.objectId, src: urlOf(doc.objectId)!, ...sizeOf(doc.objectId)! } : null;
+  // The cutout with the flip and the outline the person asked for baked in, and a copy with an outline for the outline combination.
+  const look = doc.objectLook;
+  const objSrc = doc.objectId ? urlOf(doc.objectId) : null;
+  const accent = String((picked.style.spec.palettes[picked.style.spec.thumbnail?.palette ?? ''] as unknown as Record<string, unknown> | undefined)?.accent ?? '#ffffff');
+  const object = doc.objectId && objSrc && sizeOf(doc.objectId)
+    ? { id: doc.objectId, src: await variantUrl(objSrc, { flip: look?.flip, outline: look?.outline }), outlinedSrc: await variantUrl(objSrc, { flip: look?.flip, outline: look?.outline ?? { color: /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : '#ffffff', width: 14 } }), ...sizeOf(doc.objectId)!, ...(look ? { look } : {}) }
+    : null;
   const emphasis = doc.emphasis?.trim() || undefined;
   const req: ThumbRequest = {
     aspect: doc.aspect,

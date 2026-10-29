@@ -15,10 +15,11 @@ import { carouselStyles, composeDoc, getStyles, pickShuffleSalt, renderer, style
 import { ensureTemplatesLoaded, isUserStyle, targetWarning, useTemplatesVersion } from '../reference/templates';
 import { platformOf, platformWarning } from './platform';
 import { PhotosStrip } from './PhotosStrip';
-import { getCutoutProvider } from '../image-engine/cutout/provider';
-import { putCutout } from '../image-engine/cutout/cutoutStore';
+import { CutoutEditor, type CutoutSaved } from './CutoutEditor';
+import { cutoutPicture, useCutoutIds } from './cutoutAction';
+import { listCutouts, putCutout, type CutoutRecord } from '../image-engine/cutout/cutoutStore';
 import type { AddFiles } from './PhotoControls';
-import { PictureError, addPicture, currentStorageProblem, hydrate, nameOf, removePicture, storageRoomNote, useLibraryVersion, workBlobOf, type PictureMeta } from './photoLibrary';
+import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, useLibraryVersion, type PictureMeta } from './photoLibrary';
 import { SlideCard, type SlideView } from './SlideCard';
 import { PASTE_KEY, readStore, useProject, writeStore } from './useProject';
 import { onCancel, startJob, type JobHandle } from '../live/jobs';
@@ -238,20 +239,27 @@ export default function CarouselPage() {
   /** Adds files to the project's pictures. Unusable files are reported in plain words and skipped; the rest are added. */
   /** Remove background: the cutout is made by the cutout provider, the original and the cutout are kept in IndexedDB, and the cutout is added as an object. */
   const makeCutout = async (id: string): Promise<string> => {
-    const blob = workBlobOf(id);
-    if (!blob) return 'That picture is not in memory, so its background cannot be removed.';
-    const provider = getCutoutProvider();
-    const a = await provider.available();
-    if (!a.available) return a.reason ?? 'No cutout provider is available.';
-    try {
-      const r = await provider.remove(blob);
-      const name = (nameOf(id) ?? 'photo').replace(/\.[^.]+$/, '');
-      const saved = await putCutout({ id: `cut-${Date.now().toString(36)}`, sourceId: id, name, original: blob, cutout: r.cutout, mask: r.mask, provider: provider.id, ms: r.ms.total, at: Date.now() });
-      const res = await addFiles([new File([r.cutout], `${name}-cutout.png`, { type: 'image/png' })], 'object');
-      return `Cutout of ${name} made in ${(r.ms.total / 1000).toFixed(1)} s and added as an object.${saved.ok ? '' : ` ${saved.why}`}${res.messages.length ? ` ${res.messages.join(' ')}` : ''}`;
-    } catch (e) {
-      return (e as Error).message;
-    }
+    const msg = await cutoutPicture(id, async (file) => {
+      const res = await addFiles([file], 'object');
+      const first = res.added[0] as unknown;
+      return { id: typeof first === 'string' ? first : (first as { id?: string } | undefined)?.id, messages: res.messages };
+    });
+    cutouts.refresh();
+    return msg;
+  };
+  const cutouts = useCutoutIds();
+  const [editing, setEditing] = useState<CutoutRecord | null>(null);
+  const editCutout = async (pictureId: string) => {
+    const rec = (await listCutouts()).find((r) => r.pictureId === pictureId);
+    if (rec) setEditing(rec);
+  };
+  const saveEdited = async (r: CutoutSaved) => {
+    const res = await addFiles([new File([r.cutout], `${r.record.name}-edited.png`, { type: 'image/png' })], 'object');
+    const first = res.added[0] as unknown;
+    const id = typeof first === 'string' ? first : (first as { id?: string } | undefined)?.id;
+    if (id) await putCutout({ ...r.record, pictureId: id });
+    cutouts.refresh();
+    setEditing(null);
   };
   const addFiles: AddFiles = async (files, kind) => {
     const added: PictureMeta[] = [];
@@ -510,7 +518,8 @@ export default function CarouselPage() {
         </div>
       )}
 
-      <PhotosStrip pictures={pictures} supported={hasPhotoStyle} styleTitle={style?.spec.title ?? 'This style'} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onCutout={makeCutout} usedOn={usedOn} storageProblem={currentStorageProblem()} lowRoom={lowRoom} />
+      <PhotosStrip pictures={pictures} supported={hasPhotoStyle} styleTitle={style?.spec.title ?? 'This style'} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onCutout={makeCutout} editableCutouts={cutouts.ids} onEditCutout={(id) => void editCutout(id)} usedOn={usedOn} storageProblem={currentStorageProblem()} lowRoom={lowRoom} />
+      {editing && <CutoutEditor record={editing} onSave={(r) => void saveEdited(r)} onClose={() => setEditing(null)} />}
 
       <section aria-labelledby="cr-slides-h" className="cr-slides-sec">
         <div className="cr-toolbar">

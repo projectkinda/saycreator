@@ -4,7 +4,9 @@
 import type { Treatment } from '../../types';
 
 /** The arrangements a thumbnail can have. A style lists the ones it suits, best first. */
-export const THUMB_LAYOUTS = ['face-left-title-right', 'title-over-photo', 'split-colour', 'object-title', 'number-badge', 'before-after'] as const;
+export const THUMB_LAYOUTS = ['face-left-title-right', 'title-over-photo', 'split-colour', 'object-title', 'number-badge', 'before-after', 'cutout-outline-glow', 'cutout-over-text', 'cutout-on-block'] as const;
+/** The three ready combinations for a cutout: offered with any style when the person has added an object. */
+export const CUTOUT_COMBOS = ['cutout-outline-glow', 'cutout-over-text', 'cutout-on-block'] as const;
 export type ThumbLayoutId = (typeof THUMB_LAYOUTS)[number];
 
 export const THUMB_LAYOUT_LABEL: Record<ThumbLayoutId, string> = {
@@ -14,6 +16,9 @@ export const THUMB_LAYOUT_LABEL: Record<ThumbLayoutId, string> = {
   'object-title': 'Object and title',
   'number-badge': 'Number badge',
   'before-after': 'Before and after',
+  'cutout-outline-glow': 'Subject with outline and glow',
+  'cutout-over-text': 'Subject over big text',
+  'cutout-on-block': 'Subject on a colour block',
 };
 
 /** How the title is set. plain: letters on a darkened photo. outline: a thick outline round the letters. marker: the emphasis word on a coloured box. plate: the whole title on a solid plate. */

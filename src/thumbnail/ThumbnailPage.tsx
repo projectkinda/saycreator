@@ -1,6 +1,10 @@
 // Images > Make a thumbnail: upload a photo, point at the subject, give a title (or have titles written), choose a style, see several
 // options each checked at phone size, pick one, edit it and export it. Pictures stay in this browser. Stills only: not video frames.
 import { ReplayButton } from '../live/Replay';
+import { CutoutEditor, type CutoutSaved } from '../carousel/CutoutEditor';
+import { cutoutPicture, useCutoutIds } from '../carousel/cutoutAction';
+import { listCutouts, type CutoutRecord } from '../image-engine/cutout/cutoutStore';
+import type { CutoutLook } from '../image-engine/cutout/look';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../components/Icon';
 import { useDocumentTitle } from '../useDocumentTitle';
@@ -59,6 +63,42 @@ export default function ThumbnailPage() {
     void hydrate(pictures);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Remove background on the photo, and the cutout controls for the object.
+  const cutouts = useCutoutIds();
+  const [editing, setEditing] = useState<CutoutRecord | null>(null);
+  const [cutStatus, setCutStatus] = useState('');
+  const [cutting, setCutting] = useState(false);
+  const addCutoutObject = async (file: File) => {
+    const r = await addPicture(file, 'object');
+    setPhotos((before) => [...before, r.meta]);
+    apply(thumbPatches.object(r.meta.id));
+    return { id: r.meta.id, messages: r.notes };
+  };
+  const removeBackground = async () => {
+    if (!doc.photoId) return;
+    setCutting(true);
+    setCutStatus('Removing the background…');
+    setCutStatus(await cutoutPicture(doc.photoId, addCutoutObject));
+    cutouts.refresh();
+    setCutting(false);
+  };
+  const look = (patch: Partial<CutoutLook>, label: string) => apply(thumbPatches.objectLook({ ...(doc.objectLook ?? {}), ...patch }, label));
+  const editCutout = async () => {
+    const rec = (await listCutouts()).find((r) => r.pictureId === doc.objectId);
+    if (rec) setEditing(rec);
+    else setCutStatus('This object was not made by Remove background, so it has no mask to edit.');
+  };
+  const saveEdited = async (r: CutoutSaved) => {
+    const res = await addPicture(new File([r.cutout], `${r.record.name}-edited.png`, { type: 'image/png' }), 'object');
+    setPhotos((before) => [...before, res.meta]);
+    await import('../image-engine/cutout/cutoutStore').then((m) => m.putCutout({ ...r.record, pictureId: res.meta.id }));
+    apply(thumbPatches.object(res.meta.id));
+    apply(thumbPatches.objectLook(r.look, 'Use the edited cutout'));
+    cutouts.refresh();
+    setEditing(null);
+    setCutStatus('Saved the edited cutout and used it.');
+  };
 
   /** Adds files, reports unusable ones in plain words, and puts the first good one in the slot asked for. */
   const addFiles = async (files: File[], kind: 'photo' | 'object', slot: 'photo' | 'second' | 'object') => {
@@ -196,7 +236,7 @@ export default function ThumbnailPage() {
     }, 200);
     return () => window.clearTimeout(timer);
     // The options depend on everything in the doc except the topic and the history; libVersion covers pictures coming back after a refresh.
-  }, [tplVersion, doc.aspect, doc.style, doc.title, doc.emphasis, doc.photoId, doc.objectId, doc.secondId, doc.subject, doc.secondSubject, doc.treatment, libVersion, doc.topic]);
+  }, [tplVersion, doc.aspect, doc.style, doc.title, doc.emphasis, doc.photoId, doc.objectId, doc.objectLook, doc.secondId, doc.subject, doc.secondSubject, doc.treatment, libVersion, doc.topic]);
 
   const ready = cards.length > 0 && cards.every((c) => c.status === 'ready');
   const size = THUMB_SIZES[doc.aspect];
@@ -266,6 +306,9 @@ export default function ThumbnailPage() {
           {hasPhoto && (
             <button type="button" className="btn btn-outline btn-sm" onClick={() => void removeFromProject(doc.photoId!)}>Remove photo</button>
           )}
+          {hasPhoto && (
+            <button type="button" className="btn btn-outline btn-sm" disabled={cutting || busy} onClick={() => void removeBackground()}>{cutting ? 'Working…' : 'Remove background'}</button>
+          )}
           {photos.length > 1 && (
             <select className="plain-select cr-select" aria-label="Use another photo you added" value={doc.photoId ?? ''} onChange={(e) => e.target.value && apply(thumbPatches.photo(e.target.value))}>
               {photos.map((p) => (
@@ -277,6 +320,8 @@ export default function ThumbnailPage() {
         </div>
         {messages && <p className="small" role="status" aria-live="polite" data-testid="thumb-status">{messages}</p>}
         {lowRoom && <p className="small cr-warn" role="status">{lowRoom}</p>}
+        {cutStatus && <p className="small" role="status" data-testid="cutout-status">{cutStatus}</p>}
+        {editing && <CutoutEditor record={editing} onSave={(r) => void saveEdited(r)} onClose={() => setEditing(null)} />}
         {proj.saveFailed && <p className="small cr-problem" role="alert">This browser would not save the project. Download your thumbnails before you leave.</p>}
 
         <details className="tn-more">
@@ -298,6 +343,38 @@ export default function ThumbnailPage() {
                 <input ref={objectRef} type="file" accept="image/png,image/webp" className="visually-hidden" tabIndex={-1} aria-label="Choose an object" onChange={(e) => { void addFiles(imageFiles(e.target.files ?? []).slice(0, 1), 'object', 'object'); e.target.value = ''; }} />
               </div>
             </div>
+            {doc.objectId && (
+              <div className="tn-cutout" role="group" aria-label="Cutout controls">
+                <h3 className="h4">Cutout controls</h3>
+                <p className="small muted">No model: every change redraws the options at once, and Undo covers it.</p>
+                {([['Position across', 'x', 0, 1, 0.01, 0.7], ['Position down', 'y', 0, 1, 0.01, 0.5], ['Size', 'scale', 0.15, 2.5, 0.05, 1], ['Tilt', 'tilt', -45, 45, 1, 0]] as const).map(([l, k, lo, hi, st, dflt]) => (
+                  <label key={k} className="cr-inline small"><span className="field-label">{l}: {(doc.objectLook?.[k] ?? dflt).toFixed(st < 1 ? 2 : 0)}</span><input type="range" min={lo} max={hi} step={st} value={doc.objectLook?.[k] ?? dflt} aria-label={`Cutout ${l.toLowerCase()}`} onChange={(e) => look({ [k]: Number(e.target.value) }, `Change the cutout ${l.toLowerCase()}`)} /></label>
+                ))}
+                <label className="small rf-toggle"><input type="checkbox" checked={!!doc.objectLook?.flip} onChange={(e) => look({ flip: e.target.checked }, e.target.checked ? 'Flip the cutout' : 'Unflip the cutout')} /> Flip left to right</label>
+                <label className="small rf-toggle"><input type="checkbox" checked={!!doc.objectLook?.outline} onChange={(e) => look({ outline: e.target.checked ? { color: '#ffffff', width: 12 } : undefined }, e.target.checked ? 'Add an outline' : 'Remove the outline')} /> Outline</label>
+                {doc.objectLook?.outline && (
+                  <>
+                    <label className="cr-inline small"><span className="field-label">Outline colour</span><input type="color" value={doc.objectLook.outline.color} aria-label="Cutout outline colour" onChange={(e) => look({ outline: { ...doc.objectLook!.outline!, color: e.target.value } }, 'Change the outline colour')} /></label>
+                    <label className="cr-inline small"><span className="field-label">Outline thickness: {doc.objectLook.outline.width}</span><input type="range" min={2} max={40} value={doc.objectLook.outline.width} aria-label="Cutout outline thickness" onChange={(e) => look({ outline: { ...doc.objectLook!.outline!, width: Number(e.target.value) } }, 'Change the outline thickness')} /></label>
+                  </>
+                )}
+                <label className="cr-inline small">
+                  <span className="field-label">Glow or shadow</span>
+                  <select className="plain-select cr-select" aria-label="Cutout glow or shadow" value={doc.objectLook?.fx ?? ''} onChange={(e) => look({ fx: (e.target.value || undefined) as CutoutLook['fx'] }, 'Change the glow or shadow')}>
+                    <option value="">The layout's own</option>
+                    <option value="none">None</option>
+                    <option value="contact">Soft shadow on the floor</option>
+                    <option value="drop">Drop shadow</option>
+                    <option value="glow">Glow</option>
+                  </select>
+                </label>
+                <label className="small rf-toggle"><input type="checkbox" checked={!!doc.objectLook?.textBehind} onChange={(e) => look({ textBehind: e.target.checked }, e.target.checked ? 'Put the title behind the cutout' : 'Put the title in front')} /> Title behind the subject</label>
+                <div className="cr-photo-actions">
+                  {cutouts.ids.has(doc.objectId) && <button type="button" className="btn btn-outline btn-sm" onClick={() => void editCutout()}>Edit cutout (edge and brush)</button>}
+                  {doc.objectLook && <button type="button" className="btn btn-outline btn-sm" onClick={() => apply(thumbPatches.objectLook(undefined, 'Reset the cutout'))}>Reset the cutout</button>}
+                </div>
+              </div>
+            )}
             <div>
               <h3 className="h4">Second photo</h3>
               <p className="small muted">The “after” picture. It gives the “Before and after” option (your first photo is the “before”).</p>

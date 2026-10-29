@@ -4,6 +4,10 @@ export interface CutoutRecord {
   id: string;
   /** The library picture this cutout was made from, if any. */
   sourceId?: string;
+  /** The object picture that holds the cutout (so it can be edited, and is never cut out again). */
+  pictureId?: string;
+  /** How it was last placed and dressed in the editor. */
+  look?: import('./look').CutoutLook;
   name: string;
   original: Blob;
   cutout: Blob;
