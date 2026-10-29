@@ -49,7 +49,7 @@ test('the screen has three parts side by side: the reference, your content, the 
   expect(Math.abs(boxes[0].y - boxes[2].y)).toBeLessThan(30);
 });
 
-test('one reader call that only labels: it is sent boxes and what was detected, no rounds follow, and the answer names the roles', async ({ page }) => {
+test('one holistic reader call: it is sent the whole picture and asked for a scene, no rounds follow, and the scene gives the roles', async ({ page }) => {
   const rec = await fakeReader(page, labels);
   await openStyleFromReferences(page);
   await refInput(page).setInputFiles(await makeReference(page, { name: 'dark.jpg', kind: 'slide' }));
@@ -61,9 +61,9 @@ test('one reader call that only labels: it is sent boxes and what was detected, 
   expect(rec.reads).toHaveLength(1);
   expect(rec.refines, 'no automatic rounds').toHaveLength(0);
   const prompt = rec.reads[0].prompt;
-  expect(prompt).toContain('You label the parts of reference slides');
-  expect(prompt).toContain('you do NOT give positions, sizes, colours or fonts');
-  expect(prompt).toMatch(/r1T1 \(text\): x [\d.]+%, y [\d.]+%/);
+  expect(prompt).toContain('look at the WHOLE picture and describe the scene');
+  expect(prompt).toContain('measures every box exactly afterwards');
+  expect(prompt).toContain('BACK TO FRONT');
   expect(prompt).not.toMatch(/font family|Schibsted|Instrument Sans/);
   expect(rec.reads[0].images.map((i) => i.name)).toEqual(['ref1.jpg']);
   await expect(calls(page)).toContainText('Model calls: 1 of 2');

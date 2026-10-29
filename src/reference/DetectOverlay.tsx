@@ -6,6 +6,7 @@ import { FREE_ROLES, FREE_TREATMENTS, type FreeBox, type FreeLayout, type FreeRo
 import { MARK_KINDS } from '../image-engine/styles/marks-spec';
 import { GRAPHIC_LABELS } from './labels';
 import type { TextBlock } from './regions';
+import { keepRelations, type ReconScene } from './scene';
 
 type Kind = 'slot' | 'photo' | 'shape' | 'graphic';
 interface Entry {
@@ -38,7 +39,9 @@ function withBox(f: FreeLayout, kind: Kind, id: string, box: FreeBox): FreeLayou
   };
 }
 
-export function DetectOverlay({ url, name, free, texts, onChange }: {
+export function DetectOverlay({ url, name, free, texts, scene, onChange }: {
+  /** The holistic read of this reference: layer order, APPROX layers, and the lines the layers share. */
+  scene?: ReconScene;
   url: string;
   name: string;
   free: FreeLayout;
@@ -47,6 +50,7 @@ export function DetectOverlay({ url, name, free, texts, onChange }: {
   onChange: (next: FreeLayout, label: string) => void;
 }) {
   const [sel, setSel] = useState<string | null>(null);
+  const [keep, setKeep] = useState(true);
   const [tmp, setTmp] = useState<{ key: string; box: FreeBox } | null>(null);
   const area = useRef<HTMLDivElement>(null);
   const drag = useRef<{ key: string; mode: 'move' | 'resize'; x0: number; y0: number; box: FreeBox } | null>(null);
@@ -72,7 +76,12 @@ export function DetectOverlay({ url, name, free, texts, onChange }: {
     setTmp(null);
     if (!b || !d) return;
     const [kind, id] = d.key.split(':') as [Kind, string];
-    if (b.x !== d.box.x || b.y !== d.box.y || b.w !== d.box.w || b.h !== d.box.h) onChange(withBox(free, kind, id, b), d.mode === 'move' ? 'Move a box' : 'Resize a box');
+    if (b.x !== d.box.x || b.y !== d.box.y || b.w !== d.box.w || b.h !== d.box.h) {
+      let next = withBox(free, kind, id, b);
+      // The layers that share a line with this one move with it, unless the person turned that off.
+      if (scene && keep && d.mode === 'move' && kind === 'slot') for (const [other, m] of keepRelations(scene, id, b.x - d.box.x, b.y - d.box.y)) { const o = entriesOf(next).find((x) => x.key === `slot:${other}`); if (o) next = withBox(next, 'slot', other, { ...o.box, x: r1(o.box.x + m.dx), y: r1(o.box.y + m.dy) }); }
+      onChange(next, d.mode === 'move' ? 'Move a box' : 'Resize a box');
+    }
   };
 
   const patchSlot = (id: string, f: (s: FreeSlot) => FreeSlot, label: string) => onChange({ ...free, slots: free.slots.map((s) => (s.id === id ? f(s) : s)) }, label);
@@ -90,6 +99,13 @@ export function DetectOverlay({ url, name, free, texts, onChange }: {
     else onChange({ ...free, graphics: [...free.graphics, { id, kind: 'sparkle', box: { x: 40, y: 40, w: 15, h: 12 }, colour: '#888888' }] }, 'Add a graphic');
     setSel(`${kind}:${id}`);
   };
+  // Which layer of the scene each box is: its place back to front, and whether it is APPROX (not measured).
+  const approxIds = (scene?.layers ?? []).filter((l) => l.approx && (l.type === 'text' || l.type === 'photo'));
+  const layerOf = (e: Entry) => {
+    if (!scene) return undefined;
+    const m = /^approx(\d+)$/.exec(e.id);
+    return m ? approxIds[Number(m[1]) - 1] : scene.layers.find((l) => l.measured === e.id);
+  };
   const detectedFor = selected?.kind === 'slot' ? texts.find((t) => t.id === selected.id) : undefined;
   const missingHere = detectedFor?.treatments.filter((t) => !t.supported) ?? [];
 
@@ -98,8 +114,11 @@ export function DetectOverlay({ url, name, free, texts, onChange }: {
       <div className="rf-detect-main">
         <div ref={area} className="rf-detect-img" onPointerDown={(e) => e.target === e.currentTarget && setSel(null)}>
           <img src={url} alt={`Reference ${name} with the detected boxes`} draggable={false} />
+          {(scene?.guides ?? []).map((g, k) => <div key={`g${k}`} className="rf-guide" aria-label={`Aligned ${g.edge} at ${g.at}%${g.enforced ? '' : ' (not exactly aligned)'}`} style={{ position: 'absolute', pointerEvents: 'none', background: g.enforced ? '#0ea5e9' : '#94a3b8', ...(g.axis === 'x' ? { left: `${g.at}%`, top: 0, bottom: 0, width: 1 } : { top: `${g.at}%`, left: 0, right: 0, height: 1 }) }} />)}
           {all.map((e) => {
             const b = tmp && tmp.key === e.key ? tmp.box : e.box;
+            const layer = layerOf(e);
+            const approx = !!layer?.approx;
             return (
               <div
                 key={e.key}
@@ -108,7 +127,7 @@ export function DetectOverlay({ url, name, free, texts, onChange }: {
                 aria-label={`${e.kind === 'slot' ? 'Text box' : e.kind === 'photo' ? 'Photo region' : e.kind === 'shape' ? 'Shape' : 'Graphic'} ${e.id}: ${e.label}`}
                 aria-pressed={sel === e.key}
                 className={`rf-box rf-box-${e.kind}${sel === e.key ? ' on' : ''}`}
-                style={{ left: `${b.x}%`, top: `${b.y}%`, width: `${b.w}%`, height: `${b.h}%`, borderColor: COLOUR[e.kind] }}
+                style={{ left: `${b.x}%`, top: `${b.y}%`, width: `${b.w}%`, height: `${b.h}%`, borderColor: approx ? '#f59e0b' : COLOUR[e.kind], ...(approx ? { borderStyle: 'dashed' } : {}) }}
                 onPointerDown={(ev) => {
                   ev.stopPropagation();
                   (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
@@ -131,7 +150,7 @@ export function DetectOverlay({ url, name, free, texts, onChange }: {
                   }
                 }}
               >
-                <span className="rf-box-label" style={{ background: COLOUR[e.kind] }}>{e.label}</span>
+                <span className="rf-box-label" style={{ background: approx ? '#f59e0b' : COLOUR[e.kind] }}>{layer ? `${layer.order}. ` : ''}{e.label}{approx ? ' · APPROX' : ''}</span>
                 {sel === e.key && (
                   <span
                     className="rf-box-grip"
@@ -150,6 +169,13 @@ export function DetectOverlay({ url, name, free, texts, onChange }: {
         </div>
       </div>
       <div className="rf-detect-side">
+        {scene && (
+          <div className="small" aria-label="The scene">
+            <p>Layers back to front: {scene.layers.map((l) => `${l.order}. ${l.type}${l.role ? ` (${l.role})` : ''}${l.approx ? ' APPROX' : ''}`).join(' · ')}.</p>
+            {scene.focal && <p>Focal point: {scene.layers.find((l) => l.id === scene.focal)?.role ?? scene.focal}. Size order: {scene.hierarchy.map((h) => scene.layers.find((l) => l.id === h)?.role ?? h).join(' > ') || 'not stated'}.</p>}
+            {scene.guides.length > 0 && <label className="small rf-toggle"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> Keep aligned boxes aligned when I move one ({scene.guides.filter((g) => g.enforced).length} lines)</label>}
+          </div>
+        )}
         <div className="cr-photo-actions">
           <button type="button" className="btn btn-outline btn-sm" onClick={() => add('slot')}>Add a text box</button>
           <button type="button" className="btn btn-outline btn-sm" onClick={() => add('shape')}>Add a shape</button>

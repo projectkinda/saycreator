@@ -28,8 +28,8 @@ import { detectReaders, ReaderError, readStyle, type ReferenceReader } from './r
 import { applyPatches, checkSpec, defaultThumbnail, sectionsFor } from './spec';
 import { detectRegions, type Detected } from './regions';
 import { buildFree, missingRanked } from './free';
-import { applyLabels, labelReference, type Labels } from './labels';
-import { overlayImage } from './overlay';
+import { applyLabels } from './labels';
+import { applyScene, labelsOf, readScene, reconcile, type DeckRead, type ReconScene, type SceneRead } from './scene';
 import { DetectOverlay } from './DetectOverlay';
 import { meanOf, pctText, scoreLayout, type LayoutScore } from './score';
 import { clearActiveReference, setActiveReference, setShowDetected as storeShowDetected, useActiveReference } from './active';
@@ -245,6 +245,8 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
   const [draftSeconds, setDraftSeconds] = useState<number | null>(null);
   const [advanced, setAdvanced] = useState(false);
   const [showDetected, setShowDetected] = useState(false);
+  const [scenes, setScenes] = useState<Record<string, ReconScene>>({});
+  const [deckRead, setDeckRead] = useState<DeckRead | null>(null);
   const [detItem, setDetItem] = useState(0);
   const [costShown, setCostShown] = useState<Cost>(freshCost());
   const cost = useRef<Cost>(costShown);
@@ -354,26 +356,29 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
       let draft = draftSpec(measured[0], detected[0]);
       if (!advanced && editState) {
         // The reader only labels: the boxes, sizes and colours are the code's, and the reader says what each box is. One call.
-        const key = await cacheKey({ dataUrls: items.map((i) => i.dataUrl), learn: items.map((i) => i.learn), target, baseName: 'labels', readerId: reader.id }).catch(() => '');
-        const hit = key ? ((await cacheGet(key)) as unknown as { labels?: Labels; problems: string[]; ms: number; attempts: 1 | 2 } | null) : null;
+        const key = await cacheKey({ dataUrls: items.map((i) => i.dataUrl), learn: items.map((i) => i.learn), target, baseName: 'scene', readerId: reader.id }).catch(() => '');
+        const hit = key ? ((await cacheGet(key)) as unknown as SceneRead | null) : null;
         job.begin('reader');
-        let lab: { labels: Labels; problems: string[]; ms: number; attempts: 1 | 2 };
-        if (hit?.labels) {
-          lab = hit as typeof lab;
+        let raw: SceneRead;
+        if (hit && (hit.answer || hit.labels)) {
+          raw = hit;
           job.cached();
           job.end('reader', 'from cache');
         } else {
-          const pics = await Promise.all(items.map((it, i) => overlayImage(it.dataUrl, detected[i], i + 1, `ref${i + 1}.jpg`)));
           job.waiting('the reader');
           try {
-            lab = await labelReference({ reader, ds: detected, names: items.map((_, i) => `ref${i + 1}.jpg`), images: pics, signal: abort.current.signal });
+            raw = await readScene({ reader, ds: detected, names: items.map((_, i) => `ref${i + 1}.jpg`), images, signal: abort.current.signal });
           } finally {
             job.waiting(null);
           }
-          job.end('reader', lab.attempts === 2 ? 'the first answer needed a second try' : undefined);
-          if (key) void cachePut(key, lab as unknown as never);
+          job.end('reader', raw.attempts === 2 ? 'the first answer needed a second try' : undefined);
+          if (key) void cachePut(key, raw as unknown as never);
         }
+        // The holistic read: the code snaps the described layers to what it measured, drops measured noise, and enforces the relationships.
+        const recs: ReconScene[] = raw.answer ? raw.answer.scenes.slice(0, detected.length).map((s, i) => reconcile(s, detected[i], i + 1, raw.answer!.deck?.margins)) : [];
+        const lab = { labels: raw.answer ? labelsOf(raw.answer, recs) : raw.labels!, problems: raw.problems, ms: raw.ms, attempts: raw.attempts };
         job.begin('validate');
+        const sceneBy: Record<string, ReconScene> = {};
         const freeBy: Record<string, import('../image-engine/styles/free-spec').FreeLayout> = {};
         const clampNotes: string[] = [];
         const lists: string[][] = [];
@@ -382,11 +387,15 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
           const type = lab.labels.seenSlideTypes[i] ?? (i === 0 ? 'cover' : 'content');
           if (freeBy[type]) return;
           const built = buildFree(detected[i]);
-          const applied = applyLabels(built.free, detected[i], i + 1, lab.labels);
+          const applied0 = applyLabels(built.free, detected[i], i + 1, lab.labels);
+          const applied = { ...applied0, free: recs[i] ? applyScene(applied0.free, detected[i], recs[i]) : applied0.free };
+          if (recs[i]) sceneBy[type] = recs[i];
           freeBy[type] = applied.free;
           clampNotes.push(...built.clamps);
           lists.push(applied.free.missing ?? []);
         });
+        setScenes(sceneBy);
+        setDeckRead(raw.answer?.deck ?? null);
         const spec0 = { ...editState.spec, name, title: title.trim() || 'My style', basedOn: { cluster: 'your references', note: `Built from ${items.length === 1 ? 'one image' : `${items.length} images`}: ${items.map((i) => LEARN_LABEL[i.learn].toLowerCase()).join(', ')}.` }, free: freeBy } as StyleSpec;
         // A thumbnail needs its own look block: the plain one, from the style's first palette (the reader's labels do not make one).
         const spec = target !== 'carousel' && !spec0.thumbnail ? { ...spec0, thumbnail: defaultThumbnail(spec0) } : spec0;
@@ -838,8 +847,9 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
                     {items.map((it, k) => <button key={it.id} type="button" className="btn btn-outline btn-sm" aria-pressed={k === i} onClick={() => setDetItem(k)}>{k + 1}</button>)}
                   </div>
                 )}
+                {deckRead && <p className="small muted">Constant across the deck: {[deckRead.margins !== undefined && `margin ${deckRead.margins}%`, deckRead.header && `header: ${deckRead.header}`, deckRead.footer && `footer: ${deckRead.footer}`, deckRead.pageNumber && `page number: ${deckRead.pageNumber}`, deckRead.repeatedMarks.length > 0 && `repeated: ${deckRead.repeatedMarks.join(', ')}`].filter(Boolean).join(' · ') || 'nothing stated'}.{deckRead.varies.length > 0 && ` Varies: ${deckRead.varies.join(', ')}.`}</p>}
                 {free ? (
-                  <DetectOverlay url={items[i].dataUrl} name={items[i].name} free={free} texts={detected[i]?.texts ?? []} onChange={(next, label) => void doEdit(label, [{ path: `free.${type}`, value: next }])} />
+                  <DetectOverlay url={items[i].dataUrl} name={items[i].name} scene={scenes[type]} free={free} texts={detected[i]?.texts ?? []} onChange={(next, label) => void doEdit(label, [{ path: `free.${type}`, value: next }])} />
                 ) : (
                   <p className="small muted">This reference does not give a layout ({LEARN_LABEL[items[i].learn]}), so there is nothing to show.</p>
                 )}

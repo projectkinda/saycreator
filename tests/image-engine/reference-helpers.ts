@@ -95,6 +95,12 @@ export function readAnswer(o: { accent?: string; layouts?: boolean; photo?: bool
 
 /** A valid labels answer (the default read): the first text box is the title, the rest body text, and graphics are called asterisks. The ids are read from the prompt. */
 export function labelsAnswer(prompt: string, o: { seen?: string[]; photoImages?: string[] } = {}) {
+  // The holistic prompt (no box list in it): answer with a scene per picture, a title and a line under it where the reference helper draws them.
+  if (prompt.includes('describe the scene')) {
+    const refs = [...new Set(prompt.match(/ref\d+\.jpg/g) ?? [])];
+    const scene = (k: number) => ({ ref: k + 1, slide_type: (o.seen ?? [])[k] ?? (k === 0 ? 'cover' : 'content'), layers: [{ id: 'L1', type: 'text', role: 'title', box: { x: 8, y: 19, w: 80, h: 13 }, confidence: 0.9, treatment: 'capitals' }, { id: 'L2', type: 'text', role: 'subtitle', box: { x: 8, y: 44, w: 70, h: 6 }, confidence: 0.8 }], relationships: { shared_edges: [{ edge: 'left', layers: ['L1', 'L2'] }], reading_order: ['L1', 'L2'], hierarchy: ['L1', 'L2'], focal: 'L1' }, canvas: { background: 'flat' } });
+    return JSON.stringify({ scenes: refs.map((_, k) => scene(k)), deck: refs.length > 1 ? { margins: 8, repeated_marks: [], varies: ['the text'] } : null, images_with_photos: o.photoImages ?? [], missing: [], notes: 'A made-up scene for a test.' });
+  }
   const text = [...new Set(prompt.match(/r\d+T\d+/g) ?? [])];
   const graphics = [...new Set(prompt.match(/r\d+G\d+/g) ?? [])];
   return JSON.stringify({ roles: Object.fromEntries(text.map((id, i) => [id, i === 0 ? 'title' : i === 1 ? 'subtitle' : 'body'])), graphics: Object.fromEntries(graphics.map((id) => [id, 'asterisk'])), emphasis: {}, seen_slide_types: o.seen ?? ['cover'], images_with_photos: o.photoImages ?? [], missing: [{ tool: 'Device mockups', why: 'The reference shows a phone.' }], notes: 'Plain slide with a big title.' });
