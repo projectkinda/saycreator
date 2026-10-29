@@ -565,7 +565,7 @@ export function detectRegions(p: Px): Detected {
   for (const c of rest) {
     const w = c.x1 - c.x0 + 1;
     const h = c.y1 - c.y0 + 1;
-    const big = w * h > W * H * 0.012;
+    const big = w * h > W * H * 0.006;
     const holeBox = rest.filter((o) => o !== c && inside(o, c, 0));
     const ring = w > 6 && h > 6 && c.area / (w * h) < 0.4 && holeBox.length > 0 && c.edge / c.area > 0.6;
     if (ring) graphics.push({ id: `graphic${graphics.length + 1}`, box: roundBox(boxOf(c, W, H)), colour: hex(c.rgb), kind: 'ring' });

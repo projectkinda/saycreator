@@ -123,6 +123,7 @@ test('detection against the plans of our own styles', async ({ page }) => {
   expect(ratio(t.align), 'alignment right').toBeGreaterThan(0.7);
   expect(ratio(t.photoFound), "photo regions found").toBeGreaterThan(0.7);
   expect(ratio(t.highlight), "highlight boxes found").toBeGreaterThan(0.6);
+  expect(ratio(t.graphicFound), "graphics found").toBeGreaterThan(0.75);
   expect(ratio(t.shapeFound), "shapes found").toBeGreaterThan(0.85);
   expect(ratio(t.background), 'background kind right').toBeGreaterThan(0.85);
 });
