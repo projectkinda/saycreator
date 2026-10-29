@@ -39,7 +39,7 @@ export function buildRecreatePrompt(x: RecreateCtx): string {
 }
 export function buildFixPrompt(x: RecreateCtx, feedback: string): string {
   return [
-    '[recreate:fix] You recreated a carousel slide as SVG. You now get TWO pictures: the REFERENCE (first) and a render of YOUR SVG (second). Compare them carefully: positions, sizes, colours, text, fonts, graphics, spacing. Reply with the corrected, complete SVG only.',
+    '[recreate:fix] You recreated a carousel slide as SVG. You now get TWO pictures, two files in the current folder: reference.jpg (the REFERENCE) and render.jpg (a render of YOUR SVG). Look at BOTH with your Read tool, then compare them carefully: positions, sizes, colours, text, fonts, graphics, spacing. Reply with the corrected, complete SVG only.',
     `The slide is ${x.w} x ${x.h} px (4:5). Bundled fonts: ${fontLine()}.`,
     ...RULES,
     feedback.trim() ? `The person says: "${feedback.trim().slice(0, 300)}"` : '',
@@ -623,7 +623,7 @@ export interface RecreateResult {
 /** From the model's answer to layers, or the reasons in plain words. */
 export async function answerToLayers(text: string, ctx: RecreateCtx): Promise<{ ok: true; result: RecreateResult } | { ok: false; reasons: string[] }> {
   const s = sanitizeSvg(text);
-  if (!s.svg) return { ok: false, reasons: s.reasons };
+  if (!s.svg) return { ok: false, reasons: [...s.reasons, ...(s.reasons.some((r) => /no <svg>/.test(r)) ? [`The reader said: "${text.replace(/\s+/g, ' ').slice(0, 160)}"`] : [])] };
   await loadFonts();
   const { layers, notes } = svgToLayers(s.svg, ctx.w, ctx.h);
   if (layers.length < 2) return { ok: false, reasons: [...s.reasons, 'No layer could be made from the picture (nothing drawable was inside the canvas).'] };
