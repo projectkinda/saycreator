@@ -11,7 +11,8 @@ test.skip(process.env.REAL_RECREATE !== '1', 'Real runs are opt-in (REAL_RECREAT
 test.describe.configure({ mode: 'serial' });
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 
-const SETS = [
+// RECREATE_FILE=<path>: one full-size picture (for example from the private test-assets folder) in place of the three sheets.
+const SETS = process.env.RECREATE_FILE ? [{ id: 'full-size', kind: 'full-size reference', prefix: '', cell: 0 }] : [
   { id: 'deck-a', kind: 'text slide', prefix: '44937935', cell: 0 },
   { id: 'single', kind: 'photo slide', prefix: '1503c1de', cell: 0 },
   { id: 'deck-c', kind: 'shapes and patterns (yellow posters)', prefix: '05bedfc0', cell: 0 },
@@ -21,8 +22,7 @@ for (const set of SETS) {
   test(`real recreate: ${set.id} (${set.kind})`, async ({ page }) => {
     test.setTimeout(900_000);
     await page.goto('/images/carousel');
-    const file = fs.readdirSync(DIR).find((f) => f.startsWith(set.prefix))!;
-    const b64 = fs.readFileSync(path.join(DIR, file)).toString('base64');
+    const b64 = process.env.RECREATE_FILE ? fs.readFileSync(process.env.RECREATE_FILE).toString('base64') : fs.readFileSync(path.join(DIR, fs.readdirSync(DIR).find((f) => f.startsWith(set.prefix))!)).toString('base64');
     const r = await page.evaluate(async ([b64, cell]) => {
       const I = await import('/src/reference/images.ts');
       const G = await import('/src/reference/grid.ts');

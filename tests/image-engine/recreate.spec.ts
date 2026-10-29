@@ -116,3 +116,77 @@ test('Recreate in the carousel: one read, one look-and-fix by itself, one Improv
   expect(JSON.stringify(t.recreate)).not.toMatch(/data:|blob:/);
   expect(rec.reads).toHaveLength(3);
 });
+
+test('a saved Recreate template on a generated carousel: each slide gets its own words, long text shrinks or wraps and says so, nothing breaks when drawn', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const r = await page.evaluate(async (example) => {
+    const R = await import('/src/reference/recreate.ts');
+    const T = await import('/src/reference/templates.ts');
+    const B = await import('/src/reference/blank.ts');
+    const D = await import('/src/carousel/doc.ts');
+    const S = await import('/src/carousel/script.ts');
+    const C = await import('/src/carousel/render.ts');
+    await T.ensureTemplatesLoaded();
+    const res = await R.answerToLayers(example, { w: 1080, h: 1350, ownRoles: [] });
+    if (!res.ok) return { ok: false, reasons: res.reasons };
+    const tiny = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const t = await T.saveTemplate({ name: 'Test look', target: 'carousel', spec: { ...B.blankStyle(), name: T.styleNameFor('t') }, preview: tiny, recreate: { layers: res.result.layers, palette: res.result.palette, canvas: { w: 1080, h: 1350 }, notes: [] } });
+    const script = {
+      ...S.EXAMPLE,
+      slides: [
+        { type: 'cover', kicker: 'Kick', headline: 'Short', sub: 'Sub' },
+        { type: 'step', number: 2, headline: 'A rather long headline that needs more than one line to fit the place the template gave it', body: 'Body text that is quite a bit longer than the sample body, so it must shrink or wrap to fit the place the template gave it, and then some more words to be sure of it.' },
+        { type: 'stat', value: '87%', label: 'of people', note: '' },
+      ],
+    };
+    const doc = { ...D.emptyDoc(t.spec.name), script };
+    const out = C.composeDoc(doc as never);
+    const slides = [];
+    for (const s of out.slides) {
+      const texts = s.plan.layers.filter((l: { kind: string }) => l.kind === 'text') as { name: string; text: string; visible?: boolean; style: { size: number } }[];
+      const blob = await C.renderer.preview(s.plan, 0.3);
+      slides.push({ texts: texts.map((x) => ({ role: x.name, text: x.text.slice(0, 40), hidden: x.visible === false, size: x.style.size })), notes: (s as unknown as { notes?: string[] }).notes ?? [], drewBytes: blob.size, paths: s.plan.layers.filter((l: { kind: string }) => l.kind === 'path').length });
+    }
+    return { ok: true, slides };
+  }, EXAMPLE);
+  expect(r.ok, JSON.stringify(r)).toBe(true);
+  const [a, b, c] = r.slides!;
+  const title = (s: typeof a) => s.texts.find((t) => t.role === 'title' && !t.hidden);
+  expect(title(a)!.text).toBe('Short');
+  expect(title(b)!.text).toContain('A rather long headline');
+  expect(title(c)!.text).toBe('87%');
+  // The step slide's tag and number are its own; the cover has no number, so a tag with no words is hidden.
+  expect(b.texts.find((t) => t.role === 'tag')?.text).toBe('STEP 2');
+  expect(a.texts.find((t) => t.role === 'tag')?.hidden).toBe(true);
+  // The long headline and body fit by shrinking or wrapping, and the notes say so; never under the phone minimum.
+  expect(b.notes.join(' ')).toMatch(/title text (was made smaller|wraps)/);
+  for (const s of r.slides!) for (const t of s.texts) if (!t.hidden) expect(t.size).toBeGreaterThanOrEqual(12);
+  for (const s of r.slides!) {
+    expect(s.drewBytes, 'every slide draws').toBeGreaterThan(1000);
+    expect(s.paths, 'the graphics come with it').toBeGreaterThan(5);
+  }
+});
+
+test('Swap graphic: a drawing group becomes a library element, recolours and resizes with no model call, and Undo brings the drawing back', async ({ page }) => {
+  const rec = await fakeReader(page, (kind: string) => (kind === 'refine' ? refineAnswer() : EXAMPLE));
+  await page.goto('/images/carousel');
+  await page.getByText('Match a reference', { exact: true }).click();
+  await page.getByLabel('Choose a picture to recreate').setInputFiles(await makeReference(page, { name: 'slide.jpg', kind: 'slide' }));
+  await page.getByRole('button', { name: 'Recreate', exact: true }).click();
+  await expect(page.getByTestId('recreate-status')).toContainText('compared and corrected once', { timeout: 120_000 });
+  const reads = rec.reads.length;
+  const layers = page.getByRole('list', { name: 'Layers' });
+  await page.getByRole('button', { name: 'Swap graphic drawing' }).click();
+  await page.getByLabel('Search the element library').fill('arrow');
+  const pick = page.getByRole('group', { name: 'Library for drawing' }).getByRole('button').first();
+  await expect(pick).toBeVisible();
+  await pick.click();
+  await expect(layers.getByRole('listitem', { name: 'Layer drawing' })).toContainText('library graphic');
+  await page.getByLabel('Colour of drawing').fill('#ff0000');
+  await page.getByRole('button', { name: 'Make drawing bigger' }).click();
+  await expect(layers.getByRole('listitem', { name: 'Layer drawing' })).toContainText('library graphic');
+  // Undo three times (bigger, colour, swap): the drawing is back.
+  for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(layers.getByRole('listitem', { name: 'Layer drawing' })).toContainText('drawing,');
+  expect(rec.reads.length, 'no model call for any of it').toBe(reads);
+});

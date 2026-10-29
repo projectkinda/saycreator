@@ -10,6 +10,7 @@ import { detectGrid } from './grid';
 import { detectReaders, type ReferenceReader } from './reader';
 import { answerToLayers, buildFixPrompt, buildRecreatePrompt, callRecreate, parsePath, RECREATE_CAP, resolveTokens, segsToD, transformSegs, type RecreateSpec, type RLayer } from './recreate';
 import { saveTemplate, styleNameFor } from './templates';
+import { listElements } from '../image-engine/assets/library';
 
 const W = 1080;
 const H = 1350;
@@ -92,6 +93,8 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
   const [words, setWords] = useState('');
   const [view, setView] = useState('');
   const [over, setOver] = useState(false);
+  const [swapFor, setSwapFor] = useState<string | null>(null);
+  const [q, setQ] = useState('');
   const abort = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -262,6 +265,38 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     setState(to);
     void publish(to);
   };
+  /** A drawing group becomes one element of the library, in the same box (resize and recolour work on it like on the drawing). */
+  const swap = (name: string, element: string) => {
+    if (!state) return;
+    const g = state.layers.filter((l) => l.name === name);
+    if (!g.length) return;
+    const x0 = Math.min(...g.map((l) => l.x));
+    const y0 = Math.min(...g.map((l) => l.y));
+    const x1 = Math.max(...g.map((l) => l.x + l.width));
+    const y1 = Math.max(...g.map((l) => l.y + l.height));
+    const first = state.layers.findIndex((l) => l.name === name);
+    const tint = g.flatMap((l) => (l.kind === 'path' ? [l.stroke?.color, l.fill].filter((c): c is string => !!c) : [])).find((c) => c !== 'none');
+    const el = { kind: 'element', id: `${name}:element`, name, role: 'decor', x: x0, y: y0, width: x1 - x0, height: y1 - y0, rotation: 0, opacity: 1, element, ...(tint ? { tint } : {}) } as RLayer;
+    const rest = state.layers.filter((l) => l.name !== name);
+    rest.splice(Math.min(first, rest.length), 0, el);
+    setSwapFor(null);
+    setQ('');
+    commit({ ...state, layers: rest });
+  };
+  /** One colour for the whole group (its strokes, fills and tint). */
+  const recolour = (name: string, hex: string) => {
+    if (!state) return;
+    commit({
+      ...state,
+      layers: state.layers.map((l) => {
+        if (l.name !== name) return l;
+        if (l.kind === 'path') return { ...l, ...(l.fill && l.fill !== 'none' ? { fill: hex } : {}), ...(l.stroke ? { stroke: { ...l.stroke, color: hex } } : {}) } as RLayer;
+        if (l.kind === 'element') return { ...l, tint: hex } as RLayer;
+        return l;
+      }),
+    });
+  };
+  const found = q.trim().length < 2 ? [] : listElements().filter((e) => [e.id, e.name, ...e.tags].join(' ').toLowerCase().includes(q.trim().toLowerCase())).slice(0, 12);
   const move = (name: string, dx: number, dy: number) => state && commit({ ...state, layers: state.layers.map((l) => (l.name === name ? { ...l, x: l.x + dx, y: l.y + dy } : l)) });
   const save = async () => {
     if (!state) return;
@@ -324,7 +359,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
           <ol className="small rf-layers" aria-label="Layers">
             {groupsOf(state.layers).map((g) => (
               <li key={g.name} aria-label={`Layer ${g.name}`}>
-                <strong>{g.name}</strong> · {g.layers[0].kind === 'text' ? 'text' : g.layers[0].kind === 'path' ? `drawing, ${g.layers.length} part${g.layers.length === 1 ? '' : 's'}` : 'shape'}
+                <strong>{g.name}</strong> · {g.layers[0].kind === 'text' ? 'text' : g.layers[0].kind === 'path' ? `drawing, ${g.layers.length} part${g.layers.length === 1 ? '' : 's'}` : g.layers[0].kind === 'element' ? `library graphic (${(g.layers[0] as { element: string }).element})` : 'shape'}
                 {g.layers[0].kind === 'text' && (
                   <input className="input" aria-label={`Text of ${g.name}`} value={(g.layers[0] as { text: string }).text} onChange={(e) => commit({ ...state, layers: state.layers.map((l) => (l === g.layers[0] && l.kind === 'text' ? { ...l, text: e.target.value } : l)) })} />
                 )}
@@ -335,12 +370,27 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
                   <button type="button" className="btn btn-outline btn-sm" aria-label={`Move ${g.name} right`} onClick={() => move(g.name, W * 0.01, 0)}>→</button>
                   <button type="button" className="btn btn-outline btn-sm" aria-label={`Move ${g.name} up`} onClick={() => move(g.name, 0, -H * 0.01)}>↑</button>
                   <button type="button" className="btn btn-outline btn-sm" aria-label={`Move ${g.name} down`} onClick={() => move(g.name, 0, H * 0.01)}>↓</button>
+                  {(g.layers[0].kind === 'path' || g.layers[0].kind === 'element') && (
+                    <>
+                      <button type="button" className="btn btn-outline btn-sm" aria-label={`Swap graphic ${g.name}`} aria-expanded={swapFor === g.name} onClick={() => { setSwapFor(swapFor === g.name ? null : g.name); setQ(''); }}>Swap graphic</button>
+                      <label className="cr-inline small"><span className="field-label">Colour</span><input type="color" aria-label={`Colour of ${g.name}`} defaultValue="#000000" onChange={(e) => recolour(g.name, e.target.value.toUpperCase())} /></label>
+                    </>
+                  )}
                   <button type="button" className="btn btn-outline btn-sm" aria-label={`Delete ${g.name}`} onClick={() => commit({ ...state, layers: state.layers.filter((l) => l.name !== g.name) })}>Delete</button>
                 </span>
+                {swapFor === g.name && (
+                  <div role="group" aria-label={`Library for ${g.name}`}>
+                    <input className="input" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search the element library" placeholder="arrow, clock, star…" />
+                    {q.trim().length >= 2 && found.length === 0 && <p className="small muted" role="status">Nothing in the library matches “{q.trim()}”.</p>}
+                    <ul className="row-actions">
+                      {found.map((e) => <li key={e.id}><button type="button" className="btn btn-outline btn-sm" aria-label={`Use ${e.name} (${e.id})`} onClick={() => swap(g.name, e.id)}>{e.name}</button></li>)}
+                    </ul>
+                  </div>
+                )}
               </li>
             ))}
           </ol>
-          <p className="small muted">Your slides {title ? `(“${title}”)` : ''} use these layers with their own words{ownRoles.length ? '' : ''}. Swapping a drawing for a library element is not available yet.</p>
+          <p className="small muted">Your slides {title ? `(“${title}”)` : ''} use these layers with their own words{ownRoles.length ? '' : ''}. Swap graphic replaces a drawing with an element from the library (no model call).</p>
         </>
       )}
     </div>

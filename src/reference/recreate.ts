@@ -527,6 +527,7 @@ const colourFields = (l: Layer): string[] => {
     if (l.fill) o.push(l.fill);
     if (l.stroke) o.push(l.stroke.color);
   } else if (l.kind === 'text') o.push(l.style.color);
+  else if (l.kind === 'element' && l.tint) o.push(l.tint);
   return o;
 };
 const mapColours = (l: RLayer, f: (c: string) => string): RLayer => {
@@ -539,6 +540,7 @@ const mapColours = (l: RLayer, f: (c: string) => string): RLayer => {
     if (x.fill) x.fill = f(x.fill);
     if (x.stroke) x.stroke.color = f(x.stroke.color);
   } else if (x.kind === 'text') x.style.color = f(x.style.color);
+  else if (x.kind === 'element' && x.tint) x.tint = f(x.tint);
   return x;
 };
 /** The colours that matter become named palette entries (bg, text, accent, accent2, ...), and the layers use the names. */
