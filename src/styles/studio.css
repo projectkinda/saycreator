@@ -78,3 +78,15 @@ body:has(.cr-studio) .lv { right: var(--sp-4); bottom: 0; max-height: 46vh; bord
 .cr-studio { overflow-wrap: anywhere; }
 .cr-group-body > *, .cr-controls > * { min-width: 0; }
 .cr-studio .chip-group, .cr-studio .row-actions { flex-wrap: wrap; }
+
+/* Reference group: the two panels (Describe, Match) and their inner rows get the same 8/12/16 rhythm. */
+.cr-group-body .rf-match { display: grid; gap: var(--sp-4); }
+.cr-group-body .tn-more { display: grid; gap: var(--sp-3); }
+.cr-group-body .tn-more > summary { margin: 0; }
+.cr-group-body .tn-field { display: grid; gap: var(--sp-1); }
+.cr-group-body .tn-field[role='radiogroup'] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.cr-group-body .tn-field[role='radiogroup'] .field-label { flex: none; margin-right: var(--sp-1); }
+.cr-group-body textarea.input { height: 72px; min-height: 56px; max-height: 200px; resize: vertical; }
+.cr-group-body .cr-drop { display: grid; gap: var(--sp-2); justify-items: start; padding: var(--sp-3) var(--sp-4); }
+.cr-group-body .rf-recreate { display: grid; gap: var(--sp-3); }
+.cr-group-body .rf-describe .row-actions, .cr-group-body .rf-recreate .row-actions { align-items: center; }
