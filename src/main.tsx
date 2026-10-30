@@ -16,6 +16,7 @@ import './styles/branding.css';
 import './styles/analytics.css';
 import './styles/settings.css';
 import './styles/help.css';
+import './styles/refresh.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
