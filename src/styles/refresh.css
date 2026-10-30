@@ -201,6 +201,16 @@ body {
 .row-title { font-weight: 620; }
 .dot { width: 7px; height: 7px; }
 .row-plan .btn-sm { min-height: 32px; padding-inline: 13px; border-radius: 9px; font-size: 11px; }
+.plan-main { display: grid; gap: 6px; }
+.plan-line { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.plan-line .chip-tag { flex: none; min-width: 58px; min-height: 25px; justify-content: center; padding-inline: 9px; font-size: 11px; line-height: 1; }
+.plan-line > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-status { display: inline-flex; align-items: center; gap: 6px; width: fit-content; color: #77787f; font-size: 11.5px; line-height: 1.25; }
+.plan-status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .72; }
+.plan-status.is-ok { color: #39764b; }
+.plan-status.is-warn { color: #8a641d; }
+.plan-status.is-error { color: #ad4343; }
+.plan-status.is-plain::before { background: #a1a2a8; }
 
 .grid { gap: 16px; }
 .grid-continue { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }

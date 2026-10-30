@@ -11,6 +11,15 @@ const greeting = () => {
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 };
 
+const planStatus = (status: engine.PlanEntry['status']) => {
+  if (status === 'ready') return { text: 'Ready to post', tone: 'ok' };
+  if (status === 'needs-thumbnail') return { text: 'Add a thumbnail before posting', tone: 'warn' };
+  if (status === 'render-retry') return { text: 'The video render needs another try', tone: 'error' };
+  if (status === 'posted') return { text: 'Already posted', tone: 'plain' };
+  if (status === 'suggested') return { text: 'Suggested for an open day', tone: 'plain' };
+  return null;
+};
+
 function SectionHead({
   id,
   title,
@@ -256,14 +265,13 @@ export default function Home() {
                         <div className="row-main small muted">Nothing planned</div>
                       ) : (
                         <>
-                          <span className="chip chip-tag">{e.channel}</span>
-                          <div className={`row-main${e.status === 'suggested' ? ' small muted' : ' row-title-plain'}`}>
-                            {e.title}
+                          <div className="row-main plan-main">
+                            <div className="plan-line">
+                              <span className="chip chip-tag">{e.channel}</span>
+                              <span className={e.status === 'suggested' ? 'muted' : 'row-title-plain'}>{e.title}</span>
+                            </div>
+                            {planStatus(e.status) && <span className={`plan-status is-${planStatus(e.status)!.tone}`}>{planStatus(e.status)!.text}</span>}
                           </div>
-                          {e.status === 'ready' && <span className="chip chip-ok">Ready</span>}
-                          {e.status === 'needs-thumbnail' && <span className="chip chip-warn">Needs thumbnail</span>}
-                          {e.status === 'render-retry' && <span className="chip chip-error">Render retry</span>}
-                          {e.status === 'posted' && <span className="chip">Posted</span>}
                           {e.status === 'suggested' && (
                             <button
                               type="button"
