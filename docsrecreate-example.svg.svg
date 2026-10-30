@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 686 857" width="1080" height="1349">
+  <defs>
+    <style>
+      .sans{font-family:'Inter','Roboto','Helvetica Neue',Arial,sans-serif}
+      .serif{font-family:'Instrument Serif','Newsreader','Bitstream Charter','FreeSerif','Georgia',serif;font-style:italic}
+      .ink{stroke:#FF8A4C;fill:none;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+  </defs>
+  <rect width="686" height="857" fill="#F5F0EB"/>
+
+  <!-- brand -->
+  <text class="sans" x="343" y="85" text-anchor="middle" font-size="22" font-weight="500" fill="#FF8A4C">Borcelle</text>
+
+  <!-- step tag -->
+  <rect x="272" y="223" width="141" height="50" fill="#FF8A4C"/>
+  <text class="sans" x="343" y="258" text-anchor="middle" font-size="27" font-weight="800" letter-spacing="1.5" fill="#111">STEP 3</text>
+
+  <!-- title -->
+  <text class="serif" x="343" y="332" text-anchor="middle" font-size="58" fill="#111" textLength="483" lengthAdjust="spacingAndGlyphs">Focus Block Example</text>
+
+  <!-- clock doodle (left) -->
+  <g class="ink" transform="translate(188 457)">
+    <path d="M-48.3 12.9 A50 50 0 1 1 -25 43.3"/>
+    <path d="M-23.4 54 L-28 44 L-17 43"/>
+    <path d="M-2 -4 L-4 -30"/>
+    <path d="M-2 -4 L16 8"/>
+    <circle cx="-2" cy="-4" r="2.6" fill="#FF8A4C"/>
+    <path d="M-44 -4 L-36 -4"/><path d="M38 0 L46 0"/><path d="M0 34 L0 42"/>
+    <path d="M-34 -30 L-29 -25"/><path d="M30 -28 L35 -33"/>
+  </g>
+
+  <!-- calendar + bell doodle (right) -->
+  <g class="ink" transform="translate(497 455)">
+    <path d="M-44 -34 C-30 -38 20 -42 48 -36 C52 -10 50 14 46 32 C20 36 -20 38 -40 34 C-46 12 -46 -12 -44 -34Z"/>
+    <path d="M-42 -16 C-10 -20 20 -20 48 -16"/>
+    <g transform="translate(0 -40)">
+      <path d="M-26 -8 C-26 -18 -18 -18 -18 -8"/><path d="M-4 -9 C-4 -19 4 -19 4 -9"/><path d="M18 -9 C18 -19 26 -19 26 -9"/>
+      <path d="M-22 -8 v8"/><path d="M0 -8 v8"/><path d="M22 -8 v8"/>
+    </g>
+    <path d="M-12 22 C-12 -2 14 -2 14 22 L20 28 H-18 Z"/>
+    <path d="M-4 33 C-2 37 4 37 6 33"/>
+    <path d="M-1 -4 v-5"/>
+    <path d="M-26 6 l-8 -3"/><path d="M-24 -6 l-8 -7"/><path d="M26 6 l8 -3"/><path d="M24 -6 l8 -7"/>
+    <path d="M-44 34 C-47 42 -45 48 -40 52 C-32 48 -26 42 -22 36 Z" fill="#FF8A4C"/>
+  </g>
+
+  <!-- captions -->
+  <g class="sans" font-size="22" font-weight="700" fill="#111" text-anchor="middle">
+    <text x="188" y="570">Pick one 90-</text>
+    <text x="188" y="604">minute block</text>
+    <text x="188" y="638">daily</text>
+    <text x="497" y="570">Silence</text>
+    <text x="497" y="604">notifications,</text>
+    <text x="497" y="638">close tabs</text>
+  </g>
+
+  <!-- dots -->
+  <g>
+    <circle cx="288" cy="783" r="6.5" fill="#FBD5BC"/>
+    <circle cx="310" cy="783" r="6.5" fill="#FBD5BC"/>
+    <circle cx="331" cy="783" r="6.5" fill="#FBD5BC"/>
+    <circle cx="353" cy="783" r="6.5" fill="#FF7F3A"/>
+    <circle cx="374" cy="783" r="6.5" fill="#FBD5BC"/>
+    <circle cx="395" cy="783" r="6.5" fill="#FBD5BC"/>
+  </g>
+</svg>
