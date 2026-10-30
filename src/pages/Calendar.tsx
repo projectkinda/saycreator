@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../AppContext';
+import { PlatformBadge } from '../components/PlatformBadge';
 import {
   addDays,
   addMonths,
@@ -65,7 +66,7 @@ function Slot({
       onDragStart={(e) => e.dataTransfer.setData('text/plain', `entry:${entry.id}`)}
       onClick={onSelect}
     >
-      <span className="chip chip-tag">{entry.channel}</span>
+      <PlatformBadge channel={entry.channel}/>
       <span className="slot-title">{entry.title}</span>
       {!compact && <span className={`${st.cls} slot-status`}>{st.text}</span>}
     </button>
@@ -387,7 +388,7 @@ export default function Calendar() {
             <>
               <span className="label">Not scheduled</span>
               <strong>{item.label}</strong>
-              <div className="img-tags"><span className="chip chip-tag">{item.channel}</span></div>
+              <div className="img-tags"><PlatformBadge channel={item.channel}/></div>
               {item.text && <p className="small slot-text">{item.text}</p>}
               <label className="field">
                 <span className="field-label">Pick a day</span>
@@ -417,7 +418,7 @@ export default function Calendar() {
               <span className="label">Selected</span>
               <strong>{entry.title}</strong>
               <div className="img-tags">
-                <span className="chip chip-tag">{entry.channel}</span>
+                <PlatformBadge channel={entry.channel}/>
                 <span className="mini">{dayLabel(entry.date)} · {entry.time}</span>
                 <span className={STATUS[entry.status].cls}>{STATUS[entry.status].text}</span>
               </div>

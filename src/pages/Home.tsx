@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { Icon, PlayIcon } from '../components/Icon';
+import { PlatformBadge } from '../components/PlatformBadge';
 import * as engine from '../engine';
 import { fmtTime, grad } from '../format';
 import { useDocumentTitle } from '../useDocumentTitle';
@@ -267,7 +268,7 @@ export default function Home() {
                         <>
                           <div className="row-main plan-main">
                             <div className="plan-line">
-                              <span className="chip chip-tag">{e.channel}</span>
+                              <PlatformBadge channel={e.channel!}/>
                               <span className={e.status === 'suggested' ? 'muted' : 'row-title-plain'}>{e.title}</span>
                             </div>
                             {planStatus(e.status) && <span className={`plan-status is-${planStatus(e.status)!.tone}`}>{planStatus(e.status)!.text}</span>}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../AppContext';
+import { PlatformBadge } from '../components/PlatformBadge';
 import { dayMonth } from '../dates';
 import * as engine from '../engine';
 import { grad } from '../format';
@@ -215,7 +216,7 @@ export default function Analytics() {
                               )}
                             </div>
                           </td>
-                          <td data-label="Platform"><span className="chip chip-tag">{p.channel}</span></td>
+                          <td data-label="Platform"><PlatformBadge channel={p.channel}/></td>
                           <td className="c-length" data-label="Views">{p.views.toLocaleString('en-US')}</td>
                           <td className="c-length" data-label="Watched">{p.watchedPercent}%</td>
                           <td data-label="How it was edited">
