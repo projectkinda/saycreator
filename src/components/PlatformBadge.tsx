@@ -10,5 +10,5 @@ function Mark({ channel }: { channel: string }) {
 }
 
 export function PlatformBadge({ channel }: { channel: string }) {
-  return <span className={`platform-badge platform-${keyOf(channel)}`} role="img" aria-label={channel} title={channel}><Mark channel={channel}/></span>;
+  return <span className={`platform-badge platform-${keyOf(channel)}`}><Mark channel={channel}/><span>{channel}</span></span>;
 }
