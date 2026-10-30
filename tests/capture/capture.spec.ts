@@ -7,6 +7,13 @@ async function openReady(page: import('@playwright/test').Page) {
   await expect(page.getByRole('button', { name: 'Turn camera off' })).toBeVisible();
 }
 
+test('opens the recorder from the Home record button', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Record now' }).click();
+  await expect(page).toHaveURL(/\/videos\/record$/);
+  await expect(page.getByRole('heading', { name: 'Record' })).toBeVisible();
+});
+
 test('requests fake devices and switches between camera and audio only', async ({ page }) => {
   await openReady(page);
   await expect(page.getByLabel('Camera preview')).toBeVisible();

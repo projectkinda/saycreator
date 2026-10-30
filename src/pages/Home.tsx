@@ -132,7 +132,7 @@ export default function Home() {
               <Icon name="upload" size={18} strokeWidth={2.2} />
               Upload a video
             </Link>
-            <Link to="/videos/new?source=record" className="btn btn-outline-strong btn-lg">
+            <Link to="/videos/record" className="btn btn-outline-strong btn-lg">
               <span className="rec-dot" aria-hidden="true" />
               Record now
             </Link>
