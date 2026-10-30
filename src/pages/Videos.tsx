@@ -104,10 +104,13 @@ export default function Videos() {
     <div className="page page-tight">
       <header className="page-header">
         <h1 className="page-title page-header-text">Videos</h1>
-        <Link to="/videos/new" className="btn btn-primary btn-lg">
-          <Icon name="plus" size={18} strokeWidth={2.2} />
-          New project
-        </Link>
+        <div className="capture-actions">
+          <Link to="/videos/record" className="btn btn-outline btn-lg">Record</Link>
+          <Link to="/videos/new" className="btn btn-primary btn-lg">
+            <Icon name="plus" size={18} strokeWidth={2.2} />
+            New project
+          </Link>
+        </div>
       </header>
 
       <Tabs

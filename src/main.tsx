@@ -7,6 +7,7 @@ import './styles/base.css';
 import './styles/shell.css';
 import './styles/home.css';
 import './styles/videos.css';
+import './styles/capture.css';
 import './styles/workspace.css';
 import './styles/images.css';
 import './styles/assets.css';

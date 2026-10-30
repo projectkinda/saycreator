@@ -21,6 +21,7 @@ const ThumbnailPage = lazy(() => import('./thumbnail/ThumbnailPage'));
 const StylesPage = lazy(() => import('./reference/StylesPage'));
 const LayoutsPage = lazy(() => import('./layouts/LayoutsPage'));
 const ReferenceStylePage = lazy(() => import('./reference/ReferenceStylePage'));
+const RecordPage = lazy(() => import('./capture/RecordPage'));
 
 // Dev-only lab for judging the image engine. Not built into production.
 const Lab = import.meta.env.DEV ? lazy(() => import('./pages/Lab')) : null;
@@ -42,6 +43,7 @@ export default function App() {
             />
           )}
           <Route path="videos" element={<Videos />} />
+          <Route path="videos/record" element={<Suspense fallback={<p className="page" role="status">Loading recorder…</p>}><RecordPage /></Suspense>} />
           <Route path="videos/new" element={<NewProject />} />
           <Route path="videos/:id" element={<Workspace />} />
           <Route path="images" element={<Images />} />
