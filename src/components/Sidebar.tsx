@@ -9,7 +9,7 @@ const NAV: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: '/images', label: 'Images', icon: 'image' },
   { to: '/assets', label: 'Assets', icon: 'folder' },
   { to: '/calendar', label: 'Calendar', icon: 'calendar' },
-  { to: '/branding', label: 'Branding', icon: 'drop' },
+  { to: '/branding', label: 'Branding', icon: 'sparkle' },
   { to: '/analytics', label: 'Analytics', icon: 'chart' },
 ];
 
