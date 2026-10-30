@@ -1176,8 +1176,11 @@ const kitStore = new Map<string, BrandKit>([[brandKitFixture.brandId, clone(bran
 const voiceStore = new Map<string, VoiceProfile>([[voiceFixture.brandId, clone(voiceFixture)]]);
 
 function kitOf(brandId: string): BrandKit {
-  const k = kitStore.get(brandId);
-  if (!k) throw new EngineError('NOT_FOUND', 'We cannot find that brand.', false);
+  let k = kitStore.get(brandId);
+  if (!k) {
+    k = { ...clone(brandKitFixture), brandId, handle: '@newbrand', logo: { name: 'Brand logo', poster: { from: '#27272A', to: '#6D3BE8' } } };
+    kitStore.set(brandId, k);
+  }
   return k;
 }
 function voiceOf(brandId: string): VoiceProfile {

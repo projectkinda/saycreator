@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useApp } from '../../AppContext';
 import * as engine from '../../engine';
 
 const SENTENCE_LABEL = ['', 'Very short sentences', 'Short sentences', 'Medium sentences', 'Long sentences', 'Very long sentences'];
 const list = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
 const quoted = (a: string[]) => (a.length ? a.map((w) => `“${w}”`).join(', ') : 'None yet');
 
-export function VoiceTab() {
-  const { brand } = useApp();
-  const brandId = brand?.id;
+export function VoiceTab({ brandId, brandName }: { brandId: string; brandName: string }) {
   const [voice, setVoice] = useState<engine.VoiceProfile | null>(null);
   const [options, setOptions] = useState<engine.VoiceOptions | null>(null);
   const [failed, setFailed] = useState(false);
@@ -101,6 +98,7 @@ export function VoiceTab() {
 
   return (
     <div className="kit">
+      <div className="brand-section-identity"><span>Writing voice for</span><strong>{brandName}</strong></div>
       <p className="visually-hidden" role="status" aria-live="polite">{announce}</p>
 
       <section className="card ws-card" aria-labelledby="what-h">

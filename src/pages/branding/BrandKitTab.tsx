@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
-import { useApp } from '../../AppContext';
 import { UploadProgress } from '../../components/UploadProgress';
 import * as engine from '../../engine';
 import { grad } from '../../format';
@@ -14,9 +13,7 @@ const COLOR_ROWS: { key: keyof engine.BrandColors; label: string }[] = [
 type Editing = 'colors' | 'fonts' | 'handle' | null;
 const isHex = (s: string) => /^#[0-9a-f]{6}$/i.test(s);
 
-export function BrandKitTab() {
-  const { brand } = useApp();
-  const brandId = brand?.id;
+export function BrandKitTab({ brandId, brandName }: { brandId: string; brandName: string }) {
   const [kit, setKit] = useState<engine.BrandKit | null>(null);
   const [fonts, setFonts] = useState<string[]>([]);
   const [failed, setFailed] = useState(false);
@@ -102,6 +99,7 @@ export function BrandKitTab() {
 
   return (
     <div className="kit">
+      <div className="brand-section-identity"><span>Visual kit for</span><strong>{brandName}</strong></div>
       <p className="visually-hidden" role="status" aria-live="polite">{announce}</p>
       {warnings.length > 0 && (
         <div className="notice notice-warn" role="status">
