@@ -210,10 +210,20 @@
 .brand-owner { padding: 5px 9px; border-radius: 999px; background: #efeff2; color: #5d5e64; font-size: 11px; font-weight: 650; }
 .brand-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .brand-field { display: grid; gap: 6px; }
-.brand-field > span { color: #606168; font-size: 11px; font-weight: 700; }
+.brand-field > span, .brand-field > label { color: #606168; font-size: 11px; font-weight: 700; }
 .brand-field input, .brand-field textarea { width: 100%; border: 1px solid var(--line); border-radius: 12px; background: #f7f7f9; padding: 11px 12px; resize: vertical; }
-.brand-field input[list] { min-height: 43px; }
 .brand-field input:focus, .brand-field textarea:focus { border-color: rgb(108 60 230 / 40%); outline: 0; background: #fff; box-shadow: 0 0 0 4px rgb(108 60 230 / 9%); }
+.brand-combobox { position: relative; }
+.brand-combobox-input { position: relative; }
+.brand-combobox-input input { min-height: 43px; padding-right: 42px; }
+.brand-combobox-input > button { position: absolute; top: 50%; right: 7px; display: grid; width: 30px; height: 30px; translate: 0 -50%; place-items: center; border: 0; border-radius: 9px; background: transparent; color: #6d6e74; font-size: 17px; }
+.brand-combobox-input > button:hover { background: #ececef; color: #1b1b1e; }
+.brand-combobox-menu { position: absolute; z-index: 30; top: calc(100% + 7px); right: 0; left: 0; max-height: 310px; overflow-y: auto; padding: 7px; border: 1px solid rgb(20 20 24 / 10%); border-radius: 15px; background: rgb(255 255 255 / 96%); box-shadow: 0 20px 55px rgb(0 0 0 / 16%), 0 1px 0 #fff inset; backdrop-filter: blur(24px) saturate(1.3); }
+.brand-combobox-menu.drop-up { top: auto; bottom: calc(100% + 7px); }
+.brand-combobox-menu > button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: #35353a; text-align: left; font-size: 13px; }
+.brand-combobox-menu > button:hover, .brand-combobox-menu > button[aria-selected='true'] { background: #f0eef8; color: #24184a; }
+.brand-combobox-menu > p { padding: 12px; color: var(--text-2); font-size: 12px; }
+.brand-option-check { display: grid; flex: none; width: 20px; height: 20px; place-items: center; border-radius: 50%; background: #6c3ce6; color: white; font-size: 11px; }
 .brand-form-grid .brand-field:has(textarea) { grid-column: 1 / -1; }
 .brand-collection { display: grid; gap: 12px; }
 .brand-collection-item { display: grid; grid-template-columns: 1fr 1.5fr 1fr auto; gap: 10px; align-items: end; padding: 14px; border: 1px solid var(--line); border-radius: 15px; background: #fafafd; }

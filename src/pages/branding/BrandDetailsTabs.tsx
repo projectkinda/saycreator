@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { removeRulesDocument, saveRulesDocument } from './documentStore';
 import { COUNTRIES, NICHES, type BrandCompetitor, type BrandProduct, type BrandWorkspace } from './workspace';
 
@@ -10,7 +10,23 @@ function Field({ label, value, onChange, placeholder = '', area = false }: { lab
 
 function SelectField({ label, value, options, onChange, placeholder }: { label: string; value: string; options: string[]; onChange: (value: string) => void; placeholder: string }) {
   const id = useId();
-  return <label className="brand-field"><span>{label}</span><input list={id} value={value} placeholder={`${placeholder} or type to find`} onChange={(e) => onChange(e.target.value)}/><datalist id={id}>{options.map((option) => <option key={option} value={option}/>)}</datalist></label>;
+  const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
+  const [query, setQuery] = useState(value);
+  const root = useRef<HTMLDivElement>(null);
+  const filtered = options.filter((option) => option.toLowerCase().includes(query.trim().toLowerCase()));
+
+  useEffect(() => setQuery(value), [value]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const choose = (option: string) => { setQuery(option); onChange(option); setOpen(false); };
+  const show = () => { const rect = root.current?.getBoundingClientRect(); setDropUp(!!rect && rect.bottom + 320 > window.innerHeight && rect.top > 320); setOpen(true); };
+  return <div className="brand-field brand-combobox" ref={root}><label htmlFor={id}>{label}</label><div className="brand-combobox-input"><input id={id} role="combobox" aria-expanded={open} aria-controls={`${id}-list`} aria-autocomplete="list" value={query} placeholder={`${placeholder} or type to find`} onFocus={show} onClick={show} onChange={(e) => { setQuery(e.target.value); onChange(e.target.value); show(); }} onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); if (e.key === 'ArrowDown') { e.preventDefault(); show(); } if (e.key === 'Enter' && open && filtered[0]) { e.preventDefault(); choose(filtered[0]); } }}/><button type="button" tabIndex={-1} aria-label={`Open ${label} options`} onClick={() => open ? setOpen(false) : show()}><span aria-hidden="true">⌄</span></button></div>{open && <div className={`brand-combobox-menu${dropUp ? ' drop-up' : ''}`} id={`${id}-list`} role="listbox" aria-label={`${label} options`}>{filtered.length ? filtered.map((option) => <button type="button" role="option" aria-selected={option === value} key={option} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(option)}><span>{option}</span>{option === value && <span className="brand-option-check" aria-hidden="true">✓</span>}</button>) : <p>No matching options</p>}</div>}</div>;
 }
 
 export function ProfileTab({ brand, update }: Props) {
