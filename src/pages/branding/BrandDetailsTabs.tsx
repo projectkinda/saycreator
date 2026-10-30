@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import type { BrandCompetitor, BrandProduct, BrandWorkspace } from './workspace';
+import { useId, useState } from 'react';
+import { removeRulesDocument, saveRulesDocument } from './documentStore';
+import { COUNTRIES, NICHES, type BrandCompetitor, type BrandProduct, type BrandWorkspace } from './workspace';
 
 type Props = { brand: BrandWorkspace; update: (patch: Partial<BrandWorkspace>) => void };
 
@@ -7,10 +8,15 @@ function Field({ label, value, onChange, placeholder = '', area = false }: { lab
   return <label className="brand-field"><span>{label}</span>{area ? <textarea rows={3} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} /> : <input value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />}</label>;
 }
 
+function SelectField({ label, value, options, onChange, placeholder }: { label: string; value: string; options: string[]; onChange: (value: string) => void; placeholder: string }) {
+  const id = useId();
+  return <label className="brand-field"><span>{label}</span><input list={id} value={value} placeholder={`${placeholder} or type to find`} onChange={(e) => onChange(e.target.value)}/><datalist id={id}>{options.map((option) => <option key={option} value={option}/>)}</datalist></label>;
+}
+
 export function ProfileTab({ brand, update }: Props) {
   return <div className="brand-stack">
     <section className="card brand-form-card"><div className="brand-section-head"><div><span className="brand-eyebrow">Identity</span><h2>Who this brand is</h2></div><span className="brand-owner">{brand.name}</span></div>
-      <div className="brand-form-grid"><Field label="Brand name" value={brand.name} onChange={(name) => update({ name })}/><Field label="Country" value={brand.country} placeholder="Where the brand operates" onChange={(country) => update({ country })}/><Field label="What you do" value={brand.description} area placeholder="A clear description of the business" onChange={(description) => update({ description })}/><Field label="Who buys" value={brand.audience} area placeholder="The people this brand serves" onChange={(audience) => update({ audience })}/><Field label="Niche" value={brand.niche} placeholder="Industry or category" onChange={(niche) => update({ niche })}/></div>
+      <div className="brand-form-grid"><Field label="Brand name" value={brand.name} onChange={(name) => update({ name })}/><SelectField label="Country" value={brand.country} options={COUNTRIES} placeholder="Choose a country" onChange={(country) => update({ country })}/><Field label="What you do" value={brand.description} area placeholder="A clear description of the business" onChange={(description) => update({ description })}/><Field label="Who buys" value={brand.audience} area placeholder="The people this brand serves" onChange={(audience) => update({ audience })}/><SelectField label="Niche" value={brand.niche} options={NICHES} placeholder="Choose a niche" onChange={(niche) => update({ niche })}/></div>
     </section>
     <section className="card brand-form-card"><div className="brand-section-head"><div><span className="brand-eyebrow">Offer</span><h2>What customers choose</h2></div><span className="brand-owner">{brand.name}</span></div>
       <div className="brand-form-grid"><Field label="What you sell" value={brand.offer} area placeholder="Products or services" onChange={(offer) => update({ offer })}/><Field label="Price point" value={brand.pricePoint} placeholder="Optional" onChange={(pricePoint) => update({ pricePoint })}/><Field label="Why they choose you" value={brand.whyChoose} area placeholder="The practical difference" onChange={(whyChoose) => update({ whyChoose })}/></div>
@@ -19,6 +25,8 @@ export function ProfileTab({ brand, update }: Props) {
       <div className="brand-form-grid"><Field label="Website name" value={brand.websiteName} placeholder="Name shown on the website" onChange={(websiteName) => update({ websiteName })}/><Field label="Website URL" value={brand.websiteUrl} placeholder="https://example.com" onChange={(websiteUrl) => update({ websiteUrl })}/><Field label="Other links" value={brand.otherLinks} area placeholder="Store, booking page, social profile…" onChange={(otherLinks) => update({ otherLinks })}/></div>
     </section>
     <section className="card brand-form-card"><div className="brand-section-head"><div><span className="brand-eyebrow">Rules</span><h2>Claims and guardrails</h2></div><span className="brand-owner">{brand.name}</span></div>
+      <div className="rules-upload"><div><strong>Have brand guidelines?</strong><span>Attach a PDF, Word document, or text file instead of typing everything.</span></div><label className="btn btn-outline btn-sm">Upload rules document<input type="file" accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; await saveRulesDocument(brand.id, file); update({ rulesDocument: { name: file.name, size: file.size, type: file.type } }); event.target.value = ''; }}/></label></div>
+      {brand.rulesDocument && <div className="rules-file"><div><strong>{brand.rulesDocument.name}</strong><span>{Math.max(1, Math.round(brand.rulesDocument.size / 1024))} KB · stored on this device</span></div><button type="button" className="btn btn-outline btn-sm" onClick={async () => { await removeRulesDocument(brand.id); update({ rulesDocument: undefined }); }}>Remove</button></div>}
       <div className="brand-form-grid"><Field label="Legal lines" value={brand.legalLines} area placeholder="Lines content must always carry" onChange={(legalLines) => update({ legalLines })}/><Field label="Product claims" value={brand.productClaims} area placeholder="Claims that are safe to make" onChange={(productClaims) => update({ productClaims })}/><Field label="Avoid" value={brand.avoid} area placeholder="What content must never show or say" onChange={(avoid) => update({ avoid })}/></div>
     </section>
     <section className="card brand-form-card"><div className="brand-section-head"><div><span className="brand-eyebrow">Current promotion</span><h2>Offer to mention now</h2></div><span className="brand-owner">{brand.name}</span></div>

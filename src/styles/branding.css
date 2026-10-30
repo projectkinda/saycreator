@@ -212,6 +212,7 @@
 .brand-field { display: grid; gap: 6px; }
 .brand-field > span { color: #606168; font-size: 11px; font-weight: 700; }
 .brand-field input, .brand-field textarea { width: 100%; border: 1px solid var(--line); border-radius: 12px; background: #f7f7f9; padding: 11px 12px; resize: vertical; }
+.brand-field input[list] { min-height: 43px; }
 .brand-field input:focus, .brand-field textarea:focus { border-color: rgb(108 60 230 / 40%); outline: 0; background: #fff; box-shadow: 0 0 0 4px rgb(108 60 230 / 9%); }
 .brand-form-grid .brand-field:has(textarea) { grid-column: 1 / -1; }
 .brand-collection { display: grid; gap: 12px; }
@@ -220,6 +221,11 @@
 .competitor-list > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 14px; background: #fafafd; }
 .competitor-list > div > div { display: grid; gap: 2px; }
 .competitor-list a { color: #5930bf; font-size: 13px; }
+.rules-upload, .rules-file { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; border: 1px dashed var(--line-strong); border-radius: 15px; background: #fafafd; }
+.rules-upload > div, .rules-file > div { display: grid; gap: 2px; }
+.rules-upload span, .rules-file span { color: var(--text-2); font-size: 12px; }
+.rules-upload input[type='file'] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.rules-file { border-style: solid; background: rgb(108 60 230 / 5%); }
 
 @media (max-width: 800px) {
   .brand-library { grid-template-columns: 1fr; }

@@ -20,9 +20,47 @@ export type BrandWorkspace = {
   promotion: string;
   promotionEnds: string;
   namePronunciation: string;
+  rulesDocument?: { name: string; size: number; type: string };
   products: BrandProduct[];
   competitors: BrandCompetitor[];
 };
+
+export const COUNTRIES = [
+  'Australia', 'Brazil', 'Canada', 'France', 'Germany', 'India', 'Indonesia', 'Ireland', 'Italy', 'Japan', 'Mexico', 'Netherlands', 'New Zealand', 'Nigeria', 'Philippines', 'Singapore', 'South Africa', 'South Korea', 'Spain', 'Sweden', 'United Arab Emirates', 'United Kingdom', 'United States',
+];
+
+export const NICHES = [
+  'AI content / social / UGC / video-image gen tools',
+  'AI dev tools / agents / automation / infra',
+  'AI productivity / assistant / utility apps',
+  'Apparel, footwear & fashion DTC',
+  'Consumer goods / home goods / general DTC',
+  'Creator economy / UGC marketplaces / monetization',
+  'Crypto / web3 / DeFi / blockchain',
+  'Dating & social apps',
+  'Edtech / courses / tutoring / coaching',
+  'Faith / spirituality / astrology / manifestation',
+  'Fintech / payments / lending / wealth / insurance',
+  'Food / beverage / grocery / restaurants',
+  'Health, fitness & nutrition apps',
+  'Healthcare / telehealth / medical & dental',
+  'Home / cleaning / trades / local services',
+  'Legaltech / compliance / corporate / cybersecurity',
+  'Marketing / creative / PR agencies',
+  'Mental health / mindfulness / habit / screen-time apps',
+  'Music / media / publishing / content brands',
+  'Parenting / kids / baby',
+  'Pet care & products',
+  'Real estate / proptech / property',
+  'Recruiting / careers / jobs / HR',
+  'SEO / website-builder / marketing-automation SaaS',
+  'Skincare / beauty / cosmetics DTC',
+  'Sports betting / gaming / esports / fantasy',
+  'Supplements & functional wellness DTC',
+  'Trading / investing / market intelligence',
+  'Travel / hospitality / eSIM / mobility',
+  'Vertical / SMB business software, ops & CRM',
+];
 
 const KEY = 'creator.brand-workspaces.v1';
 

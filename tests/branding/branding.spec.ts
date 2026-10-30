@@ -31,6 +31,18 @@ test('stores competitor website links for the selected brand', async ({ page }) 
   await expect(page.getByText('Overlapping audience')).toBeVisible();
 });
 
+test('picks country and niche and stores a rules document locally', async ({ page }) => {
+  await page.getByLabel('Country').fill('India');
+  await page.getByLabel('Niche').fill('Marketing / creative / PR agencies');
+  await page.getByLabel('Upload rules document').setInputFiles({ name: 'brand-rules.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF rules') });
+  await expect(page.getByText('brand-rules.pdf')).toBeVisible();
+  await expect(page.getByText('stored on this device')).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel('Country')).toHaveValue('India');
+  await expect(page.getByLabel('Niche')).toHaveValue('Marketing / creative / PR agencies');
+  await expect(page.getByText('brand-rules.pdf')).toBeVisible();
+});
+
 test('keeps visual kits separate when switching brands', async ({ page }) => {
   await page.getByRole('button', { name: '+ New brand kit' }).click();
   await page.getByRole('tab', { name: 'Brand kit' }).click();
