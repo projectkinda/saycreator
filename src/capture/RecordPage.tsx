@@ -64,13 +64,13 @@ export default function RecordPage() {
     analyserCleanup.current = () => { cancelAnimationFrame(frame); void context.close(); };
   }, []);
 
-  const connect = useCallback(async (nextCameraOn = cameraOn) => {
+  const connect = useCallback(async (nextCameraOn = cameraOn, nextCameraId = cameraId, nextMicrophoneId = microphoneId) => {
     setError('');
     try {
       stopStream(streamRef.current);
-      const stream = await requestMedia(cameraId || undefined, microphoneId || undefined, nextCameraOn);
+      const stream = await requestMedia(nextCameraId || undefined, nextMicrophoneId || undefined, nextCameraOn);
       streamRef.current = stream;
-      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play().catch(() => undefined); }
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
       attachLevelMeter(stream);
       const listed = await navigator.mediaDevices.enumerateDevices(); setDevices(listed);
       const estimate = await navigator.storage.estimate();
@@ -179,8 +179,8 @@ export default function RecordPage() {
       <aside className="capture-controls card">
         {phase === 'setup' && <><h2>Allow camera and microphone</h2><p>We need the microphone to record. The camera is optional. Your browser will ask for permission.</p><button className="btn btn-primary" onClick={() => void connect()}>Choose devices</button></>}
         {phase !== 'setup' && <>
-          <label>Camera<select value={cameraId} disabled={!cameraOn || phase === 'recording'} onChange={(e) => { setCameraId(e.target.value); void connect(); }}><option value="">Default camera</option>{devices.filter((d) => d.kind === 'videoinput').map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || 'Camera'}</option>)}</select></label>
-          <label>Microphone<select value={microphoneId} disabled={phase === 'recording'} onChange={(e) => { setMicrophoneId(e.target.value); void connect(); }}><option value="">Default microphone</option>{devices.filter((d) => d.kind === 'audioinput').map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || 'Microphone'}</option>)}</select></label>
+          <label>Camera<select value={cameraId} disabled={!cameraOn || phase === 'recording'} onChange={(e) => { const id = e.target.value; setCameraId(id); void connect(cameraOn, id, microphoneId); }}><option value="">Default camera</option>{devices.filter((d) => d.kind === 'videoinput').map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || 'Camera'}</option>)}</select></label>
+          <label>Microphone<select value={microphoneId} disabled={phase === 'recording'} onChange={(e) => { const id = e.target.value; setMicrophoneId(id); void connect(cameraOn, cameraId, id); }}><option value="">Default microphone</option>{devices.filter((d) => d.kind === 'audioinput').map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || 'Microphone'}</option>)}</select></label>
           <button className="btn btn-outline" disabled={phase === 'recording'} onClick={() => void changeCamera()}>{cameraOn ? 'Turn camera off' : 'Turn camera on'}</button>
           <label className="capture-toggle"><input type="checkbox" checked={guide} onChange={(e) => setGuide(e.target.checked)}/> Show thirds and 9:16 safe area</label>
           <div className="meter-row"><span>Mic level</span><meter min={0} max={0.6} low={0.04} high={0.45} optimum={0.2} value={mic}/><span>{mic < .025 ? 'Too low' : mic > .5 ? 'Clipping' : 'Good'}</span></div>

@@ -10,11 +10,31 @@ async function openReady(page: import('@playwright/test').Page) {
 test('requests fake devices and switches between camera and audio only', async ({ page }) => {
   await openReady(page);
   await expect(page.getByLabel('Camera preview')).toBeVisible();
+  await expect.poll(() => page.getByLabel('Camera preview').evaluate((video: HTMLVideoElement) => ({
+    width: video.videoWidth,
+    height: video.videoHeight,
+    paused: video.paused,
+    tracks: (video.srcObject as MediaStream | null)?.getVideoTracks().map((track) => track.readyState) ?? [],
+  }))).toMatchObject({ width: expect.any(Number), height: expect.any(Number), paused: false, tracks: ['live'] });
+  const dimensions = await page.getByLabel('Camera preview').evaluate((video: HTMLVideoElement) => [video.videoWidth, video.videoHeight]);
+  expect(dimensions[0]).toBeGreaterThan(0);
+  expect(dimensions[1]).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Turn camera off' }).click();
   await expect(page.getByText('Camera off · audio only')).toBeVisible();
   await page.getByRole('button', { name: 'Turn camera on' }).click();
   await expect(page.getByRole('button', { name: 'Turn camera off' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('creator.capture.cameraOn'))).toBe('true');
+});
+
+test('falls back to default devices when remembered ids are stale', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('creator.capture.devices', JSON.stringify({ cameraId: 'missing-camera', microphoneId: 'missing-microphone' })));
+  await openReady(page);
+  await expect.poll(() => page.getByLabel('Camera preview').evaluate((video: HTMLVideoElement) => ({
+    width: video.videoWidth,
+    track: (video.srcObject as MediaStream | null)?.getVideoTracks()[0]?.readyState,
+  }))).toMatchObject({ width: expect.any(Number), track: 'live' });
+  const width = await page.getByLabel('Camera preview').evaluate((video: HTMLVideoElement) => video.videoWidth);
+  expect(width).toBeGreaterThan(0);
 });
 
 test('records chunks, advances and backs through beats, and saves a manifest', async ({ page }) => {

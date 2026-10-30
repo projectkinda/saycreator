@@ -6,13 +6,21 @@ export function bestMimeType(cameraOn: boolean) {
 }
 
 export async function requestMedia(cameraId: string | undefined, microphoneId: string | undefined, cameraOn: boolean) {
-  return navigator.mediaDevices.getUserMedia({
-    audio: microphoneId ? { deviceId: { exact: microphoneId }, echoCancellation: true, noiseSuppression: true } : { echoCancellation: true, noiseSuppression: true },
+  const constraints = (useRememberedDevices: boolean): MediaStreamConstraints => ({
+    audio: microphoneId && useRememberedDevices ? { deviceId: { exact: microphoneId }, echoCancellation: true, noiseSuppression: true } : { echoCancellation: true, noiseSuppression: true },
     video: cameraOn ? {
-      deviceId: cameraId ? { exact: cameraId } : undefined,
+      deviceId: cameraId && useRememberedDevices ? { exact: cameraId } : undefined,
       width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 30 },
     } : false,
   });
+
+  try {
+    return await navigator.mediaDevices.getUserMedia(constraints(true));
+  } catch (cause) {
+    const staleDevice = cause instanceof DOMException && (cause.name === 'OverconstrainedError' || cause.name === 'NotFoundError');
+    if (!staleDevice || (!cameraId && !microphoneId)) throw cause;
+    return navigator.mediaDevices.getUserMedia(constraints(false));
+  }
 }
 
 export function stopStream(stream?: MediaStream | null) {
