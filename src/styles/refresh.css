@@ -211,14 +211,14 @@ body {
 .plan-status.is-warn { color: #8a641d; }
 .plan-status.is-error { color: #ad4343; }
 .plan-status.is-plain::before { background: #a1a2a8; }
-.platform-badge { display: inline-flex; flex: none; min-height: 26px; align-items: center; gap: 6px; padding: 0 9px 0 7px; border: 1px solid currentColor; border-radius: 8px; background: #f4f4f6; box-shadow: 0 1px 1px rgb(0 0 0 / 3%); font-size: 10.5px; font-weight: 650; letter-spacing: -.005em; line-height: 1; white-space: nowrap; }
-.platform-badge svg { width: 14px; height: 14px; overflow: visible; fill: currentColor; stroke: currentColor; stroke-width: 1.7; }
-.platform-linkedin { border-color: rgb(10 102 194 / 18%); background: rgb(10 102 194 / 8%); color: #075aab; }
-.platform-instagram { border-color: rgb(193 53 132 / 18%); background: rgb(193 53 132 / 7%); color: #b12e78; }
+.platform-badge { display: inline-grid; flex: none; width: 30px; height: 30px; place-items: center; overflow: hidden; border: 1px solid rgb(20 20 24 / 8%); border-radius: 9px; background: #f2f2f4; box-shadow: 0 1px 2px rgb(0 0 0 / 5%); }
+.platform-badge svg { display: block; width: 16px; height: 16px; overflow: visible; fill: currentColor; stroke: currentColor; stroke-width: 1.7; }
+.platform-linkedin { border-color: rgb(10 102 194 / 15%); background: #0a66c2; color: #fff; }
+.platform-instagram { border-color: transparent; background: radial-gradient(circle at 32% 105%, #ffd66b 0 18%, #f24f5d 38%, #bf32a2 66%, #5b4fe9 100%); color: #fff; }
 .platform-instagram svg { fill: none; }
 .platform-instagram .platform-fill { fill: currentColor; stroke: none; }
-.platform-x { border-color: rgb(23 23 25 / 15%); background: #f1f1f3; color: #171719; }
-.platform-youtube-shorts, .platform-youtube { border-color: rgb(255 0 51 / 17%); background: rgb(255 0 51 / 7%); color: #e6002e; }
+.platform-x { border-color: transparent; background: #171719; color: #fff; }
+.platform-youtube-shorts, .platform-youtube { border-color: transparent; background: #ff0033; color: #fff; }
 .platform-youtube-shorts svg, .platform-youtube svg { stroke: none; }
 .platform-youtube-shorts .platform-cut, .platform-youtube .platform-cut { fill: #fff; }
 
