@@ -606,3 +606,12 @@ Only Chrome; Safari and Firefox (EXIF and drag and drop), touch screens, real fu
 
 ## Thumbnails parked (image slots step)
 Thumbnails are parked while carousels and quote posts are the focus: the Images tab, the "Make a thumbnail" button and the thumbnail link on the Styles page are hidden. No code was deleted and the `/images/thumbnail` route still works by its address.
+
+## Image slots and the image provider (carousels and quote posts)
+- **Slots:** a pack design can hold image slots (`data-image-slot` = background, inset, half-bleed, strip of 2-3, cutout; `data-mask` rect/rounded/circle/arch/blob; `data-fit`; `data-scrim`). The sanitiser takes them out first and leaves a marker; the stored pack keeps slot data only, never a picture, link or `<image>`. Empty slots draw a clean placeholder.
+- **Drawing:** the faithful renderer fills each marker with the slide's baked picture (cropped to the slot with its treatments), with a scrim; the editable layers get image layers (no mask).
+- **Treatments:** duotone to the palette, grain, blur, darken, lighten, colour wash, vignette (the engine's photo treatments). The safety net raises the scrim until the text over a picture keeps 4.5:1 against the picture's worst part.
+- **Provider:** `src/images/provider.ts` (interface, fake, server). The server route `/__image` reads `IMAGE_API_KEY`, `IMAGE_MODEL` (and optional `IMAGE_API_URL`) from the server environment only; off without them; `check:secrets` also forbids the key name in client code. A first-use notice says the prompt text is sent.
+- **Requests:** `planImageRequests` (code, not the writer model: a few scrubbed title words, mood and palette words) and "put X as the background here" on a slide; list with Generate, Generate all (count and estimate), cap 5, counter, Upload instead, Regenerate, Remove, treatments, focal click. Pictures cached in IndexedDB, never remade silently.
+- **Quote posts:** packs may carry a square 1:1 quote design (asked for in every pack prompt, built by the code for rebuilt styles); quote posts use it; a pack without one says so and offers "Make a square quote design" (1 model call, estimate first).
+- **Not done / untested:** the writer model does not return the requests (the code planner does); the panel and the slide input are not covered by a browser test; the real provider was never called; empty placeholders also appear in exports.
