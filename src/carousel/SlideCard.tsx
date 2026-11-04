@@ -48,7 +48,7 @@ function Alternatives({ slide, info, used, onPick }: { slide: StyledSlide; info:
   );
 }
 
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -65,6 +65,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   apply: Apply;
   /** Shuffles the slide's pictures; false when no other choice fits. */
   onShuffle: () => boolean;
+  /** "put X as the background here": makes an image request for this slide and says what it did. */
+  onImageText?: (text: string) => string;
   onOpen: () => void;
   onDownload: () => void;
   deckLabel: string;
@@ -73,6 +75,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   const [problem, setProblem] = useState('');
   const run = (r: ReturnType<Apply>) => setProblem(r.ok ? '' : r.reasons[0]);
   const title = `Slide ${index + 1} of ${count}, ${TYPE_LABEL[script.type]}`;
+  const [imgText, setImgText] = useState('');
+  const [imgMsg, setImgMsg] = useState('');
   const used = slide.elementsUsed;
   const rec = script as unknown as Record<string, unknown>;
 
@@ -92,6 +96,13 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
             </p>
           ))}
         {faithfulOf(slide) && <p className="small muted" data-testid="faithful-note">Drawn as the pack's design was written. Checks that cannot run on it: {view?.rendered?.warnings?.length ? 'contrast over art, graphics crossing text, picture overlap' : 'see Make editable'}.</p>}
+        {onImageText && (
+          <label className="tn-field">
+            <span className="field-label">Put a picture here</span>
+            <input className="input" value={imgText} placeholder="put a sunrise as the background here" aria-label={`Picture for slide ${index + 1}`} onChange={(e) => setImgText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setImgMsg(onImageText(imgText)); setImgText(''); } }} />
+            {imgMsg && <span className="small" role="status">{imgMsg}</span>}
+          </label>
+        )}
         {view?.error && <p className="small cr-problem" role="alert">{view.error}</p>}
       </div>
       <div className="cr-edit">

@@ -145,6 +145,17 @@ export async function deleteTemplate(id: string) {
   bump();
 }
 
+/** Replaces a saved pack (for example after a square quote design was added to it). */
+export async function updateTemplatePack(id: string, pack: NonNullable<Template['pack']>) {
+  const t = templateById(id);
+  if (!t) return;
+  const next = { ...t, pack, updatedAt: Date.now() };
+  list = list.map((x) => (x.id === id ? next : x));
+  bump();
+  await persist(next);
+  bump();
+}
+
 // ---------- export and import ----------
 
 export const EXPORT_FORMAT = 'creator-style-templates';

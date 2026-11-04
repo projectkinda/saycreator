@@ -27,6 +27,8 @@ import { SlideCard, type SlideView } from './SlideCard';
 import { Group, PreviewStage, useGroups } from './Studio';
 import { packFor, packFromStyle, distinctCheck } from '../reference/pack';
 import { packPicture } from '../reference/packRender';
+import { ImageRequestsPanel } from '../images/ImageRequestsPanel';
+import { requestFromText, useImagesVersion } from '../images/store';
 import { saveTemplate, styleNameFor as packStyleName } from '../reference/templates';
 import { blankStyle as packBlank } from '../reference/blank';
 import { PASTE_KEY, readStore, useProject, writeStore } from './useProject';
@@ -236,6 +238,7 @@ export default function CarouselPage() {
   const [slides, setSlides] = useState<StyledSlide[]>([]);
   const [margin, setMargin] = useState(80);
   const urls = useRef(new Map<Blob, string>());
+  const imagesVersion = useImagesVersion();
   const token = useRef(0);
   const urlFor = (b: Blob) => {
     let u = urls.current.get(b);
@@ -266,7 +269,7 @@ export default function CarouselPage() {
     // Slides that are being redrawn keep their old picture until the new one is ready.
     setViews((v) => Object.fromEntries(Object.entries(v).filter(([k]) => Number(k) < composed.slides.length).map(([k, x]) => [k, { ...x, status: 'drawing' as const }])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.script, doc.style, doc.format, doc.choices, doc.photos, libVersion, tplVersion, refVersion]);
+  }, [doc.script, doc.style, doc.format, doc.choices, doc.photos, doc.imageRequests, imagesVersion, libVersion, tplVersion, refVersion]);
 
   /** Adds files to the project's pictures. Unusable files are reported in plain words and skipped; the rest are added. */
   /** Remove background: the cutout is made by the cutout provider, the original and the cutout are kept in IndexedDB, and the cutout is added as an object. */
@@ -597,6 +600,7 @@ export default function CarouselPage() {
         </div>
       </details>
 
+      <ImageRequestsPanel doc={doc} apply={apply} />
       <PhotosStrip pictures={pictures} supported={hasPhotoStyle} styleTitle={style?.spec.title ?? 'This style'} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onCutout={makeCutout} editableCutouts={cutouts.ids} onEditCutout={(id) => void editCutout(id)} usedOn={usedOn} storageProblem={currentStorageProblem()} lowRoom={lowRoom} />
       {editing && <CutoutEditor record={editing} onSave={(r) => void saveEdited(r)} onClose={() => setEditing(null)} />}
 
@@ -642,6 +646,12 @@ export default function CarouselPage() {
                 palette={style.spec.palettes[s.palette]}
                 hasPhotoStyle={hasPhotoStyle}
                 addFiles={addFiles}
+                onImageText={(text) => {
+                  const r = requestFromText(text, i, packFor(doc.style)?.palette ?? {});
+                  if (!r) return 'Say what the picture should show.';
+                  apply(patches.setImageRequests([...(doc.imageRequests ?? []), r], `Add a picture request on slide ${i + 1}`));
+                  return `Added a picture request for slide ${i + 1}. Generate it under "Pictures for the image slots".`;
+                }}
               />
             ))}
           </ol>
