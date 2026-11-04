@@ -154,7 +154,7 @@ test('a saved Recreate template on a generated carousel: each slide gets its own
   const title = (s: typeof a) => s.texts.find((t) => t.role === 'title' && !t.hidden);
   expect(title(a)!.text).toBe('Short');
   expect(title(b)!.text).toContain('A rather long headline');
-  expect(title(c)!.text).toBe('87%');
+  expect(title(c)!.text, 'a stat slide: the label is the title, the figure is the number').toBe('of people');
   // The step slide's tag and number are its own; the cover has no number, so a tag with no words is hidden.
   expect(b.texts.find((t) => t.role === 'tag')?.text).toBe('STEP 2');
   expect(a.texts.find((t) => t.role === 'tag')?.hidden).toBe(true);

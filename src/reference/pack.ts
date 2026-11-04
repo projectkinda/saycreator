@@ -46,7 +46,7 @@ export function packSlide(pack: StylePack, slideType: string, slide: Record<stri
   if (key !== 'list' || !texts.body) return fillRecreate({ layers: d, palette: pack.palette, canvas: pack.canvas, notes: [] }, texts);
   // A list: every item keeps a readable size (40 px at least) and its own line; the slot grows downward, and when it still does not fit the items go in two columns.
   const items = texts.body.split('\n').filter(Boolean);
-  const readable = d.map((l) => (l.kind === 'text' && l.name === 'body' ? ({ ...l, slot: { minSize: Math.max(40, l.slot?.minSize ?? 0), maxLines: Math.max(l.slot?.maxLines ?? 0, items.length * 2) } } as RLayer) : l));
+  const readable = d.map((l) => (l.kind === 'text' && l.name === 'body' ? ({ ...l, style: { ...l.style, lineHeight: Math.max(l.style.lineHeight, 1.5) }, slot: { minSize: Math.max(40, l.slot?.minSize ?? 0), maxLines: Math.max(l.slot?.maxLines ?? 0, items.length * 2) } } as RLayer) : l));
   const r = fillRecreate({ layers: readable, palette: pack.palette, canvas: pack.canvas, notes: [] }, texts);
   const i = r.layers.findIndex((l) => l.kind === 'text' && l.name === 'body');
   if (i < 0) return r;

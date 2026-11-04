@@ -22,7 +22,8 @@ for (const run of RUNS.filter((r) => !process.env.PACK_ONLY || r.id === process.
     test.setTimeout(900_000);
     await page.goto('/images/carousel');
     const b64 = run.kind === 'reference' ? fs.readFileSync(FILE).toString('base64') : '';
-    const r = await page.evaluate(async ([run, b64]) => {
+    const replay = process.env.PACK_REPLAY ? fs.readFileSync(process.env.PACK_REPLAY, 'utf8') : '';
+    const r = await page.evaluate(async ([run, b64, replay]) => {
       const I = await import('/src/reference/images.ts');
       const R = await import('/src/reference/recreate.ts');
       const P = await import('/src/reference/pack.ts');
@@ -57,7 +58,9 @@ for (const run of RUNS.filter((r) => !process.env.PACK_ONLY || r.id === process.
       const types = run.size === 'quick' ? ['cover', 'content'] : [...P.PACK_TYPES];
       const t1 = performance.now();
       const prompt = P.buildPackPrompt({ kind: run.kind as 'reference' | 'description', types: types as never, description: (run as { description?: string }).description, firstSvg: first?.svg });
-      const text = await P.callPack(reader, prompt, ref ? [I.readerImageOf(ref.url, 'reference.jpg')] : [], sig);
+      // PACK_REPLAY=<file> answers from a saved model answer, so a fix can be measured again with no model call.
+      const text = replay ? (replay as string) : await P.callPack(reader, prompt, ref ? [I.readerImageOf(ref.url, 'reference.jpg')] : [], sig);
+      (window as unknown as { __packText?: string }).__packText = text;
       calls++;
       const seconds2 = (performance.now() - t1) / 1000;
       const parsed = await P.parsePack(text, run.id);
@@ -142,8 +145,14 @@ for (const run of RUNS.filter((r) => !process.env.PACK_ONLY || r.id === process.
         sheet: await asUrl(await sheet.convertToBlob({ type: 'image/png' })),
         sheet2: await asUrl(await sheet2.convertToBlob({ type: 'image/png' })),
       };
-    }, [run, b64] as const);
+    }, [run, b64, replay] as const).catch(async (e) => {
+      const raw = await page.evaluate(() => (window as unknown as { __packText?: string }).__packText ?? '').catch(() => '');
+      if (raw) fs.writeFileSync(path.join(OUT, `raw-${run.id}.txt`), raw);
+      throw e;
+    });
     const { sheet, sheet2, packJson, ...rest } = r as Record<string, unknown> & { sheet?: string; sheet2?: string; packJson?: string };
+    const rawNow = await page.evaluate(() => (window as unknown as { __packText?: string }).__packText ?? '');
+    if (rawNow) fs.writeFileSync(path.join(OUT, `raw-${run.id}.txt`), rawNow);
     if (packJson) fs.writeFileSync(path.join(OUT, `pack-${run.id}.json`), packJson);
     if (sheet) fs.writeFileSync(path.join(OUT, `sheet-${run.id}.png`), Buffer.from(sheet.split(',')[1], 'base64'));
     if (sheet2) fs.writeFileSync(path.join(OUT, `applied-${run.id}.png`), Buffer.from(sheet2.split(',')[1], 'base64'));

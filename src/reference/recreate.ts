@@ -516,7 +516,7 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
     for (let k = 2; used.has(id); k++) id = `${role}${k}`;
     used.add(id);
     const top = t.y - t.size * 0.82;
-    layers.push({ kind: 'text', id, name: role, role: 'content', x, y: top, width: w, height: Math.ceil(t.size * lh * b.length + t.size * 0.2), rotation: 0, opacity: t.opacity, text: b.map((l) => l.line).join('\n'), style: { font: t.font, weight: nearestWeight(t.font, t.weight), size: Math.round(t.size), color: t.fill, align: t.anchor === 'middle' ? 'center' : t.anchor === 'end' ? 'right' : 'left', valign: 'top', lineHeight: Math.round(lh * 100) / 100 }, autoFit: { minSize: Math.max(32, Math.min(Math.round(t.size), t.min ?? 32)) }, ...(t.min || t.lines ? { slot: { ...(t.min ? { minSize: Math.max(32, t.min) } : {}), ...(t.lines ? { maxLines: Math.max(1, Math.round(t.lines)) } : {}) } } : {}) } as RLayer);
+    layers.push({ kind: 'text', id, name: role, role: 'content', x, y: top, width: w, height: Math.ceil(t.size * lh * b.length + t.size * 0.2), rotation: 0, opacity: t.opacity, text: b.map((l) => l.line).join('\n'), style: { font: t.font, weight: nearestWeight(t.font, t.weight), size: Math.min(600, Math.round(t.size)), color: t.fill, align: t.anchor === 'middle' ? 'center' : t.anchor === 'end' ? 'right' : 'left', valign: 'top', lineHeight: Math.round(lh * 100) / 100 }, autoFit: { minSize: Math.max(32, Math.min(Math.round(t.size), t.min ?? 32)) }, ...(t.min || t.lines ? { slot: { ...(t.min ? { minSize: Math.max(32, t.min) } : {}), ...(t.lines ? { maxLines: Math.max(1, Math.round(t.lines)) } : {}) } } : {}) } as RLayer);
     if (t.ls) notes.push(`Letter spacing on the ${role} text is not drawn (the toolbox has none).`);
   }
   if (invisible) notes.push(`${invisible} part${invisible === 1 ? '' : 's'} of the picture had neither a fill nor a line, so nothing was drawn for ${invisible === 1 ? 'it' : 'them'}.`);
@@ -584,6 +584,7 @@ const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : '');
 export function textsOf(s: SlideLike, handle: string): Partial<Record<RecreateRole, string>> {
   const items = Array.isArray(s.items) ? (s.items as unknown[]).map(str).filter(Boolean) : [];
   const body = str(s.body) || str(s.sub) || str(s.note) || str(s.cta) || items.join('\n') || str(s.author);
+  if (s.type === 'stat') return { kicker: str(s.kicker) || handle, tag: '', title: str(s.label), body: str(s.note), caption: '', number: str(s.value) };
   return {
     kicker: str(s.kicker) || handle,
     tag: typeof s.number === 'number' ? `STEP ${s.number}` : '',
@@ -607,14 +608,20 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
     const floor = Math.max(32, slot?.minSize ?? 32);
     const filled = { ...plain, text, autoFit: { minSize: floor } } as TextLayer;
     // A slot never reaches past the slide: its box was measured from the sample words, which may have run to the edge.
+    filled.style = { ...filled.style, size: Math.min(600, filled.style.size) };
     filled.x = Math.max(0, filled.x);
     filled.width = Math.max(120, Math.min(filled.width, rec.canvas.w - filled.x - rec.canvas.w * 0.05));
     try {
       // A slot with a line limit: the size comes down inside its limits until the words fit in that many lines.
       if (slot?.maxLines) {
+        const startSize = filled.style.size;
         let n = 0;
         while (n++ < 30 && layoutText(filled).lines.length > slot.maxLines && filled.style.size > floor) filled.style = { ...filled.style, size: Math.max(floor, Math.round(filled.style.size * 0.93)) };
-        if (layoutText(filled).lines.length > slot.maxLines) notes.push(`The ${role} text needs more than ${slot.maxLines} lines even at its smallest size (${floor} px).`);
+        if (layoutText(filled).lines.length > slot.maxLines) {
+          // Not at this size and not at the smallest: the line limit gives way, and the slot's own height fits the words.
+          filled.style = { ...filled.style, size: startSize };
+          notes.push(`The ${role} text needs more than ${slot.maxLines} lines, so it takes the room its place has.`);
+        }
       }
       const b = layoutText(filled);
       if (b.size < l.style.size * 0.97) notes.push(`The ${role} text was made smaller (${l.style.size} to ${Math.round(b.size)} px) to fit its place.`);
