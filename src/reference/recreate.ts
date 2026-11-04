@@ -1,7 +1,7 @@
 // Recreate mode: the model draws a carousel reference as one SVG slide; the code makes it safe, turns it into editable plan layers (text with roles, graphic
 // groups as path sub-layers, background and shapes), and fills those layers with the person's own words. The reference pixels are never embedded anywhere.
 import type { FontFamily, Layer, ShapeLayer, TextLayer } from '../image-engine/types';
-import { extractImageSlots, injectSlots, slotMarkup } from '../images/slots';
+import { extractImageSlots, injectSlots, slotCells, slotMarkup, type ImageSlot } from '../images/slots';
 import { FONT_WEIGHTS, loadFonts } from '../image-engine/fonts';
 import { layoutText } from '../image-engine/draw/text';
 import { activeReference } from './active';
@@ -384,6 +384,8 @@ export const segsToD = (segs: Seg[]) => segs.map((s) => (s.c === 'Z' ? 'Z' : `${
 /** A layer of the recreated slide. Colours may be palette tokens like "$accent"; the layer's `name` is its role (text) or its group (graphics). */
 export type RLayer = Layer & { name: string; /** A text slot's limits (from data-min-size and data-max-lines): the size never goes under minSize (32 at least), the words wrap to at most maxLines. */ slot?: { minSize?: number; maxLines?: number; maxSize?: number }; /** Where this layer came from in the clean SVG (element order), for the faithful view. */ src?: number; srcAll?: number[] };
 export interface RecreateSpec {
+  /** The photo regions of the slide (id, kind, box, mask, fit, focal): never a picture. The carousel fills them from its image requests. */
+  slots?: ImageSlot[];
   layers: RLayer[];
   palette: Record<string, string>;
   canvas: { w: number; h: number };
@@ -430,6 +432,7 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
   gradEls.forEach((g) => g.localName.toLowerCase() === 'radialgradient' && radial.add(g.id));
   const index = new Map(Array.from(root.querySelectorAll('*')).map((e, i) => [e, i] as const));
   let radialUsed = 0;
+  let gradStroke = 0;
   let stretched = 0;
   let dashed = 0;
   let referenced = 0;
@@ -490,7 +493,15 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
       return h ? `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${Math.round(a * 100) / 100})` : c;
     };
     const num = (a: string, d = 0) => parseFloat(el.getAttribute(a) ?? '') || d;
-    const stroke = cur.stroke !== 'none' && cur.sw > 0 ? { color: alpha(cur.stroke, cur.so), width: Math.max(1, Math.round(cur.sw * scaleOf(m) * 10) / 10) } : undefined;
+    // The plan has no gradient lines: a line painted with a gradient takes the colour of the middle of that gradient (said in the notes).
+    const strokeSrc = ((): string => {
+      const u = /^url(#([w-]+))$/.exec(cur.stroke);
+      if (!u) return cur.stroke;
+      gradStroke++;
+      const g = grads.get(u[1]);
+      return g ? String((g.stops[Math.floor(g.stops.length / 2)] as { color: string }).color) : '#888888';
+    })();
+    const stroke = cur.stroke !== 'none' && cur.sw > 0 ? { color: alpha(strokeSrc, cur.so), width: Math.max(1, Math.round(cur.sw * scaleOf(m) * 10) / 10) } : undefined;
     if (tag === 'rect' || tag === 'circle' || tag === 'ellipse') {
       const w = tag === 'rect' ? num('width') : tag === 'circle' ? 2 * num('r') : 2 * num('rx');
       const h = tag === 'rect' ? num('height') : tag === 'circle' ? 2 * num('r') : 2 * num('ry');
@@ -604,6 +615,7 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
   }
   if (invisible) notes.push(`${invisible} part${invisible === 1 ? '' : 's'} of the picture had neither a fill nor a line, so nothing was drawn for ${invisible === 1 ? 'it' : 'them'}.`);
   if (stretched) notes.push(`${stretched} text line${stretched === 1 ? ' was' : 's were'} stretched to a set length in the picture; the layers draw ${stretched === 1 ? 'it' : 'them'} at the natural width.`);
+  if (gradStroke) notes.push(`${gradStroke} line${gradStroke === 1 ? '' : 's'} painted with a gradient drawn in one colour (the plan has no gradient lines).`);
   if (radialUsed) notes.push(`${radialUsed} radial gradient${radialUsed === 1 ? '' : 's'} drawn as a linear one (the plan has no radial gradients).`);
   if (dashed) notes.push(`${dashed} dashed line${dashed === 1 ? '' : 's'} drawn solid (the plan has no dashes).`);
   if (referenced) notes.push(`${referenced} clip or mask reference${referenced === 1 ? '' : 's'} not applied.`);
@@ -814,6 +826,7 @@ export interface RecreateResult {
   palette: Record<string, string>;
   notes: string[];
   wished: { wish: string; used: string }[];
+  slots: ImageSlot[];
 }
 
 /** From the model's answer to layers, or the reasons in plain words. */
@@ -826,8 +839,29 @@ export async function answerToLayers(text: string, ctx: RecreateCtx): Promise<{ 
   const t = tokenise(layers);
   // Photo slots: the faithful picture shows the clean placeholder in each slot's mask (never abstract shapes); the layers keep a placeholder block named photo-slot-N.
   const ex = extractImageSlots(s.svg);
+  const tagged = new Set<string>();
+  for (const sl of ex.slots) {
+    const near = t.layers.filter((l) => l.name.startsWith('photo-slot') && !tagged.has(l.id)).sort((p, q) => Math.abs(p.x - sl.x) + Math.abs(p.y - sl.y) + Math.abs(p.width - sl.w) + Math.abs(p.height - sl.h) - (Math.abs(q.x - sl.x) + Math.abs(q.y - sl.y) + Math.abs(q.width - sl.w) + Math.abs(q.height - sl.h)))[0];
+    if (near) {
+      tagged.add(near.id);
+      near.name = `photo-slot-${sl.id}`;
+    }
+  }
   const svg = ex.slots.length ? injectSlots(ex.svg, Object.fromEntries(ex.slots.map((sl) => [sl.id, slotMarkup(sl, [], { palette: t.palette })]))) : s.svg;
-  return { ok: true, result: { svg, layers: t.layers, palette: t.palette, notes: [...s.reasons, ...notes], wished: s.wished } };
+  return { ok: true, result: { svg, layers: t.layers, palette: t.palette, notes: [...s.reasons, ...notes], wished: s.wished, slots: ex.slots } };
+}
+
+/** The slots filled for one slide: each slot's placeholder block becomes the picture(s) from its image requests (the image layers of the editable form); an empty slot keeps its placeholder. */
+export function applyPhotoSlots(layers: Layer[], slots: ImageSlot[], fills: Record<string, ({ url: string } | null)[]>): Layer[] {
+  let out = layers;
+  for (const s of slots) {
+    const at = out.findIndex((l) => l.name === `photo-slot-${s.id}`);
+    const f = fills[s.id] ?? [];
+    if (at < 0 || !f.some(Boolean)) continue;
+    const imgs = slotCells(s).flatMap((c, i) => (f[i] ? [{ kind: 'image', id: `${s.id}-img${i}`, name: `image-${s.id}`, role: 'decor', rotation: 0, opacity: 1, x: c.x, y: c.y, width: c.w, height: c.h, src: f[i]!.url, fit: 'cover' } as unknown as Layer] : []));
+    out = [...out.slice(0, at), ...imgs, ...out.slice(at + 1)];
+  }
+  return out;
 }
 
 /** Turns the photo-slot placeholder layers into image layers holding the given picture (null: the placeholders stay). */

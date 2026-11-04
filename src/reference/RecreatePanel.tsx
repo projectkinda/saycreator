@@ -13,6 +13,7 @@ import { listElements } from '../image-engine/assets/library';
 import { PackMaker } from './PackMaker';
 import { svgToPng } from './faithful';
 import { chooseSlide } from './slides';
+import type { ImageSlot } from '../images/slots';
 
 const W = 1080;
 const H = 1350;
@@ -109,6 +110,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
   const [edited, setEdited] = useState(false);
   const editedRef = useRef(false);
   const svgRef = useRef('');
+  const slotsRef = useRef<ImageSlot[]>([]);
   const [q, setQ] = useState('');
   const abort = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -132,15 +134,24 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     }
   }, [removed]);
 
-  const publish = async (s: State, n: string[] = notes, svgText?: string) => {
+  /** Publishes the layers as the active look and draws the view. Returns the reason in plain words when the editable layers could not be drawn (the picture as the reader drew it is then kept). */
+  const publish = async (s: State, n: string[] = notes, svgText?: string): Promise<string | null> => {
     const spec = { ...blankStyle(), name: 'recreated', title: 'Recreated look' };
-    const rec: RecreateSpec = { layers: s.layers, palette: s.palette, canvas: { w: W, h: H }, notes: n };
+    const rec: RecreateSpec = { layers: s.layers, palette: s.palette, canvas: { w: W, h: H }, notes: n, ...(slotsRef.current.length ? { slots: slotsRef.current } : {}) };
     setActiveReference({ spec, thumb: ref ? await previewOf(await (await fetch(ref.url)).blob(), 160) : '', learn: 'everything', target: 'carousel', ratioNote: null, photoRegion: null, source: 'recreate', recreate: rec });
     try {
       const asWritten = svgText ?? svg;
       setView(await blobUrl(!editedRef.current && asWritten ? await svgToPng(asWritten, 540) : await renderUrl(s, 0.5)));
-    } catch {
-      setView('');
+      return null;
+    } catch (e) {
+      const why = String((e as Error)?.message ?? e).replace(/^This plan cannot be drawn:s*/, '');
+      try {
+        const asWritten = svgText ?? svg;
+        setView(asWritten ? await blobUrl(await svgToPng(asWritten, 540)) : '');
+      } catch {
+        setView('');
+      }
+      return why;
     }
   };
   const ctx = { w: W, h: H, ownRoles };
@@ -211,6 +222,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     editedRef.current = false;
     setEdited(false);
     svgRef.current = r.result.svg;
+    slotsRef.current = r.result.slots;
     setSvg(r.result.svg);
     await publish(next, n, r.result.svg);
     return true;
@@ -259,6 +271,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     editedRef.current = false;
     setEdited(false);
     svgRef.current = r.result.svg;
+    slotsRef.current = r.result.slots;
     setSvg(r.result.svg);
     await publish(next, n, r.result.svg);
     return true;
@@ -343,7 +356,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     // The preview is a render of the recreated layers, never the reference.
     // Until the person edits, the template's picture is the faithful render.
     const preview = await previewOf(!editedRef.current && svg ? await svgToPng(svg, 360) : await renderUrl(state, 0.3), 360);
-    const rec: RecreateSpec = { layers: state.layers, palette: state.palette, canvas: { w: W, h: H }, notes };
+    const rec: RecreateSpec = { layers: state.layers, palette: state.palette, canvas: { w: W, h: H }, notes, ...(slotsRef.current.length ? { slots: slotsRef.current } : {}) };
     await saveTemplate({ name, target: 'carousel', spec: { ...blankStyle(), name: styleNameFor(name), title: name }, preview, recreate: rec });
     setMsg(`Saved “${name}” as a template: the layers and palette only, no reference pixels. New text refits its places with no model call.`);
   };
@@ -392,7 +405,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
               <input className="input" value={words} onChange={(e) => setWords(e.target.value)} aria-label="Your words for the correction" />
             </label>
             <button type="button" className="btn btn-outline btn-sm" disabled={busy || calls >= RECREATE_CAP} onClick={() => void improve()}>Improve (one model call)</button>
-            {!edited && <button type="button" className="btn btn-outline btn-sm" onClick={() => { editedRef.current = true; setEdited(true); void publish(state); setMsg(`Now drawn from editable layers. ${notes.length ? `What changes: ${notes.slice(0, 4).join(' ')}` : 'Nothing was lost in the conversion.'}`); }}>Make editable</button>}
+            {!edited && <button type="button" className="btn btn-outline btn-sm" onClick={() => { editedRef.current = true; setEdited(true); void publish(state).then((why) => { if (why) { editedRef.current = false; setEdited(false); setMsg(`Make editable stopped: ${why} The picture as the reader drew it stays shown.`); } else setMsg(`Now drawn from editable layers. ${notes.length ? `What changes: ${notes.slice(0, 4).join(' ')}` : 'Nothing was lost in the conversion.'}`); }); }}>Make editable</button>}
             <button type="button" className="btn btn-outline btn-sm" disabled={past.length === 0} onClick={() => step('undo')}>Undo</button>
             <button type="button" className="btn btn-outline btn-sm" disabled={future.length === 0} onClick={() => step('redo')}>Redo</button>
             <button type="button" className="btn btn-outline btn-sm" onClick={() => void save()}>Save as template</button>
