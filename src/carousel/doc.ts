@@ -6,6 +6,7 @@ import type { Platform } from './platform';
 import type { ObjectChoice } from '../image-engine/photo/objects';
 import type { PhotoChoice, TreatmentChoice } from './photoChoices';
 import type { PictureMeta } from './photoLibrary';
+import type { ImageRequest } from '../images/store';
 
 export interface SlideChoice {
   layout?: string;
@@ -42,6 +43,8 @@ export interface Doc {
   options?: GenerateOptions;
   /** The pictures the person added (the pictures themselves are in the browser's storage). Not part of the undo history. */
   photos?: PictureMeta[];
+  /** Pictures asked for (or added) for the image slots of pack designs; the pictures themselves are in the browser's storage. */
+  imageRequests?: ImageRequest[];
   script: CarouselScript | null;
   /** By slide number, "0" for the first slide. */
   choices: Record<string, SlideChoice>;
@@ -171,6 +174,7 @@ const slidePath = (i: number, ...rest: Path): Path => ['script', 'slides', i, ..
 export const patches = {
   editField: (i: number, field: string, label: string, value: unknown): DocPatch => ({ label: `Edit ${label.toLowerCase()} on slide ${i + 1}`, coalesce: `field:${i}:${field}`, ops: [{ path: slidePath(i, field), value }] }),
   editTags: (i: number, tags: string[]): DocPatch => ({ label: `Change tags on slide ${i + 1}`, coalesce: `tags:${i}`, ops: [{ path: slidePath(i, 'element_tags'), value: tags }] }),
+  setImageRequests: (list: ImageRequest[], label = 'Change the image requests'): DocPatch => ({ label, ops: [{ path: ['imageRequests'], value: list }] }),
   makeEditable: (i: number): DocPatch => ({ label: `Make slide ${i + 1} editable`, ops: [{ path: ['choices', String(i), 'editable'], value: true }] }),
   layout: (i: number, layout: string): DocPatch => ({ label: `Change layout on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'layout'], value: layout }] }),
   swap: (i: number, from: string, to: string): DocPatch => ({ label: `Swap an element on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'swaps', from], value: to }] }),

@@ -10,6 +10,8 @@ import { fillRecreate, FONT_NAMES, sanitizeSvg, svgToLayers, textsOf, type RLaye
 import { layoutText } from '../image-engine/draw/text';
 import type { Layer, TextLayer } from '../image-engine/types';
 import { faithfulSvg, resolveSvgTokens, type FaithfulSlot } from './faithful';
+import { extractImageSlots, injectSlots, scrimFor, slotMarkup, type ImageSlot } from '../images/slots';
+import { fillsFor, type ImageRequest } from '../images/store';
 import type { ReaderImage, ReferenceReader } from './reader';
 
 export const PACK_TYPES = ['cover', 'step', 'content', 'list', 'stat', 'quote', 'cta'] as const;
@@ -28,6 +30,13 @@ export interface SlotMeta {
   maxSize?: number;
   maxLines?: number;
 }
+export interface SquareDesign {
+  layers: RLayer[];
+  svg?: string;
+  slots?: ImageSlot[];
+  slotMeta?: SlotMeta[];
+  canvas: { w: number; h: number };
+}
 export interface StylePack {
   name: string;
   /** Colour names the designs use ("$bg", "$accent", ...). */
@@ -38,6 +47,10 @@ export interface StylePack {
   designs: Partial<Record<PackType | 'base', RLayer[]>>;
   /** The sanitised SVG of each design, as drawn (colours as palette names, text slots marked): the faithful form. The layers above are its editable form. */
   svgs?: Partial<Record<PackType | 'base', string>>;
+  /** Each design's image slots (where pictures go): kind, box, mask, fit, focal, scrim. Never a picture. */
+  imageSlots?: Partial<Record<PackType | 'base', ImageSlot[]>>;
+  /** A square (1:1) quote design: quote posts use it instead of the 4:5 one scaled. */
+  square?: SquareDesign;
   /** Each design's text slots: role, box (px of the canvas), size limits, line limit. */
   slotMeta?: Partial<Record<PackType | 'base', SlotMeta[]>>;
   canvas: { w: number; h: number };
@@ -66,18 +79,81 @@ export interface PackSlide {
   hidden?: number[];
   /** The design's SVG with the slide's words in it, as written (colours resolved); absent when the pack has no SVG for this design. */
   faithful?: string;
+  /** The canvas this slide was drawn on (a square quote design is 1080 by 1080). */
+  canvas?: { w: number; h: number };
 }
 /** The slide's own words in the pack's design: the editable layers, and the faithful SVG when the pack kept the drawing. No model call. */
-export function packSlide(pack: StylePack, slideType: string, slide: Record<string, unknown>, handle: string): PackSlide {
-  const r = packLayers(pack, slideType, slide, handle);
-  const used = designUsed(pack, slideType);
-  const svg = used ? pack.svgs?.[used] : undefined;
-  if (!svg || !r.slots) return r;
-  try {
-    return { ...r, faithful: faithfulSvg(resolveSvgTokens(svg, pack.palette), pack.canvas.w, r.slots, r.hidden ?? []) };
-  } catch {
-    return r;
+export function packSlide(pack: StylePack, slideType: string, slide: Record<string, unknown>, handle: string, opts: { square?: boolean; images?: ImageRequest[]; slide?: number } = {}): PackSlide {
+  const p = opts.square && designKey(slideType) === 'quote' && pack.square ? squareView(pack) : pack;
+  const r = packLayers(p, slideType, slide, handle);
+  const used = designUsed(p, slideType);
+  const svg = used ? p.svgs?.[used] : undefined;
+  let layers = r.layers;
+  let faithful: string | undefined;
+  if (svg && r.slots) {
+    try {
+      faithful = faithfulSvg(resolveSvgTokens(svg, p.palette), p.canvas.w, r.slots, r.hidden ?? []);
+    } catch {
+      faithful = undefined;
+    }
   }
+  const slots = slotsFor(p, slideType);
+  if (slots.length) {
+    const fills = fillsFor(opts.images, opts.slide ?? 0, slots, p.palette);
+    const markup: Record<string, string> = {};
+    const veils: Record<string, { color: string; amount: number } | null> = {};
+    for (const s of slots) {
+      // The text over a slot decides the scrim: the contrast safety net darkens (or lightens) the picture until that text keeps 4.5:1.
+      const over = layers.filter((l): l is TextLayer => l.kind === 'text' && l.visible !== false && l.x < s.x + s.w && l.x + l.width > s.x && l.y < s.y + s.h && l.y + l.height > s.y).map((l) => String(l.style.color));
+      const first = fills[s.id].find(Boolean);
+      const scrim = first ? scrimFor(over, first, s.scrim) : null;
+      veils[s.id] = scrim;
+      markup[s.id] = slotMarkup(s, fills[s.id], { palette: p.palette, scrim });
+    }
+    if (faithful) faithful = injectSlots(faithful, markup);
+    layers = withImageLayers(layers, slots, fills, p.palette, veils);
+  }
+  return { ...r, layers, canvas: p.canvas, ...(faithful ? { faithful } : {}) };
+}
+
+/** The pack seen as its square quote design: the quote design, canvas and slots are the square ones. */
+function squareView(pack: StylePack): StylePack {
+  const sq = pack.square!;
+  const svgs = { ...pack.svgs };
+  if (sq.svg) svgs.quote = sq.svg;
+  else delete svgs.quote;
+  return { ...pack, canvas: sq.canvas, designs: { ...pack.designs, quote: sq.layers }, svgs, imageSlots: { ...pack.imageSlots, quote: sq.slots ?? [] } };
+}
+/** The image slots of the design a slide type uses (the square quote design's when `square`). */
+export function slotsFor(pack: StylePack, slideType: string, square = false): ImageSlot[] {
+  const p = square && designKey(slideType) === 'quote' && pack.square ? squareView(pack) : pack;
+  const used = designUsed(p, slideType);
+  return used ? (p.imageSlots?.[used] ?? []) : [];
+}
+/** The editable form of the slots: each picture as an image layer, a flat veil for the scrim, a soft block for an empty slot (a background slot has none). The mask is only in the faithful drawing. */
+function withImageLayers(layers: Layer[], slots: ImageSlot[], fills: Record<string, ({ url: string } | null)[]>, palette: Record<string, string>, veils: Record<string, { color: string; amount: number } | null>): Layer[] {
+  const bg: Layer[] = [];
+  const rest: Layer[] = [];
+  for (const s of slots) {
+    const cells = s.kind === 'strip' ? (s.count ?? 3) : 1;
+    const gap = 12;
+    const w = (s.w - gap * (cells - 1)) / cells;
+    for (let i = 0; i < cells; i++) {
+      const base = { rotation: 0, x: s.x + i * (w + gap), y: s.y, width: w, height: s.h, role: 'decor' as const };
+      const f = fills[s.id]?.[i];
+      const out = s.kind === 'background' ? bg : rest;
+      if (f) {
+        out.push({ ...base, kind: 'image', id: `${s.id}-img${i}`, name: `image-${s.id}`, opacity: 1, src: f.url, fit: 'cover' } as unknown as Layer);
+        const v = veils[s.id];
+        if (v) out.push({ ...base, kind: 'shape', id: `${s.id}-veil${i}`, name: `scrim-${s.id}`, opacity: Math.min(0.9, v.amount * 0.8), shape: 'rect', fill: v.color } as unknown as Layer);
+      } else if (s.kind !== 'background') out.push({ ...base, kind: 'shape', id: `${s.id}-empty${i}`, name: `placeholder-${s.id}`, opacity: 0.5, shape: s.mask === 'circle' ? 'ellipse' : 'rect', fill: palette.surface ?? palette.muted ?? '#D9D9D9' } as unknown as Layer);
+    }
+  }
+  const at = layers.findIndex((l) => l.kind === 'text');
+  const head = layers.slice(0, Math.min(1, layers.length));
+  const mid = layers.slice(head.length, at < 0 ? layers.length : at);
+  const tail = at < 0 ? [] : layers.slice(at);
+  return [...head, ...bg, ...mid, ...rest, ...tail];
 }
 
 function packLayers(pack: StylePack, slideType: string, slide: Record<string, unknown>, handle: string): PackSlide {
@@ -164,6 +240,8 @@ export function buildPackPrompt(o: { kind: 'reference' | 'description'; types: P
     `Fonts: only these bundled ones: ${fontLine()}. If none fits a text, use the nearest and add data-font-wish="the family you wanted".`,
     'EVERY design MUST have real <text> elements for its text slots (at least a title or a body, each with data-role). Words drawn as outlines or paths, or text left out, are refused and the design is asked for again.',
     o.retry ? `Your previous answer was refused for: ${o.retry}. Make ONLY the slide types listed above again.` : '',
+    'Image slots (optional, where a photo or picture would fit on that slide type, at most 2 per design): draw one as <rect data-image-slot="background|inset|half-bleed|strip|cutout" data-mask="rect|rounded|circle|arch|blob" data-fit="cover|contain" data-scrim="0.4" data-scrim-from="bottom" x=".." y=".." width=".." height=".."/> (a strip also has data-count="2" or "3"). NEVER an <image> and never a link or picture data: the slot stays empty until the person adds a picture. Keep the text slots clear of it or on its scrim.',
+    'ALSO make one extra <svg data-type="quote" data-format="square" viewBox="0 0 1080 1080"> after the others: a 1:1 quote post for the same look (data-role title for the quote and caption for who said it), composed for a square, not the 4:5 quote scaled down. It may have a background or inset image slot too.',
     'Graphics (motifs, shapes, doodles, patterns, dots) are plain shapes and paths; every group of them is a <g id="short-name">. Allowed elements only: svg, g, path, circle, ellipse, rect, line, polyline, polygon, defs, linearGradient, radialGradient, stop, clipPath, mask, pattern, text, tspan. No images, no scripts, no external references. The first element of each design is the full-size background <rect>.',
   ].filter(Boolean).join('\n');
 }
@@ -195,6 +273,8 @@ export async function parsePack(text: string, name: string, fallbackPalette?: Re
   await loadFonts();
   const designs: StylePack['designs'] = {};
   const svgs: NonNullable<StylePack['svgs']> = {};
+  const imageSlots: NonNullable<StylePack['imageSlots']> = {};
+  let square: SquareDesign | undefined;
   const slotMeta: NonNullable<StylePack['slotMeta']> = {};
   const problems: string[] = [];
   const notes: string[] = [];
@@ -204,12 +284,16 @@ export async function parsePack(text: string, name: string, fallbackPalette?: Re
       problems.push(`A design without a known data-type (${PACK_TYPES.join(', ')}) was left out.`);
       continue;
     }
-    const s = sanitizeSvg(b.replace(/data-palette\s*=\s*'[^']*'|data-palette\s*=\s*"[^"]*"/i, ''));
+    // Image slots come out first (a marker stays in the drawing); a picture is never kept in the SVG.
+    const ex = extractImageSlots(b);
+    const isSquare = /data-format\s*=\s*["']square["']/i.test(b);
+    const dims = isSquare ? { w: 1080, h: 1080 } : SIZE;
+    const s = sanitizeSvg(ex.svg.replace(/data-palette\s*=\s*'[^']*'|data-palette\s*=\s*"[^"]*"/i, ''));
     if (!s.svg) {
       problems.push(`${t}: ${s.reasons.join(' ')}`);
       continue;
     }
-    const { layers, notes: n } = svgToLayers(s.svg, SIZE.w, SIZE.h);
+    const { layers, notes: n } = svgToLayers(s.svg, dims.w, dims.h);
     if (layers.length < 2) {
       problems.push(`${t}: nothing drawable was in the picture.`);
       continue;
@@ -219,7 +303,15 @@ export async function parsePack(text: string, name: string, fallbackPalette?: Re
       problems.push(`${t}: no text slots (<text> elements with data-role), so the design was left out.`);
       continue;
     }
+    if (isSquare) {
+      if (t === 'quote') {
+        square = { layers, svg: s.svg, slots: ex.slots, slotMeta: slotMetaOf(layers), canvas: { w: 1080, h: 1080 } };
+        notes.push('quote (square): a 1:1 design for quote posts.');
+      }
+      continue;
+    }
     designs[t as PackType] = layers;
+    if (ex.slots.length) imageSlots[t as PackType] = ex.slots;
     svgs[t as PackType] = s.svg;
     slotMeta[t as PackType] = slotMetaOf(layers);
     notes.push(...n.map((x) => `${t}: ${x}`), ...s.wished.map((w) => `${t}: font wanted ${w.wish}, used ${w.used}.`));
@@ -231,7 +323,7 @@ export async function parsePack(text: string, name: string, fallbackPalette?: Re
     const bo = first.find((l) => l.name === 'body')?.style.font ?? 'Instrument Sans';
     return { headline: h, body: bo };
   })();
-  return { ok: true, problems, pack: { name, palette, fonts, motifs: [], designs, svgs, slotMeta, canvas: { ...SIZE }, notes } };
+  return { ok: true, problems, pack: { name, palette, fonts, motifs: [], designs, svgs, slotMeta, ...(Object.keys(imageSlots).length ? { imageSlots } : {}), ...(square ? { square } : {}), canvas: { ...SIZE }, notes } };
 }
 
 export async function callPack(reader: ReferenceReader, prompt: string, images: ReaderImage[], signal: AbortSignal): Promise<string> {
@@ -266,6 +358,18 @@ export function packFromStyle(spec: StyleSpec): StylePack {
     quote: [bg(), T('quotemark', 6, 3, 30, 20, 420, { font: 'headline', colour: '$accent', lines: 1, min: 200, sample: '“' }), T('title', 10, 27, 80, 42, 76, { font: 'headline', lines: 6, min: 40, lh: 1.2 }), T('caption', 10, 74, 80, 6, 38, { colour: '$muted', lines: 2 }), block('foot', 0, 97, 100, 3, '$accent')],
     cta: [bg(), block('top-block', 0, 0, 100, 55, '$accent'), T('title', 7, 11, 86, 36, 112, { font: 'headline', colour: '$onAccent', lines: 4, min: 56, lh: 1.05 }), T('body', 7, 62, 86, 14, 46, { lines: 4 }), block('button', 7, 80, 50, 8, '$accent', { radius: 60 }), T('kicker', 7, 81.4, 50, 5, 40, { colour: '$onAccent', align: 'center', lines: 1 })],
   };
-  const pack: StylePack = { name: `${spec.title} pack`, palette, fonts, motifs: [], designs, canvas: { ...SIZE }, notes: [`Built from the ${spec.title} style: its colours and fonts, a different composition for each slide type.`] };
+  // Image slots (empty until the person adds pictures) and a square quote design, built by the code too.
+  const slot = (id: string, kind: ImageSlot['kind'], x: number, y: number, w: number, h: number, mask: ImageSlot['mask'], scrim?: ImageSlot['scrim']): ImageSlot => ({ id, kind, x, y, w, h, mask, fit: 'cover', focal: { x: 0.5, y: 0.5 }, ...(scrim ? { scrim } : {}) });
+  const P = (px: number, py: number, pw: number, ph: number): [number, number, number, number] => [px / 10.8, py / 13.5, pw / 10.8, ph / 13.5];
+  const sq = {
+    layers: [bg(), T('title', ...P(90, 230, 900, 560), 78, { font: 'headline', lines: 7, min: 44, lh: 1.2 }), T('caption', ...P(330, 880, 660, 100), 40, { colour: '$muted', lines: 2 }), block('foot', ...P(0, 1050, 1080, 30), '$accent')],
+    slots: [slot('square-bg', 'background', 0, 0, 1080, 1080, 'rect', { amount: 0.4, from: 'all' }), slot('square-inset', 'inset', 90, 840, 190, 190, 'circle')],
+    canvas: { w: 1080, h: 1080 },
+  } as SquareDesign;
+  const imageSlots: StylePack['imageSlots'] = {
+    cover: [slot('cover-bg', 'background', 0, 0, 1080, 1350, 'rect', { amount: 0.45, from: 'bottom' })],
+    content: [slot('content-inset', 'inset', 616, 675, 389, 405, 'rounded')],
+  };
+  const pack: StylePack = { name: `${spec.title} pack`, palette, fonts, motifs: [], designs, imageSlots, square: sq, canvas: { ...SIZE }, notes: [`Built from the ${spec.title} style: its colours and fonts, a different composition for each slide type.`] };
   return pack;
 }
