@@ -7,6 +7,7 @@ import type { ObjectChoice } from '../image-engine/photo/objects';
 import type { PhotoChoice, TreatmentChoice } from './photoChoices';
 import type { PictureMeta } from './photoLibrary';
 import type { ImageRequest } from '../images/store';
+import type { Designed } from './designed';
 
 export interface SlideChoice {
   layout?: string;
@@ -29,6 +30,10 @@ export interface GenerateOptions {
   handle: string;
   /** Where it will be posted. null: nowhere in particular, so no slide limit. Saved with the project. */
   platform: Platform | null;
+  /** "designed": the model designs every slide (default); "quick": templates, no design call. */
+  mode?: 'designed' | 'quick';
+  /** The look in words, when no pack is chosen (Designed mode). */
+  brief?: string;
 }
 export const DEFAULT_OPTIONS: GenerateOptions = { slides: 7, tone: 'clear', autoStyle: true, handle: '', platform: null };
 
@@ -45,6 +50,8 @@ export interface Doc {
   photos?: PictureMeta[];
   /** Pictures asked for (or added) for the image slots of pack designs; the pictures themselves are in the browser's storage. */
   imageRequests?: ImageRequest[];
+  /** Designed mode: the model's own design for each slide (a slide without one uses the style). */
+  designed?: Designed;
   script: CarouselScript | null;
   /** By slide number, "0" for the first slide. */
   choices: Record<string, SlideChoice>;
@@ -175,6 +182,7 @@ export const patches = {
   editField: (i: number, field: string, label: string, value: unknown): DocPatch => ({ label: `Edit ${label.toLowerCase()} on slide ${i + 1}`, coalesce: `field:${i}:${field}`, ops: [{ path: slidePath(i, field), value }] }),
   editTags: (i: number, tags: string[]): DocPatch => ({ label: `Change tags on slide ${i + 1}`, coalesce: `tags:${i}`, ops: [{ path: slidePath(i, 'element_tags'), value: tags }] }),
   setImageRequests: (list: ImageRequest[], label = 'Change the image requests'): DocPatch => ({ label, ops: [{ path: ['imageRequests'], value: list }] }),
+  setDesigned: (d: Designed | undefined, label = 'Change the slide designs'): DocPatch => ({ label, ops: [{ path: ['designed'], value: d }] }),
   makeEditable: (i: number): DocPatch => ({ label: `Make slide ${i + 1} editable`, ops: [{ path: ['choices', String(i), 'editable'], value: true }] }),
   layout: (i: number, layout: string): DocPatch => ({ label: `Change layout on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'layout'], value: layout }] }),
   swap: (i: number, from: string, to: string): DocPatch => ({ label: `Swap an element on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'swaps', from], value: to }] }),
@@ -196,5 +204,5 @@ export const patches = {
   /** The whole result of one Generate, so one Undo takes it back. */
   generate: (script: CarouselScript, style: string | null, title: string): DocPatch => ({ label: title, ops: [{ path: ['script'], value: script }, { path: ['choices'], value: {} }, ...(style ? [{ path: ['style'] as Path, value: style }] : [])] }),
   format: (format: Format, clearScript: boolean): DocPatch => ({ label: `Change format to ${format === 'carousel' ? 'carousel' : 'quote card'}`, ops: [{ path: ['format'], value: format }, ...(clearScript ? [{ path: ['script'] as Path, value: null }, { path: ['choices'] as Path, value: {} }] : [])] }),
-  useScript: (script: CarouselScript): DocPatch => ({ label: 'Load the script', ops: [{ path: ['script'], value: script }, { path: ['choices'], value: {} }] }),
+  useScript: (script: CarouselScript): DocPatch => ({ label: 'Load the script', ops: [{ path: ['script'], value: script }, { path: ['choices'], value: {} }, { path: ['designed'], value: undefined }] }),
 };

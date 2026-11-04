@@ -48,7 +48,7 @@ function Alternatives({ slide, info, used, onPick }: { slide: StyledSlide; info:
   );
 }
 
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -67,6 +67,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   onShuffle: () => boolean;
   /** "put X as the background here": makes an image request for this slide and says what it did. */
   onImageText?: (text: string) => string;
+  /** Designed decks: a small model call for this slide's design; says what happened. */
+  onRedesign?: (words: string) => Promise<string>;
   onOpen: () => void;
   onDownload: () => void;
   deckLabel: string;
@@ -77,6 +79,9 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   const title = `Slide ${index + 1} of ${count}, ${TYPE_LABEL[script.type]}`;
   const [imgText, setImgText] = useState('');
   const [imgMsg, setImgMsg] = useState('');
+  const [rdWords, setRdWords] = useState('');
+  const [rdMsg, setRdMsg] = useState('');
+  const [rdBusy, setRdBusy] = useState(false);
   const used = slide.elementsUsed;
   const rec = script as unknown as Record<string, unknown>;
 
@@ -88,7 +93,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
         </button>
         <LintBadges lint={view?.rendered?.lint} />
         {slide.notes
-          .filter((n) => n.startsWith("Highlight '"))
+          .filter((n) => n.startsWith("Highlight '") || n.startsWith("This slide fell back"))
           .map((n) => (
             <p key={n} className="small cr-warn" role="status">
               <span aria-hidden="true">⚠ </span>
@@ -102,6 +107,16 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
             <input className="input" value={imgText} placeholder="put a sunrise as the background here" aria-label={`Picture for slide ${index + 1}`} onChange={(e) => setImgText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setImgMsg(onImageText(imgText)); setImgText(''); } }} />
             {imgMsg && <span className="small" role="status">{imgMsg}</span>}
           </label>
+        )}
+        {onRedesign && (
+          <div className="tn-field" data-testid={`redesign-${index}`}>
+            <span className="field-label">Redesign this slide (one small model call)</span>
+            <input className="input" value={rdWords} disabled={rdBusy} placeholder="optional: bolder, with a clock icon" aria-label={`Words for redesigning slide ${index + 1}`} onChange={(e) => setRdWords(e.target.value)} />
+            <button type="button" className="btn btn-outline btn-sm" disabled={rdBusy} onClick={async () => { setRdBusy(true); setRdMsg(''); setRdMsg(await onRedesign(rdWords)); setRdBusy(false); }}>
+              {rdBusy ? 'Redesigning…' : 'Redesign this slide'}
+            </button>
+            {rdMsg && <span className="small" role="status">{rdMsg}</span>}
+          </div>
         )}
         {view?.error && <p className="small cr-problem" role="alert">{view.error}</p>}
       </div>

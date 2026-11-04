@@ -17,7 +17,8 @@ import { targetOfStyle, userStyles } from '../reference/templates';
 import { fillsFor } from '../images/store';
 import { applyPhotoSlots, fillRecreate, recreateFor, textsOf } from '../reference/recreate';
 import { designUsed, packFor, packSlide } from '../reference/pack';
-import { svgToPng } from '../reference/faithful';
+import { resolveSvgTokens, svgToPng } from '../reference/faithful';
+import { recurringLayers, recurringMarkup } from './designed';
 import { faithfulChecks, UNCHECKED } from '../reference/faithfulChecks';
 import type { Layer } from '../image-engine/types';
 import { activeStyle } from '../reference/active';
@@ -47,6 +48,33 @@ export const styleByName = (name: string) => getStyles().styles.find((s) => s.sp
 
 /** The plans for every slide of the doc, with the person's layout and element choices applied. Not drawn yet. */
 export function composeDoc(doc: Doc): { slides: StyledSlide[]; margin: number } {
+  return withDesigned(doc, composeBase(doc));
+}
+
+/** Designed mode: a slide with its own design is drawn from it (faithfully, text through its slots); one that fell back keeps the style's drawing and says why. */
+function withDesigned(doc: Doc, out: { slides: StyledSlide[]; margin: number }): { slides: StyledSlide[]; margin: number } {
+  const d = doc.designed;
+  if (!d || !doc.script) return out;
+  const slides = out.slides.map((s, i) => {
+    const dp = d.slides[String(i)]?.pack;
+    if (!dp) {
+      const why = d.fallbacks[String(i)];
+      return why ? ({ ...s, notes: [...((s as { notes?: string[] }).notes ?? []), `This slide fell back to the style's own design: ${why}`] } as typeof s) : s;
+    }
+    const sc = (doc.script!.slides[i] ?? {}) as unknown as Record<string, unknown>;
+    const r = packSlide(dp, String(sc.type ?? s.type), sc, doc.script!.brand.handle, { images: doc.imageRequests, slide: i });
+    const editable = !!doc.choices[String(i)]?.editable;
+    const rec = d.slides[String(i)].recurring;
+    const svg = r.faithful ? r.faithful.replace(/<\/svg>\s*$/i, () => resolveSvgTokens(recurringMarkup(rec, dp), dp.palette) + '</svg>') : '';
+    const layers = editable ? [...r.layers, ...recurringLayers(rec, dp, 'd' + i)] : r.layers;
+    const f = !editable && svg ? { faithful: { svg, layers: r.layers, canvas: r.canvas ?? dp.canvas, bg: dp.palette.bg ?? '#FFFFFF' } } : {};
+    const more = editable ? ['Made editable: this slide now draws from layers. Gradients, patterns and fine drawing parts can look a little different from the designed drawing.'] : [];
+    return { ...s, ...f, plan: { ...s.plan, layers }, notes: ['Designed by the model for this slide.', ...r.notes, ...more] } as typeof s;
+  });
+  return { slides, margin: out.margin };
+}
+
+function composeBase(doc: Doc): { slides: StyledSlide[]; margin: number } {
   const style = styleByName(doc.style);
   if (!style) throw new Error(`The style "${doc.style}" is not available any more. Pick another one.`);
   if (!doc.script) return { slides: [], margin: style.spec.spacing.margin };

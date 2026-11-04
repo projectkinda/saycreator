@@ -5,6 +5,8 @@ import { WriterError, detectProviders, generateScript, type GenerateResult, type
 import { MAX_CHARS, TONES, textProblem, type WriteRequest } from './writerPrompt';
 import { FORMATS, SLIDE_RANGE, type Format, type Issue } from './script';
 import { getStyles } from './render';
+import { packFor } from '../reference/pack';
+import { designDeck, designEstimate, type Designed } from './designed';
 import { PLATFORMS, isPlatform, platformOf, platformWarning, type Platform } from './platform';
 
 /** The style used when the writer does not name one: by tone. Only names that exist are used. */
@@ -28,6 +30,8 @@ export interface GenState {
   message?: string;
   /** Why "Pick for me" chose the style it did. */
   styleWhy?: string;
+  /** Extra words for the summary line (Designed mode). */
+  extra?: string;
 }
 
 export function useWriters() {
@@ -46,6 +50,21 @@ export function useWriters() {
 export async function runGenerate(req: WriteRequest, provider: WriteProvider, signal: AbortSignal, onPhase: (p: 'writing' | 'retrying') => void): Promise<{ ok: true; result: GenerateResult } | { ok: false; state: GenState }> {
   try {
     return { ok: true, result: await generateScript(req, provider, signal, onPhase) };
+  } catch (e) {
+    if (e instanceof WriterError) {
+      if (e.kind === 'cancelled') return { ok: false, state: { phase: 'idle', message: 'Cancelled. Your text is kept.' } };
+      if (e.kind === 'invalid') return { ok: false, state: { phase: 'error', message: 'The writer answered twice, but neither answer could be used as a script. Your text is kept, so you can press Generate again.', problems: e.problems.map((p) => p.message) } };
+      return { ok: false, state: { phase: 'error', message: `${e.message} Your text is kept.` } };
+    }
+    return { ok: false, state: { phase: 'error', message: `Something went wrong: ${(e as Error).message} Your text is kept.` } };
+  }
+}
+
+/** Designed mode: one call for the story and every slide's design (see designed.ts). Same result shape as runGenerate, plus the designs. */
+export async function runDesign(req: WriteRequest, look: { pack?: import('../reference/pack').StylePack | null; brief?: string }, handle: string, provider: WriteProvider, signal: AbortSignal, onPhase: (p: 'writing' | 'retrying') => void): Promise<{ ok: true; result: GenerateResult; designed: Designed } | { ok: false; state: GenState }> {
+  try {
+    const { designed, ...result } = await designDeck(req, look, handle, provider, signal, onPhase);
+    return { ok: true, result, designed };
   } catch (e) {
     if (e instanceof WriterError) {
       if (e.kind === 'cancelled') return { ok: false, state: { phase: 'idle', message: 'Cancelled. Your text is kept.' } };
@@ -83,6 +102,9 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
   const ceiling = plat ? plat.max : hi;
   const asked = Math.min(hi, Math.max(lo, options.slides), ceiling);
   const [cap, setCap] = useState('');
+  const mode = doc.format === 'carousel' && options.mode !== 'quick' ? 'designed' : 'quick';
+  const chosenPack = !options.autoStyle ? packFor(doc.style) : null;
+  const estimate = designEstimate(asked);
   // A script that is already longer than the platform allows is warned about (it is not cut).
   const platformNote = doc.format === 'carousel' && doc.script ? platformWarning(doc.script.slides.length, platform) : null;
   const choosePlatform = (p: Platform) => {
@@ -153,6 +175,29 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
             </div>
           </div>
         </div>
+
+        {doc.format === 'carousel' && (
+          <div className="cr-inline" data-testid="mode-box">
+            <span className="field-label" id="cr-mode-l">How the slides are made</span>
+            <div role="group" aria-labelledby="cr-mode-l" className="chip-group">
+              <button type="button" className="chip-btn" aria-pressed={mode === 'designed'} disabled={busy} onClick={() => setOptions({ mode: 'designed' })} title="One model call writes the story and designs every slide.">
+                Designed
+              </button>
+              <button type="button" className="chip-btn" aria-pressed={mode === 'quick'} disabled={busy} onClick={() => setOptions({ mode: 'quick' })} title="The writer writes the story and the app lays it out with the style's templates. No design call.">
+                Quick (free, templates)
+              </button>
+            </div>
+            {mode === 'designed' && !chosenPack && (
+              <label className="cr-inline">
+                <span className="field-label">Look, in a few words (optional)</span>
+                <input type="text" className="cr-input" value={options.brief ?? ''} maxLength={200} placeholder="for example: warm paper, big serif, hand-drawn arrows" disabled={busy} onChange={(e) => setOptions({ brief: e.target.value })} />
+              </label>
+            )}
+            <p className="small muted" role="status" data-testid="estimate">
+              {mode === 'designed' ? `${estimate.text} ${chosenPack ? `The look follows your pack "${chosenPack.name}".` : 'No pack is chosen, so the look comes from the words above.'} Only facts from your text are used.` : 'Quick mode: no design call; the app lays the script out with the style\'s templates.'}
+            </p>
+          </div>
+        )}
 
         {plat && (
           <p className="small muted" role="status" data-testid="platform-cap">

@@ -7,7 +7,9 @@ import { composeStyled, type StyledSlide } from '../image-engine/styles/compose'
 import { useDocumentTitle } from '../useDocumentTitle';
 import { validateScript, validateScriptText, exampleScript, formatOf, scriptPrompt, SLIDE_RANGE, type Format, type ScriptResult } from './script';
 import { DEFAULT_OPTIONS, patches } from './doc';
-import { MakeIt, runGenerate, useWriters, type GenState } from './MakeIt';
+import { MakeIt, runDesign, runGenerate, useWriters, type GenState } from './MakeIt';
+import { DesignedCard } from './DesignedCard';
+import { redesignSlide, type Designed } from './designed';
 import { pickStyle } from './pickStyle';
 import { type WriteRequest } from './writerPrompt';
 import { downloadBlob, exportAllAsZip, slideFileName, zipFileName } from './export';
@@ -396,7 +398,11 @@ export default function CarouselPage() {
     onCancel(job.id, () => ctl.abort());
     job.begin('write');
     job.waiting('the writer');
-    const r = await runGenerate(req, provider, ctl.signal, (phase) => setGen({ phase }));
+    const designedMode = doc.format === 'carousel' && options.mode !== 'quick';
+    const r = designedMode
+      ? await runDesign(req, { pack: options.autoStyle ? null : packFor(doc.style), brief: options.brief }, options.handle.trim(), provider, ctl.signal, (phase) => setGen({ phase }))
+      : await runGenerate(req, provider, ctl.signal, (phase) => setGen({ phase }));
+    const designedOut = r.ok && designedMode ? (r as { designed?: Designed }).designed : undefined;
     job.waiting(null);
     abort.current = null;
     if (!r.ok) {
@@ -413,7 +419,8 @@ export default function CarouselPage() {
     const pick = options.autoStyle ? pickStyle({ text: doc.topic, tone: options.tone, slideTypes: result.script.slides.map((x) => x.type), styles: carouselStyles(), writerSuggestion: result.style && known.includes(result.style) ? result.style : null }) : null;
     const style = pick ? pick.name : null;
     const withHandle = { ...result.script, brand: { ...result.script.brand, handle: options.handle.trim() || result.script.brand.handle } };
-    const done = apply(patches.generate(withHandle, style, GEN_LABEL));
+    const gp = patches.generate(withHandle, style, GEN_LABEL);
+    const done = apply({ ...gp, ops: [...gp.ops, { path: ['designed'], value: designedOut }] });
     if (!done.ok) {
       job.fail('apply', done.reasons[0]);
       job.finish('failed', done.reasons[0]);
@@ -422,7 +429,7 @@ export default function CarouselPage() {
     }
     job.end('apply', pick ? `style: ${pick.name}` : undefined);
     job.begin('draw');
-    setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…`, styleWhy: pick?.why });
+    setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…`, styleWhy: pick?.why, extra: designedOut ? ` Designed mode: ${Object.keys(designedOut.slides).length} slides designed, ${Object.keys(designedOut.fallbacks).length} fell back, ${designedOut.calls} model call${designedOut.calls === 1 ? '' : 's'}.` : '' });
   };
   const cancel = () => {
     if (gen.phase === 'drawing') {
@@ -450,7 +457,7 @@ export default function CarouselPage() {
       const retry = gen.attempts === 2 ? ' It needed a second try.' : '';
       const why = gen.styleWhy ? ` Style: ${gen.styleWhy}` : '';
       const handle = options.handle.trim() ? '' : ' The last slide shows the placeholder @yourname: type your handle above to replace it.';
-      setGen((g) => ({ ...g, phase: 'done', message: `Done: ${slides.length} ${doc.format === 'quote' ? 'cards' : 'slides'} in ${((gen.ms ?? 0) / 1000).toFixed(0)} s of writing.${retry}${why}${note}${handle} Edit anything below.` }));
+      setGen((g) => ({ ...g, phase: 'done', message: `Done: ${slides.length} ${doc.format === 'quote' ? 'cards' : 'slides'} in ${((gen.ms ?? 0) / 1000).toFixed(0)} s of writing.${retry}${why}${note}${gen.extra ?? ''}${handle} Edit anything below.` }));
     } else setGen((g) => (g.phase === 'drawing' ? { ...g, message: `Drawing slide ${drawnCount + 1} of ${slides.length}…` } : g));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawnCount, slides.length, gen.phase]);
@@ -600,6 +607,7 @@ export default function CarouselPage() {
         </div>
       </details>
 
+      <DesignedCard doc={doc} />
       <ImageRequestsPanel doc={doc} apply={apply} />
       <PhotosStrip pictures={pictures} supported={hasPhotoStyle} styleTitle={style?.spec.title ?? 'This style'} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onCutout={makeCutout} editableCutouts={cutouts.ids} onEditCutout={(id) => void editCutout(id)} usedOn={usedOn} storageProblem={currentStorageProblem()} lowRoom={lowRoom} />
       {editing && <CutoutEditor record={editing} onSave={(r) => void saveEdited(r)} onClose={() => setEditing(null)} />}
@@ -646,6 +654,19 @@ export default function CarouselPage() {
                 palette={style.spec.palettes[s.palette]}
                 hasPhotoStyle={hasPhotoStyle}
                 addFiles={addFiles}
+                onRedesign={doc.designed && doc.script && provider ? async (words) => {
+                  const look = { pack: options.autoStyle ? null : packFor(doc.style), brief: options.brief };
+                  try {
+                    const r = await redesignSlide(doc.script!, i, doc.designed, look, words, provider, new AbortController().signal);
+                    if (!r.ok) return `Could not redesign slide ${i + 1}: ${r.reasons[0] ?? 'the design could not be used'} The current look is kept (${r.calls} calls).`;
+                    const d = doc.designed!;
+                    const { [String(i)]: _gone, ...fallbacks } = d.fallbacks;
+                    apply(patches.setDesigned({ ...d, slides: { ...d.slides, [String(i)]: { pack: r.pack, ...(r.recurring?.length ? { recurring: r.recurring } : {}) } }, fallbacks, calls: d.calls + r.calls }, `Redesign slide ${i + 1}`));
+                    return `Redesigned slide ${i + 1} (${r.calls} model call${r.calls === 1 ? '' : 's'}). Undo brings the old design back.`;
+                  } catch (e) {
+                    return `Could not redesign slide ${i + 1}: ${(e as Error).message}`;
+                  }
+                } : undefined}
                 onImageText={(text) => {
                   const r = requestFromText(text, i, packFor(doc.style)?.palette ?? {});
                   if (!r) return 'Say what the picture should show.';
