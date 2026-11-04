@@ -109,7 +109,8 @@ test('empty slots draw placeholders, pictures (fake provider, treatments) fill t
     const built = P.packFromStyle(C.getStyles().styles.find((s) => s.spec.name === 'editorial-collage')!.spec);
     return {
       ok: true,
-      emptyHasPlaceholder: emptySvg.includes('clip-imgslot-1-c0') && !/<image/.test(emptySvg),
+      emptyDrawsNothing: !/<image/.test(emptySvg) && !emptySvg.includes('fill-opacity="0.55"') && !JSON.stringify(empty.slides[0].plan.layers).includes('placeholder-'),
+      emptyReported: ((empty.slides[0] as unknown as { emptySlots?: { id: string }[] }).emptySlots ?? []).map((e) => e.id),
       emptyPx, filledPx, fresh, hygiene, capPlan,
       typed: typed && { kind: typed.kind, prompt: typed.prompt },
       filledHasImage: /<image href="data:image\//.test(fa.svg), hasScrim: fa.svg.includes('scrim-imgslot-0'),
@@ -120,7 +121,8 @@ test('empty slots draw placeholders, pictures (fake provider, treatments) fill t
   }, SVGS);
   expect(r.ok).toBe(true);
   const res = r as Extract<typeof r, { fresh: number }>;
-  expect(res.emptyHasPlaceholder, 'an empty slot draws a placeholder').toBe(true);
+  expect(res.emptyDrawsNothing, 'an empty picture spot is not drawn: no placeholder in the drawing or the layers').toBe(true);
+  expect(res.emptyReported.length, 'the editor is told about the empty spots (overlay)').toBeGreaterThan(0);
   expect(res.fresh).toBeGreaterThan(0);
   expect(res.filledHasImage).toBe(true);
   expect(Math.abs(res.filledPx[0] - res.emptyPx[0]) + Math.abs(res.filledPx[1] - res.emptyPx[1]) + Math.abs(res.filledPx[2] - res.emptyPx[2]), 'the picture shows in the exported PNG').toBeGreaterThan(30);

@@ -70,10 +70,10 @@ function withDesigned(doc: Doc, out: { slides: StyledSlide[]; margin: number }):
     const rec = own ? own.recurring : recurringFor(first?.recurring, i, n);
     const svg = r.faithful ? r.faithful.replace(/<\/svg>\s*$/i, () => resolveSvgTokens(recurringMarkup(rec, dp), dp.palette) + '</svg>') : '';
     const layers = editable || !svg ? [...r.layers, ...recurringLayers(rec, dp, 'd' + i)] : r.layers;
-    const f = !editable && svg ? { faithful: { svg, layers: r.layers, canvas: r.canvas ?? dp.canvas, bg: dp.palette.bg ?? '#FFFFFF' } } : {};
+    const f = !editable && svg ? { faithful: { svg, layers: [...r.layers, ...recurringLayers(rec, dp, 'd' + i)], canvas: r.canvas ?? dp.canvas, bg: dp.palette.bg ?? '#FFFFFF' } } : {};
     const more = editable ? ['Made editable: this slide now draws from layers. Gradients, patterns and fine drawing parts can look a little different from the designed drawing.'] : [];
     const head = own ? 'Designed by the model for this slide.' : "This slide fell back to a standard layout in the deck's colours and fonts: " + (why ?? 'its design could not be used');
-    return { ...s, ...f, plan: { ...s.plan, layers }, notes: [head, ...r.notes, ...more] } as typeof s;
+    return { ...s, ...f, plan: { ...s.plan, layers }, ...(r.emptySlots ? { emptySlots: r.emptySlots } : {}), notes: [head, ...r.notes, ...more] } as typeof s;
   });
   return { slides, margin: out.margin };
 }
@@ -105,7 +105,7 @@ function composeBase(doc: Doc): { slides: StyledSlide[]; margin: number } {
       const used = designUsed(pack, String(sc.type ?? s.type));
       const more = editable && used ? [`Made editable: this slide now draws from layers. ${pack.notes.filter((n) => n.startsWith(`${used}:`)).slice(0, 3).join(' ') || 'Gradients, patterns and fine drawing parts can look a little different from the original drawing.'}`] : [];
       const f = !editable && r.faithful ? { faithful: { svg: r.faithful, layers: r.layers, canvas: r.canvas ?? pack.canvas, bg: pack.palette.bg ?? '#FFFFFF' } } : {};
-      return { ...s, ...f, plan: { ...s.plan, layers: r.layers }, notes: [...((s as { notes?: string[] }).notes ?? []), ...r.notes, ...more] };
+      return { ...s, ...f, plan: { ...s.plan, layers: r.layers }, ...(r.emptySlots ? { emptySlots: r.emptySlots } : {}), notes: [...((s as { notes?: string[] }).notes ?? []), ...r.notes, ...more] };
     });
     return { slides: filled as typeof slides, margin: style.spec.spacing.margin };
   }

@@ -20,7 +20,7 @@ function svgFor(i: number, s: S, o: { extra?: string; edge?: boolean } = {}): st
   const x = o.edge ? 4 : 80 + (i % 3) * 40;
   const items = Array.isArray(s.items) ? (s.items as string[]) : [];
   const rows = s.type === 'checklist' ? items.map((it, k) => `<rect x="80" y="${1000 + k * 0}" width="1" height="1" fill="$bg"/><text data-role="body" data-min-size="40" data-max-lines="2" x="120" y="${900 + k * 110}" font-size="44" font-family="Instrument Sans" fill="$text">${it.split(/\s+/).slice(0, 3).join(' ').replace(/&/g, '&amp;')}</text>`).join('') : '';
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-slide="${i + 1}" data-type="${String(s.type)}" ${PAL}><rect width="1080" height="1350" fill="$bg"/><g id="icon-${i}"><circle cx="${880 - i * 20}" cy="${160 + i * 10}" r="${50 + i * 6}" fill="$accent"/></g><text data-role="title" data-min-size="44" data-max-lines="4" x="${x}" y="${Y[i % 7]}" font-size="64" font-family="Schibsted Grotesk" font-weight="700" fill="$text">${title}</text>${rows}<text x="80" y="1270" font-size="30" font-family="Instrument Sans" fill="$muted">${i + 1} / 7</text></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-slide="${i + 1}" data-type="${String(s.type)}" ${PAL}><rect width="1080" height="1350" fill="$bg"/><g id="icon-${i}"><circle cx="${880 - i * 20}" cy="${160 + i * 10}" r="${50 + i * 6}" fill="$accent"/></g><rect x="80" y="240" width="160" height="10" fill="$accent"/><circle cx="960" cy="1100" r="70" fill="$surface"/><text data-role="title" data-min-size="44" data-max-lines="4" x="${x}" y="${Y[i % 7]}" font-size="64" font-family="Schibsted Grotesk" font-weight="700" fill="$text">${title}</text>${rows}${s.type === 'stat' && s.value ? `<text data-role="number" data-min-size="120" data-max-lines="1" x="80" y="560" font-size="240" font-family="Schibsted Grotesk" font-weight="700" fill="$accent">${String(s.value).replace(/&/g, '&amp;')}</text>` : ''}<text x="80" y="1270" font-size="30" font-family="Instrument Sans" fill="$muted">${i + 1} / 7</text></svg>`;
 }
 const answer = (svgs: string[], extra: Record<string, unknown> = {}) => JSON.stringify({ ...script, ...extra }) + '\n' + svgs.join('\n');
 const all = (o: Record<number, { extra?: string; edge?: boolean }> = {}) => script.slides.map((s, i) => svgFor(i, s, o[i]));
@@ -193,7 +193,7 @@ test('checklist: a design with 5 rows and 3 items hides the 2 empty rows (card a
 
 test('the edge check measures the box, not the sample width: a wide sample is clamped inside the margins; only an off-slide slot is rejected', async ({ page }) => {
   await page.goto('/images/carousel');
-  const wide = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-type="cover" ${PAL}><rect width="1080" height="1350" fill="$bg"/><text data-role="title" data-min-size="44" data-max-lines="3" x="20" y="300" font-size="64" font-family="Schibsted Grotesk" font-weight="700" fill="$text">A really quite long sample headline A really quite long sample headline A really quite long sample headline</text></svg>`;
+  const wide = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-type="cover" ${PAL}><rect width="1080" height="1350" fill="$bg"/><rect x="80" y="240" width="160" height="10" fill="$accent"/><circle cx="900" cy="200" r="60" fill="$accent"/><circle cx="960" cy="1100" r="70" fill="$surface"/><text data-role="title" data-min-size="44" data-max-lines="3" x="20" y="300" font-size="64" font-family="Schibsted Grotesk" font-weight="700" fill="$text">A really quite long sample headline A really quite long sample headline A really quite long sample headline</text></svg>`;
   const off = wide.replace('x="20"', 'x="1300"');
   const r = await page.evaluate(async ({ wide, off }) => {
     const P = await import('/src/reference/pack.ts');
@@ -244,4 +244,59 @@ test('the writer prompt says a stat value is a real figure from the text, never 
   });
   expect(p).toContain('must be a real figure taken from the text');
   expect(p).toContain('never "X"');
+});
+
+const STAT = { type: 'stat', value: '6 hours', label: 'saved every week', note: 'by batching videos' };
+const statSvg = (size: number) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-type="stat" ${PAL}><rect width="1080" height="1350" fill="$bg"/><rect x="60" y="260" width="960" height="720" rx="40" fill="$surface"/><circle cx="900" cy="150" r="60" fill="$accent"/><rect x="80" y="1000" width="200" height="10" fill="$accent"/><text data-role="number" data-min-size="120" data-max-lines="1" x="80" y="700" font-size="${size}" font-family="Schibsted Grotesk" font-weight="700" fill="$accent">6 hours</text><text data-role="title" data-min-size="44" data-max-lines="2" x="80" y="860" font-size="56" font-family="Schibsted Grotesk" font-weight="700" fill="$text">saved every week</text><text data-role="body" data-min-size="36" data-max-lines="2" x="80" y="1100" font-size="40" font-family="Instrument Sans" fill="$muted">by batching videos</text></svg>`;
+
+test('stat slide with a real figure: the design must draw it as a huge number, and the fill keeps it huge', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const r = await page.evaluate(async ({ big, small, stat }) => {
+    const P = await import('/src/reference/pack.ts');
+    const D = await import('/src/carousel/designed.ts');
+    const a = await P.parsePack(big, 'Big');
+    const b = await P.parsePack(small, 'Small');
+    if (!a.ok || !b.ok) return null;
+    const bigProblems = D.checkDesign(stat, '@x', 7, big, a.pack, []);
+    const smallProblems = D.checkDesign(stat, '@x', 7, small, b.pack, []);
+    const filled = P.packSlide(a.pack, 'stat', stat, '@x').faithful ?? '';
+    const doc = new DOMParser().parseFromString(filled, 'image/svg+xml');
+    const el = [...doc.getElementsByTagName('text')].find((t) => (t.textContent ?? '').replace(/\s+/g, ' ').trim() === stat.value);
+    const size = Number(el?.getAttribute('font-size') ?? el?.querySelector('tspan')?.getAttribute('font-size') ?? 0);
+    const placeholder = D.checkDesign({ ...stat, value: 'X' }, '@x', 7, small.replace('6 hours', 'X'), b.pack, []);
+    return { bigProblems, smallProblems, size, found: !!el, placeholder };
+  }, { big: statSvg(260), small: statSvg(80), stat: STAT });
+  expect(r).not.toBeNull();
+  expect(r!.bigProblems).toEqual([]);
+  expect(r!.smallProblems.join(' ')).toMatch(/HUGE number/);
+  expect(r!.found, 'the real value is on the slide').toBe(true);
+  expect(r!.size, 'and it stays a huge number').toBeGreaterThanOrEqual(150);
+  expect(r!.placeholder.join(' '), 'a placeholder value does not demand a huge number').not.toMatch(/HUGE number/);
+});
+
+test('footer text is at least 28 px and the phone checks say so; a design needs at least 3 visual elements beyond its text', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const r = await page.evaluate(async () => {
+    const D = await import('/src/carousel/designed.ts');
+    const F = await import('/src/reference/faithfulChecks.ts');
+    const Fo = await import('/src/image-engine/fonts.ts');
+    await Fo.loadFonts();
+    const tiny = D.splitRecurring('<svg><text x="80" y="1270" font-size="18" font-family="Instrument Sans">1 / 7</text></svg>').recurring[0].size;
+    const mk = (size: number) => [{ kind: 'text', id: 'r', name: 'recurring', role: 'content', x: 80, y: 1270, width: 200, height: 50, rotation: 0, opacity: 1, text: '1 / 7', style: { font: 'Instrument Sans', weight: 400, size, color: '#888888', align: 'left', valign: 'top', lineHeight: 1.15 } }] as never;
+    const chk = (size: number) => F.faithfulChecks(mk(size), { canvas: { w: 1080, h: 1350 }, bg: '#101820', k: 1, slideType: 'content' }).find((x) => x.id === 'size')!;
+    const lone = D.visualElements('<svg><rect width="1080" height="1350"/><g id="icon"><circle cx="9" cy="9" r="5"/></g><text data-role="title">x</text></svg>');
+    const full = D.visualElements('<svg><rect width="1080" height="1350"/><circle cx="9" cy="9" r="5"/><rect x="1" y="1" width="9" height="9"/><path d="M0 0L5 5"/><text data-role="title">x</text></svg>');
+    const slide = { type: 'content', headline: 'x', body: 'x' } as Record<string, unknown>;
+    const P = await import('/src/reference/pack.ts');
+    const sparse = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-type="content" data-palette=\'{"bg":"#101820","text":"#F5F0EB"}\'><rect width="1080" height="1350" fill="$bg"/><circle cx="900" cy="200" r="60" fill="$text"/><text data-role="title" data-min-size="44" data-max-lines="2" x="80" y="400" font-size="64" font-family="Schibsted Grotesk" fill="$text">x</text></svg>';
+    const p = await P.parsePack(sparse, 'S');
+    return { tiny, small: chk(24), ok: chk(28), lone, full, sparse: p.ok ? D.checkDesign(slide, '@x', 7, sparse, p.pack, []) : ['parse'] };
+  });
+  expect(r.tiny, 'a footer drawn at 18 px is raised to 28').toBe(28);
+  expect(r.small.pass, 'a 24 px footer fails the phone check').toBe(false);
+  expect(r.small.reason).toContain('28');
+  expect(r.ok.pass, 'a 28 px footer passes').toBe(true);
+  expect(r.lone).toBe(1);
+  expect(r.full).toBe(3);
+  expect(r.sparse.join(' '), 'a lone icon on empty space is refused').toMatch(/at least 3 visual elements/);
 });

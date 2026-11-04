@@ -12,7 +12,7 @@ test.setTimeout(15 * 60_000);
 test.use({ viewport: { width: 1280, height: 900 } });
 
 const ex = JSON.parse(exampleScript('carousel')) as { slides: Record<string, unknown>[] };
-const TEXT = ex.slides.map((s) => [s.headline, s.sub, s.body, ...(Array.isArray(s.items) ? (s.items as string[]) : []), s.quote, s.label, s.note, s.cta].filter((x) => typeof x === 'string' && x).join('. ')).join('\n');
+const TEXT = 'Accounts that fix their headline get about 3x more replies. ' + ex.slides.map((s) => [s.headline, s.sub, s.body, ...(Array.isArray(s.items) ? (s.items as string[]) : []), s.quote, s.label, s.note, s.cta].filter((x) => typeof x === 'string' && x).join('. ')).join('\n');
 
 const SHEET = async (urls: string[]) => {
   const w = 300;
@@ -49,9 +49,9 @@ test('real Designed run on the example script text', async ({ page }) => {
   const outQ = path.join(ROOT, 'out/image-engine/quick');
   fs.mkdirSync(out, { recursive: true });
   fs.mkdirSync(outQ, { recursive: true });
-  fs.writeFileSync(path.join(out, 'example-2.txt'), `seconds (click to drawn): ${seconds}\n${card}\n`);
+  fs.writeFileSync(path.join(out, 'example-3.txt'), `seconds (click to drawn): ${seconds}\n${card}\n`);
   const designed = await page.evaluate(`(${SHEET.toString()})([...document.querySelectorAll('.cr-pic img')].map((e) => e.src))`) as string;
-  fs.writeFileSync(path.join(out, 'designed-example-2.png'), Buffer.from(designed.split(',')[1], 'base64'));
+  fs.writeFileSync(path.join(out, 'designed-example-3.png'), Buffer.from(designed.split(',')[1], 'base64'));
   // Quick: the same script through the template code path (compose + render), no model call, no saved project.
   const styleTitle = await page.locator('button.cr-style:has-text("In use") strong').first().innerText().catch(() => '');
   const quick = await page.evaluate(async ({ answer, styleTitle, sheet }) => {
@@ -65,6 +65,6 @@ test('real Designed run on the example script text', async ({ page }) => {
     // eslint-disable-next-line no-eval
     return { sheet: await (eval(`(${sheet})`) as (u: string[]) => Promise<string>)(urls), style };
   }, { answer, styleTitle, sheet: SHEET.toString() });
-  fs.writeFileSync(path.join(outQ, 'quick-example.png'), Buffer.from(quick.sheet.split(',')[1], 'base64'));
-  fs.appendFileSync(path.join(out, 'example-2.txt'), `quick style: ${quick.style}\n`);
+  fs.writeFileSync(path.join(outQ, 'quick-example-3.png'), Buffer.from(quick.sheet.split(',')[1], 'base64'));
+  fs.appendFileSync(path.join(out, 'example-3.txt'), `quick style: ${quick.style}\n`);
 });

@@ -81,6 +81,8 @@ export interface PackSlide {
   faithful?: string;
   /** The canvas this slide was drawn on (a square quote design is 1080 by 1080). */
   canvas?: { w: number; h: number };
+  /** Picture spots nothing fills: never drawn (not in the drawing, not in the export); the editor shows them as an overlay. */
+  emptySlots?: { id: string; x: number; y: number; w: number; h: number }[];
 }
 /** The slide's own words in the pack's design: the editable layers, and the faithful SVG when the pack kept the drawing. No model call. */
 export function packSlide(pack: StylePack, slideType: string, slide: Record<string, unknown>, handle: string, opts: { square?: boolean; images?: ImageRequest[]; slide?: number } = {}): PackSlide {
@@ -98,8 +100,10 @@ export function packSlide(pack: StylePack, slideType: string, slide: Record<stri
     }
   }
   const slots = slotsFor(p, slideType);
+  let emptySlots: NonNullable<PackSlide["emptySlots"]> = [];
   if (slots.length) {
     const fills = fillsFor(opts.images, opts.slide ?? 0, slots, p.palette);
+    emptySlots = slots.filter((s) => s.kind !== "background" && fills[s.id].every((x) => !x)).map((s) => ({ id: s.id, x: s.x, y: s.y, w: s.w, h: s.h }));
     const markup: Record<string, string> = {};
     const veils: Record<string, { color: string; amount: number } | null> = {};
     for (const s of slots) {
@@ -113,7 +117,7 @@ export function packSlide(pack: StylePack, slideType: string, slide: Record<stri
     if (faithful) faithful = injectSlots(faithful, markup);
     layers = withImageLayers(layers, slots, fills, p.palette, veils);
   }
-  return { ...r, layers, canvas: p.canvas, ...(faithful ? { faithful } : {}) };
+  return { ...r, layers, canvas: p.canvas, ...(emptySlots.length ? { emptySlots } : {}), ...(faithful ? { faithful } : {}) };
 }
 
 /** The pack seen as its square quote design: the quote design, canvas and slots are the square ones. */
@@ -131,7 +135,7 @@ export function slotsFor(pack: StylePack, slideType: string, square = false): Im
   return used ? (p.imageSlots?.[used] ?? []) : [];
 }
 /** The editable form of the slots: each picture as an image layer, a flat veil for the scrim, a soft block for an empty slot (a background slot has none). The mask is only in the faithful drawing. */
-function withImageLayers(layers: Layer[], slots: ImageSlot[], fills: Record<string, ({ url: string } | null)[]>, palette: Record<string, string>, veils: Record<string, { color: string; amount: number } | null>): Layer[] {
+function withImageLayers(layers: Layer[], slots: ImageSlot[], fills: Record<string, ({ url: string } | null)[]>, _palette: Record<string, string>, veils: Record<string, { color: string; amount: number } | null>): Layer[] {
   const bg: Layer[] = [];
   const rest: Layer[] = [];
   for (const s of slots) {
@@ -146,7 +150,7 @@ function withImageLayers(layers: Layer[], slots: ImageSlot[], fills: Record<stri
         out.push({ ...base, kind: 'image', id: `${s.id}-img${i}`, name: `image-${s.id}`, opacity: 1, src: f.url, fit: 'cover' } as unknown as Layer);
         const v = veils[s.id];
         if (v) out.push({ ...base, kind: 'shape', id: `${s.id}-veil${i}`, name: `scrim-${s.id}`, opacity: Math.min(0.9, v.amount * 0.8), shape: 'rect', fill: v.color } as unknown as Layer);
-      } else if (s.kind !== 'background') out.push({ ...base, kind: 'shape', id: `${s.id}-empty${i}`, name: `placeholder-${s.id}`, opacity: 0.5, shape: s.mask === 'circle' ? 'ellipse' : 'rect', fill: palette.surface ?? palette.muted ?? '#D9D9D9' } as unknown as Layer);
+      }
     }
   }
   const at = layers.findIndex((l) => l.kind === 'text');

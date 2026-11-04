@@ -75,7 +75,8 @@ function designRules(look: Look, handle: string, n: number): string {
     'Composition: decide each slide\'s composition from its own content (a hook low and big on the cover, a huge number on a stat, a column on a checklist, a quote with a giant mark...). The slides must NOT all share one composition: at least three clearly different arrangements across the deck. Same palette, fonts and margins (at least 48 px) on every slide.',
     'Graphics: draw small icons or graphics that relate to what THAT slide says (a clock for time, a bar for a stat, a check for a checklist), as plain shapes and paths, each group a <g id="short-name">. A checklist slide has ONE body text slot PER ITEM, each in its own row (data-role="body", rows top to bottom, up to 5; the code puts item 1 in the first, item 2 in the second...; an unused row is hidden), never one slot holding all items. Allowed elements only: svg, g, path, circle, ellipse, rect, line, polyline, polygon, defs, linearGradient, radialGradient, stop, clipPath, mask, pattern, text, tspan. No images, scripts or links. The first element is the full-size background <rect>.',
     `Text: real <text> elements, never outlines. Each slot has data-role (kicker, tag, title, body, caption or number), data-min-size (32 or more) and data-max-lines, and holds THAT slide's own words from the JSON (${ROLE_RULE}). Use only words that are in the slide's JSON: no new words, facts or numbers. One <text> per slot; the code refits the words into it, so make each slot big enough for its words (at least 32 px type).`,
-    `Recurring items the same on every slide, same place, same size, as plain <text> (at least 30 px) with NO data-role: the page number ("1 / ${n}", "2 / ${n}"...), the handle "${handle || '@yourname'}", and a swipe cue "swipe →" on every slide except the last.`,
+    `Recurring items the same on every slide, same place, same size, as plain <text> (at least 28 px) with NO data-role: the page number ("1 / ${n}", "2 / ${n}"...), the handle "${handle || '@yourname'}", and a swipe cue "swipe →" on every slide except the last.`,
+    'Visual weight: every slide needs at least 3 visual elements beyond its text, for example a large numeral, a pattern or shape cluster, a framed quote, an icon with a backing shape, or a divider. A lone icon or line on empty space is not enough. A stat slide with a real "value" draws it as a HUGE number (data-role="number", at least 200 px) with its label and note around it.',
     'Photos: when a slide has a "photo_hint", leave a photo region as an image slot, never as abstract shapes: <rect data-image-slot="background|inset|half-bleed|strip|cutout" data-mask="rect|rounded|circle|arch|blob" data-fit="cover" data-scrim="0.4" data-scrim-from="bottom" x=".." y=".." width=".." height=".."/>. NEVER an <image>. At most 2 per slide; keep text clear of it or on its scrim.',
   ].join('\n');
 }
@@ -136,9 +137,16 @@ function wordsOf(v: unknown, out: Set<string>, skip = false) {
   } else if (Array.isArray(v)) v.forEach((x) => wordsOf(x, out));
   else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) wordsOf(x, out, ['type', 'element_tags', 'photo', 'photo_hint', 'style'].includes(k));
 }
+/** How many drawn shapes a design has beyond its text and its background (picture spots and definitions are not counted). */
+export function visualElements(block: string): number {
+  const body = block.replace(/<defs[\s\S]*?<\/defs>/gi, '');
+  const shapes = [...body.matchAll(/<(rect|circle|ellipse|path|line|polyline|polygon)\b([^>]*)>/gi)].filter((m) => !/data-image-slot/i.test(m[2]));
+  return Math.max(0, shapes.length - 1);
+}
 /** Every text element of a design: its role (none for the recurring items) and its words. */
-export function textsInSvg(block: string): { role: string | null; text: string }[] {
+export function textsInSvg(block: string): { role: string | null; text: string; size: number }[] {
   return [...block.matchAll(/<text\b([^>]*)>([\s\S]*?)<\/text>/gi)].map((m) => ({
+    size: Number(/font-size\s*=\s*["']?([\d.]+)/i.exec(m[1])?.[1]) || 0,
     role: /data-role\s*=\s*["']([a-z]+)["']/i.exec(m[1])?.[1]?.toLowerCase() ?? null,
     text: m[2].replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#?\w+;/g, ' ').replace(/\s+/g, ' ').trim(),
   }));
@@ -157,6 +165,8 @@ export function checkDesign(slide: Record<string, unknown>, handle: string, n: n
     const ok = t.role ? allowed : new Set<string>(['swipe', 'next', 'of', ...tokens(handle || '@yourname')]);
     for (const w of tokens(t.text)) if (!/^\d+$/.test(w) && !ok.has(w)) extra.add(w);
   }
+  if (visualElements(block) < 3) out.push('the design has too little to look at: it needs at least 3 visual elements beyond its text (a large numeral, a pattern or shape cluster, a framed quote, an icon with a backing shape, a divider). A lone icon or line on empty space is not enough.');
+  if (slide.type === 'stat' && !isPlaceholder(slide.value) && !texts.some((t) => t.role === 'number' && t.size >= 160)) out.push('the stat slide has a real value, so it must be drawn as a HUGE number: put it in a data-role="number" text of at least 160 px.');
   if (extra.size) out.push(`the design uses words that are not in this slide's script: ${[...extra].slice(0, 8).join(', ')}. Use only the slide's own words (plus the page number, the handle and "swipe").`);
   if (pack) {
     const key = designKey(String(slide.type));
@@ -221,7 +231,7 @@ export function splitRecurring(block: string): { block: string; recurring: Recur
     const font = (FONT_NAMES as string[]).includes(family) ? family : '';
     const anchor = attr(a, 'text-anchor');
     const fill = attr(a, 'fill') ?? '';
-    if (text) recurring.push({ x: Number(attr(a, 'x')) || 0, y: Number(attr(a, 'y')) || 0, size: Math.min(80, Math.max(24, Number(attr(a, 'font-size')) || 30)), font, weight: Number(attr(a, 'font-weight')) || 400, fill: /^(\$[a-z0-9]+|#[0-9a-f]{6})$/i.test(fill) ? fill : '$muted', anchor: anchor === 'middle' || anchor === 'end' ? anchor : 'start', text });
+    if (text) recurring.push({ x: Number(attr(a, 'x')) || 0, y: Number(attr(a, 'y')) || 0, size: Math.min(80, Math.max(28, Number(attr(a, 'font-size')) || 30)), font, weight: Number(attr(a, 'font-weight')) || 400, fill: /^(\$[a-z0-9]+|#[0-9a-f]{6})$/i.test(fill) ? fill : '$muted', anchor: anchor === 'middle' || anchor === 'end' ? anchor : 'start', text });
     return '';
   });
   return { block: out, recurring };

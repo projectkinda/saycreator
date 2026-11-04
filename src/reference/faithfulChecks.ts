@@ -11,6 +11,8 @@ export const UNCHECKED = [
   'The picture-overlap and orphan-word checks that read the finished pixels.',
 ] as const;
 
+/** The smallest a footer item (page number, handle, swipe cue) may be on the 1080 x 1350 slide. */
+export const FOOTER_MIN = 28;
 const flat = (l: Layer): string | null => {
   if (l.kind !== 'shape') return null;
   const f = (l as { fill?: unknown }).fill;
@@ -23,10 +25,13 @@ export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: num
   const texts = layers.filter((l): l is TextLayer => l.kind === 'text' && l.visible !== false && l.role !== 'decor' && !!l.text.trim());
   const out: CarouselLintResult[] = [];
   const res = (id: CarouselLintResult['id'], label: string, pass: boolean, reason: string, extra: Partial<CarouselLintResult> = {}) => out.push({ id, label, pass, reason, ...extra });
-  const laid = texts.map((t) => ({ t, b: layoutText(t) }));
+  const laidAll = texts.map((t) => ({ t, b: layoutText(t) }));
+  // The footer items (page number, handle, swipe cue) take part in the size check only: they must be 28 px or bigger.
+  const laid = laidAll.filter((x) => x.t.name !== 'recurring');
+  const floorOf = (t: TextLayer) => (t.name === 'recurring' ? FOOTER_MIN : L.minTextPx);
 
-  const small = laid.filter((x) => x.b.size * o.k < L.minTextPx - 0.5);
-  res('size', 'Text is big enough', small.length === 0, small.length ? `${small.length} text slot(s) are under ${L.minTextPx} px at the exported size (smallest ${Math.round(Math.min(...small.map((x) => x.b.size * o.k)))} px).` : `Every text slot is ${L.minTextPx} px or bigger.`, { measured: laid.length ? Math.round(Math.min(...laid.map((x) => x.b.size * o.k))) : undefined, limit: L.minTextPx });
+  const small = laidAll.filter((x) => x.b.size * o.k < floorOf(x.t) - 0.5);
+  res('size', 'Text is big enough', small.length === 0, small.length ? `${small.length} text slot(s) are under ${floorOf(small[0].t)} px at the exported size (smallest ${Math.round(Math.min(...small.map((x) => x.b.size * o.k)))} px).` : `Every text slot is ${L.minTextPx} px or bigger.`, { measured: laidAll.length ? Math.round(Math.min(...laidAll.map((x) => x.b.size * o.k))) : undefined, limit: L.minTextPx });
 
   const edge = L.edgePx / o.k;
   const near = laid.filter(({ t, b }) => t.x < edge - 1 || t.x + t.width > o.canvas.w - edge + 1 || t.y + b.height > o.canvas.h - edge + 1 || t.y < edge - 1);

@@ -84,12 +84,22 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   const [rdBusy, setRdBusy] = useState(false);
   const used = slide.elementsUsed;
   const rec = script as unknown as Record<string, unknown>;
+  // Picture spots nothing fills are not drawn (not in the picture, not in the export); here, in the editor, they show as a dashed outline.
+  const empties = (slide as unknown as { emptySlots?: { id: string; x: number; y: number; w: number; h: number }[] }).emptySlots ?? [];
+  const fa = faithfulOf(slide);
+  const cw = fa ? fa.canvas.w : slide.plan.canvas.width;
+  const ch = fa ? fa.canvas.h : slide.plan.canvas.height;
+  const emptyOverlay = empties.length ? (
+    <span aria-hidden="true" data-testid="empty-slot-overlay" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 1 }}>
+      {empties.map((e) => <span key={e.id} style={{ position: "absolute", left: (e.x / cw * 100) + "%", top: (e.y / ch * 100) + "%", width: (e.w / cw * 100) + "%", height: (e.h / ch * 100) + "%", border: "2px dashed #888", borderRadius: 6, boxSizing: "border-box" }} />)}
+    </span>
+  ) : null;
 
   return (
     <li className="card cr-card" aria-label={title} data-status={view?.status ?? "drawing"}>
       <div className="cr-pic">
-        <button type="button" className="cr-pic-btn" onClick={onOpen} disabled={!view?.url} aria-label={`Open ${deckLabel} slide ${index + 1} full size`}>
-          {view?.url ? <img src={view.url} alt={`${deckLabel}, slide ${index + 1}: ${slide.type}, ${slide.layout} layout`} width={216} height={216 * (slide.plan.canvas.height / slide.plan.canvas.width)} /> : <span className="cr-pic-wait small muted" role="status">{view?.status === 'error' ? 'Could not draw this slide' : 'Drawing…'}</span>}
+        <button type="button" className="cr-pic-btn" style={{ position: "relative" }} onClick={onOpen} disabled={!view?.url} aria-label={`Open ${deckLabel} slide ${index + 1} full size`}>
+          {emptyOverlay}{view?.url ? <img src={view.url} alt={`${deckLabel}, slide ${index + 1}: ${slide.type}, ${slide.layout} layout`} width={216} height={216 * (slide.plan.canvas.height / slide.plan.canvas.width)} /> : <span className="cr-pic-wait small muted" role="status">{view?.status === 'error' ? 'Could not draw this slide' : 'Drawing…'}</span>}
         </button>
         <LintBadges lint={view?.rendered?.lint} />
         {slide.notes

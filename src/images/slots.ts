@@ -189,11 +189,9 @@ export function scrimFor(textColours: string[], b: Baked, own?: ImageSlot['scrim
 
 // ----- filling a marker -----
 
-/** The SVG that goes in a slot's marker: the picture(s) in the mask with the scrim, or a clean placeholder. */
+/** The SVG that goes in a slot's marker: the picture(s) in the mask with the scrim, or nothing when it is empty. */
 export function slotMarkup(slot: ImageSlot, fills: (Baked | null)[], o: { palette: Record<string, string>; scrim?: { color: string; amount: number; from: 'top' | 'bottom' | 'all' } | null }): string {
   const cells = slotCells(slot);
-  const surface = o.palette.surface ?? o.palette.muted ?? '#D9D9D9';
-  const line = o.palette.muted ?? '#9AA5B1';
   let defs = '';
   let body = '';
   cells.forEach((c, i) => {
@@ -208,13 +206,8 @@ export function slotMarkup(slot: ImageSlot, fills: (Baked | null)[], o: { palett
         veil = `<rect x="${f(c.x)}" y="${f(c.y)}" width="${f(c.w)}" height="${f(c.h)}" fill="url(#scrim-${id})"/>`;
       }
       body += `<g clip-path="url(#clip-${id})"><image href="${b.url}" x="${f(c.x)}" y="${f(c.y)}" width="${f(c.w)}" height="${f(c.h)}" preserveAspectRatio="none"/>${veil}</g>`;
-    } else if (slot.kind !== 'background') {
-      // A clean placeholder: a soft block in the mask's shape with a small picture icon. Never an error.
-      const s = Math.min(c.w, c.h) * 0.14;
-      const cx = c.x + c.w / 2;
-      const cy = c.y + c.h / 2;
-      body += `<g clip-path="url(#clip-${id})"><rect x="${f(c.x)}" y="${f(c.y)}" width="${f(c.w)}" height="${f(c.h)}" fill="${surface}" fill-opacity="0.55"/></g><g fill="none" stroke="${line}" stroke-width="4" stroke-linejoin="round" stroke-opacity="0.8"><path d="M${f(cx - s * 1.4)} ${f(cy + s)} L${f(cx - s * 0.4)} ${f(cy - s * 0.4)} L${f(cx + s * 0.3)} ${f(cy + s * 0.5)} L${f(cx + s * 0.8)} ${f(cy - s * 0.1)} L${f(cx + s * 1.4)} ${f(cy + s)} Z"/><circle cx="${f(cx + s * 0.9)}" cy="${f(cy - s * 0.9)}" r="${f(s * 0.3)}"/></g>`;
     }
+    // An empty slot draws nothing: no placeholder in the drawing or the export (the editor shows its own overlay).
   });
   return `<defs>${defs}</defs>${body}`;
 }
