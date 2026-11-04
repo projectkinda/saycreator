@@ -733,9 +733,9 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
   };
   const layers = all.map((l): Layer => {
     if (l.kind !== 'text') return l;
-    const role = l.name as RecreateRole;
-    if (!(ROLES as readonly string[]).includes(role) || !(role in texts)) return l;
-    const text = texts[role] ?? '';
+    const role = l.name.replace(/^body\d+$/, 'body') as RecreateRole;
+    if (!(ROLES as readonly string[]).includes(role) || !(l.name in texts || role in texts)) return l;
+    const text = (texts as Record<string, string | undefined>)[l.name] ?? texts[role] ?? '';
     if (!text) return { ...l, visible: false };
     const { slot, ...plain } = l as RLayer & { slot?: { minSize?: number; maxLines?: number; maxSize?: number } };
     const floor = Math.max(32, slot?.minSize ?? 32);
@@ -797,6 +797,8 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
   // A block or graphic that belongs to a slot with no words (its box holds, or sits under, the empty text) is hidden with it.
   const empty = layers.filter((l) => l.kind === 'text' && l.visible === false);
   const gone = new Set<Layer>();
+  // An empty checklist row (a body slot after the first) takes the card it sits in with it, whatever size the sample words were.
+  for (const e of empty) if (/^body\d+$/.test(e.name ?? '')) { const h = holderOf(e); if (h) gone.add(h); }
   for (const e of empty)
     for (const l of layers) if (l.kind !== 'text' && area(l) < canvasArea * 0.3 && area(l) <= 6 * area(e) && overlap(l, e) >= 0.5 * area(e)) gone.add(l);
   // What sits inside a hidden block goes with it.

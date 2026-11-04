@@ -18,7 +18,9 @@ function svgFor(i: number, s: S, o: { extra?: string; edge?: boolean } = {}): st
   const base = titleOf(s).split(/\s+/).slice(0, 3).join(' ');
   const title = (o.extra ? base + ' ' + o.extra : base).replace(/&/g, '&amp;');
   const x = o.edge ? 4 : 80 + (i % 3) * 40;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-slide="${i + 1}" data-type="${String(s.type)}" ${PAL}><rect width="1080" height="1350" fill="$bg"/><g id="icon-${i}"><circle cx="${880 - i * 20}" cy="${160 + i * 10}" r="${50 + i * 6}" fill="$accent"/></g><text data-role="title" data-min-size="44" data-max-lines="4" x="${x}" y="${Y[i % 7]}" font-size="64" font-family="Schibsted Grotesk" font-weight="700" fill="$text">${title}</text><text x="80" y="1270" font-size="30" font-family="Instrument Sans" fill="$muted">${i + 1} / 7</text></svg>`;
+  const items = Array.isArray(s.items) ? (s.items as string[]) : [];
+  const rows = s.type === 'checklist' ? items.map((it, k) => `<rect x="80" y="${1000 + k * 0}" width="1" height="1" fill="$bg"/><text data-role="body" data-min-size="40" data-max-lines="2" x="120" y="${900 + k * 110}" font-size="44" font-family="Instrument Sans" fill="$text">${it.split(/\s+/).slice(0, 3).join(' ').replace(/&/g, '&amp;')}</text>`).join('') : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-slide="${i + 1}" data-type="${String(s.type)}" ${PAL}><rect width="1080" height="1350" fill="$bg"/><g id="icon-${i}"><circle cx="${880 - i * 20}" cy="${160 + i * 10}" r="${50 + i * 6}" fill="$accent"/></g><text data-role="title" data-min-size="44" data-max-lines="4" x="${x}" y="${Y[i % 7]}" font-size="64" font-family="Schibsted Grotesk" font-weight="700" fill="$text">${title}</text>${rows}<text x="80" y="1270" font-size="30" font-family="Instrument Sans" fill="$muted">${i + 1} / 7</text></svg>`;
 }
 const answer = (svgs: string[], extra: Record<string, unknown> = {}) => JSON.stringify({ ...script, ...extra }) + '\n' + svgs.join('\n');
 const all = (o: Record<number, { extra?: string; edge?: boolean }> = {}) => script.slides.map((s, i) => svgFor(i, s, o[i]));
@@ -117,7 +119,7 @@ test('retry and fallback: one retry (a counted call) fixes slide 3; slide 5 stay
   await expect(page.getByTestId('designed-card')).toContainText('2 model calls');
   await expect(page.getByTestId('designed-card')).toContainText('Slide 5: the design uses words that are not in this slide');
   await expect(page.getByTestId('faithful-note')).toHaveCount(6);
-  await expect(page.locator('.cr-card').nth(4)).toContainText("fell back to the style's own design");
+  await expect(page.locator('.cr-card').nth(4)).toContainText("fell back to a standard layout");
 });
 
 test('text edits go through the slots with no model call; Make editable works; redesign is one small call; the look saves as a pack', async ({ page }) => {
@@ -149,4 +151,97 @@ test('text edits go through the slots with no model call; Make editable works; r
   await page.getByRole('button', { name: 'Save this look as a pack' }).click();
   await expect(page.getByTestId('designed-card')).toContainText('Saved “My designed look” as a template', { timeout: 30_000 });
   expect(f.calls.length, 'saving the look is free').toBe(2);
+});
+
+const ITEMS = ['Clear well-lit photo', 'Name who you help', 'Contact info is current', 'Link in bio', 'One call to action'];
+const rowsSvg = (rows: number) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-type="list" ${PAL}><rect width="1080" height="1350" fill="$bg"/><text data-role="title" data-min-size="44" data-max-lines="2" x="80" y="200" font-size="64" font-family="Schibsted Grotesk" font-weight="700" fill="$text">Before you save</text>${Array.from({ length: rows }, (_, i) => `<rect x="80" y="${300 + i * 190}" width="920" height="150" rx="20" fill="$surface"/><circle cx="150" cy="${375 + i * 190}" r="30" fill="$accent"/><text data-role="body" data-min-size="40" data-max-lines="2" x="220" y="${390 + i * 190}" font-size="44" font-family="Instrument Sans" fill="$text">item ${i + 1}</text>`).join('')}</svg>`;
+
+async function fillChecklist(page: Page, rows: number, items: string[]) {
+  await page.goto('/images/carousel');
+  return page.evaluate(async ({ svg, items }) => {
+    const P = await import('/src/reference/pack.ts');
+    const p = await P.parsePack(svg, 'Rows');
+    if (!p.ok) return { ok: false as const, reasons: p.reasons };
+    const r = P.packSlide(p.pack, 'checklist', { type: 'checklist', headline: 'Before you save', items }, '@x');
+    const f = r.faithful ?? '';
+    const texts = [...f.matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)].map((m) => m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+    return { ok: true as const, texts, circles: (f.match(/<circle\b/g) ?? []).length, cards: (f.match(/<rect\b[^>]*rx="20"/g) ?? []).length };
+  }, { svg: rowsSvg(rows), items });
+}
+
+test('checklist: 3 items land one per row, and 5 items land one per row', async ({ page }) => {
+  for (const n of [3, 5]) {
+    const r = await fillChecklist(page, n, ITEMS.slice(0, n));
+    expect(r.ok, JSON.stringify(r)).toBe(true);
+    const res = r as Extract<typeof r, { ok: true }>;
+    for (const it of ITEMS.slice(0, n)) expect(res.texts.filter((t) => t === it), `${n} items: "${it}" is its own row`).toHaveLength(1);
+    expect(res.texts.some((t) => ITEMS.filter((it) => t.includes(it)).length > 1), 'no row holds two items').toBe(false);
+    expect(res.circles).toBe(n);
+    expect(res.cards).toBe(n);
+  }
+});
+
+test('checklist: a design with 5 rows and 3 items hides the 2 empty rows (card and check mark too)', async ({ page }) => {
+  const r = await fillChecklist(page, 5, ITEMS.slice(0, 3));
+  expect(r.ok, JSON.stringify(r)).toBe(true);
+  const res = r as Extract<typeof r, { ok: true }>;
+  expect(res.texts.filter((t) => ITEMS.includes(t))).toEqual(ITEMS.slice(0, 3));
+  expect(res.texts.some((t) => /^item \d$/.test(t)), 'no sample words left').toBe(false);
+  expect(res.circles).toBe(3);
+  expect(res.cards).toBe(3);
+});
+
+test('the edge check measures the box, not the sample width: a wide sample is clamped inside the margins; only an off-slide slot is rejected', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const wide = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-type="cover" ${PAL}><rect width="1080" height="1350" fill="$bg"/><text data-role="title" data-min-size="44" data-max-lines="3" x="20" y="300" font-size="64" font-family="Schibsted Grotesk" font-weight="700" fill="$text">A really quite long sample headline A really quite long sample headline A really quite long sample headline</text></svg>`;
+  const off = wide.replace('x="20"', 'x="1300"');
+  const r = await page.evaluate(async ({ wide, off }) => {
+    const P = await import('/src/reference/pack.ts');
+    const D = await import('/src/carousel/designed.ts');
+    const slide = { type: 'cover', headline: 'A really quite long sample headline', sub: 'x' } as Record<string, unknown>;
+    const a = await P.parsePack(wide, 'W');
+    const b = await P.parsePack(off, 'O');
+    if (!a.ok || !b.ok) return null;
+    const problemsWide = D.checkDesign(slide, '@x', 7, wide, a.pack, []);
+    const clamped = D.clampSlots(a.pack, 'cover');
+    const m = clamped.slotMeta!.cover!.find((s) => s.role === 'title')!;
+    return { problemsWide, x: m.x, right: m.x + m.w, problemsOff: D.checkDesign(slide, '@x', 7, off, b.pack, []) };
+  }, { wide, off });
+  expect(r).not.toBeNull();
+  expect(r!.problemsWide).toEqual([]);
+  expect(r!.x).toBeGreaterThanOrEqual(26);
+  expect(r!.right).toBeLessThanOrEqual(1032 + 1);
+  expect(r!.problemsOff.join(' ')).toMatch(/no box on the slide/);
+});
+
+test('a slide that falls back is drawn in the deck\'s palette and fonts, with its page number', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const bad = all({ 2: { extra: 'zebra' } });
+  const r = await page.evaluate(async ({ first, retry }) => {
+    const D = await import('/src/carousel/designed.ts');
+    const R = await import('/src/carousel/render.ts');
+    let n = 0;
+    const provider = { id: 'api' as const, label: 'fake', write: async () => ({ text: n++ === 0 ? first : retry, ms: 1 }) };
+    const req = { text: 'x'.repeat(60), slides: 7, tone: 'clear' as const, format: 'carousel' as const, styleChoice: 'auto', styles: [] };
+    const out = await D.designDeck(req, {}, '', provider, new AbortController().signal);
+    const style = R.carouselStyles()[0].spec.name;
+    const doc = { version: 1 as const, format: 'carousel' as const, style, topic: '', script: out.script, choices: {}, designed: out.designed };
+    const slides = R.composeDoc(doc).slides;
+    return { fallbacks: Object.keys(out.designed.fallbacks), svg: JSON.stringify(slides[2].plan.layers), own: R.faithfulOf(slides[0])?.svg ?? '' };
+  }, { first: answer(bad), retry: svgFor(2, script.slides[2], { extra: 'zebra' }) });
+  expect(r.fallbacks).toEqual(['2']);
+  expect(r.svg.length).toBeGreaterThan(100);
+  expect(r.svg.toUpperCase(), "the deck's background colour").toContain('#101820');
+  expect(r.svg, 'its own page number').toContain('3 / 7');
+  expect(r.svg).toContain('Schibsted Grotesk');
+});
+
+test('the writer prompt says a stat value is a real figure from the text, never X or empty', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const p = await page.evaluate(async () => {
+    const W = await import('/src/carousel/writerPrompt.ts');
+    return W.buildWritePrompt({ text: 'x'.repeat(60), slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'auto', styles: [] });
+  });
+  expect(p).toContain('must be a real figure taken from the text');
+  expect(p).toContain('never "X"');
 });

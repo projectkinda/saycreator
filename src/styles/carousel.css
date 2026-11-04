@@ -7,6 +7,8 @@
   align-items: stretch;
   gap: 4px;
 }
+.cr-styles > li { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cr-styles > li .cr-quiet { align-self: flex-start; max-width: 100%; white-space: normal; }
 .cr-style-pic {
   display: flex;
   align-items: center;

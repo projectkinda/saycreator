@@ -162,6 +162,23 @@ function packLayers(pack: StylePack, slideType: string, slide: Record<string, un
   if (!d) return { layers: [], notes: ['The pack has no design.'] };
   const texts = textsOf(slide, handle);
   const key = designKey(slideType);
+  if (key === 'list' && texts.body) {
+    // A design with a body slot per row: item k goes in row k (top to bottom); extra rows are left empty (hidden with their row); more items than rows share the last row.
+    const rows = d.filter((l) => l.kind === 'text' && l.name === 'body').sort((a, b) => a.y - b.y);
+    if (rows.length >= 2) {
+      const list = texts.body.split('\n').filter(Boolean);
+      const renamed = d.map((l) => {
+        const k = rows.indexOf(l);
+        return k > 0 ? ({ ...l, name: 'body' + (k + 1) } as RLayer) : l;
+      });
+      const per: Record<string, string> = { body: rows.length === 1 ? list.join('\n') : list[0] ?? '' };
+      rows.slice(1).forEach((_, k) => {
+        const last = k + 2 === rows.length;
+        per['body' + (k + 2)] = last ? list.slice(k + 1).join('\n') : list[k + 1] ?? '';
+      });
+      return fillRecreate({ layers: renamed, palette: pack.palette, canvas: pack.canvas, notes: [] }, { ...texts, ...per } as typeof texts);
+    }
+  }
   if (key !== 'list' || !texts.body) return fillRecreate({ layers: d, palette: pack.palette, canvas: pack.canvas, notes: [] }, texts);
   // A list: every item keeps a readable size (40 px at least) and its own line; the slot grows downward, and when it still does not fit the items go in two columns.
   const items = texts.body.split('\n').filter(Boolean);

@@ -49,6 +49,8 @@ async function fake(page: Page, answer: (n: number, prompt: string) => { text: s
 const open = async (page: Page) => {
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
+  // These tests are about the Quick path (the writer writes the script, the templates draw it); Designed mode has its own spec.
+  await page.getByRole('button', { name: /^Quick \(free, templates\)/ }).click();
 };
 const source = (page: Page) => page.getByLabel('Your text, idea or article');
 const generate = (page: Page) => page.getByRole('button', { name: 'Generate', exact: true });
@@ -115,13 +117,13 @@ test('tone, slide count and style choice reach the writer; "Pick for me" uses th
   // The writer's style was applied, and the Pick for me tile still says it is in charge.
   await expect(page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasText: 'hot-flat' }).getByText('In use')).toBeVisible();
   // A style chosen by hand is not asked for and is kept.
-  await page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasText: 'dark-quiet' }).getByRole('button').click();
+  await page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasText: 'dark-quiet' }).getByRole('button', { name: /^(?!Rebuild)/ }).click();
   await page.getByRole('button', { name: 'Friendly', exact: true }).click();
   await generate(page).click();
   await allDrawn(page, 5);
   expect(f.calls[1].prompt).not.toMatch(/top-level "style"/);
   expect(f.calls[1].prompt).toContain('Tone: Friendly');
-  await expect(page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasText: 'dark-quiet' }).getByRole('button')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasText: 'dark-quiet' }).getByRole('button', { pressed: true })).toBeVisible();
 });
 
 test('a bad answer is retried once automatically, with the problems sent back, and then it works', async ({ page }) => {

@@ -51,6 +51,11 @@ const allDrawn = async (page: Page, count = 7) => {
   await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(count, { timeout: 30_000 });
 };
 const srcs = (page: Page) => page.locator('.cr-card .cr-pic img').evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src));
+/** A fingerprint of the first slide's picture itself (a redrawn slide gets a new blob address, so addresses are not compared after Undo). */
+const pixels = (page: Page) => page.locator('.cr-card .cr-pic img').first().evaluate(async (e) => {
+  const buf = await (await fetch((e as HTMLImageElement).src)).arrayBuffer();
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-1', buf))).map((b) => b.toString(16)).join('');
+});
 const loadExample = async (page: Page) => {
   await open(page);
   await openAdvanced(page);
@@ -219,8 +224,10 @@ test('tags are chips: removing below two or adding above four is refused with a 
 test('changing the style restyles the same script; undo goes back', async ({ page }) => {
   await loadExample(page);
   const before = await srcs(page);
+  await allDrawn(page);
+  const beforeHash = await pixels(page);
   const picker = page.getByRole('list', { name: 'Styles' });
-  const buttons = picker.getByRole('button');
+  const buttons = picker.getByRole('button', { name: /^(?!Rebuild)/ });
   const pressed = await buttons.evaluateAll((els) => els.findIndex((e) => e.getAttribute('aria-pressed') === 'true'));
   const current = buttons.nth(pressed);
   const currentName = await current.innerText();
@@ -236,7 +243,7 @@ test('changing the style restyles the same script; undo goes back', async ({ pag
   await shot(page, 'style-switched', 'Another style, same script', `Switched from ${currentName.split('\n')[0]} to ${otherName.split('\n')[0]}. The words did not change.`);
   await undoBtn(page).click();
   await expect(current).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(async () => (await srcs(page))[0], { timeout: 30_000 }).toBe(before[0]);
+  await expect.poll(() => pixels(page), { timeout: 30_000 }).toBe(beforeHash);
 });
 
 test('per-slide actions are patches: layout, shuffle, swap an element, regenerate, and undo each', async ({ page }) => {
@@ -419,7 +426,7 @@ test('keyboard and screen readers: the whole flow works without a mouse, and con
   await expect(page.getByRole('button', { name: /^Quote card/ })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('combobox', { name: /^Slides/ })).toBeFocused();
-  const firstStyle = page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasNotText: 'Pick for me' }).first().getByRole('button');
+  const firstStyle = page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasNotText: 'Pick for me' }).first().getByRole('button', { name: /^(?!Rebuild)/ });
   await firstStyle.focus();
   await page.keyboard.press('Enter');
   await expect(firstStyle).toHaveAttribute('aria-pressed', 'true');

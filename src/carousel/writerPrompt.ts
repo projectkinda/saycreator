@@ -52,7 +52,7 @@ export function buildWritePrompt(req: WriteRequest): string {
     JSON.stringify(quote ? EXAMPLE_QUOTE : EXAMPLE, null, 2),
     '',
     'Rules:',
-    '- Facts: use only facts, claims and numbers that are in the text. Never invent statistics, names, quotes, dates or results. If a slide would want a number the text does not give, either leave that slide out or use a clearly marked placeholder: "value": "X" with "note": "Placeholder: use your own number".',
+    '- Facts: use only facts, claims and numbers that are in the text. Never invent statistics, names, quotes, dates or results. If a slide would want a number the text does not give, leave that slide out. A "stat" slide\'s "value" must be a real figure taken from the text (for example "6 hours" or "3x"), never "X", "?" or empty: if the text has no figure to show, write a "content" slide instead of a stat slide.',
     quote ? `- Write exactly ${n} quote cards, every one of type "quote": one sentence from the text (shortened if needed, at most 20 words, no new words in the quote), and "by" saying who said it as the text says; if the text does not say, use the author or brand as "by": "From the text".` : `- Write ${n} slides. The first is a strong "cover" (a hook in at most 8 words). The last is a "closing" with a call to action in "cta". In between use "step", "content", "checklist", "stat" or "beforeafter" as the content calls for. Use "quote" only for words that are in the text.`,
     `- One idea per slide. Short copy that fits: headline at most 60 characters, body at most 160, "sub" at most 90, checklist items at most 50 characters and 3 to 5 of them, "kicker" at most 24, stat "value" at most 8 characters.`,
     `- Tone: ${tone.label} (${tone.how}).`,

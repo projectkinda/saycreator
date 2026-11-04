@@ -2,7 +2,7 @@
 // the phone checks from its slot data); a slide that still fails after one retry falls back to the pack or template design and says so.
 // A designed slide is stored as a one-design pack, so the faithful renderer, the slots (text edits refit with no model call), "Make editable" and the picture slots all work as for packs.
 import type { CarouselScript } from '../image-engine/carousel/types';
-import { designKey, parsePack, slotMetaOf, type StylePack } from '../reference/pack';
+import { designKey, packFromStyle, parsePack, slotMetaOf, type StylePack } from '../reference/pack';
 import { FONT_NAMES, textsOf } from '../reference/recreate';
 import { FONT_WEIGHTS } from '../image-engine/fonts';
 import type { FontFamily, Layer } from '../image-engine/types';
@@ -73,7 +73,7 @@ function designRules(look: Look, handle: string, n: number): string {
     lookText(look),
     `Fonts: only these bundled ones: ${FONT_NAMES.join(', ')}.`,
     'Composition: decide each slide\'s composition from its own content (a hook low and big on the cover, a huge number on a stat, a column on a checklist, a quote with a giant mark...). The slides must NOT all share one composition: at least three clearly different arrangements across the deck. Same palette, fonts and margins (at least 48 px) on every slide.',
-    'Graphics: draw small icons or graphics that relate to what THAT slide says (a clock for time, a bar for a stat, a check for a checklist), as plain shapes and paths, each group a <g id="short-name">. Allowed elements only: svg, g, path, circle, ellipse, rect, line, polyline, polygon, defs, linearGradient, radialGradient, stop, clipPath, mask, pattern, text, tspan. No images, scripts or links. The first element is the full-size background <rect>.',
+    'Graphics: draw small icons or graphics that relate to what THAT slide says (a clock for time, a bar for a stat, a check for a checklist), as plain shapes and paths, each group a <g id="short-name">. A checklist slide has ONE body text slot PER ITEM, each in its own row (data-role="body", rows top to bottom, up to 5; the code puts item 1 in the first, item 2 in the second...; an unused row is hidden), never one slot holding all items. Allowed elements only: svg, g, path, circle, ellipse, rect, line, polyline, polygon, defs, linearGradient, radialGradient, stop, clipPath, mask, pattern, text, tspan. No images, scripts or links. The first element is the full-size background <rect>.',
     `Text: real <text> elements, never outlines. Each slot has data-role (kicker, tag, title, body, caption or number), data-min-size (32 or more) and data-max-lines, and holds THAT slide's own words from the JSON (${ROLE_RULE}). Use only words that are in the slide's JSON: no new words, facts or numbers. One <text> per slot; the code refits the words into it, so make each slot big enough for its words (at least 32 px type).`,
     `Recurring items the same on every slide, same place, same size, as plain <text> (at least 30 px) with NO data-role: the page number ("1 / ${n}", "2 / ${n}"...), the handle "${handle || '@yourname'}", and a swipe cue "swipe →" on every slide except the last.`,
     'Photos: when a slide has a "photo_hint", leave a photo region as an image slot, never as abstract shapes: <rect data-image-slot="background|inset|half-bleed|strip|cutout" data-mask="rect|rounded|circle|arch|blob" data-fit="cover" data-scrim="0.4" data-scrim-from="bottom" x=".." y=".." width=".." height=".."/>. NEVER an <image>. At most 2 per slide; keep text clear of it or on its scrim.',
@@ -161,13 +161,47 @@ export function checkDesign(slide: Record<string, unknown>, handle: string, n: n
   if (pack) {
     const key = designKey(String(slide.type));
     const meta = pack.slotMeta?.[key] ?? slotMetaOf(pack.designs[key] ?? []);
+    // Only a slot that is truly off the slide (or has no box) rejects the design; a box that runs past the margins is clamped inside them (see clampSlots).
     for (const m of meta) {
-      if (m.x < 24 || m.y < 24 || m.x + m.w > 1100 || m.y + m.h > 1370) out.push(`the ${m.role} slot sits on or beyond the edge of the slide (keep text at least 48 px inside the 1080 x 1350 slide).`);
-      else if (m.h < m.minSize * 1.05 || m.w < 120) out.push(`the ${m.role} slot is too small for ${m.minSize}px text (${m.w} x ${m.h}).`);
+      if (!(m.w > 0) || !(m.h > 0) || m.x >= 1080 || m.y >= 1350 || m.x + m.w <= 0 || m.y + m.h <= 0) out.push('the ' + m.role + ' slot has no box on the slide (it is off the 1080 x 1350 slide or has no size).');
+    }
+    if (key === 'list') {
+      const items = Array.isArray(slide.items) ? slide.items.length : 0;
+      const bodies = meta.filter((m) => m.role === 'body').length;
+      if (items >= 2 && bodies < items) out.push('this checklist has ' + items + ' items but only ' + bodies + ' body text slot' + (bodies === 1 ? '' : 's') + ': draw one body slot per item row (each its own row with data-role="body"), so every item lands in its own row.');
     }
     if (n > 0 && !meta.some((m) => m.role === 'title' || m.role === 'body' || m.role === 'number')) out.push('the design has no title, body or number text slot.');
   }
   return out;
+}
+
+const MARGIN = 48;
+const TOLERANCE = 22; // about 2% of the slide width
+/** A slot box that runs past the margins (by more than the tolerance) is pulled inside them instead of the slide being rejected. Measured on the box, never on the sample text's width. */
+export function clampSlots(pack: StylePack, key: keyof StylePack['designs']): StylePack {
+  const layers = pack.designs[key];
+  if (!layers) return pack;
+  let moved = 0;
+  const next = layers.map((l) => {
+    if (l.kind !== 'text') return l;
+    let x0 = l.x;
+    let x1 = l.x + l.width;
+    let y0 = l.y;
+    let y1 = l.y + l.height;
+    if (x0 < MARGIN - TOLERANCE) x0 = MARGIN;
+    if (x1 > 1080 - MARGIN + TOLERANCE) x1 = 1080 - MARGIN;
+    if (y0 < MARGIN - TOLERANCE) y0 = MARGIN;
+    if (y1 > 1350 - MARGIN + TOLERANCE) y1 = 1350 - MARGIN;
+    const minH = Math.ceil((l.style.size || 32) * 1.2);
+    if (x1 - x0 < 120) x0 = Math.max(MARGIN, x1 - 120);
+    if (y1 - y0 < minH) y0 = Math.max(MARGIN, y1 - minH);
+    if (x0 === l.x && x1 === l.x + l.width && y0 === l.y && y1 === l.y + l.height) return l;
+    moved += 1;
+    return { ...l, x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  });
+  if (!moved) return pack;
+  const designs = { ...pack.designs, [key]: next };
+  return { ...pack, designs, slotMeta: { ...pack.slotMeta, [key]: slotMetaOf(next) }, notes: [...pack.notes, key + ': ' + moved + ' text slot' + (moved === 1 ? ' was' : 's were') + ' moved inside the slide margins.'] };
 }
 
 interface Checked {
@@ -220,7 +254,7 @@ async function checkOne(i: number, script: CarouselScript, block: string | undef
   if (!r.ok) return { pack: null, problems: checkDesign(slide, script.brand.handle, script.slides.length, block, null, r.reasons) };
   const pack = { ...r.pack, ...(forced ? { palette: forced } : {}) };
   const problems = checkDesign(slide, script.brand.handle, script.slides.length, block, pack, r.problems.filter((p) => !/left out/.test(p)));
-  return { pack: problems.length ? null : pack, problems, recurring: split.recurring };
+  return { pack: problems.length ? null : clampSlots(pack, key), problems, recurring: split.recurring };
 }
 function deckPaletteOf(blocks: Iterable<string>): Record<string, string> | null {
   for (const b of blocks) {
@@ -241,6 +275,29 @@ export function alikeNote(slides: Record<string, DesignedSlide>): string | null 
     return m ? `${Math.round(m.x / 90)}|${Math.round(m.y / 120)}|${Math.round(m.w / 180)}` : '';
   });
   return boxes.length >= 4 && new Set(boxes).size < 3 ? 'The designed slides are quite alike: their titles sit in nearly the same place. Use "Redesign this slide" on a few for more variety.' : null;
+}
+
+/** A stat value that is a placeholder ("X", "?", empty), not a real figure. */
+export const isPlaceholder = (v: unknown) => typeof v !== 'string' || /^\s*(x+|\?+|n\/?a|tbd|\.+|…)?\s*$/i.test(v);
+
+// ----- fallback slides take the deck's colours and fonts -----
+const fallbackCache = new Map<string, StylePack>();
+/** The standard layouts of a style, recoloured with the palette and fonts of the designed slides, so a slide that fell back still matches the deck. */
+export function deckFallbackPack(spec: Parameters<typeof packFromStyle>[0], deck: StylePack): StylePack {
+  const key = spec.name + JSON.stringify(deck.palette) + JSON.stringify(deck.fonts);
+  const hit = fallbackCache.get(key);
+  if (hit) return hit;
+  const p = deck.palette;
+  const pal = { bg: p.bg, text: p.text, accent: p.accent ?? p.text, onAccent: p.onAccent ?? p.bg, surface: p.surface ?? p.bg, muted: p.muted ?? p.text };
+  const pack = packFromStyle({ ...spec, fonts: { ...spec.fonts, headline: deck.fonts.headline, body: deck.fonts.body }, palettes: { deck: pal } } as unknown as Parameters<typeof packFromStyle>[0]);
+  const out = { ...pack, palette: { ...deck.palette, onAccent: pal.onAccent, accent: pal.accent, surface: pal.surface, muted: pal.muted }, fonts: { ...deck.fonts } };
+  fallbackCache.set(key, out);
+  return out;
+}
+/** The recurring items of a designed slide for slide i of n: the page number is renumbered, and the swipe cue is left off the last slide. */
+export function recurringFor(rec: Recurring[] | undefined, i: number, n: number): Recurring[] | undefined {
+  const pad = (v: number, w: number) => String(v).padStart(w, '0');
+  return rec?.filter((r) => !(i === n - 1 && /swipe/i.test(r.text))).map((r) => ({ ...r, text: r.text.replace(/^(\d+)(\s*\/\s*)(\d+)$/, (_m, a: string, sep: string, b: string) => pad(i + 1, a.length) + sep + pad(n, b.length)) }));
 }
 
 // ----- the whole deck: one call, one retry -----
@@ -283,6 +340,9 @@ export async function designDeck(req: WriteRequest, look: Look, handle: string, 
   }
   const alike = alikeNote(designed.slides);
   if (alike) designed.notes.push(alike);
+  script.slides.forEach((s, i) => {
+    if (s.type === 'stat' && isPlaceholder((s as unknown as Record<string, unknown>).value)) designed.notes.push('Slide ' + (i + 1) + ' is a stat slide with a placeholder value. Type your own figure into its value field.');
+  });
   return { script, ...extras(text), attempts: calls > 1 ? 2 : 1, ms, warnings: v.warnings, provider: p.id, designed };
 }
 

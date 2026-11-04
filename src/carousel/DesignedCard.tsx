@@ -34,7 +34,7 @@ export function DesignedCard({ doc }: { doc: Doc }) {
     <section className="card ws-card" aria-label="Designed deck" data-testid="designed-card">
       <h2 className="h3">Designed deck</h2>
       <p className="small" role="status">
-        {ok} of {n} slides were designed by the model{fell.length ? `; ${fell.length} fell back to the style's own design` : ''}. {d.calls} model call{d.calls === 1 ? '' : 's'}, {(d.ms / 1000).toFixed(0)} s.
+        {ok} of {n} slides were designed by the model{fell.length ? `; ${fell.length} fell back to a standard layout in the deck's colours and fonts` : ''}. {d.calls} model call{d.calls === 1 ? '' : 's'}, {(d.ms / 1000).toFixed(0)} s.
       </p>
       {fell.length > 0 && (
         <ul className="small cr-issues">
