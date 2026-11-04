@@ -5,6 +5,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { carouselHandler } from './server/carousel-writer';
 import { referenceHandler } from './server/reference-reader';
 import { cutoutHandler } from './server/cutout-dev';
+import { imageHandler } from './server/image-dev';
 
 /** Dev-only JSON endpoints for the /lab page: the test pictures and the Step 2 thumbnail outputs with their checks. */
 function labEndpoints(): Plugin {
@@ -276,7 +277,7 @@ function carouselWriters(): Plugin {
     name: 'carousel-writers',
     apply: 'serve',
     configureServer(server) {
-      const env = { ...process.env, ...loadEnv('development', process.cwd(), ['ANTHROPIC_', 'CLAUDE_', 'CAROUSEL_']) };
+      const env = { ...process.env, ...loadEnv('development', process.cwd(), ['ANTHROPIC_', 'CLAUDE_', 'CAROUSEL_', 'IMAGE_']) };
       server.middlewares.use('/__carousel', carouselHandler('dev-cli', { env }));
       server.middlewares.use('/api/carousel', carouselHandler('api', { env }));
       // The reference reader (a model with vision): the same two providers, for reading the look of reference images.
@@ -284,6 +285,8 @@ function carouselWriters(): Plugin {
       server.middlewares.use('/api/reference', referenceHandler('api', { env }));
       // Background removal on this computer (BiRefNet_lite through onnxruntime-node). Dev only: a production build has no such address.
       server.middlewares.use('/__cutout', cutoutHandler({ env }));
+      // Picture generation: off unless IMAGE_API_KEY and IMAGE_MODEL are set in the server environment. Never called by the tests.
+      server.middlewares.use('/__image', imageHandler({ env }));
     },
   };
 }

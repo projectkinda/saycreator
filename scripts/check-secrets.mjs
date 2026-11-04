@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 const argRoot = process.argv.indexOf('--root');
 const root = argRoot > -1 ? path.resolve(process.argv[argRoot + 1]) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const KEY = /sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9]{32,}/;
-const NAME = /ANTHROPIC_API_KEY|x-api-key/i;
+const NAME = /ANTHROPIC_API_KEY|IMAGE_API_KEY|x-api-key/i;
 const TEXT = /\.(ts|tsx|js|mjs|cjs|json|css|html|md|txt|map|env|example)$/i;
 
 const walk = (p) => {

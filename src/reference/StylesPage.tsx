@@ -54,8 +54,7 @@ export default function StylesPage() {
           <p className="lead">Your own templates, made from references. They appear in the style pickers for carousels and thumbnails, tagged “Mine”.</p>
         </div>
         <div className="row-actions">
-          <Link to="/images/thumbnail" className="btn btn-primary btn-lg">Match a reference in Make a thumbnail</Link>
-          <Link to="/images/carousel" className="btn btn-outline btn-lg">Match a reference in the carousel</Link>
+          <Link to="/images/carousel" className="btn btn-primary btn-lg">Match a reference in the carousel</Link>
         </div>
       </header>
 

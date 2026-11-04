@@ -602,3 +602,7 @@ Only Chrome; Safari and Firefox (EXIF and drag and drop), touch screens, real fu
 **Honest limits**: the carousel is 4:5 and the thumbnail maker uses its own layouts, so a stored layout can only be applied by a template when it is 4:5 (4 in this set). Any other shape is saved inside the template (`layoutKept`) but **not applied**, and the screen says so; nothing is stretched. Real designers' vector art is flattened to plain shapes (some of it shows as black or white slabs), there are no effects or fonts, and the person's words fill slots by role only.
 
 **Tests** (`layouts-crello.spec.ts`, 8): the converter keeps boxes only; near-copies fold; the derived-file check and the build guard fail on a preview key, text, a link, a picture beside it, the marker in a build, or the file in `public/` or `dist/`; the gallery loads with every layout passing the free-layout checks, filters narrow, a star survives a reload, and Try with my content draws at the layout's own shape and saves a Mine template.
+
+
+## Thumbnails parked (image slots step)
+Thumbnails are parked while carousels and quote posts are the focus: the Images tab, the "Make a thumbnail" button and the thumbnail link on the Styles page are hidden. No code was deleted and the `/images/thumbnail` route still works by its address.

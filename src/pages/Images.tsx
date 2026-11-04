@@ -11,7 +11,7 @@ import { useDocumentTitle } from '../useDocumentTitle';
 
 const TABS = [
   { id: 'all', label: 'All' },
-  { id: 'thumbnail', label: 'Thumbnails' },
+  // Thumbnails are parked: the tab, the button and the menu entries are hidden; the code and the /images/thumbnail route stay.
   { id: 'carousel', label: 'Carousels' },
   { id: 'quote', label: 'Quote cards' },
 ];
@@ -221,7 +221,6 @@ export default function Images() {
           ) : (
             <Link to="/images/carousel" className="btn btn-outline btn-lg">Make a carousel</Link>
           )}
-          <Link to="/images/thumbnail" className="btn btn-outline btn-lg">Make a thumbnail</Link>
           <Link to="/images/styles" className="btn btn-outline btn-lg">Styles</Link>
           <Link to="/images/layouts" className="btn btn-outline btn-lg">Layouts</Link>
         <button
