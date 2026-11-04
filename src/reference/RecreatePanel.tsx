@@ -6,46 +6,49 @@ import { loadFonts } from '../image-engine/fonts';
 import { blankStyle } from './blank';
 import { activeReference, setActiveReference, useActiveReference } from './active';
 import { bitmapOf, cut, jpegUrl, pxOfCanvas, previewOf, readerImageOf } from './images';
-import { detectGrid } from './grid';
 import { detectReaders, type ReferenceReader } from './reader';
 import { answerToLayers, buildFixPrompt, buildRecreatePrompt, callRecreate, parsePath, RECREATE_CAP, resolveTokens, segsToD, transformSegs, type RecreateSpec, type RLayer } from './recreate';
 import { saveTemplate, styleNameFor } from './templates';
 import { listElements } from '../image-engine/assets/library';
 import { PackMaker } from './PackMaker';
 import { svgToPng } from './faithful';
+import { chooseSlide } from './slides';
 
 const W = 1080;
 const H = 1350;
 interface Ref {
   url: string;
   name: string;
+  /** The size in px of the picture that is sent. */
+  width: number;
+  height: number;
+  srcW: number;
+  srcH: number;
+  split: boolean;
+  canSplit: boolean;
+  why: string;
 }
 interface State {
   layers: RLayer[];
   palette: Record<string, string>;
 }
 
-/** The first slide of a picture (a carousel sheet is split the way the style-from-references page splits it), at 1400 px. */
-export async function referenceAt1400(file: File): Promise<Ref> {
+/** The one slide that is sent to the reader (a sheet of slides is split only when it clearly is one, or when the person asks; a flat piece is never sent), at 1400 px. */
+export async function referenceAt1400(file: File, mode: 'auto' | 'whole' | 'split' = 'auto'): Promise<Ref> {
   const bm = await bitmapOf(file);
-  let rect = null;
-  for (const size of [1400, 900, 600]) {
+  const pxAt = (size: number) => {
     const small = cut(bm, null, size);
-    const g = detectGrid(pxOfCanvas(small));
-    if (g) {
-      const k = bm.width / small.width;
-      const c = g.cells[0];
-      rect = { x: Math.round(c.x * k), y: Math.round(c.y * k), width: Math.round(c.width * k), height: Math.round(c.height * k) };
-      break;
-    }
-  }
-  if (!rect && bm.width <= 1400 && bm.height <= 1400 && /^image\/(jpeg|png)$/.test(file.type)) {
+    return { p: pxOfCanvas(small), k: bm.width / small.width };
+  };
+  const choice = chooseSlide(pxAt, mode);
+  const meta = { srcW: bm.width, srcH: bm.height, split: choice.split, canSplit: choice.canSplit, why: choice.why };
+  if (!choice.rect && bm.width <= 1400 && bm.height <= 1400 && /^image\/(jpeg|png)$/.test(file.type)) {
     bm.close();
-    return { url: await blobUrl(file), name: file.name };
+    return { url: await blobUrl(file), name: file.name, width: meta.srcW, height: meta.srcH, ...meta };
   }
-  const j = await jpegUrl(bm, rect, 1400);
+  const j = await jpegUrl(bm, choice.rect, 1400);
   bm.close();
-  return { url: j.url, name: file.name };
+  return { url: j.url, name: file.name, width: j.width, height: j.height, ...meta };
 }
 
 const plan = (layers: RLayer[]) => ({ schema: 1 as const, revision: 1, canvas: { width: W, height: H, background: '#FFFFFF' }, layers });
@@ -89,6 +92,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
   const { removed } = useActiveReference();
   const [readers, setReaders] = useState<ReferenceReader[] | null>(null);
   const [ref, setRef] = useState<Ref | null>(null);
+  const [refFile, setRefFile] = useState<File | null>(null);
   const [state, setState] = useState<State | null>(null);
   const [past, setPast] = useState<State[]>([]);
   const [future, setFuture] = useState<State[]>([]);
@@ -147,11 +151,24 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     if (!f) return;
     try {
       setRef(await referenceAt1400(f));
+      setRefFile(f);
       setState(null);
       setCalls(0);
       setMsg('');
     } catch {
       setMsg(`“${f.name}” could not be read as a picture.`);
+    }
+  };
+  /** The toggle: the whole image, or its first slide when it is a sheet of slides. */
+  const pickSplit = async (split: boolean) => {
+    if (!refFile || busy) return;
+    try {
+      setRef(await referenceAt1400(refFile, split ? 'split' : 'whole'));
+      setState(null);
+      setCalls(0);
+      setMsg('');
+    } catch {
+      setMsg('The picture could not be read again.');
     }
   };
   useEffect(() => {
@@ -340,7 +357,18 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
         onDragLeave={() => setOver(false)}
         onDrop={(e) => { e.preventDefault(); setOver(false); void add([...e.dataTransfer.files]); }}
       >
-        <p className="small">{ref ? `Reference: ${ref.name}` : 'Drop, pick or paste (Ctrl+V) one carousel slide. A sheet of slides uses its first slide.'}</p>
+        <p className="small">{ref ? `Reference: ${ref.name}` : 'Drop, pick or paste (Ctrl+V) one carousel slide. A picture of one slide is sent whole.'}</p>
+        {ref && (
+          <div className="rf-chip-bar" role="group" aria-label="What will be sent">
+            <img src={ref.url} alt="The picture that will be sent" width={64} />
+            <span className="small" data-testid="recreate-sent">Sent: {ref.width} × {ref.height} px{ref.split ? ` (the first slide of a sheet, from ${ref.srcW} × ${ref.srcH} px)` : ''}. {ref.why}</span>
+            {Math.max(ref.width, ref.height) < 1000 && <span className="small cr-warn">Small reference: fine details may be lost.</span>}
+            <div role="radiogroup" aria-label="Whole image or slides">
+              <button type="button" role="radio" aria-checked={!ref.split} className="chip-btn" onClick={() => void pickSplit(false)}>Use whole image</button>
+              <button type="button" role="radio" aria-checked={ref.split} className="chip-btn" disabled={!ref.canSplit} onClick={() => void pickSplit(true)}>Split into slides</button>
+            </div>
+          </div>
+        )}
         <button type="button" className="btn btn-outline btn-sm" onClick={() => fileRef.current?.click()}>{ref ? 'Use another picture' : 'Choose a picture'}</button>
         <input ref={fileRef} type="file" accept="image/*" className="visually-hidden" tabIndex={-1} aria-label="Choose a picture to recreate" onChange={(e) => { void add([...(e.target.files ?? [])]); e.target.value = ''; }} />
       </div>

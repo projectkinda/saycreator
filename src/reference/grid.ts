@@ -171,7 +171,14 @@ export function detectGrid(p: Px): GridResult | null {
   // Seams at every evenly spaced line, all of them clear, settle it before looking for gutters (the plain margins inside slides can repeat evenly too).
   const sure = seamGrid(p);
   if (sure && sure.all) return sure.result;
-  // 1. Gutters.
+  const gg = gutterGrid(p);
+  if (gg) return gg;
+  // 2. Slides set edge to edge: evenly spaced seams.
+  return sure ? sure.result : null;
+}
+
+/** Only the gutters: strips of one plain colour running the whole height or width between the slides. */
+export function gutterGrid(p: Px): GridResult | null {
   const xs = spansFrom(gutterRuns(p, true), p.width);
   const ys = spansFrom(gutterRuns(p, false), p.height);
   if (xs.length >= 2 || ys.length >= 2) {
@@ -183,8 +190,7 @@ export function detectGrid(p: Px): GridResult | null {
     const aspects = cells.map((c) => c.width / c.height);
     if (cells.length >= 2 && aspects.every((a) => a > 0.3 && a < 3.2)) return { cols: cx.length, rows: cy.length, cells, method: 'gutters between the slides' };
   }
-  // 2. Slides set edge to edge: evenly spaced seams.
-  return sure ? sure.result : null;
+  return null;
 }
 
 function seamGrid(p: Px): { result: GridResult; all: boolean } | null {
