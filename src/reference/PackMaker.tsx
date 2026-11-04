@@ -5,7 +5,7 @@ import { renderer } from '../carousel/render';
 import { blankStyle } from './blank';
 import { setActiveReference } from './active';
 import { readerImageOf } from './images';
-import { buildPackPrompt, callPack, distinctCheck, PACK_CAP, PACK_TYPES, packSlide, parsePack, type PackType, type StylePack } from './pack';
+import { buildPackPrompt, callPack, distinctCheck, hasTextSlots, PACK_CAP, PACK_TYPES, packSlide, parsePack, type PackType, type StylePack } from './pack';
 import { detectReaders, type ReferenceReader } from './reader';
 import type { RLayer } from './recreate';
 import { saveTemplate, styleNameFor } from './templates';
@@ -74,12 +74,27 @@ export function PackMaker({ kind, description, reference, first }: { kind: 'refe
         setMsg(`The designs could not be used: ${r.reasons.join(' ')}`);
         return;
       }
-      const p = { ...r.pack, ...(first?.layers ? { designs: { ...r.pack.designs, base: first.layers } } : {}) };
+      // Every design needs text slots: the ones that came without are asked for once more.
+      let pk = r.pack;
+      let retried = '';
+      const missing = types.filter((t) => !pk.designs[t]);
+      if (missing.length && used < PACK_CAP) {
+        setMsg(`${missing.join(', ')} had no text slots: asking once more…`);
+        used++;
+        ls.forEach((l) => l());
+        retried = missing.join(', ');
+        const again = await callPack(readers![0], buildPackPrompt({ kind, types: missing, description, firstSvg: first?.svg, retry: `no text slots (<text> with data-role) in: ${missing.join(', ')}` }), images, abort.current.signal);
+        const r2 = await parsePack(again, pk.name, pk.palette);
+        if (r2.ok) pk = { ...pk, designs: { ...pk.designs, ...r2.pack.designs }, notes: [...pk.notes, ...r2.pack.notes] };
+      }
+      // The first slide of a reference is only kept as the base design when it has text slots of its own.
+      const baseOk = !!first?.layers && hasTextSlots(first.layers);
+      const p = { ...pk, ...(baseOk ? { designs: { ...pk.designs, base: first!.layers } } : {}), notes: [...pk.notes, ...(first && !baseOk ? ['The first slide has no text slots, so it is not kept as a fallback design.'] : [])] };
       setPack(p);
       setThumbs(await packThumbs(p));
       setName(p.name);
       setActiveReference({ spec: { ...blankStyle(), name: 'pack', title: 'Style pack' }, thumb: '', learn: 'everything', target: 'carousel', ratioNote: null, photoRegion: null, source: 'pack', pack: p });
-      setMsg(`${Object.keys(r.pack.designs).length} slide designs made in ${Math.round((performance.now() - t0) / 1000)} s.${r.problems.length ? ` ${r.problems.slice(0, 2).join(' ')}` : ''}`);
+      setMsg(`${Object.keys(p.designs).filter((k) => k !== 'base').length} slide designs made${retried ? ` (asked once more for ${retried})` : ''} in ${Math.round((performance.now() - t0) / 1000)} s.${r.problems.length ? ` ${r.problems.slice(0, 2).join(' ')}` : ''}`);
     } catch (e) {
       setMsg((e as Error).message);
     } finally {
@@ -102,7 +117,7 @@ export function PackMaker({ kind, description, reference, first }: { kind: 'refe
         <button type="button" role="radio" aria-checked={size === 'quick'} className="chip-btn" onClick={() => setSize('quick')}>Quick (cover and one content slide)</button>
         <button type="button" role="radio" aria-checked={size === 'full'} className="chip-btn" onClick={() => setSize('full')}>Full set (7 slide types)</button>
       </div>
-      <p className="small muted" role="status" aria-label="Pack estimate">Estimate: 1 model call, about {types.length * SECONDS_PER_DESIGN} s, {types.length} designs ({types.join(', ')}). Pack calls used: {calls} of {PACK_CAP}.</p>
+      <p className="small muted" role="status" aria-label="Pack estimate">Estimate: 1 model call (2 if a design comes without text), about {types.length * SECONDS_PER_DESIGN} s, {types.length} designs ({types.join(', ')}). Pack calls used: {calls} of {PACK_CAP}.</p>
       <div className="row-actions">
         <button type="button" className="btn btn-outline btn-sm" disabled={busy || noReader || !needs || calls >= PACK_CAP} onClick={() => void make()}>{busy ? 'Working…' : 'Make the set'}</button>
         {busy && <button type="button" className="btn btn-outline btn-sm" onClick={() => abort.current?.abort()}>Cancel</button>}

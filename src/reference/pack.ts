@@ -7,6 +7,8 @@ import type { StyleSpec } from '../image-engine/styles/format';
 import { activeReference } from './active';
 import { templateOfStyle } from './templates';
 import { fillRecreate, FONT_NAMES, sanitizeSvg, svgToLayers, textsOf, type RLayer } from './recreate';
+import { layoutText } from '../image-engine/draw/text';
+import type { TextLayer } from '../image-engine/types';
 import type { ReaderImage, ReferenceReader } from './reader';
 
 export const PACK_TYPES = ['cover', 'step', 'content', 'list', 'stat', 'quote', 'cta'] as const;
@@ -39,7 +41,38 @@ export function packFor(styleName: string): StylePack | null {
 export function packSlide(pack: StylePack, slideType: string, slide: Record<string, unknown>, handle: string) {
   const d = pack.designs[designKey(slideType)] ?? pack.designs.content ?? pack.designs.cover ?? pack.designs.base ?? Object.values(pack.designs)[0];
   if (!d) return { layers: [], notes: ['The pack has no design.'] };
-  return fillRecreate({ layers: d, palette: pack.palette, canvas: pack.canvas, notes: [] }, textsOf(slide, handle));
+  const texts = textsOf(slide, handle);
+  const key = designKey(slideType);
+  if (key !== 'list' || !texts.body) return fillRecreate({ layers: d, palette: pack.palette, canvas: pack.canvas, notes: [] }, texts);
+  // A list: every item keeps a readable size (40 px at least) and its own line; the slot grows downward, and when it still does not fit the items go in two columns.
+  const items = texts.body.split('\n').filter(Boolean);
+  const readable = d.map((l) => (l.kind === 'text' && l.name === 'body' ? ({ ...l, slot: { minSize: Math.max(40, l.slot?.minSize ?? 0), maxLines: Math.max(l.slot?.maxLines ?? 0, items.length * 2) } } as RLayer) : l));
+  const r = fillRecreate({ layers: readable, palette: pack.palette, canvas: pack.canvas, notes: [] }, texts);
+  const i = r.layers.findIndex((l) => l.kind === 'text' && l.name === 'body');
+  if (i < 0) return r;
+  const body = r.layers[i] as TextLayer;
+  const bottom = pack.canvas.h * 0.93;
+  try {
+    const need = layoutText(body).height;
+    if (need > body.height) {
+      const grown = Math.min(need + body.style.size * 0.3, bottom - body.y);
+      if (need <= grown) {
+        r.layers[i] = { ...body, height: grown };
+        r.notes.push('The list slot was made taller to keep every item readable.');
+      } else if (items.length >= 4) {
+        const half = Math.ceil(items.length / 2);
+        const gap = pack.canvas.w * 0.04;
+        const w = (body.width - gap) / 2;
+        const colA = { ...body, text: items.slice(0, half).join('\n'), width: w, height: bottom - body.y } as TextLayer;
+        const colB = { ...body, id: `${body.id}-2`, text: items.slice(half).join('\n'), x: body.x + w + gap, width: w, height: bottom - body.y } as TextLayer;
+        r.layers.splice(i, 1, colA, colB);
+        r.notes.push('The list is set in two columns so every item stays readable.');
+      } else r.notes.push('The list needs more room than its slot has, even at the smallest readable size.');
+    }
+  } catch {
+    /* fonts not ready: leave the slot as it is */
+  }
+  return r;
 }
 
 // ----- distinct compositions -----
@@ -72,7 +105,7 @@ const SLOTS: Record<PackType, string> = {
 };
 const fontLine = () => FONT_NAMES.map((f) => `"${f}" (weights ${FONT_WEIGHTS[f].join(', ')})`).join('; ');
 
-export function buildPackPrompt(o: { kind: 'reference' | 'description'; types: PackType[]; description?: string; firstSvg?: string }): string {
+export function buildPackPrompt(o: { kind: 'reference' | 'description'; types: PackType[]; description?: string; firstSvg?: string; retry?: string }): string {
   return [
     '[pack:new] You design a STYLE PACK for carousel slides: one SVG slide design per slide type, all in one look. You are drawing designs, not describing them. Reply with the SVGs only (no code fence, no explanation).',
     o.kind === 'reference'
@@ -83,8 +116,10 @@ export function buildPackPrompt(o: { kind: 'reference' | 'description'; types: P
     'Text slots: each <text> has data-role (kicker, tag, title, body, caption or number), data-min-size (px, 32 or more) and data-max-lines, and holds sample words. One <text> per slot; a slot may hold several lines, the code wraps and fits the person\'s words into it, so make each slot as big as its words need. Slots a slide type has:',
     ...o.types.map((t) => `  ${t}: ${SLOTS[t]}`),
     `Fonts: only these bundled ones: ${fontLine()}. If none fits a text, use the nearest and add data-font-wish="the family you wanted".`,
+    'EVERY design MUST have real <text> elements for its text slots (at least a title or a body, each with data-role). Words drawn as outlines or paths, or text left out, are refused and the design is asked for again.',
+    o.retry ? `Your previous answer was refused for: ${o.retry}. Make ONLY the slide types listed above again.` : '',
     'Graphics (motifs, shapes, doodles, patterns, dots) are plain shapes and paths; every group of them is a <g id="short-name">. Allowed elements only: svg, g, path, circle, ellipse, rect, line, polyline, polygon, defs, linearGradient, radialGradient, stop, clipPath, mask, pattern, text, tspan. No images, no scripts, no external references. The first element of each design is the full-size background <rect>.',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 // ----- the answer -----
@@ -94,7 +129,9 @@ export interface PackAnswer {
   pack: StylePack;
   problems: string[];
 }
-export async function parsePack(text: string, name: string): Promise<PackAnswer | { ok: false; reasons: string[] }> {
+export const hasTextSlots = (layers: RLayer[]) => layers.some((l) => l.kind === 'text' && ['kicker', 'tag', 'title', 'body', 'caption', 'number'].includes(l.name));
+
+export async function parsePack(text: string, name: string, fallbackPalette?: Record<string, string>): Promise<PackAnswer | { ok: false; reasons: string[] }> {
   const blocks = text.match(/<svg[\s\S]*?<\/svg>/gi) ?? [];
   if (blocks.length === 0) return { ok: false, reasons: [`The answer has no <svg> designs. The reader said: "${text.replace(/\s+/g, ' ').slice(0, 160)}"`] };
   let palette: Record<string, string> = {};
@@ -105,6 +142,7 @@ export async function parsePack(text: string, name: string): Promise<PackAnswer 
   } catch {
     /* no palette */
   }
+  if ((!palette.bg || !palette.text) && fallbackPalette) palette = fallbackPalette;
   if (!palette.bg || !palette.text) return { ok: false, reasons: ['The first design has no usable data-palette (it needs at least "bg" and "text" as #rrggbb).'] };
   await loadFonts();
   const designs: StylePack['designs'] = {};
@@ -124,6 +162,11 @@ export async function parsePack(text: string, name: string): Promise<PackAnswer 
     const { layers, notes: n } = svgToLayers(s.svg, SIZE.w, SIZE.h);
     if (layers.length < 2) {
       problems.push(`${t}: nothing drawable was in the picture.`);
+      continue;
+    }
+    // A design without text slots cannot take a slide's words: it is left out (and asked for again once).
+    if (!hasTextSlots(layers)) {
+      problems.push(`${t}: no text slots (<text> elements with data-role), so the design was left out.`);
       continue;
     }
     designs[t as PackType] = layers;
@@ -165,7 +208,7 @@ export function packFromStyle(spec: StyleSpec): StylePack {
   const designs: StylePack['designs'] = {
     cover: [bg(), block('base', 0, 60, 100, 40, '$accent'), T('kicker', 7, 6, 60, 4, 34, { colour: '$muted', lines: 1 }), T('title', 7, 14, 86, 42, 140, { font: 'headline', lines: 4, min: 56, lh: 1.02 }), T('body', 7, 66, 76, 22, 46, { colour: '$onAccent', lines: 4 })],
     step: [bg(), block('tag-pill', 63, 6, 30, 5, '$accent', { radius: 40 }), T('tag', 63, 6.6, 30, 4, 34, { colour: '$onAccent', align: 'center', lines: 1 }), T('number', 7, 7, 34, 22, 300, { font: 'headline', colour: '$accent', lines: 1, min: 120 }), block('rule', 7, 33, 14, 0.6, '$accent'), T('title', 7, 36, 86, 18, 84, { font: 'headline', lines: 3, min: 48 }), T('body', 7, 58, 80, 32, 46, { lines: 8 })],
-    content: [bg(), T('title', 7, 7, 86, 12, 72, { font: 'headline', lines: 2, min: 44 }), block('column-rule', 52, 24, 0.5, 60, '$muted'), T('body', 7, 24, 40, 62, 44, { lines: 13 }), T('caption', 57, 24, 36, 24, 38, { colour: '$muted', lines: 5 }), block('corner', 57, 70, 36, 14, '$surface', { radius: 24 })],
+    content: [bg(), T('title', 7, 7, 86, 12, 72, { font: 'headline', lines: 2, min: 44 }), block('column-rule', 52, 24, 0.5, 60, '$muted'), T('body', 7, 24, 40, 62, 44, { lines: 13 }), block('corner', 57, 24, 36, 22, '$surface', { radius: 24 }), T('caption', 59.5, 26.5, 31, 17, 38, { colour: '$muted', lines: 4 })],
     list: [bg(), T('title', 10, 6, 80, 11, 64, { font: 'headline', align: 'center', lines: 2, min: 40 }), block('bullet-1', 7, 25, 2.5, 1.8, '$accent'), block('bullet-2', 7, 38, 2.5, 1.8, '$accent'), block('bullet-3', 7, 51, 2.5, 1.8, '$accent'), block('bullet-4', 7, 64, 2.5, 1.8, '$accent'), block('bullet-5', 7, 77, 2.5, 1.8, '$accent'), T('body', 14, 22, 79, 66, 50, { lines: 6, lh: 2.05 })],
     stat: [bg(), block('panel', 6, 20, 88, 56, '$surface', { radius: 32 }), T('kicker', 7, 6, 70, 4, 34, { colour: '$muted', lines: 1 }), T('number', 6, 25, 88, 28, 320, { font: 'headline', colour: '$accent', align: 'center', lines: 1, min: 120 }), T('title', 10, 56, 80, 10, 60, { font: 'headline', align: 'center', lines: 2, min: 38 }), T('body', 12, 68, 76, 7, 38, { colour: '$muted', align: 'center', lines: 2 })],
     quote: [bg(), T('quotemark', 6, 3, 30, 20, 420, { font: 'headline', colour: '$accent', lines: 1, min: 200, sample: '“' }), T('title', 10, 27, 80, 42, 76, { font: 'headline', lines: 6, min: 40, lh: 1.2 }), T('caption', 10, 74, 80, 6, 38, { colour: '$muted', lines: 2 }), block('foot', 0, 97, 100, 3, '$accent')],

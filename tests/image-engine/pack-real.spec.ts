@@ -16,7 +16,8 @@ const RUNS = [
   { id: 'from-description', kind: 'description', size: 'full', description: 'A warm, friendly coaching brand: cream paper, deep green and terracotta, big soft serif headlines, hand-drawn underlines and small leaf doodles.' },
 ];
 
-for (const run of RUNS) {
+// PACK_ONLY=<id> runs one of them.
+for (const run of RUNS.filter((r) => !process.env.PACK_ONLY || r.id === process.env.PACK_ONLY)) {
   test(`real pack: ${run.id}`, async ({ page }) => {
     test.setTimeout(900_000);
     await page.goto('/images/carousel');
@@ -63,6 +64,13 @@ for (const run of RUNS) {
       if (!parsed.ok) return { ...out, ok: false, reasons: parsed.reasons, raw: text.slice(0, 600), seconds2 };
       const pack = { ...parsed.pack, ...(first ? { designs: { ...parsed.pack.designs, base: first.layers } } : {}) } as never as import('/src/reference/pack.ts').StylePack;
       const check = P.distinctCheck(pack);
+      // Does any text slot reach past the slide when a slide's own words are in it? (the longest samples of each type)
+      const LONG: Record<string, Record<string, unknown>> = { cover: { type: 'cover', kicker: 'A rather long kicker line', headline: 'Why your morning routine keeps failing every single week', sub: 'And the small fix that finally works for people' }, step: { type: 'step', number: 3, headline: 'Start with five minutes only', body: 'Pick one habit. Do it for five minutes only. Stop while it still feels easy.' }, content: { type: 'content', headline: 'Make it obvious and easy to start', body: 'Put the thing you need where you will see it. The easier it is to start, the more often you will.' }, quote: { type: 'quote', quote: 'Clear beats clever, every single time, even when clever is more fun to write.', by: 'An editor' } };
+      const overflow: Record<string, number> = {};
+      for (const [t, sl] of Object.entries(LONG)) {
+        const lay = P.packSlide(pack, String(sl.type), sl, '@yourname').layers as unknown as { kind: string; visible?: boolean; x: number; y: number; width: number; height: number }[];
+        overflow[t] = lay.filter((l) => l.kind === 'text' && l.visible !== false && (l.x < -1 || l.x + l.width > pack.canvas.w + 1 || l.y + l.height > pack.canvas.h + 1)).length;
+      }
       // The sheet: every slide type side by side.
       const thumbs = await M.packThumbs(pack, 0.3);
       const bms = await Promise.all(thumbs.map((t) => createImageBitmap(t.blob)));
@@ -124,6 +132,8 @@ for (const run of RUNS) {
         palette: pack.palette,
         fonts: pack.fonts,
         alike: check.alike,
+        overflow,
+        packJson: JSON.stringify(pack),
         textSlots: Object.fromEntries(Object.entries(pack.designs).map(([k, v]) => [k, (v as { kind: string; name: string }[]).filter((l) => l.kind === 'text').map((l) => l.name)])),
         packNotes: pack.notes.slice(0, 8),
         problems: parsed.problems,
@@ -133,7 +143,8 @@ for (const run of RUNS) {
         sheet2: await asUrl(await sheet2.convertToBlob({ type: 'image/png' })),
       };
     }, [run, b64] as const);
-    const { sheet, sheet2, ...rest } = r as Record<string, unknown> & { sheet?: string; sheet2?: string };
+    const { sheet, sheet2, packJson, ...rest } = r as Record<string, unknown> & { sheet?: string; sheet2?: string; packJson?: string };
+    if (packJson) fs.writeFileSync(path.join(OUT, `pack-${run.id}.json`), packJson);
     if (sheet) fs.writeFileSync(path.join(OUT, `sheet-${run.id}.png`), Buffer.from(sheet.split(',')[1], 'base64'));
     if (sheet2) fs.writeFileSync(path.join(OUT, `applied-${run.id}.png`), Buffer.from(sheet2.split(',')[1], 'base64'));
     fs.writeFileSync(path.join(OUT, `${run.id}.json`), JSON.stringify(rest, null, 1));

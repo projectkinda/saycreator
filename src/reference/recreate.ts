@@ -625,7 +625,18 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
     }
     return filled;
   });
-  return { layers, notes };
+  // A block or graphic that belongs to a slot with no words (its box holds, or sits under, the empty text) is hidden with it.
+  const canvasArea = rec.canvas.w * rec.canvas.h;
+  const area = (l: Layer) => l.width * l.height;
+  const overlap = (a: Layer, b: Layer) => Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  const empty = layers.filter((l) => l.kind === 'text' && l.visible === false);
+  const gone = new Set<Layer>();
+  for (const e of empty)
+    for (const l of layers) if (l.kind !== 'text' && area(l) < canvasArea * 0.3 && area(l) <= 6 * area(e) && overlap(l, e) >= 0.5 * area(e)) gone.add(l);
+  // What sits inside a hidden block goes with it.
+  for (const g of [...gone]) for (const l of layers) if (l !== g && l.kind !== 'text' && !gone.has(l) && area(l) <= area(g) && l.x + l.width / 2 >= g.x && l.x + l.width / 2 <= g.x + g.width && l.y + l.height / 2 >= g.y && l.y + l.height / 2 <= g.y + g.height) gone.add(l);
+  const shown = layers.map((l) => (gone.has(l) ? ({ ...l, visible: false } as Layer) : l));
+  return { layers: shown, notes };
 }
 
 /** The recreated look to use for a style name: the active one, or a saved template's. */
