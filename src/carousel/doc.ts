@@ -15,6 +15,8 @@ export interface SlideChoice {
   photo?: PhotoChoice;
   /** A transparent object placed on this slide. */
   object?: ObjectChoice;
+  /** A pack slide turned into editable layers (otherwise it is drawn as the SVG was written). */
+  editable?: boolean;
 }
 export type Tone = 'clear' | 'bold' | 'friendly' | 'expert';
 export interface GenerateOptions {
@@ -169,6 +171,7 @@ const slidePath = (i: number, ...rest: Path): Path => ['script', 'slides', i, ..
 export const patches = {
   editField: (i: number, field: string, label: string, value: unknown): DocPatch => ({ label: `Edit ${label.toLowerCase()} on slide ${i + 1}`, coalesce: `field:${i}:${field}`, ops: [{ path: slidePath(i, field), value }] }),
   editTags: (i: number, tags: string[]): DocPatch => ({ label: `Change tags on slide ${i + 1}`, coalesce: `tags:${i}`, ops: [{ path: slidePath(i, 'element_tags'), value: tags }] }),
+  makeEditable: (i: number): DocPatch => ({ label: `Make slide ${i + 1} editable`, ops: [{ path: ['choices', String(i), 'editable'], value: true }] }),
   layout: (i: number, layout: string): DocPatch => ({ label: `Change layout on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'layout'], value: layout }] }),
   swap: (i: number, from: string, to: string): DocPatch => ({ label: `Swap an element on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'swaps', from], value: to }] }),
   shuffle: (i: number, salt: string): DocPatch => ({ label: `Shuffle elements on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'swaps'], value: undefined }, { path: ['choices', String(i), 'salt'], value: salt }] }),

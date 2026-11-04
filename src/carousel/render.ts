@@ -15,8 +15,20 @@ import { treatmentsFor } from './photoChoices';
 import { objectInputs, photoInputs } from './photoLibrary';
 import { targetOfStyle, userStyles } from '../reference/templates';
 import { fillRecreate, recreateFor, textsOf } from '../reference/recreate';
-import { packFor, packSlide } from '../reference/pack';
+import { designUsed, packFor, packSlide } from '../reference/pack';
+import { svgToPng } from '../reference/faithful';
+import { faithfulChecks, UNCHECKED } from '../reference/faithfulChecks';
+import type { Layer } from '../image-engine/types';
 import { activeStyle } from '../reference/active';
+
+/** A pack slide drawn as the SVG was written: the filled SVG, and the filled layers (for the phone checks only). */
+export interface FaithfulInfo {
+  svg: string;
+  layers: Layer[];
+  canvas: { w: number; h: number };
+  bg: string;
+}
+export const faithfulOf = (s: unknown) => (s as { faithful?: FaithfulInfo }).faithful;
 
 let styles: { styles: LoadedStyle[]; problems: { folder: string; messages: string[] }[] } | null = null;
 let merged: { user: LoadedStyle[]; active: LoadedStyle | null; value: { styles: LoadedStyle[]; problems: { folder: string; messages: string[] }[] } } | null = null;
@@ -55,7 +67,11 @@ export function composeDoc(doc: Doc): { slides: StyledSlide[]; margin: number } 
     const filled = slides.map((s, i) => {
       const sc = (doc.script!.slides[i] ?? {}) as unknown as Record<string, unknown>;
       const r = packSlide(pack, String(sc.type ?? s.type), sc, doc.script!.brand.handle);
-      return { ...s, plan: { ...s.plan, layers: r.layers }, notes: [...((s as { notes?: string[] }).notes ?? []), ...r.notes] };
+      const editable = !!doc.choices[String(i)]?.editable;
+      const used = designUsed(pack, String(sc.type ?? s.type));
+      const more = editable && used ? [`Made editable: this slide now draws from layers. ${pack.notes.filter((n) => n.startsWith(`${used}:`)).slice(0, 3).join(' ') || 'Gradients, patterns and fine drawing parts can look a little different from the original drawing.'}`] : [];
+      const f = !editable && r.faithful ? { faithful: { svg: r.faithful, layers: r.layers, canvas: pack.canvas, bg: pack.palette.bg ?? '#FFFFFF' } } : {};
+      return { ...s, ...f, plan: { ...s.plan, layers: r.layers }, notes: [...((s as { notes?: string[] }).notes ?? []), ...r.notes, ...more] };
     });
     return { slides: filled as typeof slides, margin: style.spec.spacing.margin };
   }
@@ -127,11 +143,13 @@ class Renderer {
 
   /** Draws one slide and checks it. The same plan is drawn only once. */
   render(slide: StyledSlide, margin: number): Promise<Rendered> {
-    const key = `${margin}|${JSON.stringify(slide.plan)}`;
+    const fa = faithfulOf(slide);
+    const key = `${margin}|${JSON.stringify(slide.plan)}${fa ? `|${fa.svg}` : ''}`;
     let p = this.cache.get(key);
     if (!p) {
       p = this.enqueue(async () => {
         const t0 = performance.now();
+        if (fa) return this.faithful(slide, fa, t0);
         const a = await this.ready();
         // A photo behind words gets a stronger overlay if the check still fails (a no-op on slides with no full photo).
         const c = await checkWithRepair(a, { id: slide.id, type: slide.type, plan: slide.plan, notes: slide.notes }, margin);
@@ -142,6 +160,16 @@ class Renderer {
       if (this.cache.size > 80) this.cache.delete(this.cache.keys().next().value!);
     }
     return p;
+  }
+
+  /** A faithful pack slide: the SVG drawn as written, at the slide's size (a design on a smaller card is fitted whole), checked from its slot data. */
+  private async faithful(slide: StyledSlide, fa: FaithfulInfo, t0: number): Promise<Rendered> {
+    const { width: W, height: H } = slide.plan.canvas;
+    const same = Math.abs(W / H - fa.canvas.w / fa.canvas.h) < 0.005;
+    const png = await svgToPng(fa.svg, W, same ? undefined : { w: W, h: H, bg: fa.bg });
+    const k = same ? W / fa.canvas.w : Math.min(W / fa.canvas.w, H / fa.canvas.h);
+    const lint = faithfulChecks(fa.layers, { canvas: fa.canvas, bg: fa.bg, k, slideType: slide.type });
+    return { png, lint, warnings: [`Faithful drawing: these checks cannot run on it. ${UNCHECKED.join(' ')}`], repairs: [], ms: performance.now() - t0 };
   }
 
   /** A small picture of a plan, for the style picker. No checks. */

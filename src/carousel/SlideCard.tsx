@@ -10,7 +10,7 @@ import type { StyledSlide } from '../image-engine/styles/compose';
 import { linkScore } from '../image-engine/styles/tags';
 import { patches } from './doc';
 import { FieldEditor, LintBadges, TagEditor, type Apply } from './parts';
-import type { Rendered } from './render';
+import { faithfulOf, type Rendered } from './render';
 import { FIELDS, TYPE_LABEL } from './script';
 import type { Palette } from '../image-engine/carousel/types';
 import type { ObjectChoice } from '../image-engine/photo/objects';
@@ -91,6 +91,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
               {n}
             </p>
           ))}
+        {faithfulOf(slide) && <p className="small muted" data-testid="faithful-note">Drawn as the pack's design was written. Checks that cannot run on it: {view?.rendered?.warnings?.length ? 'contrast over art, graphics crossing text, picture overlap' : 'see Make editable'}.</p>}
         {view?.error && <p className="small cr-problem" role="alert">{view.error}</p>}
       </div>
       <div className="cr-edit">
@@ -113,6 +114,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
           </label>
           <button type="button" className="btn btn-outline btn-sm" onClick={() => setProblem(onShuffle() ? '' : 'No other pictures fit this slide.')}>Shuffle elements</button>
           <button type="button" className="btn btn-outline btn-sm" onClick={() => run(apply(patches.regenerate(index)))}>Regenerate from the plan</button>
+          {faithfulOf(slide) && <button type="button" className="btn btn-outline btn-sm" onClick={() => run(apply(patches.makeEditable(index)))} title="This slide is drawn exactly as the pack's design was written. Making it editable turns it into layers; fine details may change.">Make editable</button>}
           <ReplayButton plan={slide.plan} label={`Slide ${index + 1}`} />
           <WhyPopover slide={slide} lint={view?.rendered?.lint} repairs={view?.rendered?.repairs} />
           <button type="button" className="btn btn-outline btn-sm" onClick={onDownload} disabled={!view?.rendered}>

@@ -25,7 +25,8 @@ import type { AddFiles } from './PhotoControls';
 import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, useLibraryVersion, type PictureMeta } from './photoLibrary';
 import { SlideCard, type SlideView } from './SlideCard';
 import { Group, PreviewStage, useGroups } from './Studio';
-import { packFor, packFromStyle, packSlide, distinctCheck } from '../reference/pack';
+import { packFor, packFromStyle, distinctCheck } from '../reference/pack';
+import { packPicture } from '../reference/packRender';
 import { saveTemplate, styleNameFor as packStyleName } from '../reference/templates';
 import { blankStyle as packBlank } from '../reference/blank';
 import { PASTE_KEY, readStore, useProject, writeStore } from './useProject';
@@ -46,8 +47,7 @@ function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; 
   const rebuild = async (st: (typeof styles)[number]) => {
     const pack = packFromStyle(st.spec);
     const check = distinctCheck(pack);
-    const slide = packSlide(pack, 'cover', { type: 'cover', kicker: 'Example', headline: 'A headline that makes people stop', sub: 'A line under it' }, '@yourname');
-    const blob = await renderer.preview({ schema: 1, revision: 1, canvas: { width: 1080, height: 1350, background: pack.palette.bg }, layers: slide.layers } as never, 0.25);
+    const blob = await packPicture(pack, 'cover', { type: 'cover', kicker: 'Example', headline: 'A headline that makes people stop', sub: 'A line under it' }, 270);
     const preview = await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(blob); });
     const name = `${st.spec.title} pack`;
     await saveTemplate({ name, target: 'carousel', spec: { ...packBlank(), name: packStyleName(name), title: name }, preview, pack });
@@ -63,8 +63,7 @@ function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; 
         // A pack is previewed with its own cover design, not the plain style under it.
         const pk = packFor(st.spec.name);
         if (pk) {
-          const slide = packSlide(pk, 'cover', { type: 'cover', kicker: 'Example', headline: 'A headline that makes people stop', sub: 'And a line that makes them read on' }, '@yourname');
-          const blob = await renderer.preview({ schema: 1, revision: 1, canvas: { width: pk.canvas.w, height: pk.canvas.h, background: pk.palette.bg ?? '#FFFFFF' }, layers: slide.layers } as never, 0.2);
+          const blob = await packPicture(pk, 'cover', { type: 'cover', kicker: 'Example', headline: 'A headline that makes people stop', sub: 'And a line that makes them read on' }, 216);
           if (!live) return;
           setPreviews((p) => ({ ...p, [key]: URL.createObjectURL(blob) }));
           continue;

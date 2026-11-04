@@ -1,11 +1,11 @@
 // "Make the rest of the set" / "Make a pack from this description": one model call returns several SVG slide designs (a style pack), shown side by side, checked for
 // distinct compositions, saved as a template. Applying a pack to a script is code only. The estimate is shown before anything is sent.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { renderer } from '../carousel/render';
+import { packPicture } from './packRender';
 import { blankStyle } from './blank';
 import { setActiveReference } from './active';
 import { readerImageOf } from './images';
-import { buildPackPrompt, callPack, distinctCheck, hasTextSlots, PACK_CAP, PACK_TYPES, packSlide, parsePack, type PackType, type StylePack } from './pack';
+import { buildPackPrompt, callPack, distinctCheck, hasTextSlots, PACK_CAP, PACK_TYPES, parsePack, type PackType, type StylePack } from './pack';
 import { detectReaders, type ReferenceReader } from './reader';
 import type { RLayer } from './recreate';
 import { saveTemplate, styleNameFor } from './templates';
@@ -30,8 +30,7 @@ export async function packThumbs(pack: StylePack, scale = 0.22): Promise<{ type:
   const out: { type: string; url: string; blob: Blob }[] = [];
   for (const type of Object.keys(pack.designs).filter((k) => k !== 'base')) {
     const s = SAMPLES[type as PackType] ?? SAMPLES.content;
-    const r = packSlide(pack, String(s.type), s, '@yourname');
-    const blob = await renderer.preview({ schema: 1, revision: 1, canvas: { width: pack.canvas.w, height: pack.canvas.h, background: pack.palette.bg ?? '#FFFFFF' }, layers: r.layers } as never, scale);
+    const blob = await packPicture(pack, String(s.type), s, Math.round(pack.canvas.w * scale));
     out.push({ type, url: URL.createObjectURL(blob), blob });
   }
   return out;
@@ -89,7 +88,7 @@ export function PackMaker({ kind, description, reference, first }: { kind: 'refe
       }
       // The first slide of a reference is only kept as the base design when it has text slots of its own.
       const baseOk = !!first?.layers && hasTextSlots(first.layers);
-      const p = { ...pk, ...(baseOk ? { designs: { ...pk.designs, base: first!.layers } } : {}), notes: [...pk.notes, ...(first && !baseOk ? ['The first slide has no text slots, so it is not kept as a fallback design.'] : [])] };
+      const p = { ...pk, ...(baseOk ? { designs: { ...pk.designs, base: first!.layers }, ...(first!.svg ? { svgs: { ...pk.svgs, base: first!.svg } } : {}) } : {}), notes: [...pk.notes, ...(first && !baseOk ? ['The first slide has no text slots, so it is not kept as a fallback design.'] : [])] };
       setPack(p);
       setThumbs(await packThumbs(p));
       setName(p.name);
