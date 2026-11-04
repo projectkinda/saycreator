@@ -8,7 +8,8 @@ import { activeReference } from './active';
 import { templateOfStyle } from './templates';
 import { fillRecreate, FONT_NAMES, sanitizeSvg, svgToLayers, textsOf, type RLayer } from './recreate';
 import { layoutText } from '../image-engine/draw/text';
-import type { TextLayer } from '../image-engine/types';
+import type { Layer, TextLayer } from '../image-engine/types';
+import { faithfulSvg, resolveSvgTokens, type FaithfulSlot } from './faithful';
 import type { ReaderImage, ReferenceReader } from './reader';
 
 export const PACK_TYPES = ['cover', 'step', 'content', 'list', 'stat', 'quote', 'cta'] as const;
@@ -17,6 +18,16 @@ export type PackType = (typeof PACK_TYPES)[number];
 export const PACK_CAP = 3;
 export const SIZE = { w: 1080, h: 1350 };
 
+export interface SlotMeta {
+  role: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minSize: number;
+  maxSize?: number;
+  maxLines?: number;
+}
 export interface StylePack {
   name: string;
   /** Colour names the designs use ("$bg", "$accent", ...). */
@@ -25,6 +36,10 @@ export interface StylePack {
   motifs: string[];
   /** One design per slide type; "base" is the first slide of a reference, used when a type has none of its own. */
   designs: Partial<Record<PackType | 'base', RLayer[]>>;
+  /** The sanitised SVG of each design, as drawn (colours as palette names, text slots marked): the faithful form. The layers above are its editable form. */
+  svgs?: Partial<Record<PackType | 'base', string>>;
+  /** Each design's text slots: role, box (px of the canvas), size limits, line limit. */
+  slotMeta?: Partial<Record<PackType | 'base', SlotMeta[]>>;
   canvas: { w: number; h: number };
   notes: string[];
 }
@@ -38,8 +53,36 @@ export function packFor(styleName: string): StylePack | null {
 }
 
 /** The slide's own words in the pack's design for its type: no model call. */
-export function packSlide(pack: StylePack, slideType: string, slide: Record<string, unknown>, handle: string) {
-  const d = pack.designs[designKey(slideType)] ?? pack.designs.content ?? pack.designs.cover ?? pack.designs.base ?? Object.values(pack.designs)[0];
+/** Which design a slide type uses: its own, else content, cover, the base slide or any. */
+export function designUsed(pack: StylePack, slideType: string): (PackType | 'base') | null {
+  const k = designKey(slideType);
+  return ([k, 'content', 'cover', 'base'] as const).find((x) => pack.designs[x]) ?? ((Object.keys(pack.designs)[0] as PackType | 'base' | undefined) ?? null);
+}
+
+export interface PackSlide {
+  layers: Layer[];
+  notes: string[];
+  slots?: FaithfulSlot[];
+  hidden?: number[];
+  /** The design's SVG with the slide's words in it, as written (colours resolved); absent when the pack has no SVG for this design. */
+  faithful?: string;
+}
+/** The slide's own words in the pack's design: the editable layers, and the faithful SVG when the pack kept the drawing. No model call. */
+export function packSlide(pack: StylePack, slideType: string, slide: Record<string, unknown>, handle: string): PackSlide {
+  const r = packLayers(pack, slideType, slide, handle);
+  const used = designUsed(pack, slideType);
+  const svg = used ? pack.svgs?.[used] : undefined;
+  if (!svg || !r.slots) return r;
+  try {
+    return { ...r, faithful: faithfulSvg(resolveSvgTokens(svg, pack.palette), pack.canvas.w, r.slots, r.hidden ?? []) };
+  } catch {
+    return r;
+  }
+}
+
+function packLayers(pack: StylePack, slideType: string, slide: Record<string, unknown>, handle: string): PackSlide {
+  const used = designUsed(pack, slideType);
+  const d = used ? pack.designs[used] : undefined;
   if (!d) return { layers: [], notes: ['The pack has no design.'] };
   const texts = textsOf(slide, handle);
   const key = designKey(slideType);
@@ -49,6 +92,7 @@ export function packSlide(pack: StylePack, slideType: string, slide: Record<stri
   const readable = d.map((l) => (l.kind === 'text' && l.name === 'body' ? ({ ...l, style: { ...l.style, lineHeight: Math.max(l.style.lineHeight, 1.5) }, slot: { minSize: Math.max(40, l.slot?.minSize ?? 0), maxLines: Math.max(l.slot?.maxLines ?? 0, items.length * 2) } } as RLayer) : l));
   const r = fillRecreate({ layers: readable, palette: pack.palette, canvas: pack.canvas, notes: [] }, texts);
   const i = r.layers.findIndex((l) => l.kind === 'text' && l.name === 'body');
+  const slotAt = r.slots?.findIndex((x) => x.layer.id === (r.layers[i] as TextLayer | undefined)?.id) ?? -1;
   if (i < 0) return r;
   const body = r.layers[i] as TextLayer;
   const bottom = pack.canvas.h * 0.93;
@@ -58,6 +102,7 @@ export function packSlide(pack: StylePack, slideType: string, slide: Record<stri
       const grown = Math.min(need + body.style.size * 0.3, bottom - body.y);
       if (need <= grown) {
         r.layers[i] = { ...body, height: grown };
+        if (slotAt >= 0) r.slots![slotAt] = { ...r.slots![slotAt], layer: r.layers[i] as TextLayer };
         r.notes.push('The list slot was made taller to keep every item readable.');
       } else if (items.length >= 4) {
         const half = Math.ceil(items.length / 2);
@@ -66,6 +111,7 @@ export function packSlide(pack: StylePack, slideType: string, slide: Record<stri
         const colA = { ...body, text: items.slice(0, half).join('\n'), width: w, height: bottom - body.y } as TextLayer;
         const colB = { ...body, id: `${body.id}-2`, text: items.slice(half).join('\n'), x: body.x + w + gap, width: w, height: bottom - body.y } as TextLayer;
         r.layers.splice(i, 1, colA, colB);
+        if (slotAt >= 0) r.slots![slotAt] = { ...r.slots![slotAt], layer: colA, more: [colB] };
         r.notes.push('The list is set in two columns so every item stays readable.');
       } else r.notes.push('The list needs more room than its slot has, even at the smallest readable size.');
     }
@@ -131,6 +177,8 @@ export interface PackAnswer {
 }
 export const hasTextSlots = (layers: RLayer[]) => layers.some((l) => l.kind === 'text' && ['kicker', 'tag', 'title', 'body', 'caption', 'number'].includes(l.name));
 
+export const slotMetaOf = (layers: RLayer[]): SlotMeta[] =>
+  layers.filter((l): l is RLayer & TextLayer => l.kind === 'text').map((l) => ({ role: l.name, x: Math.round(l.x), y: Math.round(l.y), w: Math.round(l.width), h: Math.round(l.height), minSize: l.slot?.minSize ?? 32, ...(l.slot?.maxSize ? { maxSize: l.slot.maxSize } : {}), ...(l.slot?.maxLines ? { maxLines: l.slot.maxLines } : {}) }));
 export async function parsePack(text: string, name: string, fallbackPalette?: Record<string, string>): Promise<PackAnswer | { ok: false; reasons: string[] }> {
   const blocks = text.match(/<svg[\s\S]*?<\/svg>/gi) ?? [];
   if (blocks.length === 0) return { ok: false, reasons: [`The answer has no <svg> designs. The reader said: "${text.replace(/\s+/g, ' ').slice(0, 160)}"`] };
@@ -146,6 +194,8 @@ export async function parsePack(text: string, name: string, fallbackPalette?: Re
   if (!palette.bg || !palette.text) return { ok: false, reasons: ['The first design has no usable data-palette (it needs at least "bg" and "text" as #rrggbb).'] };
   await loadFonts();
   const designs: StylePack['designs'] = {};
+  const svgs: NonNullable<StylePack['svgs']> = {};
+  const slotMeta: NonNullable<StylePack['slotMeta']> = {};
   const problems: string[] = [];
   const notes: string[] = [];
   for (const b of blocks) {
@@ -170,6 +220,8 @@ export async function parsePack(text: string, name: string, fallbackPalette?: Re
       continue;
     }
     designs[t as PackType] = layers;
+    svgs[t as PackType] = s.svg;
+    slotMeta[t as PackType] = slotMetaOf(layers);
     notes.push(...n.map((x) => `${t}: ${x}`), ...s.wished.map((w) => `${t}: font wanted ${w.wish}, used ${w.used}.`));
   }
   if (Object.keys(designs).length === 0) return { ok: false, reasons: problems };
@@ -179,7 +231,7 @@ export async function parsePack(text: string, name: string, fallbackPalette?: Re
     const bo = first.find((l) => l.name === 'body')?.style.font ?? 'Instrument Sans';
     return { headline: h, body: bo };
   })();
-  return { ok: true, problems, pack: { name, palette, fonts, motifs: [], designs, canvas: { ...SIZE }, notes } };
+  return { ok: true, problems, pack: { name, palette, fonts, motifs: [], designs, svgs, slotMeta, canvas: { ...SIZE }, notes } };
 }
 
 export async function callPack(reader: ReferenceReader, prompt: string, images: ReaderImage[], signal: AbortSignal): Promise<string> {

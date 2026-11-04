@@ -693,7 +693,7 @@ export function textsOf(s: SlideLike, handle: string): Partial<Record<RecreateRo
 }
 
 /** The recreated layers with the slide's own words in the text slots. Text that does not fit shrinks (never under 32 px) or wraps, and is said in `notes`. */
-export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRole, string>>): { layers: Layer[]; notes: string[]; slots: { layer: TextLayer; srcAll: number[] }[]; hidden: number[] } {
+export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRole, string>>): { layers: Layer[]; notes: string[]; slots: { layer: TextLayer; srcAll: number[]; more?: TextLayer[] }[]; hidden: number[] } {
   const notes: string[] = [];
   const slots: { layer: TextLayer; srcAll: number[] }[] = [];
   const all = resolveTokens(rec.layers, rec.palette);
