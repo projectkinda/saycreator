@@ -183,7 +183,7 @@ export async function parsePack(text: string, name: string, fallbackPalette?: Re
 }
 
 export async function callPack(reader: ReferenceReader, prompt: string, images: ReaderImage[], signal: AbortSignal): Promise<string> {
-  return (await reader.read({ prompt, images }, signal)).text;
+  return (await reader.read({ role: 'draw', prompt, images }, signal)).text;
 }
 
 // ----- a pack from a stored style, built by the code (no model): same colours and fonts, a different composition for each slide type -----

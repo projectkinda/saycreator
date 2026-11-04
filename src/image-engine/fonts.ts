@@ -46,6 +46,24 @@ const FACES: { family: FontFamily; weight: number; url: string }[] = [
 let loading: Promise<void> | null = null;
 
 /** Loads every bundled face once. Always await this before measuring or drawing text. */
+/** @font-face rules with the bundled fonts inside (base64), so a picture saved as an SVG draws with the right fonts anywhere. */
+const faceCache = new Map<string, string>();
+export async function fontFaceCss(families: string[]): Promise<string> {
+  const out: string[] = [];
+  for (const f of FACES.filter((x) => families.includes(x.family))) {
+    let css = faceCache.get(f.url);
+    if (!css) {
+      const buf = new Uint8Array(await (await fetch(f.url)).arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+      css = `@font-face{font-family:"${f.family}";font-weight:${f.weight};src:url(data:font/woff2;base64,${btoa(bin)}) format("woff2");}`;
+      faceCache.set(f.url, css);
+    }
+    out.push(css);
+  }
+  return out.join('');
+}
+
 export function loadFonts(): Promise<void> {
   loading ??= Promise.all(
     FACES.map(async (f) => {

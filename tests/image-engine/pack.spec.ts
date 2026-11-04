@@ -52,7 +52,7 @@ test('a pack answer is parsed into designs with slot limits and palette names; a
   expect(r.ok).toBe(true);
   expect(r.types).toEqual(['cover', 'content', 'stat']);
   expect(r.palette).toMatchObject({ bg: '#101820', accent: '#FF8A4C' });
-  expect(r.slot).toEqual({ minSize: 40, maxLines: 3 });
+  expect(r.slot).toMatchObject({ minSize: 40, maxLines: 3 });
   expect(r.colour, 'colours stay palette names').toBe('$text');
   expect(r.distinct).toBe(true);
   expect(r.twin!.ok).toBe(false);

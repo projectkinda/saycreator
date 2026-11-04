@@ -25,7 +25,13 @@ export interface ReaderImageIn {
   mime: string;
   base64: string;
 }
+/** The drawing system prompt: used for Recreate and style packs, which ask for SVG. The reading one forbids SVG. */
+export const DRAW_SYSTEM = 'You are a precise vector illustrator and slide designer. You recreate reference pictures as clean SVG slides and design sets of SVG slide designs: faithful proportions, positions, colours, sizes and spacing, real text elements, plain shapes and paths. You reply with exactly what the request asks for and nothing else.';
+/** A setting, default unchanged: READER_MODEL=<model> picks the model for both providers (the Claude Code command line and the API). */
+export const readerModel = (env: NodeJS.ProcessEnv) => env.READER_MODEL || env.CAROUSEL_MODEL || '';
+
 export interface ReaderCallIn {
+  role?: 'read' | 'draw';
   prompt: string;
   images: ReaderImageIn[];
 }
@@ -42,7 +48,7 @@ export function readCall(raw: unknown): ReaderCallIn {
     const clean = String(i.name ?? `ref${n + 1}`).replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 60) || `ref${n + 1}`;
     return { name: clean, mime, base64: i.base64 };
   });
-  return { prompt: b.prompt, images: out };
+  return { role: (raw as { role?: unknown })?.role === 'draw' ? 'draw' : 'read', prompt: b.prompt, images: out };
 }
 
 /** Runs `claude -p` once in a folder holding only the images. `launcher` is a test seam. */
@@ -53,7 +59,7 @@ export function readWithCli(call: ReaderCallIn, signal: AbortSignal, env: NodeJS
   return new Promise((resolve, reject) => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'reference-reader-'));
     for (const i of call.images) fs.writeFileSync(path.join(cwd, i.name), Buffer.from(i.base64, 'base64'));
-    const args = launcher?.args ?? ['-p', '--output-format', 'json', '--no-session-persistence', '--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'dontAsk', '--system-prompt', READER_SYSTEM];
+    const args = launcher?.args ?? ['-p', '--output-format', 'json', '--no-session-persistence', '--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'dontAsk', '--system-prompt', call.role === 'draw' ? DRAW_SYSTEM : READER_SYSTEM, ...(readerModel(env) ? ['--model', readerModel(env)] : [])];
     const child = spawn(bin, args, { cwd, env: { ...env, CLAUDE_CODE_ENTRYPOINT: 'reference-reader' }, windowsHide: true, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
@@ -117,7 +123,7 @@ export async function readWithApi(call: ReaderCallIn, signal: AbortSignal, env: 
     r = await fetchImpl('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: env.CAROUSEL_MODEL || 'claude-sonnet-5-5', max_tokens: 8192, system: READER_SYSTEM, messages: [{ role: 'user', content }] }),
+      body: JSON.stringify({ model: readerModel(env) || 'claude-sonnet-5-5', max_tokens: call.role === 'draw' ? 16000 : 8192, system: call.role === 'draw' ? DRAW_SYSTEM : READER_SYSTEM, messages: [{ role: 'user', content }] }),
       signal: both,
     });
   } catch {

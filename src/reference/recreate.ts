@@ -49,7 +49,7 @@ export function buildFixPrompt(x: RecreateCtx, feedback: string): string {
 // ----- sanitising -----
 
 const TAGS = new Set(['svg', 'g', 'path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon', 'defs', 'lineargradient', 'radialgradient', 'stop', 'clippath', 'mask', 'pattern', 'text', 'tspan', 'filter', 'fegaussianblur', 'feturbulence', 'fecolormatrix', 'fedropshadow', 'feoffset']);
-const ATTRS = new Set(['id', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'x1', 'y1', 'x2', 'y2', 'fx', 'fy', 'points', 'd', 'transform', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'opacity', 'fill-opacity', 'stroke-opacity', 'fill-rule', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'text-anchor', 'dominant-baseline', 'textlength', 'lengthadjust', 'data-role', 'data-font-wish', 'viewbox', 'offset', 'stop-color', 'stop-opacity', 'gradientunits', 'gradienttransform', 'clip-path', 'mask', 'filter', 'stddeviation', 'basefrequency', 'numoctaves', 'type', 'values', 'dx', 'dy', 'flood-color', 'flood-opacity', 'in', 'in2', 'result', 'patternunits', 'patterntransform', 'clippathunits', 'seed', 'data-min-size', 'data-max-lines', 'data-type']);
+const ATTRS = new Set(['id', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'x1', 'y1', 'x2', 'y2', 'fx', 'fy', 'points', 'd', 'transform', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'opacity', 'fill-opacity', 'stroke-opacity', 'fill-rule', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'text-anchor', 'dominant-baseline', 'textlength', 'lengthadjust', 'data-role', 'data-font-wish', 'viewbox', 'offset', 'stop-color', 'stop-opacity', 'gradientunits', 'gradienttransform', 'clip-path', 'mask', 'filter', 'stddeviation', 'basefrequency', 'numoctaves', 'type', 'values', 'dx', 'dy', 'flood-color', 'flood-opacity', 'in', 'in2', 'result', 'patternunits', 'patterntransform', 'clippathunits', 'seed', 'data-min-size', 'data-max-lines', 'data-max-size', 'data-type']);
 const CSS_PROPS = new Set(['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'opacity', 'text-anchor', 'fill-opacity', 'stroke-opacity']);
 const REF_ATTRS = new Set(['fill', 'stroke', 'filter', 'mask', 'clip-path']);
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -241,6 +241,39 @@ function arcToCubics(x1: number, y1: number, rx0: number, ry0: number, phiDeg: n
 }
 
 const ARGS: Record<string, number> = { M: 2, L: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, T: 2, A: 7, Z: 0 };
+/** A dashed line as many short strokes (the plan has no dashes): the path is walked with the dash pattern and each "on" piece becomes a small segment. */
+function dashedSegs(d: string, pattern: number[], m: Mat): Seg[] | null {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  const p = document.createElementNS(NS, 'path');
+  p.setAttribute('d', d);
+  svg.appendChild(p);
+  svg.setAttribute('style', 'position:absolute;width:0;height:0;visibility:hidden');
+  document.body.appendChild(svg);
+  try {
+    const total = p.getTotalLength();
+    const pat = pattern.length % 2 ? [...pattern, ...pattern] : pattern;
+    const sum = pat.reduce((a, b) => a + b, 0);
+    if (!(sum > 0) || (total / sum) * (pat.length / 2) > 1200) return null;
+    const out: Seg[] = [];
+    let pos = 0;
+    for (let i = 0; pos < total && i < 4000; i++) {
+      const len = pat[i % pat.length];
+      if (i % 2 === 0) {
+        const a = p.getPointAtLength(pos);
+        const b = p.getPointAtLength(Math.min(total, pos + Math.max(len, 0.5)));
+        out.push({ c: 'M', a: pt(m, a.x, a.y) }, { c: 'L', a: pt(m, b.x, b.y) });
+      }
+      pos += len;
+    }
+    return out.length >= 2 ? out : null;
+  } catch {
+    return null;
+  } finally {
+    svg.remove();
+  }
+}
+
 /** A path as absolute segments (M L C Q A Z only). */
 export function parsePath(d: string): Seg[] {
   const toks = d.match(/[MmLlHhVvCcSsQqTtAaZz]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/g) ?? [];
@@ -347,7 +380,7 @@ export const segsToD = (segs: Seg[]) => segs.map((s) => (s.c === 'Z' ? 'Z' : `${
 // ----- layers -----
 
 /** A layer of the recreated slide. Colours may be palette tokens like "$accent"; the layer's `name` is its role (text) or its group (graphics). */
-export type RLayer = Layer & { name: string; /** A text slot's limits (from data-min-size and data-max-lines): the size never goes under minSize (32 at least), the words wrap to at most maxLines. */ slot?: { minSize?: number; maxLines?: number } };
+export type RLayer = Layer & { name: string; /** A text slot's limits (from data-min-size and data-max-lines): the size never goes under minSize (32 at least), the words wrap to at most maxLines. */ slot?: { minSize?: number; maxLines?: number; maxSize?: number }; /** Where this layer came from in the clean SVG (element order), for the faithful view. */ src?: number; srcAll?: number[] };
 export interface RecreateSpec {
   layers: RLayer[];
   palette: Record<string, string>;
@@ -361,6 +394,8 @@ const norm = (c: string) => (/^#[0-9a-fA-F]{3}$/.test(c) ? `#${c[1]}${c[1]}${c[2
 interface Inh {
   fill: string;
   stroke: string;
+  fo: number;
+  so: number;
   sw: number;
   cap?: string;
   join?: string;
@@ -388,13 +423,22 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
   const s = W / vb[2];
   const notes: string[] = [];
   const grads = new Map<string, { angle: number; stops: { at: number; color: string }[] }>();
-  for (const g of Array.from(doc.getElementsByTagName('linearGradient'))) {
+  const radial = new Set<string>();
+  const gradEls = [...Array.from(doc.getElementsByTagName('linearGradient')), ...Array.from(doc.getElementsByTagName('radialGradient'))];
+  gradEls.forEach((g) => g.localName.toLowerCase() === 'radialgradient' && radial.add(g.id));
+  const index = new Map(Array.from(root.querySelectorAll('*')).map((e, i) => [e, i] as const));
+  let radialUsed = 0;
+  let stretched = 0;
+  let dashed = 0;
+  let referenced = 0;
+  for (const g of gradEls) {
     const x1 = parseFloat(g.getAttribute('x1') ?? '0');
     const y1 = parseFloat(g.getAttribute('y1') ?? '0');
     const x2 = parseFloat(g.getAttribute('x2') ?? '1');
     const y2 = parseFloat(g.getAttribute('y2') ?? '0');
     const stops = Array.from(g.getElementsByTagName('stop')).map((st) => ({ at: Math.min(1, Math.max(0, parseFloat(st.getAttribute('offset') ?? '0') / (/%/.test(st.getAttribute('offset') ?? '') ? 100 : 1))), color: st.getAttribute('stop-color') ?? '#000000' }));
-    if (g.id && stops.length >= 2) grads.set(g.id, { angle: Math.round((Math.atan2(x2 - x1, -(y2 - y1)) * 180) / Math.PI + 360) % 360, stops });
+    // The plan has linear gradients only: a radial one is drawn from the top to the bottom (said in the notes).
+    if (g.id && stops.length >= 2) grads.set(g.id, { angle: radial.has(g.id) ? 180 : Math.round((Math.atan2(x2 - x1, -(y2 - y1)) * 180) / Math.PI + 360) % 360, stops });
   }
   const colour = (v: string | null, dflt: string): string => {
     if (!v) return dflt;
@@ -404,12 +448,13 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
     const u = /^url\(#([\w-]+)\)$/.exec(v);
     if (u) {
       const g = grads.get(u[1]);
+      if (g && radial.has(u[1])) radialUsed++;
       return g ? { type: 'linear', angle: g.angle, stops: g.stops } : null;
     }
     return v === 'none' ? null : v;
   };
   const layers: RLayer[] = [];
-  const texts: { x: number; y: number; size: number; weight: number; font: FontFamily; fill: string; anchor: string; line: string; role?: string; gid: string; ls: number; textLength?: number; opacity: number; parent: Element; min?: number; lines?: number }[] = [];
+  const texts: { x: number; y: number; size: number; weight: number; font: FontFamily; fill: string; anchor: string; line: string; role?: string; gid: string; ls: number; textLength?: number; opacity: number; el?: Element; parent: Element; min?: number; lines?: number; max?: number }[] = [];
   let n = 0;
   let effects = 0;
   let invisible = 0;
@@ -420,6 +465,8 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
     const cur: Inh = {
       fill: colour(el.getAttribute('fill'), inh.fill),
       stroke: colour(el.getAttribute('stroke'), inh.stroke),
+      fo: el.getAttribute('fill-opacity') ? parseFloat(el.getAttribute('fill-opacity')!) : inh.fo,
+      so: el.getAttribute('stroke-opacity') ? parseFloat(el.getAttribute('stroke-opacity')!) : inh.so,
       sw: el.getAttribute('stroke-width') ? parseFloat(el.getAttribute('stroke-width')!) : inh.sw,
       cap: el.getAttribute('stroke-linecap') ?? inh.cap,
       join: el.getAttribute('stroke-linejoin') ?? inh.join,
@@ -433,8 +480,15 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
       ls: el.getAttribute('letter-spacing') ? parseFloat(el.getAttribute('letter-spacing')!) : inh.ls,
     };
     if (el.getAttribute('filter')) effects++;
+    if (el.getAttribute('stroke-dasharray') && el.getAttribute('stroke-dasharray') !== 'none') dashed++;
+    if (el.getAttribute('clip-path') || el.getAttribute('mask')) referenced++;
+    const alpha = (c: string, a: number) => {
+      if (!(a >= 0 && a < 1)) return c;
+      const h = /^#([0-9a-fA-F]{6})$/.exec(c)?.[1];
+      return h ? `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${Math.round(a * 100) / 100})` : c;
+    };
     const num = (a: string, d = 0) => parseFloat(el.getAttribute(a) ?? '') || d;
-    const stroke = cur.stroke !== 'none' && cur.sw > 0 ? { color: cur.stroke, width: Math.max(1, Math.round(cur.sw * scaleOf(m) * 10) / 10) } : undefined;
+    const stroke = cur.stroke !== 'none' && cur.sw > 0 ? { color: alpha(cur.stroke, cur.so), width: Math.max(1, Math.round(cur.sw * scaleOf(m) * 10) / 10) } : undefined;
     if (tag === 'rect' || tag === 'circle' || tag === 'ellipse') {
       const w = tag === 'rect' ? num('width') : tag === 'circle' ? 2 * num('r') : 2 * num('rx');
       const h = tag === 'rect' ? num('height') : tag === 'circle' ? 2 * num('r') : 2 * num('ry');
@@ -443,13 +497,14 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
       const [cx, cy] = pt(m, x0 + w / 2, y0 + h / 2);
       const pw = w * Math.hypot(m[0], m[1]);
       const ph = h * Math.hypot(m[2], m[3]);
-      const fill = fillOf(cur.fill) ?? 'rgba(0,0,0,0)';
+      const fill0 = fillOf(cur.fill) ?? 'rgba(0,0,0,0)';
+      const fill = typeof fill0 === 'string' ? alpha(fill0, cur.fo) : fill0;
       if (fill === 'rgba(0,0,0,0)' && !stroke) {
         invisible++;
         return;
       }
       const full = tag === 'rect' && pw >= W * 0.97 && ph >= H * 0.97;
-      layers.push({ kind: 'shape', id: full && !layers.some((l) => l.id === 'bg') ? 'bg' : `shape${++n}`, name: full ? 'background' : cur.gid || 'shape', role: full ? 'decor' : 'content', x: cx - pw / 2, y: cy - ph / 2, width: pw, height: ph, rotation: Math.round((Math.atan2(m[1], m[0]) * 180) / Math.PI * 10) / 10, opacity: cur.opacity, shape: tag === 'rect' ? 'rect' : 'ellipse', fill, ...(stroke ? { stroke } : {}), ...(tag === 'rect' && num('rx') ? { radius: num('rx') * scaleOf(m) } : {}) } as RLayer);
+      layers.push({ src: index.get(el), kind: 'shape', id: full && !layers.some((l) => l.id === 'bg') ? 'bg' : `shape${++n}`, name: full ? 'background' : cur.gid || 'shape', role: full ? 'decor' : 'content', x: cx - pw / 2, y: cy - ph / 2, width: pw, height: ph, rotation: Math.round((Math.atan2(m[1], m[0]) * 180) / Math.PI * 10) / 10, opacity: cur.opacity, shape: tag === 'rect' ? 'rect' : 'ellipse', fill, ...(stroke ? { stroke } : {}), ...(tag === 'rect' && num('rx') ? { radius: num('rx') * scaleOf(m) } : {}) } as RLayer);
     } else if (tag === 'path' || tag === 'line' || tag === 'polyline' || tag === 'polygon') {
       let d = el.getAttribute('d') ?? '';
       if (tag === 'line') d = `M${num('x1')} ${num('y1')} L${num('x2')} ${num('y2')}`;
@@ -457,7 +512,15 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
         const p = (el.getAttribute('points') ?? '').split(/[\s,]+/).filter(Boolean).map(Number);
         d = p.length >= 4 ? `M${p[0]} ${p[1]} ${p.slice(2).reduce((a, v, i) => a + (i % 2 ? ` ${v}` : ` L${v}`), '')}${tag === 'polygon' ? ' Z' : ''}` : '';
       }
-      const segs = d ? transformSegs(parsePath(d), m) : [];
+      const dash = (el.getAttribute('stroke-dasharray') ?? '').split(/[\s,]+/).map(Number).filter((v) => Number.isFinite(v) && v >= 0);
+      let segs = d ? transformSegs(parsePath(d), m) : [];
+      if (d && dash.some((v) => v > 0) && tag !== 'polygon') {
+        const dd = dashedSegs(d, dash, m);
+        if (dd) {
+          segs = dd;
+          dashed--;
+        }
+      }
       if (segs.length >= 2) {
         // The path's box is where its points are; its own coordinates are inside that box.
         const xs: number[] = [];
@@ -467,24 +530,42 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
           const x0 = Math.min(...xs);
           const y0 = Math.min(...ys);
           const moved = transformSegs(segs, [1, 0, 0, 1, -x0, -y0]);
-          const fill = fillOf(cur.fill);
+          const fill0 = fillOf(cur.fill);
+          const fill = typeof fill0 === 'string' ? alpha(fill0, cur.fo) : fill0;
           // A path with neither a fill nor a stroke draws nothing (and the plan refuses it): it is left out and counted.
           if (!(typeof fill === 'string' && tag !== 'line') && !stroke) {
             invisible++;
             return;
           }
-          layers.push({ kind: 'path', id: `${cur.gid || 'path'}:${++n}`, name: cur.gid || 'drawing', role: 'decor', x: x0, y: y0, width: Math.max(1, Math.max(...xs) - x0), height: Math.max(1, Math.max(...ys) - y0), rotation: 0, opacity: cur.opacity, d: segsToD(moved), ...(typeof fill === 'string' && tag !== 'line' ? { fill } : {}), ...(stroke ? { stroke: { ...stroke, cap: (cur.cap === 'butt' ? 'butt' : 'round') as 'round' | 'butt', join: (cur.join === 'miter' ? 'miter' : 'round') as 'round' | 'miter' } } : {}) } as RLayer);
+          layers.push({ src: index.get(el), kind: 'path', id: `${cur.gid || 'path'}:${++n}`, name: cur.gid || 'drawing', role: 'decor', x: x0, y: y0, width: Math.max(1, Math.max(...xs) - x0), height: Math.max(1, Math.max(...ys) - y0), rotation: 0, opacity: cur.opacity, d: segsToD(moved), ...(typeof fill === 'string' && tag !== 'line' ? { fill } : {}), ...(stroke ? { stroke: { ...stroke, cap: (cur.cap === 'butt' ? 'butt' : 'round') as 'round' | 'butt', join: (cur.join === 'miter' ? 'miter' : 'round') as 'round' | 'miter' } } : {}) } as RLayer);
         }
       }
     } else if (tag === 'text') {
-      const [x, y] = pt(m, num('x'), num('y'));
-      const line = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
-      if (line) texts.push({ x, y, size: cur.size * scaleOf(m), weight: cur.weight, font: cur.font, fill: cur.fill, anchor: cur.anchor, line, role: cur.role, gid: cur.gid, ls: cur.ls * scaleOf(m), textLength: el.getAttribute('textLength') ? parseFloat(el.getAttribute('textLength')!) * scaleOf(m) : undefined, opacity: cur.opacity, parent: el.parentElement!, min: el.getAttribute('data-min-size') ? parseFloat(el.getAttribute('data-min-size')!) : undefined, lines: el.getAttribute('data-max-lines') ? parseFloat(el.getAttribute('data-max-lines')!) : undefined });
+      const tsp = Array.from(el.children).filter((c) => c.localName.toLowerCase() === 'tspan' && (c.getAttribute('y') || c.getAttribute('dy')));
+      const pieces: { line: string; x: number; y: number }[] = [];
+      if (tsp.length) {
+        let cx = num('x');
+        let cy = num('y');
+        for (const c of tsp) {
+          cx = c.getAttribute('x') !== null ? parseFloat(c.getAttribute('x')!) : cx;
+          cy = c.getAttribute('y') !== null ? parseFloat(c.getAttribute('y')!) : cy + (parseFloat(c.getAttribute('dy') ?? '0') || 0);
+          const [px, py] = pt(m, cx, cy);
+          pieces.push({ line: (c.textContent ?? '').replace(/\s+/g, ' ').trim(), x: px, y: py });
+        }
+      } else {
+        const [px, py] = pt(m, num('x'), num('y'));
+        pieces.push({ line: (el.textContent ?? '').replace(/\s+/g, ' ').trim(), x: px, y: py });
+      }
+      if (el.getAttribute('textLength') && el.getAttribute('lengthAdjust') === 'spacingAndGlyphs') stretched++;
+      for (const pc of pieces) {
+      const line = pc.line;
+      if (line) texts.push({ x: pc.x, y: pc.y, size: cur.size * scaleOf(m), weight: cur.weight, font: cur.font, fill: cur.fill, anchor: cur.anchor, line, role: cur.role, gid: cur.gid, ls: cur.ls * scaleOf(m), textLength: el.getAttribute('textLength') ? parseFloat(el.getAttribute('textLength')!) * scaleOf(m) : undefined, opacity: cur.opacity, el, parent: el.parentElement!, max: el.getAttribute('data-max-size') ? parseFloat(el.getAttribute('data-max-size')!) : undefined, min: el.getAttribute('data-min-size') ? parseFloat(el.getAttribute('data-min-size')!) : undefined, lines: el.getAttribute('data-max-lines') ? parseFloat(el.getAttribute('data-max-lines')!) : undefined });
+      }
       return;
     }
     for (const c of Array.from(el.children)) walk(c, m, cur);
   };
-  walk(root, [s, 0, 0, s, -vb[0] * s, -vb[1] * s], { fill: '#000000', stroke: 'none', sw: 1, opacity: 1, font: 'Instrument Sans', size: 16, weight: 400, anchor: 'start', gid: '', ls: 0 });
+  walk(root, [s, 0, 0, s, -vb[0] * s, -vb[1] * s], { fill: '#000000', stroke: 'none', fo: 1, so: 1, sw: 1, opacity: 1, font: 'Instrument Sans', size: 16, weight: 400, anchor: 'start', gid: '', ls: 0 });
   // Lines of the same block (same place, size and look, one under the other) become one text layer.
   const blocks: (typeof texts)[] = [];
   for (const t of texts) {
@@ -516,15 +597,22 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
     for (let k = 2; used.has(id); k++) id = `${role}${k}`;
     used.add(id);
     const top = t.y - t.size * 0.82;
-    layers.push({ kind: 'text', id, name: role, role: 'content', x, y: top, width: w, height: Math.ceil(t.size * lh * b.length + t.size * 0.2), rotation: 0, opacity: t.opacity, text: b.map((l) => l.line).join('\n'), style: { font: t.font, weight: nearestWeight(t.font, t.weight), size: Math.min(600, Math.round(t.size)), color: t.fill, align: t.anchor === 'middle' ? 'center' : t.anchor === 'end' ? 'right' : 'left', valign: 'top', lineHeight: Math.round(lh * 100) / 100 }, autoFit: { minSize: Math.max(32, Math.min(Math.round(t.size), t.min ?? 32)) }, ...(t.min || t.lines ? { slot: { ...(t.min ? { minSize: Math.max(32, t.min) } : {}), ...(t.lines ? { maxLines: Math.max(1, Math.round(t.lines)) } : {}) } } : {}) } as RLayer);
+    layers.push({ srcAll: [...new Set(b.map((l) => index.get(l.el!)!))], kind: 'text', id, name: role, role: 'content', x, y: top, width: w, height: Math.ceil(t.size * lh * b.length + t.size * 0.2), rotation: 0, opacity: t.opacity, text: b.map((l) => l.line).join('\n'), style: { font: t.font, weight: nearestWeight(t.font, t.weight), size: Math.min(600, Math.round(t.size)), color: t.fill, align: t.anchor === 'middle' ? 'center' : t.anchor === 'end' ? 'right' : 'left', valign: 'top', lineHeight: Math.round(lh * 100) / 100 }, autoFit: { minSize: Math.min(Math.min(600, Math.round(t.size)), Math.max(32, t.min ?? 32)) }, slot: { ...(t.min ? { minSize: Math.max(32, t.min) } : {}), ...(t.lines ? { maxLines: Math.max(1, Math.round(t.lines)) } : {}), maxSize: Math.min(600, Math.max(t.max ?? 0, t.max ? 0 : Math.max(Math.round(t.size), ROLE_MAX[role] ?? 0))) } } as RLayer);
     if (t.ls) notes.push(`Letter spacing on the ${role} text is not drawn (the toolbox has none).`);
   }
   if (invisible) notes.push(`${invisible} part${invisible === 1 ? '' : 's'} of the picture had neither a fill nor a line, so nothing was drawn for ${invisible === 1 ? 'it' : 'them'}.`);
+  if (stretched) notes.push(`${stretched} text line${stretched === 1 ? ' was' : 's were'} stretched to a set length in the picture; the layers draw ${stretched === 1 ? 'it' : 'them'} at the natural width.`);
+  if (radialUsed) notes.push(`${radialUsed} radial gradient${radialUsed === 1 ? '' : 's'} drawn as a linear one (the plan has no radial gradients).`);
+  if (dashed) notes.push(`${dashed} dashed line${dashed === 1 ? '' : 's'} drawn solid (the plan has no dashes).`);
+  if (referenced) notes.push(`${referenced} clip or mask reference${referenced === 1 ? '' : 's'} not applied.`);
   if (effects) notes.push(`${effects} filter effect${effects === 1 ? '' : 's'} (blur, shadow, grain) in the picture ${effects === 1 ? 'was' : 'were'} not applied to the layers.`);
   // Graphics first, text on top (the order of the picture is kept within each).
   layers.sort((a, b) => (a.kind === 'text' ? 1 : 0) - (b.kind === 'text' ? 1 : 0));
   return { layers, notes };
 }
+
+/** How big a text may grow in its slot when the slot has no data-max-size of its own (the sample size counts too). */
+const ROLE_MAX: Record<string, number> = { title: 200, body: 56, caption: 44, kicker: 44, tag: 44, number: 400 };
 
 // ----- palette tokens -----
 
@@ -596,21 +684,60 @@ export function textsOf(s: SlideLike, handle: string): Partial<Record<RecreateRo
 }
 
 /** The recreated layers with the slide's own words in the text slots. Text that does not fit shrinks (never under 32 px) or wraps, and is said in `notes`. */
-export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRole, string>>): { layers: Layer[]; notes: string[] } {
+export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRole, string>>): { layers: Layer[]; notes: string[]; slots: { layer: TextLayer; srcAll: number[] }[]; hidden: number[] } {
   const notes: string[] = [];
-  const layers = resolveTokens(rec.layers, rec.palette).map((l): Layer => {
+  const slots: { layer: TextLayer; srcAll: number[] }[] = [];
+  const all = resolveTokens(rec.layers, rec.palette);
+  const area = (l: Layer) => l.width * l.height;
+  const overlap = (a: Layer, b: Layer) => Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  const canvasArea = rec.canvas.w * rec.canvas.h;
+  const pad = rec.canvas.w * 0.04;
+  /** The shape a text sits in (its centre is inside, most of it overlaps): text stays inside it with a 4% inner padding; a circle or oval counts by the rectangle inside it. */
+  const holderOf = (t: Layer) => {
+    const cx = t.x + t.width / 2;
+    const cy = t.y + t.height / 2;
+    return all.find((h) => h.kind === 'shape' && h.visible !== false && area(h) > area(t) * 1.2 && area(h) < canvasArea * 0.6 && cx >= h.x && cx <= h.x + h.width && cy >= h.y && cy <= h.y + h.height && overlap(h, t) >= 0.4 * area(t));
+  };
+  const innerOf = (h: Layer) => {
+    const oval = h.kind === 'shape' && h.shape === 'ellipse';
+    const k = oval ? 0.7071 : 1;
+    const w = h.width * k;
+    const ht = h.height * k;
+    const x = h.x + (h.width - w) / 2;
+    const y = h.y + (h.height - ht) / 2;
+    const p = oval ? pad * 0.5 : pad;
+    return { x: x + p, y: y + p, w: Math.max(40, w - 2 * p), h: Math.max(40, ht - 2 * p) };
+  };
+  const layers = all.map((l): Layer => {
     if (l.kind !== 'text') return l;
     const role = l.name as RecreateRole;
     if (!(ROLES as readonly string[]).includes(role) || !(role in texts)) return l;
     const text = texts[role] ?? '';
     if (!text) return { ...l, visible: false };
-    const { slot, ...plain } = l as RLayer & { slot?: { minSize?: number; maxLines?: number } };
+    const { slot, ...plain } = l as RLayer & { slot?: { minSize?: number; maxLines?: number; maxSize?: number } };
     const floor = Math.max(32, slot?.minSize ?? 32);
     const filled = { ...plain, text, autoFit: { minSize: floor } } as TextLayer;
+    // The phone minimum: a sample drawn under 32 px is raised to it (and the plan needs the size to be at least the minimum).
+    if (filled.style.size < floor) filled.style = { ...filled.style, size: floor };
     // A slot never reaches past the slide: its box was measured from the sample words, which may have run to the edge.
     filled.style = { ...filled.style, size: Math.min(600, filled.style.size) };
     filled.x = Math.max(0, filled.x);
     filled.width = Math.max(120, Math.min(filled.width, rec.canvas.w - filled.x - rec.canvas.w * 0.05));
+    // In a block: the slot may use the block's room (down and across), and never touches its edge (4% inner padding).
+    const holder = holderOf(filled);
+    if (holder) {
+      const inn = innerOf(holder);
+      const right = Math.min(filled.x + filled.width, inn.x + inn.w);
+      filled.x = Math.min(Math.max(filled.x, inn.x), inn.x + inn.w - 120);
+      if (['body', 'caption'].includes(role)) {
+        filled.width = Math.max(120, inn.x + inn.w - filled.x);
+        filled.height = Math.max(filled.height, inn.y + inn.h - filled.y);
+      } else filled.width = Math.max(120, right - filled.x);
+      const bottom = Math.min(filled.y + filled.height, inn.y + inn.h);
+      filled.y = Math.min(Math.max(filled.y, inn.y), inn.y + inn.h - 40);
+      filled.height = Math.max(40, bottom - filled.y);
+      notes.push(`The ${role} text is kept clear of the edge of its block.`);
+    }
     try {
       // A slot with a line limit: the size comes down inside its limits until the words fit in that many lines.
       if (slot?.maxLines) {
@@ -623,19 +750,28 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
           notes.push(`The ${role} text needs more than ${slot.maxLines} lines, so it takes the room its place has.`);
         }
       }
+      // The fit can also grow: up to the slot's data-max-size, while the words still fit its box.
+      const maxSize = Math.min(600, slot?.maxSize ?? filled.style.size);
+      const from = filled.style.size;
+      let g = 0;
+      while (g++ < 40 && filled.style.size < maxSize) {
+        const next = Math.min(maxSize, Math.round(filled.style.size * 1.05) + 1);
+        const lb = layoutText({ ...filled, style: { ...filled.style, size: next } } as TextLayer);
+        if (lb.size < next - 0.5 || (slot?.maxLines && lb.lines.length > slot.maxLines)) break;
+        filled.style = { ...filled.style, size: next };
+      }
+      if (filled.style.size > from) notes.push(`The ${role} text was made bigger (${from} to ${filled.style.size} px) to fill its place.`);
       const b = layoutText(filled);
-      if (b.size < l.style.size * 0.97) notes.push(`The ${role} text was made smaller (${l.style.size} to ${Math.round(b.size)} px) to fit its place.`);
+      if (b.size < l.style.size * 0.97 && filled.style.size <= from) notes.push(`The ${role} text was made smaller (${l.style.size} to ${Math.round(b.size)} px) to fit its place.`);
       if (b.lines.length > l.text.split('\n').length) notes.push(`The ${role} text wraps onto ${b.lines.length} lines.`);
       if (b.size <= 32 && b.height > l.height * 1.1) notes.push(`The ${role} text does not fit its place even at the smallest size (32 px).`);
     } catch {
       /* fonts not ready: no note */
     }
+    slots.push({ layer: filled, srcAll: (l as RLayer).srcAll ?? [] });
     return filled;
   });
   // A block or graphic that belongs to a slot with no words (its box holds, or sits under, the empty text) is hidden with it.
-  const canvasArea = rec.canvas.w * rec.canvas.h;
-  const area = (l: Layer) => l.width * l.height;
-  const overlap = (a: Layer, b: Layer) => Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
   const empty = layers.filter((l) => l.kind === 'text' && l.visible === false);
   const gone = new Set<Layer>();
   for (const e of empty)
@@ -643,7 +779,14 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
   // What sits inside a hidden block goes with it.
   for (const g of [...gone]) for (const l of layers) if (l !== g && l.kind !== 'text' && !gone.has(l) && area(l) <= area(g) && l.x + l.width / 2 >= g.x && l.x + l.width / 2 <= g.x + g.width && l.y + l.height / 2 >= g.y && l.y + l.height / 2 <= g.y + g.height) gone.add(l);
   const shown = layers.map((l) => (gone.has(l) ? ({ ...l, visible: false } as Layer) : l));
-  return { layers: shown, notes };
+  const hidden = shown.filter((l) => l.visible === false).flatMap((l) => (l as RLayer).srcAll ?? ((l as RLayer).src !== undefined ? [(l as RLayer).src!] : []));
+  // The plan gets plain layers: the source index and the slot limits are not part of it.
+  const clean = shown.map((l) => {
+    const { slot: _s, src: _a, srcAll: _b, ...rest } = l as RLayer;
+    void _s; void _a; void _b;
+    return rest as Layer;
+  });
+  return { layers: clean, notes, slots, hidden };
 }
 
 /** The recreated look to use for a style name: the active one, or a saved template's. */
@@ -674,5 +817,5 @@ export async function answerToLayers(text: string, ctx: RecreateCtx): Promise<{ 
 }
 
 export async function callRecreate(reader: ReferenceReader, prompt: string, images: ReaderImage[], signal: AbortSignal): Promise<string> {
-  return (await reader.read({ prompt, images }, signal)).text;
+  return (await reader.read({ role: 'draw', prompt, images }, signal)).text;
 }

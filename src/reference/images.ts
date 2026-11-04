@@ -71,7 +71,7 @@ export async function pairImage(referenceUrl: string, replica: Blob, name: strin
   return { name, mime: 'image/jpeg', base64: url.split(',')[1] };
 }
 
-export const readerImageOf = (url: string, name: string): ReaderImage => ({ name, mime: 'image/jpeg', base64: url.split(',')[1] });
+export const readerImageOf = (url: string, name: string): ReaderImage => ({ name, mime: /^data:image\/png/.test(url) ? 'image/png' : 'image/jpeg', base64: url.split(',')[1] });
 
 /** A small JPEG of a replica, for the template's preview. */
 export async function previewOf(blob: Blob, max = 360): Promise<string> {

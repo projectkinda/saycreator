@@ -14,6 +14,8 @@ export interface ReaderImage {
   base64: string;
 }
 export interface ReaderCall {
+  /** "draw": the call asks for SVG (Recreate, style packs), so the server uses the drawing system prompt. */
+  role?: 'read' | 'draw';
   prompt: string;
   images: ReaderImage[];
 }

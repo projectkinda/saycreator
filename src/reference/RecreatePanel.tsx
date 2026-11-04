@@ -12,6 +12,7 @@ import { answerToLayers, buildFixPrompt, buildRecreatePrompt, callRecreate, pars
 import { saveTemplate, styleNameFor } from './templates';
 import { listElements } from '../image-engine/assets/library';
 import { PackMaker } from './PackMaker';
+import { svgToPng } from './faithful';
 
 const W = 1080;
 const H = 1350;
@@ -25,7 +26,7 @@ interface State {
 }
 
 /** The first slide of a picture (a carousel sheet is split the way the style-from-references page splits it), at 1400 px. */
-async function referenceAt1400(file: File): Promise<Ref> {
+export async function referenceAt1400(file: File): Promise<Ref> {
   const bm = await bitmapOf(file);
   let rect = null;
   for (const size of [1400, 900, 600]) {
@@ -37,6 +38,10 @@ async function referenceAt1400(file: File): Promise<Ref> {
       rect = { x: Math.round(c.x * k), y: Math.round(c.y * k), width: Math.round(c.width * k), height: Math.round(c.height * k) };
       break;
     }
+  }
+  if (!rect && bm.width <= 1400 && bm.height <= 1400 && /^image\/(jpeg|png)$/.test(file.type)) {
+    bm.close();
+    return { url: await blobUrl(file), name: file.name };
   }
   const j = await jpegUrl(bm, rect, 1400);
   bm.close();
@@ -96,6 +101,9 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
   const [over, setOver] = useState(false);
   const [swapFor, setSwapFor] = useState<string | null>(null);
   const [svg, setSvg] = useState('');
+  // The picture as the reader drew it is the main view until the person edits (or presses Make editable); the layers are drawn after that.
+  const [edited, setEdited] = useState(false);
+  const editedRef = useRef(false);
   const [q, setQ] = useState('');
   const abort = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -119,12 +127,13 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     }
   }, [removed]);
 
-  const publish = async (s: State, n: string[] = notes) => {
+  const publish = async (s: State, n: string[] = notes, svgText?: string) => {
     const spec = { ...blankStyle(), name: 'recreated', title: 'Recreated look' };
     const rec: RecreateSpec = { layers: s.layers, palette: s.palette, canvas: { w: W, h: H }, notes: n };
     setActiveReference({ spec, thumb: ref ? await previewOf(await (await fetch(ref.url)).blob(), 160) : '', learn: 'everything', target: 'carousel', ratioNote: null, photoRegion: null, source: 'recreate', recreate: rec });
     try {
-      setView(await blobUrl(await renderUrl(s, 0.5)));
+      const asWritten = svgText ?? svg;
+      setView(await blobUrl(!editedRef.current && asWritten ? await svgToPng(asWritten, 540) : await renderUrl(s, 0.5)));
     } catch {
       setView('');
     }
@@ -181,8 +190,10 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     setFuture([]);
     setState(next);
     setNotes(n);
+    editedRef.current = false;
+    setEdited(false);
     setSvg(r.result.svg);
-    await publish(next, n);
+    await publish(next, n, r.result.svg);
     return true;
   };
   const recreate = async () => {
@@ -226,8 +237,10 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     setFuture([]);
     setState(next);
     setNotes(n);
+    editedRef.current = false;
+    setEdited(false);
     setSvg(r.result.svg);
-    await publish(next, n);
+    await publish(next, n, r.result.svg);
     return true;
   };
   const improve = async () => {
@@ -253,6 +266,8 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     setPast((p) => [...p, state]);
     setFuture([]);
     setState(s);
+    editedRef.current = true;
+    setEdited(true);
     void publish(s);
   };
   const step = (dir: 'undo' | 'redo') => {
@@ -306,7 +321,8 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     if (!state) return;
     const name = `Recreated: ${(ref?.name ?? 'look').replace(/\.[^.]+$/, '').slice(0, 24)}`;
     // The preview is a render of the recreated layers, never the reference.
-    const preview = await previewOf(await renderUrl(state, 0.3), 360);
+    // Until the person edits, the template's picture is the faithful render.
+    const preview = await previewOf(!editedRef.current && svg ? await svgToPng(svg, 360) : await renderUrl(state, 0.3), 360);
     const rec: RecreateSpec = { layers: state.layers, palette: state.palette, canvas: { w: W, h: H }, notes };
     await saveTemplate({ name, target: 'carousel', spec: { ...blankStyle(), name: styleNameFor(name), title: name }, preview, recreate: rec });
     setMsg(`Saved “${name}” as a template: the layers and palette only, no reference pixels. New text refits its places with no model call.`);
@@ -345,6 +361,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
               <input className="input" value={words} onChange={(e) => setWords(e.target.value)} aria-label="Your words for the correction" />
             </label>
             <button type="button" className="btn btn-outline btn-sm" disabled={busy || calls >= RECREATE_CAP} onClick={() => void improve()}>Improve (one model call)</button>
+            {!edited && <button type="button" className="btn btn-outline btn-sm" onClick={() => { editedRef.current = true; setEdited(true); void publish(state); setMsg(`Now drawn from editable layers. ${notes.length ? `What changes: ${notes.slice(0, 4).join(' ')}` : 'Nothing was lost in the conversion.'}`); }}>Make editable</button>}
             <button type="button" className="btn btn-outline btn-sm" disabled={past.length === 0} onClick={() => step('undo')}>Undo</button>
             <button type="button" className="btn btn-outline btn-sm" disabled={future.length === 0} onClick={() => step('redo')}>Redo</button>
             <button type="button" className="btn btn-outline btn-sm" onClick={() => void save()}>Save as template</button>
