@@ -1,6 +1,7 @@
 // Recreate mode: the model draws a carousel reference as one SVG slide; the code makes it safe, turns it into editable plan layers (text with roles, graphic
 // groups as path sub-layers, background and shapes), and fills those layers with the person's own words. The reference pixels are never embedded anywhere.
 import type { FontFamily, Layer, ShapeLayer, TextLayer } from '../image-engine/types';
+import { extractImageSlots, injectSlots, slotMarkup } from '../images/slots';
 import { FONT_WEIGHTS, loadFonts } from '../image-engine/fonts';
 import { layoutText } from '../image-engine/draw/text';
 import { activeReference } from './active';
@@ -26,6 +27,7 @@ const fontLine = () => FONT_NAMES.map((f) => `"${f}" (weights ${FONT_WEIGHTS[f].
 const RULES = [
   'Allowed elements only: svg, g, path, circle, ellipse, rect, line, polyline, polygon, defs, linearGradient, radialGradient, stop, clipPath, mask, pattern, text, tspan, filter (with feGaussianBlur, feTurbulence, feColorMatrix, feDropShadow, feOffset). No script, no event attributes, no image elements, no links or external references, no data: URLs. The reference picture is never embedded.',
   'Every piece of text is a real <text> element with a data-role from: kicker, tag, title, body, caption, number. Write the words you read. One <text> per line. Use font-family names ONLY from the bundled list; if none fits a text, use the nearest one and add data-font-wish="the family you would have wanted".',
+  'PHOTOS are never drawn as shapes. Every photograph (people, places, objects, screenshots of real scenes) is an image slot: a plain <rect> in the box of the photo with data-image-slot="background|inset|half-bleed|strip|cutout", data-mask="rect|rounded|circle|arch|blob" (the corner shape of the photo), x, y, width, height and a plain fill colour close to the average colour of the photo (the fallback). At most 4 slots. Art that is not a photo (3D shapes, gradients, glows, doodles, icons) stays as shapes, paths and gradients.',
   'Every icon, doodle or logo is a <g id="short-name"> of plain paths and shapes with fill and stroke colours. Dots, bars and panels are plain elements. Colours are plain hex values. Put the background first as a full-size <rect>.',
 ];
 export function buildRecreatePrompt(x: RecreateCtx): string {
@@ -49,7 +51,7 @@ export function buildFixPrompt(x: RecreateCtx, feedback: string): string {
 // ----- sanitising -----
 
 const TAGS = new Set(['svg', 'g', 'path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon', 'defs', 'lineargradient', 'radialgradient', 'stop', 'clippath', 'mask', 'pattern', 'text', 'tspan', 'filter', 'fegaussianblur', 'feturbulence', 'fecolormatrix', 'fedropshadow', 'feoffset']);
-const ATTRS = new Set(['id', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'x1', 'y1', 'x2', 'y2', 'fx', 'fy', 'points', 'd', 'transform', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'opacity', 'fill-opacity', 'stroke-opacity', 'fill-rule', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'text-anchor', 'dominant-baseline', 'textlength', 'lengthadjust', 'data-role', 'data-font-wish', 'viewbox', 'offset', 'stop-color', 'stop-opacity', 'gradientunits', 'gradienttransform', 'clip-path', 'mask', 'filter', 'stddeviation', 'basefrequency', 'numoctaves', 'type', 'values', 'dx', 'dy', 'flood-color', 'flood-opacity', 'in', 'in2', 'result', 'patternunits', 'patterntransform', 'clippathunits', 'seed', 'data-min-size', 'data-max-lines', 'data-max-size', 'data-type']);
+const ATTRS = new Set(['id', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'x1', 'y1', 'x2', 'y2', 'fx', 'fy', 'points', 'd', 'transform', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'opacity', 'fill-opacity', 'stroke-opacity', 'fill-rule', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'text-anchor', 'dominant-baseline', 'textlength', 'lengthadjust', 'data-role', 'data-font-wish', 'viewbox', 'offset', 'stop-color', 'stop-opacity', 'gradientunits', 'gradienttransform', 'clip-path', 'mask', 'filter', 'stddeviation', 'basefrequency', 'numoctaves', 'type', 'values', 'dx', 'dy', 'flood-color', 'flood-opacity', 'in', 'in2', 'result', 'patternunits', 'patterntransform', 'clippathunits', 'seed', 'data-image-slot', 'data-mask', 'data-fit', 'data-focal-x', 'data-focal-y', 'data-scrim', 'data-scrim-from', 'data-count', 'data-min-size', 'data-max-lines', 'data-max-size', 'data-type']);
 const CSS_PROPS = new Set(['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'opacity', 'text-anchor', 'fill-opacity', 'stroke-opacity']);
 const REF_ATTRS = new Set(['fill', 'stroke', 'filter', 'mask', 'clip-path']);
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -504,7 +506,7 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
         return;
       }
       const full = tag === 'rect' && pw >= W * 0.97 && ph >= H * 0.97;
-      layers.push({ src: index.get(el), kind: 'shape', id: full && !layers.some((l) => l.id === 'bg') ? 'bg' : `shape${++n}`, name: full ? 'background' : cur.gid || 'shape', role: full ? 'decor' : 'content', x: cx - pw / 2, y: cy - ph / 2, width: pw, height: ph, rotation: Math.round((Math.atan2(m[1], m[0]) * 180) / Math.PI * 10) / 10, opacity: cur.opacity, shape: tag === 'rect' ? 'rect' : 'ellipse', fill, ...(stroke ? { stroke } : {}), ...(tag === 'rect' && num('rx') ? { radius: num('rx') * scaleOf(m) } : {}) } as RLayer);
+      layers.push({ src: index.get(el), kind: 'shape', id: full && !layers.some((l) => l.id === 'bg') ? 'bg' : `shape${++n}`, name: el.hasAttribute('data-image-slot') ? `photo-slot-${n}` : full ? 'background' : cur.gid || 'shape', role: full ? 'decor' : 'content', x: cx - pw / 2, y: cy - ph / 2, width: pw, height: ph, rotation: Math.round((Math.atan2(m[1], m[0]) * 180) / Math.PI * 10) / 10, opacity: cur.opacity, shape: tag === 'rect' ? 'rect' : 'ellipse', fill, ...(stroke ? { stroke } : {}), ...(tag === 'rect' && num('rx') ? { radius: num('rx') * scaleOf(m) } : {}) } as RLayer);
     } else if (tag === 'path' || tag === 'line' || tag === 'polyline' || tag === 'polygon') {
       let d = el.getAttribute('d') ?? '';
       if (tag === 'line') d = `M${num('x1')} ${num('y1')} L${num('x2')} ${num('y2')}`;
@@ -822,7 +824,16 @@ export async function answerToLayers(text: string, ctx: RecreateCtx): Promise<{ 
   const { layers, notes } = svgToLayers(s.svg, ctx.w, ctx.h);
   if (layers.length < 2) return { ok: false, reasons: [...s.reasons, 'No layer could be made from the picture (nothing drawable was inside the canvas).'] };
   const t = tokenise(layers);
-  return { ok: true, result: { svg: s.svg, layers: t.layers, palette: t.palette, notes: [...s.reasons, ...notes], wished: s.wished } };
+  // Photo slots: the faithful picture shows the clean placeholder in each slot's mask (never abstract shapes); the layers keep a placeholder block named photo-slot-N.
+  const ex = extractImageSlots(s.svg);
+  const svg = ex.slots.length ? injectSlots(ex.svg, Object.fromEntries(ex.slots.map((sl) => [sl.id, slotMarkup(sl, [], { palette: t.palette })]))) : s.svg;
+  return { ok: true, result: { svg, layers: t.layers, palette: t.palette, notes: [...s.reasons, ...notes], wished: s.wished } };
+}
+
+/** Turns the photo-slot placeholder layers into image layers holding the given picture (null: the placeholders stay). */
+export function withPhotos(layers: RLayer[], src: string | null): RLayer[] {
+  if (!src) return layers;
+  return layers.map((l) => (l.name.startsWith('photo-slot') && l.kind === 'shape' ? ({ ...l, kind: 'image', src, fit: 'cover', name: l.name.replace('photo-slot', 'photo') } as unknown as RLayer) : l));
 }
 
 export async function callRecreate(reader: ReferenceReader, prompt: string, images: ReaderImage[], signal: AbortSignal): Promise<string> {
