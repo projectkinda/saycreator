@@ -606,6 +606,15 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
   if (dashed) notes.push(`${dashed} dashed line${dashed === 1 ? '' : 's'} drawn solid (the plan has no dashes).`);
   if (referenced) notes.push(`${referenced} clip or mask reference${referenced === 1 ? '' : 's'} not applied.`);
   if (effects) notes.push(`${effects} filter effect${effects === 1 ? '' : 's'} (blur, shadow, grain) in the picture ${effects === 1 ? 'was' : 'were'} not applied to the layers.`);
+  // The plan holds 60 layers: the smallest drawing parts go first (the faithful view still shows them).
+  if (layers.length > 60) {
+    const keep = new Set<RLayer>(layers.filter((l) => l.kind === 'text' || l.id === 'bg'));
+    const rest = layers.filter((l) => !keep.has(l)).sort((a, b) => b.width * b.height - a.width * a.height).slice(0, Math.max(0, 60 - keep.size));
+    const left = layers.length - keep.size - rest.length;
+    const kept = new Set([...keep, ...rest]);
+    for (let i = layers.length - 1; i >= 0; i--) if (!kept.has(layers[i])) layers.splice(i, 1);
+    notes.push(`${left} small drawing part${left === 1 ? '' : 's'} left out of the editable layers (the plan holds 60 layers); the faithful view still shows ${left === 1 ? 'it' : 'them'}.`);
+  }
   // Graphics first, text on top (the order of the picture is kept within each).
   layers.sort((a, b) => (a.kind === 'text' ? 1 : 0) - (b.kind === 'text' ? 1 : 0));
   return { layers, notes };

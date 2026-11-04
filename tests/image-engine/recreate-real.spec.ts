@@ -29,6 +29,7 @@ for (const set of SETS) {
       const R = await import('/src/reference/recreate.ts');
       const D = await import('/src/reference/reader.ts');
       const C = await import('/src/carousel/render.ts');
+      const F = await import('/src/reference/faithful.ts');
       const reader = (await D.detectReaders())[0];
       const bm = await I.bitmapOf(new Blob([Uint8Array.from(atob(b64 as string), (c) => c.charCodeAt(0))]));
       let rect = null as { x: number; y: number; width: number; height: number } | null;
@@ -53,26 +54,43 @@ for (const set of SETS) {
       const t0 = performance.now();
       const text1 = await R.callRecreate(reader, R.buildRecreatePrompt(ctx), [I.readerImageOf(ref.url, 'reference.jpg')], new AbortController().signal);
       const t1 = performance.now();
+      (window as unknown as { __rec?: string }).__rec = text1;
       const a1 = await R.answerToLayers(text1, ctx);
       if (!a1.ok) return { ok: false, reasons: a1.reasons, text1: text1.slice(0, 600), seconds1: (t1 - t0) / 1000, refSize: [ref.width, ref.height, kb(ref.url)] };
-      const blob1 = await render(a1.result.layers, a1.result.palette, 1400 / 1350);
-      const renderUrl1 = await asUrl(blob1);
+      // The look-and-fix is shown the picture as written (the faithful render), as the app does until the person edits.
+      const renderUrl1 = await asUrl(await F.svgToPng(a1.result.svg, 1400));
       const t2 = performance.now();
       const text2 = await R.callRecreate(reader, R.buildFixPrompt(ctx, ''), [I.readerImageOf(ref.url, 'reference.jpg'), I.readerImageOf(renderUrl1, 'render.jpg')], new AbortController().signal);
       const t3 = performance.now();
       const a2 = await R.answerToLayers(text2, ctx);
       const fin = a2.ok ? a2.result : a1.result;
-      const blobF = await render(fin.layers, fin.palette, 1);
+      const blobF = await render(fin.layers, fin.palette, 0.5);
+      const faithF = await F.svgToPng(fin.svg, 540);
+      const dims = (b: ImageBitmap) => [b.width, b.height];
+      const fa = await createImageBitmap(faithF);
+      const ea = await createImageBitmap(blobF);
+      const cw = 540;
+      const chh = Math.round((540 * 1350) / 1080);
+      const c1 = new OffscreenCanvas(cw, chh);
+      const c2 = new OffscreenCanvas(cw, chh);
+      c1.getContext('2d')!.drawImage(fa, 0, 0, cw, chh);
+      c2.getContext('2d')!.drawImage(ea, 0, 0, cw, chh);
+      const p1 = c1.getContext('2d')!.getImageData(0, 0, cw, chh).data;
+      const p2 = c2.getContext('2d')!.getImageData(0, 0, cw, chh).data;
+      let dsum = 0;
+      for (let i = 0; i < p1.length; i += 4) dsum += (Math.abs(p1[i] - p2[i]) + Math.abs(p1[i + 1] - p2[i + 1]) + Math.abs(p1[i + 2] - p2[i + 2])) / 3;
+      void dims;
       // The sheet: the reference on the left, the recreated slide on the right.
       const left = await I.bitmapFromUrl(ref.url);
-      const right = await createImageBitmap(blobF);
-      const c = new OffscreenCanvas(1120, 720);
+      const right = ea;
+      const c = new OffscreenCanvas(1680, 720);
       const g = c.getContext('2d')!;
       g.fillStyle = '#e8e8e8';
       g.fillRect(0, 0, c.width, c.height);
       const fit = (b: ImageBitmap, x: number) => { const k = Math.min(540 / b.width, 700 / b.height); g.drawImage(b, x + (540 - b.width * k) / 2, 10, b.width * k, b.height * k); };
       fit(left, 10);
-      fit(right, 570);
+      fit(fa, 570);
+      fit(right, 1130);
       const sheet = await asUrl(await c.convertToBlob({ type: 'image/png' }));
       const count = (layers: { kind: string }[], k: string) => layers.filter((l) => l.kind === k).length;
       return {
@@ -82,6 +100,8 @@ for (const set of SETS) {
         seconds1: Math.round((t1 - t0) / 100) / 10,
         seconds2: Math.round((t3 - t2) / 100) / 10,
         refSize: [ref.width, ref.height, kb(ref.url)],
+        faithfulVsEnginePctDiff: Math.round((dsum / (p1.length / 4) / 255) * 1000) / 10,
+        notes: fin.notes,
         renderSentKb: kb(renderUrl1),
         first: { text: count(a1.result.layers, 'text'), path: count(a1.result.layers, 'path'), shape: count(a1.result.layers, 'shape') },
         final: { text: count(fin.layers, 'text'), path: count(fin.layers, 'path'), shape: count(fin.layers, 'shape'), roles: [...new Set(fin.layers.filter((l) => l.kind === 'text').map((l) => l.name))], groups: [...new Set(fin.layers.filter((l) => l.kind === 'path').map((l) => l.name))], palette: fin.palette, notes: fin.notes, wished: fin.wished, texts: fin.layers.filter((l) => l.kind === 'text').map((l) => (l as unknown as { text: string }).text.slice(0, 60)) },
@@ -89,7 +109,11 @@ for (const set of SETS) {
         svg2: a2.ok ? a2.result.svg : null,
         sheet,
       };
-    }, [b64, set.cell] as const);
+    }, [b64, set.cell] as const).catch(async (e) => {
+      const raw = await page.evaluate(() => (window as unknown as { __rec?: string }).__rec ?? '').catch(() => '');
+      if (raw) fs.writeFileSync(path.join(OUT, `${set.id}-raw.txt`), raw);
+      throw e;
+    });
     const { sheet, svg1, svg2, ...rest } = r as Record<string, unknown> & { sheet?: string; svg1?: string; svg2?: string | null };
     if (sheet) fs.writeFileSync(path.join(OUT, `sheet-${set.id}.png`), Buffer.from(sheet.split(',')[1], 'base64'));
     if (svg1) fs.writeFileSync(path.join(OUT, `${set.id}-1.svg`), svg1);

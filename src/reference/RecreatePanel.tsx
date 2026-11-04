@@ -104,6 +104,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
   // The picture as the reader drew it is the main view until the person edits (or presses Make editable); the layers are drawn after that.
   const [edited, setEdited] = useState(false);
   const editedRef = useRef(false);
+  const svgRef = useRef('');
   const [q, setQ] = useState('');
   const abort = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -174,7 +175,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     const refImg = readerImageOf(ref.url, 'reference.jpg');
     let images = [refImg];
     if (kind === 'fix' && state) {
-      const b = await renderUrl(state, 1400 / H);
+      const b = !editedRef.current && svgRef.current ? await svgToPng(svgRef.current, 1400) : await renderUrl(state, 1400 / H);
       images = [refImg, readerImageOf(await blobUrl(b), 'render.jpg')];
     }
     setCalls((c) => c + 1);
@@ -192,6 +193,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     setNotes(n);
     editedRef.current = false;
     setEdited(false);
+    svgRef.current = r.result.svg;
     setSvg(r.result.svg);
     await publish(next, n, r.result.svg);
     return true;
@@ -222,7 +224,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     // The state may not have been committed yet when this runs straight after the first call, so the fix works from the published layers.
     const s = { layers: cur.layers, palette: cur.palette };
     abort.current = new AbortController();
-    const b = await renderUrl(s, 1400 / H);
+    const b = !editedRef.current && svgRef.current ? await svgToPng(svgRef.current, 1400) : await renderUrl(s, 1400 / H);
     const images = [readerImageOf(ref!.url, 'reference.jpg'), readerImageOf(await blobUrl(b), 'render.jpg')];
     setCalls((c) => c + 1);
     const answer = await callRecreate(readers![0], buildFixPrompt(ctx, feedback), images, abort.current.signal);
@@ -239,6 +241,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     setNotes(n);
     editedRef.current = false;
     setEdited(false);
+    svgRef.current = r.result.svg;
     setSvg(r.result.svg);
     await publish(next, n, r.result.svg);
     return true;
