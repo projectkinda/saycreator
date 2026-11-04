@@ -25,6 +25,9 @@ import type { AddFiles } from './PhotoControls';
 import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, useLibraryVersion, type PictureMeta } from './photoLibrary';
 import { SlideCard, type SlideView } from './SlideCard';
 import { Group, PreviewStage, useGroups } from './Studio';
+import { packFor, packFromStyle, packSlide, distinctCheck } from '../reference/pack';
+import { saveTemplate, styleNameFor as packStyleName } from '../reference/templates';
+import { blankStyle as packBlank } from '../reference/blank';
 import { PASTE_KEY, readStore, useProject, writeStore } from './useProject';
 import { onCancel, startJob, type JobHandle } from '../live/jobs';
 import '../styles/carousel.css';
@@ -38,6 +41,18 @@ function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; 
   const styles = carouselStyles();
   const { problems } = getStyles();
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [packNote, setPackNote] = useState('');
+  /** A pack with a different composition for each slide type, from a stored style's colours and fonts (no model call). The style stays. */
+  const rebuild = async (st: (typeof styles)[number]) => {
+    const pack = packFromStyle(st.spec);
+    const check = distinctCheck(pack);
+    const slide = packSlide(pack, 'cover', { type: 'cover', kicker: 'Example', headline: 'A headline that makes people stop', sub: 'A line under it' }, '@yourname');
+    const blob = await renderer.preview({ schema: 1, revision: 1, canvas: { width: 1080, height: 1350, background: pack.palette.bg }, layers: slide.layers } as never, 0.25);
+    const preview = await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(blob); });
+    const name = `${st.spec.title} pack`;
+    await saveTemplate({ name, target: 'carousel', spec: { ...packBlank(), name: packStyleName(name), title: name }, preview, pack });
+    setPackNote(`Saved “${name}” (Mine): ${Object.keys(pack.designs).length} designs${check.ok ? ', each with its own composition' : `, but ${check.alike.length} pair(s) look alike`}. The ${st.spec.title} style is unchanged.`);
+  };
   useEffect(() => {
     let live = true;
     const f = formatOf(format);
@@ -45,6 +60,15 @@ function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; 
       for (const st of styles) {
         const key = `${format}:${st.spec.name}`;
         if (previews[key]) continue;
+        // A pack is previewed with its own cover design, not the plain style under it.
+        const pk = packFor(st.spec.name);
+        if (pk) {
+          const slide = packSlide(pk, 'cover', { type: 'cover', kicker: 'Example', headline: 'A headline that makes people stop', sub: 'And a line that makes them read on' }, '@yourname');
+          const blob = await renderer.preview({ schema: 1, revision: 1, canvas: { width: pk.canvas.w, height: pk.canvas.h, background: pk.palette.bg ?? '#FFFFFF' }, layers: slide.layers } as never, 0.2);
+          if (!live) return;
+          setPreviews((p) => ({ ...p, [key]: URL.createObjectURL(blob) }));
+          continue;
+        }
         const sample =
           format === 'quote'
             ? { id: 'preview', brand: { handle: '@yourname' }, slides: [{ type: 'quote' as const, quote: 'Clear beats clever, every single time.', by: 'An editor', highlight: 'Clear' }] }
@@ -81,10 +105,12 @@ function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; 
                 {auto && value === st.spec.name && <span className="chip chip-tag">In use</span>}
                 {st.warnings.some((w) => /phone-size checker needs at least 32 px/.test(w)) && <span className="chip chip-warn">Some text is below phone size</span>}
               </button>
+              {!isUserStyle(st.spec.name) && <button type="button" className="btn btn-outline btn-sm cr-quiet" aria-label={`Rebuild the ${st.spec.title} style as a pack`} onClick={() => void rebuild(st)}>Rebuild as pack</button>}
             </li>
           );
         })}
       </ul>
+      {packNote && <p className="small" role="status" data-testid="pack-note">{packNote}</p>}
       {problems.length > 0 && (
         <div className="notice notice-warn" role="status">
           <strong>{problems.length} style folder{problems.length > 1 ? 's were' : ' was'} not loaded</strong>

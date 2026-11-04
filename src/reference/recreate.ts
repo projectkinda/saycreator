@@ -49,7 +49,7 @@ export function buildFixPrompt(x: RecreateCtx, feedback: string): string {
 // ----- sanitising -----
 
 const TAGS = new Set(['svg', 'g', 'path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon', 'defs', 'lineargradient', 'radialgradient', 'stop', 'clippath', 'mask', 'pattern', 'text', 'tspan', 'filter', 'fegaussianblur', 'feturbulence', 'fecolormatrix', 'fedropshadow', 'feoffset']);
-const ATTRS = new Set(['id', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'x1', 'y1', 'x2', 'y2', 'fx', 'fy', 'points', 'd', 'transform', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'opacity', 'fill-opacity', 'stroke-opacity', 'fill-rule', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'text-anchor', 'dominant-baseline', 'textlength', 'lengthadjust', 'data-role', 'data-font-wish', 'viewbox', 'offset', 'stop-color', 'stop-opacity', 'gradientunits', 'gradienttransform', 'clip-path', 'mask', 'filter', 'stddeviation', 'basefrequency', 'numoctaves', 'type', 'values', 'dx', 'dy', 'flood-color', 'flood-opacity', 'in', 'in2', 'result', 'patternunits', 'patterntransform', 'clippathunits', 'seed']);
+const ATTRS = new Set(['id', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'x1', 'y1', 'x2', 'y2', 'fx', 'fy', 'points', 'd', 'transform', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'opacity', 'fill-opacity', 'stroke-opacity', 'fill-rule', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'text-anchor', 'dominant-baseline', 'textlength', 'lengthadjust', 'data-role', 'data-font-wish', 'viewbox', 'offset', 'stop-color', 'stop-opacity', 'gradientunits', 'gradienttransform', 'clip-path', 'mask', 'filter', 'stddeviation', 'basefrequency', 'numoctaves', 'type', 'values', 'dx', 'dy', 'flood-color', 'flood-opacity', 'in', 'in2', 'result', 'patternunits', 'patterntransform', 'clippathunits', 'seed', 'data-min-size', 'data-max-lines', 'data-type']);
 const CSS_PROPS = new Set(['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'opacity', 'text-anchor', 'fill-opacity', 'stroke-opacity']);
 const REF_ATTRS = new Set(['fill', 'stroke', 'filter', 'mask', 'clip-path']);
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -347,7 +347,7 @@ export const segsToD = (segs: Seg[]) => segs.map((s) => (s.c === 'Z' ? 'Z' : `${
 // ----- layers -----
 
 /** A layer of the recreated slide. Colours may be palette tokens like "$accent"; the layer's `name` is its role (text) or its group (graphics). */
-export type RLayer = Layer & { name: string };
+export type RLayer = Layer & { name: string; /** A text slot's limits (from data-min-size and data-max-lines): the size never goes under minSize (32 at least), the words wrap to at most maxLines. */ slot?: { minSize?: number; maxLines?: number } };
 export interface RecreateSpec {
   layers: RLayer[];
   palette: Record<string, string>;
@@ -409,7 +409,7 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
     return v === 'none' ? null : v;
   };
   const layers: RLayer[] = [];
-  const texts: { x: number; y: number; size: number; weight: number; font: FontFamily; fill: string; anchor: string; line: string; role?: string; gid: string; ls: number; textLength?: number; opacity: number; parent: Element }[] = [];
+  const texts: { x: number; y: number; size: number; weight: number; font: FontFamily; fill: string; anchor: string; line: string; role?: string; gid: string; ls: number; textLength?: number; opacity: number; parent: Element; min?: number; lines?: number }[] = [];
   let n = 0;
   let effects = 0;
   let invisible = 0;
@@ -479,7 +479,7 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
     } else if (tag === 'text') {
       const [x, y] = pt(m, num('x'), num('y'));
       const line = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
-      if (line) texts.push({ x, y, size: cur.size * scaleOf(m), weight: cur.weight, font: cur.font, fill: cur.fill, anchor: cur.anchor, line, role: cur.role, gid: cur.gid, ls: cur.ls * scaleOf(m), textLength: el.getAttribute('textLength') ? parseFloat(el.getAttribute('textLength')!) * scaleOf(m) : undefined, opacity: cur.opacity, parent: el.parentElement! });
+      if (line) texts.push({ x, y, size: cur.size * scaleOf(m), weight: cur.weight, font: cur.font, fill: cur.fill, anchor: cur.anchor, line, role: cur.role, gid: cur.gid, ls: cur.ls * scaleOf(m), textLength: el.getAttribute('textLength') ? parseFloat(el.getAttribute('textLength')!) * scaleOf(m) : undefined, opacity: cur.opacity, parent: el.parentElement!, min: el.getAttribute('data-min-size') ? parseFloat(el.getAttribute('data-min-size')!) : undefined, lines: el.getAttribute('data-max-lines') ? parseFloat(el.getAttribute('data-max-lines')!) : undefined });
       return;
     }
     for (const c of Array.from(el.children)) walk(c, m, cur);
@@ -516,7 +516,7 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
     for (let k = 2; used.has(id); k++) id = `${role}${k}`;
     used.add(id);
     const top = t.y - t.size * 0.82;
-    layers.push({ kind: 'text', id, name: role, role: 'content', x, y: top, width: w, height: Math.ceil(t.size * lh * b.length + t.size * 0.2), rotation: 0, opacity: t.opacity, text: b.map((l) => l.line).join('\n'), style: { font: t.font, weight: nearestWeight(t.font, t.weight), size: Math.round(t.size), color: t.fill, align: t.anchor === 'middle' ? 'center' : t.anchor === 'end' ? 'right' : 'left', valign: 'top', lineHeight: Math.round(lh * 100) / 100 }, autoFit: { minSize: Math.min(Math.round(t.size), 32) } } as RLayer);
+    layers.push({ kind: 'text', id, name: role, role: 'content', x, y: top, width: w, height: Math.ceil(t.size * lh * b.length + t.size * 0.2), rotation: 0, opacity: t.opacity, text: b.map((l) => l.line).join('\n'), style: { font: t.font, weight: nearestWeight(t.font, t.weight), size: Math.round(t.size), color: t.fill, align: t.anchor === 'middle' ? 'center' : t.anchor === 'end' ? 'right' : 'left', valign: 'top', lineHeight: Math.round(lh * 100) / 100 }, autoFit: { minSize: Math.max(32, Math.min(Math.round(t.size), t.min ?? 32)) }, ...(t.min || t.lines ? { slot: { ...(t.min ? { minSize: Math.max(32, t.min) } : {}), ...(t.lines ? { maxLines: Math.max(1, Math.round(t.lines)) } : {}) } } : {}) } as RLayer);
     if (t.ls) notes.push(`Letter spacing on the ${role} text is not drawn (the toolbox has none).`);
   }
   if (invisible) notes.push(`${invisible} part${invisible === 1 ? '' : 's'} of the picture had neither a fill nor a line, so nothing was drawn for ${invisible === 1 ? 'it' : 'them'}.`);
@@ -603,8 +603,16 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
     if (!(ROLES as readonly string[]).includes(role) || !(role in texts)) return l;
     const text = texts[role] ?? '';
     if (!text) return { ...l, visible: false };
-    const filled = { ...l, text, autoFit: { minSize: 32 } } as TextLayer;
+    const { slot, ...plain } = l as RLayer & { slot?: { minSize?: number; maxLines?: number } };
+    const floor = Math.max(32, slot?.minSize ?? 32);
+    const filled = { ...plain, text, autoFit: { minSize: floor } } as TextLayer;
     try {
+      // A slot with a line limit: the size comes down inside its limits until the words fit in that many lines.
+      if (slot?.maxLines) {
+        let n = 0;
+        while (n++ < 30 && layoutText(filled).lines.length > slot.maxLines && filled.style.size > floor) filled.style = { ...filled.style, size: Math.max(floor, Math.round(filled.style.size * 0.93)) };
+        if (layoutText(filled).lines.length > slot.maxLines) notes.push(`The ${role} text needs more than ${slot.maxLines} lines even at its smallest size (${floor} px).`);
+      }
       const b = layoutText(filled);
       if (b.size < l.style.size * 0.97) notes.push(`The ${role} text was made smaller (${l.style.size} to ${Math.round(b.size)} px) to fit its place.`);
       if (b.lines.length > l.text.split('\n').length) notes.push(`The ${role} text wraps onto ${b.lines.length} lines.`);

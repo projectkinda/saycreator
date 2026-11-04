@@ -8,6 +8,7 @@ import { readerImageOf } from './images';
 import { detectReaders, type ReferenceReader } from './reader';
 import { saveTemplate, styleNameFor } from './templates';
 import { loadLayouts } from '../layouts/store';
+import { PackMaker } from './PackMaker';
 
 const TINY = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 export const SKELETON_KEY = 'creator.skeleton';
@@ -185,6 +186,7 @@ export function DescribePanel({ target, title, canvas, hasPhoto, hasCutout, getP
           )}
         </>
       )}
+      {target === 'carousel' && <PackMaker kind="description" description={text} />}
     </details>
   );
 }

@@ -19,9 +19,11 @@ export interface ActiveReference {
   /** The biggest photo found in the first reference, as shares of that reference (0 to 1). Null when none, or when it covers nearly everything. */
   photoRegion: { x: number; y: number; width: number; height: number } | null;
   /** Where the style came from: references the person added, or a description they typed. Left out: references. */
-  source?: 'reference' | 'description' | 'recreate';
+  source?: 'reference' | 'description' | 'recreate' | 'pack';
   /** A recreated look: layers (colours as palette names), the palette, the size. Used on every carousel slide with the slide's own words. */
   recreate?: import('./recreate').RecreateSpec;
+  /** A style pack made on this screen (not saved yet): one design per slide type. */
+  pack?: import('./pack').StylePack;
   /** The layout of a description (the thumbnail maker draws it itself; carousels get it as the style's free layouts). */
   free?: import('../image-engine/styles/free-spec').FreeLayout;
 }
@@ -43,7 +45,7 @@ export function setActiveReference(a: ActiveReference) {
   current = { ...a, spec, style: { spec, assets: {}, warnings: c.warnings } };
   bump();
 }
-export function clearActiveReference(removed = false, only?: 'reference' | 'description' | 'recreate') {
+export function clearActiveReference(removed = false, only?: 'reference' | 'description' | 'recreate' | 'pack') {
   if (only && (current?.source ?? 'reference') !== only) return;
   if (!current && !removed) return;
   current = null;

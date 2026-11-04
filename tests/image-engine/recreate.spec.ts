@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fakeReader, makeReference, refineAnswer, ROOT, storedTemplates } from './reference-helpers';
 
 test.setTimeout(180_000);
-const EXAMPLE = fs.readFileSync(path.join(ROOT, 'docsrecreate-example.svg.svg'), 'utf8');
+const EXAMPLE = fs.readFileSync(path.join(ROOT, 'docs', 'recreate-example.svg'), 'utf8');
 
 test('the whitelist keeps drawing and drops everything else, and says why a picture is refused', async ({ page }) => {
   await page.goto('/images/carousel');

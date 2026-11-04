@@ -11,6 +11,7 @@ import { detectReaders, type ReferenceReader } from './reader';
 import { answerToLayers, buildFixPrompt, buildRecreatePrompt, callRecreate, parsePath, RECREATE_CAP, resolveTokens, segsToD, transformSegs, type RecreateSpec, type RLayer } from './recreate';
 import { saveTemplate, styleNameFor } from './templates';
 import { listElements } from '../image-engine/assets/library';
+import { PackMaker } from './PackMaker';
 
 const W = 1080;
 const H = 1350;
@@ -94,6 +95,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
   const [view, setView] = useState('');
   const [over, setOver] = useState(false);
   const [swapFor, setSwapFor] = useState<string | null>(null);
+  const [svg, setSvg] = useState('');
   const [q, setQ] = useState('');
   const abort = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -179,6 +181,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     setFuture([]);
     setState(next);
     setNotes(n);
+    setSvg(r.result.svg);
     await publish(next, n);
     return true;
   };
@@ -223,6 +226,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
     setFuture([]);
     setState(next);
     setNotes(n);
+    setSvg(r.result.svg);
     await publish(next, n);
     return true;
   };
@@ -356,6 +360,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
               <label key={role} className="cr-inline small"><span className="field-label">{role}</span><input type="color" value={c} aria-label={`Palette ${role}`} onChange={(e) => commit({ ...state, palette: { ...state.palette, [role]: e.target.value.toUpperCase() } })} /></label>
             ))}
           </div>
+          <PackMaker kind="reference" reference={ref} first={{ svg, layers: state.layers }} />
           <ol className="small rf-layers" aria-label="Layers">
             {groupsOf(state.layers).map((g) => (
               <li key={g.name} aria-label={`Layer ${g.name}`}>

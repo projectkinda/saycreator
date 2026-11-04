@@ -15,6 +15,7 @@ import { treatmentsFor } from './photoChoices';
 import { objectInputs, photoInputs } from './photoLibrary';
 import { targetOfStyle, userStyles } from '../reference/templates';
 import { fillRecreate, recreateFor, textsOf } from '../reference/recreate';
+import { packFor, packSlide } from '../reference/pack';
 import { activeStyle } from '../reference/active';
 
 let styles: { styles: LoadedStyle[]; problems: { folder: string; messages: string[] }[] } | null = null;
@@ -49,6 +50,15 @@ export function composeDoc(doc: Doc): { slides: StyledSlide[]; margin: number } 
   const pictures = doc.photos ?? [];
   const slides = composeStyled(doc.script, style, { width: f.width, height: f.height, chrome: doc.format === 'quote' ? 'none' : undefined, handle: doc.script.brand.handle, elements: 'shippable', overrides, photos: photoInputs(pictures), objects: objectInputs(pictures) }, true);
   // A recreated look: its layers carry each slide's own words (the photo slots of the ordinary layouts are not part of it).
+  const pack = packFor(doc.style);
+  if (pack) {
+    const filled = slides.map((s, i) => {
+      const sc = (doc.script!.slides[i] ?? {}) as unknown as Record<string, unknown>;
+      const r = packSlide(pack, String(sc.type ?? s.type), sc, doc.script!.brand.handle);
+      return { ...s, plan: { ...s.plan, layers: r.layers }, notes: [...((s as { notes?: string[] }).notes ?? []), ...r.notes] };
+    });
+    return { slides: filled as typeof slides, margin: style.spec.spacing.margin };
+  }
   const rec = recreateFor(doc.style);
   if (rec) {
     const filled = slides.map((s, i) => {

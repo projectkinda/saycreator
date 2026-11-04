@@ -9,6 +9,8 @@ import { checkSpec } from './spec';
 import { TARGET_LABEL, type Target } from './types';
 
 export interface Template {
+  /** A style pack: one SVG design per slide type, text slots, palette names (never reference pixels). */
+  pack?: import('./pack').StylePack;
   /** A recreated carousel look: layers and palette (never reference pixels). */
   recreate?: import('./recreate').RecreateSpec;
   id: string;
@@ -106,10 +108,10 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 /** A unique style name for a new template. */
 export const styleNameFor = (title: string) => `${TEMPLATE_PREFIX}${slug(title)}-${newId().slice(0, 4)}`;
 
-export async function saveTemplate(o: { name: string; target: Target; spec: StyleSpec; preview: string; singleImage?: boolean; extrapolated?: string[]; missing?: string[]; layoutKept?: Template['layoutKept']; recreate?: Template['recreate'] }): Promise<Template> {
+export async function saveTemplate(o: { name: string; target: Target; spec: StyleSpec; preview: string; singleImage?: boolean; extrapolated?: string[]; missing?: string[]; layoutKept?: Template['layoutKept']; recreate?: Template['recreate']; pack?: Template['pack'] }): Promise<Template> {
   await ensureTemplatesLoaded();
   const now = Date.now();
-  const t: Template = { id: newId(), name: o.name.trim() || 'My style', target: o.target, spec: { ...o.spec, title: o.name.trim() || 'My style' }, preview: o.preview, createdAt: now, updatedAt: now, ...(o.recreate ? { recreate: o.recreate } : {}), ...(o.singleImage ? { singleImage: true } : {}), ...(o.extrapolated ? { extrapolated: o.extrapolated } : {}), ...(o.missing ? { missing: o.missing } : {}), ...(o.layoutKept ? { layoutKept: o.layoutKept } : {}) };
+  const t: Template = { id: newId(), name: o.name.trim() || 'My style', target: o.target, spec: { ...o.spec, title: o.name.trim() || 'My style' }, preview: o.preview, createdAt: now, updatedAt: now, ...(o.recreate ? { recreate: o.recreate } : {}), ...(o.pack ? { pack: o.pack } : {}), ...(o.singleImage ? { singleImage: true } : {}), ...(o.extrapolated ? { extrapolated: o.extrapolated } : {}), ...(o.missing ? { missing: o.missing } : {}), ...(o.layoutKept ? { layoutKept: o.layoutKept } : {}) };
   list = [t, ...list];
   bump();
   await persist(t);
@@ -177,7 +179,7 @@ export async function importTemplates(text: string): Promise<{ added: Template[]
       rejected.push(`${label}: ${c.errors[0]}`);
       continue;
     }
-    added.push(await saveTemplate({ name: label, target: item.target as Target, spec, preview: typeof item.preview === 'string' ? item.preview : '', singleImage: item.singleImage, extrapolated: item.extrapolated, missing: item.missing, layoutKept: item.layoutKept }));
+    added.push(await saveTemplate({ name: label, target: item.target as Target, spec, preview: typeof item.preview === 'string' ? item.preview : '', singleImage: item.singleImage, extrapolated: item.extrapolated, missing: item.missing, layoutKept: item.layoutKept , recreate: item.recreate, pack: item.pack }));
   }
   return { added, rejected };
 }

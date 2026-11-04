@@ -181,3 +181,22 @@ Every message is a sentence. Examples: `Style "hot-flat": "name" is "hotflat" bu
 ## Trying a style
 
 `npm run test:image` draws every style with every sample script (and three quote cards) into `out/image-engine/style-recreation/<style>/<script>/slide-01.png` ... one file per slide, each with its own `.plan.json` (the slide as a plan, editable by patches) and `.lint.json` (the phone-size result, which layout was used and why). The Results screen shows them.
+
+
+## Style packs (a style as one SVG slide design per slide type)
+
+A pack is stored like a template (JSON, in this browser, exported and imported with the templates) and never holds a reference picture.
+
+```json
+{ "name": "Borcelle pack", "palette": { "bg": "#F5F0EB", "text": "#111111", "accent": "#FF8A4C" },
+  "fonts": { "headline": "Instrument Serif Italic", "body": "Instrument Sans" },
+  "motifs": [], "canvas": { "w": 1080, "h": 1350 },
+  "designs": { "cover": [ /* plan layers */ ], "step": [], "content": [], "list": [], "stat": [], "quote": [], "cta": [] } }
+```
+
+- **Slide types:** cover, step, content, list (a checklist), stat, quote, cta (a closing slide); "base" is the first slide of a reference and is used when a type has no design of its own. A slide with no design for its type uses content, then cover, then base.
+- **A design** is an SVG slide, 1080 x 1350 (any viewBox of that shape): the first element is the full-size background `<rect>`; colours are palette names (`fill="$accent"`); graphics are plain shapes and paths, each group a `<g id="name">`; text is real `<text>` elements with `data-role` (kicker, tag, title, body, caption, number), `data-min-size` (px, never under 32) and `data-max-lines`, holding sample words. One `<text>` per line or slot. Fonts are the bundled ones only (`data-font-wish` names the font the designer wanted).
+- **The SVG is made safe** with a whitelist before anything is drawn: svg, g, path, circle, ellipse, rect, line, polyline, polygon, defs, linearGradient, radialGradient, stop, clipPath, mask, pattern, text, tspan, filter (feGaussianBlur, feTurbulence, feColorMatrix, feDropShadow, feOffset). No script, no event attributes, no images, no external references, at most 200 kB. See `docs/recreate-example.svg` for the format.
+- **Filling:** a slide's words go into the slots of its type's design (kicker, tag, title, body, caption, number). The size comes down inside the slot's limits until the words fit in `data-max-lines` lines and never goes under `data-min-size` or 32 px; a tag or number with no words is hidden. Applying a pack to a script uses no model call.
+- **Distinct compositions:** the slide types of a pack must be arranged differently: a check flags two designs whose text slots sit at about the same place and size (within 6% of the slide). The prompt that asks a model for a pack requires it.
+- **Making packs:** from a reference (after Recreate: "Make the rest of the set", Quick = cover and a content slide, Full = all seven types, one call each), from a description (Describe the look), or from a stored style ("Rebuild as pack": its colours and fonts, a different composition per slide type, built by the code with no model call; the style stays).
