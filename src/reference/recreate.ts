@@ -495,7 +495,7 @@ export function svgToLayers(svg: string, W: number, H: number): { layers: RLayer
     const num = (a: string, d = 0) => parseFloat(el.getAttribute(a) ?? '') || d;
     // The plan has no gradient lines: a line painted with a gradient takes the colour of the middle of that gradient (said in the notes).
     const strokeSrc = ((): string => {
-      const u = /^url(#([w-]+))$/.exec(cur.stroke);
+      const u = /^url\(#([\w-]+)\)$/.exec(cur.stroke);
       if (!u) return cur.stroke;
       gradStroke++;
       const g = grads.get(u[1]);

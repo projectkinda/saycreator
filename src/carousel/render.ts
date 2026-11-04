@@ -14,7 +14,8 @@ import { yieldToBrowser } from './export';
 import { treatmentsFor } from './photoChoices';
 import { objectInputs, photoInputs } from './photoLibrary';
 import { targetOfStyle, userStyles } from '../reference/templates';
-import { fillRecreate, recreateFor, textsOf } from '../reference/recreate';
+import { fillsFor } from '../images/store';
+import { applyPhotoSlots, fillRecreate, recreateFor, textsOf } from '../reference/recreate';
 import { designUsed, packFor, packSlide } from '../reference/pack';
 import { svgToPng } from '../reference/faithful';
 import { faithfulChecks, UNCHECKED } from '../reference/faithfulChecks';
@@ -80,7 +81,9 @@ export function composeDoc(doc: Doc): { slides: StyledSlide[]; margin: number } 
   if (rec) {
     const filled = slides.map((s, i) => {
       const r = fillRecreate(rec, textsOf((doc.script!.slides[i] ?? {}) as unknown as Record<string, unknown>, doc.script!.brand.handle));
-      return { ...s, plan: { ...s.plan, layers: r.layers }, notes: [...((s as { notes?: string[] }).notes ?? []), ...r.notes] };
+      // The photo regions take the slide's pictures from the image requests (an empty one keeps its placeholder block).
+      const layers = rec.slots?.length ? applyPhotoSlots(r.layers, rec.slots, fillsFor(doc.imageRequests, i, rec.slots, rec.palette)) : r.layers;
+      return { ...s, plan: { ...s.plan, layers }, notes: [...((s as { notes?: string[] }).notes ?? []), ...r.notes] };
     });
     return { slides: filled as typeof slides, margin: style.spec.spacing.margin };
   }

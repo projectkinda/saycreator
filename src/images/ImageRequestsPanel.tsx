@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { patches, type Doc } from '../carousel/doc';
 import type { Apply } from '../carousel/parts';
 import { packFor, parsePack, slotsFor, type StylePack } from '../reference/pack';
+import { recreateFor } from '../reference/recreate';
 import { detectReaders } from '../reference/reader';
 import { callPack } from '../reference/pack';
 import { templateOfStyle, updateTemplatePack } from '../reference/templates';
@@ -27,6 +28,9 @@ export function buildSquarePrompt(pack: StylePack): string {
 export function ImageRequestsPanel({ doc, apply }: { doc: Doc; apply: Apply }) {
   useImagesVersion();
   const pack = packFor(doc.style);
+  // A recreated slide has image slots too (its photo regions), the same on every slide.
+  const rec = pack ? null : recreateFor(doc.style);
+  const palette = pack?.palette ?? rec?.palette;
   const square = doc.format === 'quote';
   const list = useMemo(() => doc.imageRequests ?? [], [doc.imageRequests]);
   const latest = useRef(list);
@@ -36,15 +40,15 @@ export function ImageRequestsPanel({ doc, apply }: { doc: Doc; apply: Apply }) {
   const [accepted, setAccepted] = useState(noticeAccepted());
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [provider, setProvider] = useState<{ available: boolean; reason?: string } | null>(null);
-  const slotsOfSlide = (i: number) => (pack && doc.script?.slides[i] ? slotsFor(pack, doc.script.slides[i].type, square) : []);
+  const slotsOfSlide = (i: number) => (pack && doc.script?.slides[i] ? slotsFor(pack, doc.script.slides[i].type, square) : rec && doc.script?.slides[i] ? (rec.slots ?? []) : []);
   useEffect(() => {
     void getImageProvider().available().then(setProvider);
   }, []);
   // Bake the pictures to their slots (and again after a treatment or focal change) so the slides can draw them.
   useEffect(() => {
-    if (pack && list.length) void ensureBaked(list, slotsOfSlide, pack.palette);
+    if (palette && list.length) void ensureBaked(list, slotsOfSlide, palette);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list, pack, doc.format]);
+  }, [list, pack, rec, doc.format]);
   // Thumbnails of the originals.
   useEffect(() => {
     let live = true;
@@ -70,11 +74,11 @@ export function ImageRequestsPanel({ doc, apply }: { doc: Doc; apply: Apply }) {
   };
   const update = (id: string, p: Partial<ImageRequest>, label?: string) => set(latest.current.map((r) => (r.id === id ? { ...r, ...p } : r)), label);
 
-  if (!pack) return <p className="small muted" data-testid="images-note">Image slots need a style pack. Rebuild a style as a pack (Styles) or make one from a reference or a description.</p>;
+  if (!pack && !rec?.slots?.length) return <p className="small muted" data-testid="images-note">Image slots need a style pack or a recreated look with photo regions. Rebuild a style as a pack (Styles) or make one from a reference or a description.</p>;
   const slotCount = doc.script ? doc.script.slides.reduce((n, _s, i) => n + slotsOfSlide(i).length, 0) : 0;
   const used = callsUsed(list);
   const open = list.filter((r) => !r.source);
-  const noSquare = square && !pack.square;
+  const noSquare = !!pack && square && !pack.square;
 
   const generate = async (r: ImageRequest) => {
     if (callsUsed(latest.current) >= IMAGE_CAP) return setMsg(`The limit of ${IMAGE_CAP} generated pictures for this ${square ? 'post' : 'carousel'} is reached. Upload a picture instead.`);
@@ -109,8 +113,8 @@ export function ImageRequestsPanel({ doc, apply }: { doc: Doc; apply: Apply }) {
     set(latest.current.filter((x) => x.id !== r.id), `Remove the picture request on slide ${r.slide + 1}`);
   };
   const suggest = () => {
-    if (!doc.script || !pack) return;
-    const plan = planImageRequests(doc.script as never, (type) => slotsFor(pack, type, square), pack.palette);
+    if (!doc.script || !palette) return;
+    const plan = planImageRequests(doc.script as never, (type) => (pack ? slotsFor(pack, type, square) : (rec?.slots ?? [])), palette);
     if (plan.length === 0) return setMsg('None of this style’s slide designs has an image slot.');
     set([...latest.current.filter((r) => r.source), ...plan], 'Suggest pictures');
     setMsg(`${plan.length} picture request${plan.length === 1 ? '' : 's'} made. Nothing is generated until you click Generate.`);
@@ -120,6 +124,7 @@ export function ImageRequestsPanel({ doc, apply }: { doc: Doc; apply: Apply }) {
     if (!tpl?.pack) return setMsg('Save the pack as a template first, then make its square quote design.');
     setBusy('square');
     try {
+      if (!pack) throw new Error('This look is not a pack.');
       const reader = (await detectReaders())[0];
       if (!reader) throw new Error('No model is set up to draw it.');
       const text = await callPack(reader, buildSquarePrompt(pack), [], new AbortController().signal);
