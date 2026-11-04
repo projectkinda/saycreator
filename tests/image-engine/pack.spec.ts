@@ -147,3 +147,18 @@ test('Make the rest of the set (Quick) from a recreated slide: the estimate come
   await expect(dmaker.getByRole('list', { name: 'Pack slide types' }).getByRole('listitem')).toHaveCount(7);
   await expect(dmaker.getByText(/share a composition/)).toHaveCount(0);
 });
+
+test('a text slot never reaches past the slide edge, whatever the sample words measured', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const r = await page.evaluate(async () => {
+    const P = await import('/src/reference/pack.ts');
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-type="cover" data-palette=\'{"bg":"#101820","text":"#F5F0EB"}\'><rect width="1080" height="1350" fill="$bg"/><text data-role="title" data-min-size="48" data-max-lines="3" x="700" y="400" font-size="90" font-family="Schibsted Grotesk" font-weight="700" fill="$text">A sample title that runs far past the right edge of the slide</text><text data-role="body" x="40" y="900" font-size="44" font-family="Instrument Sans" fill="$text">Body</text></svg>';
+    const p = await P.parsePack(svg, 'edge');
+    if (!p.ok) return { ok: false };
+    const s = P.packSlide(p.pack, 'cover', { type: 'cover', headline: 'A different, quite long headline for this slide that must wrap', sub: 'x' }, '@me');
+    const t = s.layers.find((l) => l.kind === 'text' && (l as { text: string }).text.startsWith('A different')) as { x: number; width: number };
+    return { ok: true, right: t.x + t.width };
+  });
+  expect(r.ok).toBe(true);
+  expect(r.right).toBeLessThanOrEqual(1080);
+});

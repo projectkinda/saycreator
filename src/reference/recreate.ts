@@ -606,6 +606,9 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
     const { slot, ...plain } = l as RLayer & { slot?: { minSize?: number; maxLines?: number } };
     const floor = Math.max(32, slot?.minSize ?? 32);
     const filled = { ...plain, text, autoFit: { minSize: floor } } as TextLayer;
+    // A slot never reaches past the slide: its box was measured from the sample words, which may have run to the edge.
+    filled.x = Math.max(0, filled.x);
+    filled.width = Math.max(120, Math.min(filled.width, rec.canvas.w - filled.x - rec.canvas.w * 0.05));
     try {
       // A slot with a line limit: the size comes down inside its limits until the words fit in that many lines.
       if (slot?.maxLines) {
