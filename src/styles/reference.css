@@ -7,7 +7,7 @@
 .rf-sec {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 .rf-sec h2,
 .rf-sec h3,
@@ -182,8 +182,8 @@
 }
 
 /* One screen: the reference on the left, the person's own content in the middle, the result on the right. */
-.rf-three { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
-@media (min-width: 1250px) { .rf-three { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.25fr); } }
+.rf-three { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: start; }
+@media (min-width: 1400px) { .rf-three { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.25fr); } }
 .rf-three > section { margin: 0; }
 .rf-result { display: grid; gap: 8px; }
 .rf-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }

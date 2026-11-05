@@ -20,18 +20,20 @@
 .cr-new-text { display: flex; flex-direction: column; gap: 6px; }
 .cr-new-text strong { font-size: 1.2rem; }
 .cr-go { display: flex; flex-direction: column; align-items: stretch; gap: 10px; margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--border, #e4e4ea); }
-.cr-make-btn { width: 100%; min-height: 64px; font-size: 1.25rem; font-weight: 700; border-radius: 16px; }
+.cr-make-btn { width: 100%; min-height: 56px; padding-inline: 28px; font-size: 1.25rem; font-weight: 700; border-radius: 16px; }
 .cr-make-btn:disabled { opacity: 0.5; }
 .cr-go #cr-why { text-align: center; }
 .cr-cost { margin-top: 12px; text-align: center; font-weight: 600; font-size: 1rem; }
 
 /* ---- the New style panel: clean spacing, also for the reference tools inside it ---- */
-.ns-flow { display: flex; flex-direction: column; gap: 24px; padding: 32px; }
+.ns-flow { display: flex; flex-direction: column; gap: 28px; padding: 40px; }
 .ns-flow > .row-actions { justify-content: space-between; align-items: center; }
 .ns-flow > .row-actions .h3 { margin: 0; }
 .ns-flow .chip-group, .ns-flow .row-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-.ns-flow .create-form { display: flex; flex-direction: column; gap: 20px; }
-.ns-flow .field { display: flex; flex-direction: column; gap: 10px; }
+.ns-flow .create-form { display: flex; flex-direction: column; gap: 24px; }
+.ns-flow .field { display: flex; flex-direction: column; gap: 12px; }
+.ns-flow .field .input { min-height: 52px; }
+.ns-flow .create-form > .btn { min-height: 52px; }
 .ns-flow .field-label { font-weight: 600; }
 .ns-flow .rf-match { display: flex; flex-direction: column; gap: 20px; }
 .ns-flow .rf-match > * { margin: 0; }
