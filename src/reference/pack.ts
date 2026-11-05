@@ -14,6 +14,7 @@ import { extractImageSlots, injectSlots, scrimFor, slotMarkup, type ImageSlot } 
 import { fillsFor, type ImageRequest } from '../images/store';
 import type { ReaderImage, ReferenceReader } from './reader';
 import type { Detected } from './regions';
+import { variantPack } from './variants';
 
 export const PACK_TYPES = ['cover', 'step', 'content', 'list', 'stat', 'quote', 'cta'] as const;
 export type PackType = (typeof PACK_TYPES)[number];
@@ -56,6 +57,8 @@ export interface StylePack {
   slotMeta?: Partial<Record<PackType | 'base', SlotMeta[]>>;
   canvas: { w: number; h: number };
   notes: string[];
+  /** True for a pack the code built from a stored style's colours and fonts (packFromStyle): the same seven layouts for every style. Shown as "Basic". */
+  basic?: boolean;
 }
 
 /** The design key for a script slide type. */
@@ -76,6 +79,8 @@ export function designUsed(pack: StylePack, slideType: string): (PackType | 'bas
 export interface PackSlide {
   layers: Layer[];
   notes: string[];
+  /** The page colour when a variant swapped the palette (the drawing's background). */
+  bg?: string;
   slots?: FaithfulSlot[];
   hidden?: number[];
   /** The design's SVG with the slide's words in it, as written (colours resolved); absent when the pack has no SVG for this design. */
@@ -86,8 +91,11 @@ export interface PackSlide {
   emptySlots?: { id: string; x: number; y: number; w: number; h: number }[];
 }
 /** The slide's own words in the pack's design: the editable layers, and the faithful SVG when the pack kept the drawing. No model call. */
-export function packSlide(pack: StylePack, slideType: string, slide: Record<string, unknown>, handle: string, opts: { square?: boolean; images?: ImageRequest[]; slide?: number } = {}): PackSlide {
-  const p = opts.square && designKey(slideType) === 'quote' && pack.square ? squareView(pack) : pack;
+export function packSlide(pack: StylePack, slideType: string, slide: Record<string, unknown>, handle: string, opts: { square?: boolean; images?: ImageRequest[]; slide?: number; /** Which time this slide type has come in the carousel (0 = first): later ones get code-side variants. */ nth?: number } = {}): PackSlide {
+  const sq = opts.square && designKey(slideType) === 'quote' && pack.square ? squareView(pack) : pack;
+  const used0 = designUsed(sq, slideType);
+  const v = opts.nth && used0 && !opts.square ? variantPack(sq, used0, opts.nth) : null;
+  const p = v ? v.pack : sq;
   const r = packLayers(p, slideType, slide, handle);
   const used = designUsed(p, slideType);
   const svg = used ? p.svgs?.[used] : undefined;
@@ -118,7 +126,7 @@ export function packSlide(pack: StylePack, slideType: string, slide: Record<stri
     if (faithful) faithful = injectSlots(faithful, markup);
     layers = withImageLayers(layers, slots, fills, p.palette, veils);
   }
-  return { ...r, layers, canvas: p.canvas, ...(emptySlots.length ? { emptySlots } : {}), ...(faithful ? { faithful } : {}) };
+  return { ...r, layers, canvas: p.canvas, ...(v?.done.length ? { notes: [...r.notes, `Variant for a repeated slide type: ${v.done.map((k) => (k === 'mirror' ? 'mirrored' : 'colours swapped')).join(' and ')}.`] } : {}), ...(v?.done.includes('palette') ? { bg: p.palette.bg } : {}), ...(emptySlots.length ? { emptySlots } : {}), ...(faithful ? { faithful } : {}) };
 }
 
 /** The pack seen as its square quote design: the quote design, canvas and slots are the square ones. */
@@ -236,6 +244,17 @@ export function distinctCheck(pack: StylePack): { ok: boolean; alike: [string, s
   return { ok: alike.length === 0, alike };
 }
 
+/** Packs whose designs look alike across packs: for each slide type present in two or more packs, the pairs whose text slots sit at about the same places and sizes. */
+export function crossPackCheck(packs: StylePack[]): { type: PackType; a: string; b: string }[] {
+  const out: { type: PackType; a: string; b: string }[] = [];
+  for (const type of PACK_TYPES) {
+    const have = packs.filter((p) => p.designs[type]);
+    for (let i = 0; i < have.length; i++)
+      for (let j = i + 1; j < have.length; j++) if (sameComposition(slotBoxes(have[i].designs[type]!, have[i].canvas), slotBoxes(have[j].designs[type]!, have[j].canvas))) out.push({ type, a: have[i].name, b: have[j].name });
+  }
+  return out;
+}
+
 // ----- the prompts -----
 
 const SLOTS: Record<PackType, string> = {
@@ -266,7 +285,10 @@ export function buildPackPrompt(o: { kind: 'reference' | 'description'; types: P
       ? 'The first picture is the reference slide (the file reference.jpg in the current folder; look at it with your Read tool). The look of the pack must be the reference\'s look: its colours, type, motifs and mood.' + (o.firstSvg ? ` Its first slide design, already drawn, is:\n${o.firstSvg.slice(0, 9000)}` : '')
       : `The look to design, in the person's words: "${(o.description ?? '').slice(0, 400)}".`,
     `Make one <svg> for each of these slide types, in this order: ${o.types.join(', ')}. Each is 1080 x 1350 px: use viewBox="0 0 1080 1350" and put data-type="<type>" on the <svg>. The FIRST <svg> also has data-palette='{"bg":"#...","text":"#...","accent":"#...","accent2":"#...","surface":"#...","muted":"#..."}' naming the pack's colours. In every design use colours ONLY as those names (fill="$accent", stroke="$text"), never hex.`,
-    'EVERY slide type must have a different composition from the others: a different arrangement of its text slots (position and size) and of its graphics. Do not repeat one layout with other words or small shifts; a cover, a step, a list and a stat slide look different from each other at a glance (for example: title low and big on the cover, a huge number on the left on a step, a column of items on a list, one giant figure centred on a stat). Keep the same palette, fonts and motifs so they belong together.',
+    o.kind === 'reference'
+      ? 'The COVER copies the reference\'s own composition: where its text sits, how big it is, where its graphics and picture spots are. Every OTHER slide type extends the reference\'s own grid, spacing, type scale and motifs: same margins, same column structure, same size steps, same decorative parts. Do not bring in a layout style the reference does not use.'
+      : 'Invent ONE coherent layout language for the look described (its grid, margins, type scale and motifs) and build every slide type from it.',
+    'EVERY slide type must have a different composition from the others: a different arrangement of its text slots (position and size) and of its graphics. Do not repeat one layout with other words or small shifts; the slide types must look different from each other at a glance while sharing the palette, fonts, grid and motifs, so they belong together.',
     'Text slots: each <text> has data-role (kicker, tag, title, body, caption or number), data-min-size (px, 32 or more) and data-max-lines, and holds sample words. One <text> per slot; a slot may hold several lines, the code wraps and fits the person\'s words into it, so make each slot as big as its words need. Slots a slide type has:',
     ...o.types.map((t) => `  ${t}: ${SLOTS[t]}`),
     `Fonts: only these bundled ones: ${fontLine()}. If none fits a text, use the nearest and add data-font-wish="the family you wanted".`,
@@ -473,6 +495,6 @@ export function packFromStyle(spec: StyleSpec): StylePack {
     cover: [slot('cover-bg', 'background', 0, 0, 1080, 1350, 'rect', { amount: 0.45, from: 'bottom' })],
     content: [slot('content-inset', 'inset', 616, 675, 389, 405, 'rounded')],
   };
-  const pack: StylePack = { name: `${spec.title} pack`, palette, fonts, motifs: [], designs, imageSlots, square: sq, canvas: { ...SIZE }, notes: [`Built from the ${spec.title} style: its colours and fonts, a different composition for each slide type.`] };
+  const pack: StylePack = { name: `${spec.title} pack`, palette, fonts, motifs: [], designs, imageSlots, square: sq, canvas: { ...SIZE }, basic: true, notes: [`Basic pack: the ${spec.title} style's colours and fonts on the standard compositions (the same for every style). A pack made from a reference by the model is better.`] };
   return pack;
 }

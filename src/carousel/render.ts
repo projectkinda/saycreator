@@ -16,7 +16,7 @@ import { objectInputs, photoInputs } from './photoLibrary';
 import { targetOfStyle, userStyles } from '../reference/templates';
 import { fillsFor } from '../images/store';
 import { applyPhotoSlots, fillRecreate, recreateFor, textsOf } from '../reference/recreate';
-import { designUsed, packFor, packSlide } from '../reference/pack';
+import { designKey, designUsed, packFor, packSlide } from '../reference/pack';
 import { resolveSvgTokens, svgToPng } from '../reference/faithful';
 import { cleanScript } from './clean';
 import { deckFallbackPack, recurringFor, recurringLayers, recurringMarkup } from './designed';
@@ -104,11 +104,14 @@ function composeBase(doc: Doc): { slides: StyledSlide[]; margin: number } {
     const filled = slides.map((s, i) => {
       const sc = (doc.script!.slides[i] ?? {}) as unknown as Record<string, unknown>;
       // A quote post uses the pack's square quote design when it has one; the pictures come from the slide's image requests.
-      const r = packSlide(pack, String(sc.type ?? s.type), sc, doc.script!.brand.handle, { square: doc.format === 'quote', images: doc.imageRequests, slide: i });
+      // The 2nd, 3rd... slide of the same type get code-side variants (mirrored, colours swapped): no model call.
+      const key = designKey(String(sc.type ?? s.type));
+      const nth = doc.script!.slides.slice(0, i).filter((o) => designKey(String((o as unknown as { type?: unknown }).type ?? '')) === key).length;
+      const r = packSlide(pack, String(sc.type ?? s.type), sc, doc.script!.brand.handle, { square: doc.format === 'quote', images: doc.imageRequests, slide: i, nth });
       const editable = !!doc.choices[String(i)]?.editable;
       const used = designUsed(pack, String(sc.type ?? s.type));
       const more = editable && used ? [`Made editable: this slide now draws from layers. ${pack.notes.filter((n) => n.startsWith(`${used}:`)).slice(0, 3).join(' ') || 'Gradients, patterns and fine drawing parts can look a little different from the original drawing.'}`] : [];
-      const f = !editable && r.faithful ? { faithful: { svg: r.faithful, layers: r.layers, canvas: r.canvas ?? pack.canvas, bg: pack.palette.bg ?? '#FFFFFF' } } : {};
+      const f = !editable && r.faithful ? { faithful: { svg: r.faithful, layers: r.layers, canvas: r.canvas ?? pack.canvas, bg: r.bg ?? pack.palette.bg ?? '#FFFFFF' } } : {};
       return { ...s, ...f, plan: { ...s.plan, layers: r.layers }, ...(r.emptySlots ? { emptySlots: r.emptySlots } : {}), notes: [...((s as { notes?: string[] }).notes ?? []), ...r.notes, ...more] };
     });
     return { slides: filled as typeof slides, margin: style.spec.spacing.margin };

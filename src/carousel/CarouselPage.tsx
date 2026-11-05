@@ -54,6 +54,8 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
   const [packNote, setPackNote] = useState('');
   /** A pack with a different composition for each slide type, from a stored style's colours and fonts (no model call). The style stays. */
   const rebuild = async (st: (typeof styles)[number]) => {
+    // A style made from a reference never gets the standard compositions: it has to be drawn by the model ("Make the rest of the set").
+    if (isUserStyle(st.spec.name)) return setPackNote(`${st.spec.title} was made from your references: use “Make the rest of the set” to draw its pack. The standard compositions are only for built-in styles.`);
     const pack = packFromStyle(st.spec);
     const check = distinctCheck(pack);
     const blob = await packPicture(pack, 'cover', { type: 'cover', kicker: 'Example', headline: 'A headline that makes people stop', sub: 'A line under it' }, 270);
@@ -124,6 +126,7 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
                 <strong>{st.spec.title}</strong>
                 <span className="small muted">{isUserStyle(st.spec.name) ? 'Made from your references' : st.spec.name}</span>
                 {isUserStyle(st.spec.name) && <span className="chip chip-tag">Mine</span>}
+                {packFor(st.spec.name)?.basic && <span className="chip chip-tag">Basic</span>}
                 {auto && value === st.spec.name && <span className="chip chip-tag">In use</span>}
                 {st.warnings.some((w) => /phone-size checker needs at least 32 px/.test(w)) && <span className="chip chip-warn">Some text is below phone size</span>}
               </button>

@@ -9,6 +9,7 @@ import { loadSaved, readStore, STORE_KEY, writeStore } from '../carousel/useProj
 import { newThumbProject, parseSavedThumb } from '../thumbnail/doc';
 import { THUMB_STORE_KEY } from '../thumbnail/useThumbProject';
 import { deleteTemplate, duplicateTemplate, ensureTemplatesLoaded, exportTemplates, importTemplates, renameTemplate, targetWarning, templateProblem, templates, useTemplatesVersion, type Template } from './templates';
+import { crossPackCheck } from './pack';
 import { TARGET_LABEL } from './types';
 import '../styles/carousel.css';
 import '../styles/reference.css';
@@ -33,6 +34,8 @@ export default function StylesPage() {
     void ensureTemplatesLoaded();
   }, []);
   const list = templates();
+  // Saved packs that share a cover or content composition (Basic packs are the same on purpose, so they are left out).
+  const alike = crossPackCheck(list.filter((t) => t.pack && !t.pack.basic).map((t) => ({ ...t.pack!, name: t.name }))).filter((x) => x.type === 'cover' || x.type === 'content');
   const [message, setMessage] = useState('');
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -83,6 +86,11 @@ export default function StylesPage() {
         </div>
         {message && <p className="small" role="status">{message}</p>}
         {templateProblem() && <p className="small cr-problem" role="alert">{templateProblem()}</p>}
+        {alike.length > 0 && (
+          <p className="small" role="status" aria-label="Packs that look alike">
+            {alike.map((x) => `“${x.a}” and “${x.b}” have the same ${x.type} layout.`).join(' ')} Make one of them from a different reference, or redraw it.
+          </p>
+        )}
         {list.length === 0 && (
           <div className="card empty">
             <strong>No templates yet</strong>
@@ -100,7 +108,7 @@ export default function StylesPage() {
                     <input className="input" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={`New name for ${t.name}`} onKeyDown={(e) => { if (e.key === 'Enter') { void renameTemplate(t.id, draft); setRenaming(null); } }} />
                   </label>
                 ) : (
-                  <h3 className="h4">{t.name} <span className="chip chip-tag">Mine</span></h3>
+                  <h3 className="h4">{t.name} <span className="chip chip-tag">Mine</span>{t.pack?.basic && <> <span className="chip chip-tag">Basic</span></>}</h3>
                 )}
                 <p className="small muted">Made for {TARGET_LABEL[t.target].toLowerCase()}{t.singleImage ? '. Built from one image, so the other slide types are extrapolated.' : '.'}{t.missing?.length ? ` Could not draw: ${t.missing.slice(0, 4).join(', ')}.` : ''}</p>
                 <div className="cr-photo-actions">
