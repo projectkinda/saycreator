@@ -148,3 +148,19 @@ test('a carousel with repeated slide types gets variants; the first slide of eac
   expect(r[3]).toMatch(/colours swapped/);
   expect(r[4]).toMatch(/mirrored and colours swapped/);
 });
+
+test('a carousel that still names the removed active reference draws with the default style instead of failing', async ({ page }) => {
+  const r = await page.evaluate(async () => {
+    const Dc = await import('/src/carousel/doc.ts');
+    const S = await import('/src/carousel/script.ts');
+    const C = await import('/src/carousel/render.ts');
+    const doc = { ...Dc.emptyDoc('mine-reference-active'), script: S.EXAMPLE };
+    try {
+      return { slides: C.composeDoc(doc as never).slides.length, error: '' };
+    } catch (e) {
+      return { slides: 0, error: String((e as Error).message) };
+    }
+  });
+  expect(r.error).toBe('');
+  expect(r.slides).toBeGreaterThan(0);
+});

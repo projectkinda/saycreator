@@ -26,6 +26,7 @@ import { BLANK_NAME, blankStyle } from './blank';
 import { describeMeasured, measure } from './measure';
 import { detectReaders, ReaderError, readStyle, type ReferenceReader } from './reader';
 import { applyPatches, checkSpec, defaultThumbnail, sectionsFor } from './spec';
+import { normaliseLayouts } from './layoutRules';
 import { detectRegions, type Detected } from './regions';
 import { buildFree, missingRanked } from './free';
 import { applyLabels, labelReference } from './labels';
@@ -433,7 +434,9 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
         setDeckRead(raw.answer?.deck ?? null);
         const spec0 = { ...editState.spec, name, title: title.trim() || 'My style', basedOn: { cluster: 'your references', note: `Built from ${items.length === 1 ? 'one image' : `${items.length} images`}: ${items.map((i) => LEARN_LABEL[i.learn].toLowerCase()).join(', ')}.` }, free: freeBy } as StyleSpec;
         // A thumbnail needs its own look block: the plain one, from the style's first palette (the reader's labels do not make one).
-        const spec = target !== 'carousel' && !spec0.thumbnail ? { ...spec0, thumbnail: defaultThumbnail(spec0) } : spec0;
+        const spec1 = target !== 'carousel' && !spec0.thumbnail ? { ...spec0, thumbnail: defaultThumbnail(spec0) } : spec0;
+        // Safety net: whatever rewrote a layouts list, its last rule has no "when" (the validator itself is unchanged).
+        const spec = { ...spec1, layouts: normaliseLayouts(spec1.layouts) } as typeof spec1;
         const verdict = checkSpec(spec);
         if (verdict.errors.length) throw new ReaderError('invalid', 'The layout made from the detection does not pass the checks.', verdict.errors);
         const ranked = missingRanked(lists);

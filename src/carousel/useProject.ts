@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_OPTIONS, commit, newProject, redo as redoP, undo as undoP, type DocPatch, type GenerateOptions, type Project } from './doc';
 import { validateScript } from './script';
 import { styleByName } from './render';
+import { ACTIVE_STYLE } from '../reference/active';
 import type { PictureMeta } from './photoLibrary';
 
 export const STORE_KEY = 'creator.carousel.project.v1';
@@ -37,7 +38,8 @@ export function loadSaved(defaultStyle: string): Project | null {
     const doc = proj.doc;
     if (doc.format !== 'carousel' && doc.format !== 'quote') return null;
     // A template is read from the browser's storage a moment after the page opens, so its style is not known yet: keep the choice.
-    if (!styleByName(doc.style) && !doc.style.startsWith('mine-')) doc.style = defaultStyle;
+    // The active reference lives in memory only: after a reload it is gone, so a project that still points at it goes back to the default style.
+    if (doc.style === ACTIVE_STYLE || (!styleByName(doc.style) && !doc.style.startsWith('mine-'))) doc.style = defaultStyle;
     if (doc.script) {
       const v = validateScript(doc.script, doc.format);
       if (v.errors.length) return { doc: { ...doc, script: null, choices: {} }, past: [], future: [] };

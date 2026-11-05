@@ -2,6 +2,7 @@
 // once, with undo and redo, and each value remembers where it came from: MEASURED (the code), READER (the model) or PERSON (the person's own edit).
 import type { StyleSpec } from '../image-engine/styles/format';
 import type { Treatment } from '../image-engine/types';
+import { withFallback } from './layoutRules';
 import { applyPatches, type SpecPatch } from './spec';
 import type { Target } from './types';
 
@@ -82,7 +83,7 @@ export function coverPlaced(spec: StyleSpec, place: 'top' | 'middle' | 'bottom')
   const rest = rules.filter((r) => !r.when?.photo);
   const fallback = rest.length ? rest.slice(-1) : [{ use: 'cover-stack' }];
   const chosen = use === 'cover-stack' ? [] : [{ use, when: { headlineWordsMax: 9 } }];
-  return { path: 'layouts.cover', value: [...photo, ...chosen, ...(use === 'cover-stack' ? [{ use }] : fallback.filter((r) => r.use !== use))] };
+  return { path: 'layouts.cover', value: withFallback([...photo, ...chosen, ...(use === 'cover-stack' ? [{ use }] : fallback.filter((r) => r.use !== use))], 'cover-stack') };
 }
 /** Which of the three places the cover's title is in, by the first layout that is not a photo layout. */
 export function coverPlace(spec: StyleSpec): 'top' | 'middle' | 'bottom' {

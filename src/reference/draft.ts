@@ -5,6 +5,7 @@ import type { Treatment } from '../image-engine/types';
 import { blankStyle } from './blank';
 import type { Measured } from './types';
 import { buildFree } from './free';
+import { withFallback } from './layoutRules';
 import type { Detected } from './regions';
 
 const clampN = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -69,7 +70,9 @@ export function draftSpec(m: Measured, d?: Detected | null): { spec: StyleSpec; 
   if (m.titlePlacement) {
     const use = coverLayoutFor(m.titlePlacement);
     const rules = s.layouts.cover.filter((r) => r.use !== use && r.use !== 'cover-top' && r.use !== 'cover-centre');
-    s.layouts = { ...s.layouts, cover: [...rules.slice(0, 1), { use, when: { headlineWordsMax: 9 } }, ...rules.slice(1)] };
+    // The stack layout is the plain fallback (no condition); the others apply to short headlines. The list always ends in a rule with no "when".
+    const placed = use === 'cover-stack' ? { use } : { use, when: { headlineWordsMax: 9 } };
+    s.layouts = { ...s.layouts, cover: withFallback([...rules.slice(0, 1), placed, ...rules.slice(1)], 'cover-stack') as typeof s.layouts.cover };
     values.push({ path: 'layouts.cover', text: `title place → ${m.titlePlacement} (${use})` });
   }
   const steps = treatmentOf(m, m.textColour ?? '#111111', m.background);
