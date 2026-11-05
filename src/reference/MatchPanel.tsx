@@ -15,7 +15,7 @@ export interface MatchPhoto {
   name: string;
 }
 
-export function MatchPanel({ target, title, photo, current, onUse, onRemove, describe }: { target: Target; title?: string; photo?: MatchPhoto | null; current: string; onUse: () => void; onRemove: () => void; describe?: { canvas: { w: number; h: number }; hasCutout: boolean; getPreview?: () => Promise<string | null> } }) {
+export function MatchPanel({ target, title, photo, current, onUse, onRemove, describe, skipReader }: { target: Target; title?: string; photo?: MatchPhoto | null; current: string; onUse: () => void; onRemove: () => void; skipReader?: boolean; describe?: { canvas: { w: number; h: number }; hasCutout: boolean; getPreview?: () => Promise<string | null> } }) {
   const { active, showDetected } = useActiveReference();
   const [opened, setOpened] = useState(false);
   // For carousels the default is to recreate the reference as vector layers; the measuring and labelling read stays as the other choice.
@@ -63,7 +63,8 @@ export function MatchPanel({ target, title, photo, current, onUse, onRemove, des
         )}
         {recreating && <RecreatePanel ownRoles={['kicker', 'tag', 'title', 'body', 'caption', 'number']} title={title} />}
         {!recreating && <p className="small muted">Drop, pick or paste (Ctrl+V) 1 to 10 images of a look you like. Your own text and photo appear in that look at once; one reader call then refines it.</p>}
-        {!recreating && (opened || !!active) && (
+        {!recreating && skipReader && <p className="small muted">Match mode runs in “Reference reader” above (the same reader as steps 1 and 2).</p>}
+        {!recreating && !skipReader && (opened || !!active) && (
           <Suspense fallback={<p className="small muted" role="status">Loading…</p>}>
             <ReferenceStylePage embedded target={target} title={title} photo={photo ?? undefined} />
           </Suspense>

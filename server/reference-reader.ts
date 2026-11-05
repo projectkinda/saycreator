@@ -28,10 +28,12 @@ export interface ReaderImageIn {
 /** The drawing system prompt: used for Recreate and style packs, which ask for SVG. The reading one forbids SVG. */
 export const DRAW_SYSTEM = 'You are a precise vector illustrator and slide designer. You recreate reference pictures as clean SVG slides and design sets of SVG slide designs: faithful proportions, positions, colours, sizes and spacing, real text elements, plain shapes and paths. You reply with exactly what the request asks for and nothing else.';
 /** A setting, default unchanged: READER_MODEL=<model> picks the model for both providers (the Claude Code command line and the API). */
-export const readerModel = (env: NodeJS.ProcessEnv, role: 'read' | 'draw' = 'read') => (role === 'draw' ? env.READER_DRAW_MODEL || '' : '') || env.READER_MODEL || env.CAROUSEL_MODEL || '';
+/** `pin`: the whole-slide read asks for the strong drawing model explicitly (READER_DRAW_MODEL, else Sonnet), not the CLI default. */
+export const readerModel = (env: NodeJS.ProcessEnv, role: 'read' | 'draw' = 'read', pin = false) => (role === 'draw' ? env.READER_DRAW_MODEL || '' : '') || (pin && role === 'draw' ? '' : env.READER_MODEL || env.CAROUSEL_MODEL || '');
 
 export interface ReaderCallIn {
   role?: 'read' | 'draw';
+  pin?: boolean;
   prompt: string;
   images: ReaderImageIn[];
 }
@@ -45,10 +47,17 @@ export function readCall(raw: unknown): ReaderCallIn {
   const out: ReaderImageIn[] = images.map((i: { name?: unknown; mime?: unknown; base64?: unknown }, n: number) => {
     if (typeof i?.base64 !== 'string' || !/^[A-Za-z0-9+/=]+$/.test(i.base64)) throw new WriterFailure(400, 'failed', 'An image could not be read.');
     const mime = i.mime === 'image/png' ? 'image/png' : 'image/jpeg';
-    const clean = String(i.name ?? `ref${n + 1}`).replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 60) || `ref${n + 1}`;
-    return { name: clean, mime, base64: i.base64 };
+    // Plain names whose extension matches the bytes we know (jpeg or png): never the person's file name or a .webp extension.
+    const stem = String(i.name ?? '').replace(/\.[^.]*$/, '');
+    const plain = /^[A-Za-z0-9_-]{1,20}$/.test(stem) ? stem : `ref${n + 1}`;
+    return { name: `${plain}.${mime === 'image/png' ? 'png' : 'jpg'}`, mime, base64: i.base64 };
   });
-  return { role: (raw as { role?: unknown })?.role === 'draw' ? 'draw' : 'read', prompt: b.prompt, images: out };
+  const seen = new Set<string>();
+  out.forEach((o, n) => {
+    if (seen.has(o.name)) o.name = `ref${n + 1}-${n}.${o.mime === 'image/png' ? 'png' : 'jpg'}`;
+    seen.add(o.name);
+  });
+  return { role: (raw as { role?: unknown })?.role === 'draw' ? 'draw' : 'read', prompt: b.prompt, images: out, pin: (raw as { pin?: unknown })?.pin === true };
 }
 
 /** Runs `claude -p` once in a folder holding only the images. `launcher` is a test seam. */
@@ -59,7 +68,23 @@ export function readWithCli(call: ReaderCallIn, signal: AbortSignal, env: NodeJS
   return new Promise((resolve, reject) => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'reference-reader-'));
     for (const i of call.images) fs.writeFileSync(path.join(cwd, i.name), Buffer.from(i.base64, 'base64'));
-    const args = launcher?.args ?? ['-p', '--output-format', 'json', '--no-session-persistence', '--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'dontAsk', '--system-prompt', call.role === 'draw' ? DRAW_SYSTEM : READER_SYSTEM, ...(readerModel(env, call.role) ? ['--model', readerModel(env, call.role)] : [])];
+    // Every file must be there and not empty before the model is started.
+    const bad = call.images.filter((i) => {
+      try {
+        return fs.statSync(path.join(cwd, i.name)).size === 0;
+      } catch {
+        return true;
+      }
+    });
+    if (bad.length) {
+      fs.rmSync(cwd, { recursive: true, force: true });
+      return reject(new WriterFailure(502, 'failed', `The image did not reach the model: ${bad.map((b) => b.name).join(', ')} could not be written or is empty.`));
+    }
+    // Say the real file names in the prompt, whatever route it comes from (the model cannot list the folder).
+    const prompt = call.images.length
+      ? `${call.prompt}\nThe picture files are in the current folder: ${call.images.map((i, k) => `${i.name}${k === 0 ? ' (the first picture)' : ''}`).join(', ')}. Open each with your Read tool by exactly this name.`
+      : call.prompt;
+    const args = launcher?.args ?? ['-p', '--output-format', 'json', '--no-session-persistence', '--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'dontAsk', '--system-prompt', call.role === 'draw' ? DRAW_SYSTEM : READER_SYSTEM, ...(readerModel(env, call.role, call.pin) || call.pin ? ['--model', readerModel(env, call.role, call.pin) || 'sonnet'] : [])];
     const child = spawn(bin, args, { cwd, env: { ...env, CLAUDE_CODE_ENTRYPOINT: 'reference-reader' }, windowsHide: true, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
@@ -101,7 +126,7 @@ export function readWithCli(call: ReaderCallIn, signal: AbortSignal, env: NodeJS
       }),
     );
     child.stdin.on('error', () => undefined);
-    child.stdin.end(call.prompt);
+    child.stdin.end(prompt);
   });
 }
 
@@ -123,7 +148,7 @@ export async function readWithApi(call: ReaderCallIn, signal: AbortSignal, env: 
     r = await fetchImpl('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: readerModel(env, call.role) || 'claude-sonnet-5-5', max_tokens: call.role === 'draw' ? 16000 : 8192, system: call.role === 'draw' ? DRAW_SYSTEM : READER_SYSTEM, messages: [{ role: 'user', content }] }),
+      body: JSON.stringify({ model: readerModel(env, call.role, call.pin) || 'claude-sonnet-5-5', max_tokens: call.role === 'draw' ? 16000 : 8192, system: call.role === 'draw' ? DRAW_SYSTEM : READER_SYSTEM, messages: [{ role: 'user', content }] }),
       signal: both,
     });
   } catch {
@@ -172,6 +197,14 @@ export function referenceHandler(provider: 'dev-cli' | 'api', opts: { env?: Node
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = (req.url ?? '').split('?')[0];
     if (req.method === 'GET' && url === '/status') return send(res, 200, provider === 'dev-cli' ? cliStatus(env) : apiStatus(env));
+    if (req.method === 'POST' && url === '/log') {
+      try {
+        console.error(`[reference ${provider}] ${(await readBody(req)).replace(/sk-[A-Za-z0-9_-]+/g, '[key]').slice(0, 600)}`);
+      } catch {
+        /* nothing to log */
+      }
+      return send(res, 200, { ok: true });
+    }
     if (req.method === 'POST' && url === '/read') {
       const ctl = new AbortController();
       res.on('close', () => !res.writableEnded && ctl.abort());
@@ -180,7 +213,11 @@ export function referenceHandler(provider: 'dev-cli' | 'api', opts: { env?: Node
         const r = provider === 'dev-cli' ? await readWithCli(call, ctl.signal, env) : await readWithApi(call, ctl.signal, env, opts.fetchImpl);
         return send(res, 200, r);
       } catch (e) {
-        if (e instanceof WriterFailure) return send(res, e.status, { error: e.message, kind: e.kind });
+        if (e instanceof WriterFailure) {
+          console.error(`[reference ${provider}] read failed (HTTP ${e.status}, ${e.kind}): ${e.message}`);
+          return send(res, e.status, { error: e.message, kind: e.kind });
+        }
+        console.error(`[reference ${provider}] read failed: ${(e as Error)?.message}`);
         return send(res, 400, { error: 'The request could not be read.', kind: 'failed' });
       }
     }

@@ -16,6 +16,8 @@ export interface ReaderImage {
 export interface ReaderCall {
   /** "draw": the call asks for SVG (Recreate, style packs), so the server uses the drawing system prompt. */
   role?: 'read' | 'draw';
+  /** Ask for the strong drawing model explicitly (the server uses READER_DRAW_MODEL, else Sonnet). */
+  pin?: boolean;
   prompt: string;
   images: ReaderImage[];
 }
@@ -49,7 +51,7 @@ function provider(id: ReaderId): ReferenceReader {
         r = await fetch(e.read, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call), signal });
       } catch (err) {
         if ((err as Error).name === 'AbortError') throw new ReaderError('cancelled', 'Cancelled.');
-        throw new ReaderError('failed', 'The reader could not be reached. Is the app server running?');
+        throw new ReaderError('failed', `The reader could not be reached (${(err as Error).message}). Is the app server running?`);
       }
       let body: { text?: string; error?: string; kind?: ReaderErrorKind } = {};
       try {
@@ -57,7 +59,7 @@ function provider(id: ReaderId): ReferenceReader {
       } catch {
         /* not JSON */
       }
-      if (!r.ok || typeof body.text !== 'string') throw new ReaderError(body.kind ?? (r.status === 503 ? 'unavailable' : r.status === 504 ? 'timeout' : 'failed'), body.error ?? `The reader answered with an error (${r.status}).`);
+      if (!r.ok || typeof body.text !== 'string') throw new ReaderError(body.kind ?? (r.status === 503 ? 'unavailable' : r.status === 504 ? 'timeout' : 'failed'), body.error ? `${body.error} [HTTP ${r.status}]` : `The reader answered with an error (HTTP ${r.status}).`);
       return { text: body.text, ms: performance.now() - t0 };
     },
   };

@@ -114,6 +114,7 @@ export function RecreatePanel({ ownRoles, title }: { ownRoles: string[]; title?:
   const slotsRef = useRef<ImageSlot[]>([]);
   const [q, setQ] = useState('');
   const abort = useRef<AbortController | null>(null);
+  useEffect(() => () => abort.current?.abort(), []);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     let live = true;

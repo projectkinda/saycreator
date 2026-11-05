@@ -154,7 +154,8 @@ export function validateScript(raw: unknown, format: Format): ScriptResult {
       const v = s[f.key];
       const label = `${n} "${f.key}"`;
       if (v === undefined || v === null || v === '') {
-        if (f.required) err(at(f.key), `${label} is missing. ${f.label} is required on a ${type} slide.`);
+        // A slide with "steps" needs no body: the steps are its content.
+        if (f.required && !(f.key === 'body' && Array.isArray(s.steps) && s.steps.length >= 2)) err(at(f.key), `${label} is missing. ${f.label} is required on a ${type} slide.`);
         continue;
       }
       if (f.kind === 'list') {
@@ -172,8 +173,9 @@ export function validateScript(raw: unknown, format: Format): ScriptResult {
       }
     }
     if (type === 'stat' && typeof s.value === 'string' && s.value.length > 8) warn(at('value'), `${n} number "${s.value}" is long. Big numbers are best at 8 characters or fewer (like 3x, 42%, 5 min); longer ones wrap onto two lines and fail the one-word-last-line check.`);
-    const known = new Set(['type', 'element_tags', 'photo', 'photo_hint', ...FIELDS[type].map((f) => f.key)]);
+    const known = new Set(['type', 'element_tags', 'photo', 'photo_hint', 'accent', 'steps', ...FIELDS[type].map((f) => f.key)]);
     for (const k of Object.keys(s)) if (!known.has(k)) warn(at(k), `${n} has "${k}", which a ${type} slide does not use. It is ignored.`);
+    if (s.steps !== undefined && !(Array.isArray(s.steps) && s.steps.length >= 2 && s.steps.length <= 5 && s.steps.every((x) => typeof x === 'string' && x.trim() !== ''))) err(at('steps'), `${n} "steps" must be a list of 2 to 5 short texts, for example ["one", "two"].`);
     const hl = s.highlight;
     const src = (s.headline ?? s.quote) as unknown;
     if (typeof hl === 'string' && hl && typeof src === 'string' && findHighlight(src, hl.split(/\s+/).filter(Boolean)).missing.length > 0) warn(at('highlight'), `${n} highlights "${hl}", which is not (all) in its ${s.headline !== undefined ? 'headline' : 'quote'}, so that part will be drawn without it. Punctuation and capital letters do not matter.`);
@@ -184,7 +186,7 @@ export function validateScript(raw: unknown, format: Format): ScriptResult {
   });
   const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : 'Untitled carousel';
   const handle = isObj(raw.brand) && typeof raw.brand.handle === 'string' && raw.brand.handle.trim() ? raw.brand.handle.trim() : '@yourname';
-  const script = { id: typeof raw.id === 'string' && raw.id ? slug(raw.id) : slug(title), title, aspect: '4:5', brand: { handle }, slides: slides as SlideScript[] } as CarouselScript;
+  const script = { id: typeof raw.id === 'string' && raw.id ? slug(raw.id) : slug(title), title, aspect: '4:5', brand: { handle }, slides: (slides as Record<string, unknown>[]).map((s) => (isObj(s) && Array.isArray(s.steps) && s.steps.length >= 2 && (s.type === 'content' || s.type === 'step') && !(typeof s.body === 'string' && s.body.trim()) ? { ...s, body: (s.steps as string[]).join('. ') } : s)) as unknown as SlideScript[] } as CarouselScript;
   return finish(issues, script);
 }
 

@@ -61,7 +61,7 @@ export async function runGenerate(req: WriteRequest, provider: WriteProvider, si
 }
 
 /** Designed mode: one call for the story and every slide's design (see designed.ts). Same result shape as runGenerate, plus the designs. */
-export async function runDesign(req: WriteRequest, look: { pack?: import('../reference/pack').StylePack | null; brief?: string }, handle: string, provider: WriteProvider, signal: AbortSignal, onPhase: (p: 'writing' | 'retrying') => void): Promise<{ ok: true; result: GenerateResult; designed: Designed } | { ok: false; state: GenState }> {
+export async function runDesign(req: WriteRequest, look: { pack?: import('../reference/pack').StylePack | null; brief?: string; hasPhoto?: boolean }, handle: string, provider: WriteProvider, signal: AbortSignal, onPhase: (p: 'writing' | 'retrying') => void): Promise<{ ok: true; result: GenerateResult; designed: Designed } | { ok: false; state: GenState }> {
   try {
     const { designed, ...result } = await designDeck(req, look, handle, provider, signal, onPhase);
     return { ok: true, result, designed };
@@ -75,7 +75,7 @@ export async function runDesign(req: WriteRequest, look: { pack?: import('../ref
   }
 }
 
-export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onCancel, provider, providers, styles, part = 'main' }: {
+export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onCancel, provider, providers, styles, referenceBox, styleReady = true, part = 'main' }: {
   doc: Doc;
   options: GenerateOptions;
   setTopic: (t: string) => void;
@@ -89,6 +89,10 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
   provider: WriteProvider | null;
   providers: WriteProvider[] | null;
   styles: React.ReactNode;
+  /** Under the style list: the link that opens the reference box. */
+  referenceBox?: React.ReactNode;
+  /** A style is chosen (or "Pick for me" is on): the button needs one. */
+  styleReady?: boolean;
   /** "main": the text, the styles and the one button. "options": format, count, platform, handle and tone (they live under Advanced). */
   part?: 'main' | 'options';
 }) {
@@ -100,7 +104,7 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
   const ready = !!slideBlocks(doc.topic);
   const cost = ready ? '0 design calls, 0 writing calls: your slide text is used as it is.' : '0 design calls, 1 small writing call.';
   const why = !provider && !ready ? (providers === null ? 'Looking for a writer…' : 'No writer is available on this server yet. Use Advanced below to copy a prompt for Claude and paste the answer.') : null;
-  const disabled = busy || !!why || !!problem;
+  const disabled = busy || !!why || !!problem || !styleReady;
   const label = (doc.format === 'quote' ? 'Cards' : 'Slides');
   const platform = isPlatform(options.platform) ? options.platform : null;
   const plat = doc.format === 'carousel' ? platformOf(platform) : null;
@@ -185,8 +189,10 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
   if (part === 'options') return <div className="create-form" data-testid="options">{optionsBlock}</div>;
   return (
     <section className="card ws-card" aria-labelledby="cr-make-h">
-      <h2 id="cr-make-h" className="h3">Make it from your text</h2>
-      <div className="create-form">
+      <h2 id="cr-make-h" className="h3">Make a carousel in three steps</h2>
+      <ol className="cr-steps create-form">
+        <li aria-label="Step 1: your text">
+        <h3 className="h4">Your text</h3>
         <label className="field">
           <span className="field-label">Your text or topic</span>
           <textarea className="cr-source" rows={8} value={doc.topic} onChange={(e) => setTopic(e.target.value)} disabled={busy} aria-describedby="cr-count" placeholder="Paste a paragraph, a rough idea or a whole article. Only what is in it will be used: no facts are added." />
@@ -195,14 +201,15 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
           {n.toLocaleString('en')} of {MAX_CHARS.toLocaleString('en')} characters{problem ? `. ${problem}` : ''}
         </p>
 
-        {styles ? (
-          <div>
-            <h3 className="h4">Style</h3>
-            <p className="small muted cr-hint">Pick how the slides look, or make a new look with New style.</p>
-            {styles}
-          </div>
-        ) : null}
-
+        </li>
+        <li aria-label="Step 2: pick a style">
+          <h3 className="h4">Pick a style</h3>
+          <p className="small muted cr-hint">Built-in styles and your own saved ones. Pick how the slides look.</p>
+          {styles}
+          {referenceBox}
+        </li>
+        <li aria-label="Step 3: generate">
+        <h3 className="h4">Generate</h3>
         <div className="row-actions cr-go">
           {!busy && (
             <button type="button" className="btn btn-dark btn-lg cr-make-btn" disabled={disabled} aria-describedby="cr-why" onClick={onGenerate}>
@@ -214,7 +221,7 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
               Cancel
             </button>
           )}
-          <span id="cr-why" className="small muted">{!busy ? (why ?? (problem ? 'Add your text above to turn this button on.' : '')) : ''}</span>
+          <span id="cr-why" className="small muted">{!busy ? (why ?? (problem ? 'Add your text above to turn this button on.' : !styleReady ? 'Pick a style to turn this button on.' : '')) : ''}</span>
         </div>
         <p className="small cr-cost" data-testid="cost-line">{cost}</p>
         <p className="small" role="status" aria-live="polite" data-testid="progress">
@@ -239,7 +246,8 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
             Writer (dev label): {provider ? provider.label : providers === null ? 'checking…' : 'none available'}
           </p>
         )}
-      </div>
+        </li>
+      </ol>
     </section>
   );
 }

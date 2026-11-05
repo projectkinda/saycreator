@@ -19,32 +19,138 @@
 .cr-new-plus { flex: none; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: var(--text, #111); color: #fff; font-size: 30px; line-height: 1; }
 .cr-new-text { display: flex; flex-direction: column; gap: 6px; }
 .cr-new-text strong { font-size: 1.2rem; }
+.cr-refbox {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
 .cr-go { display: flex; flex-direction: column; align-items: stretch; gap: 10px; margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--border, #e4e4ea); }
 .cr-make-btn { width: 100%; min-height: 56px; padding-inline: 28px; font-size: 1.25rem; font-weight: 700; border-radius: 16px; }
 .cr-make-btn:disabled { opacity: 0.5; }
 .cr-go #cr-why { text-align: center; }
 .cr-cost { margin-top: 12px; text-align: center; font-weight: 600; font-size: 1rem; }
 
+/* ---- Advanced tools: keep each block readable without changing its behavior ---- */
+.cr-advanced {
+  padding: 28px;
+}
+.cr-advanced > summary {
+  cursor: pointer;
+  margin: 0 0 24px;
+}
+.cr-advanced > .h4,
+.cr-advanced > p {
+  margin: 0;
+}
+.cr-advanced > .h4 + p {
+  margin-top: 8px;
+  line-height: 1.5;
+}
+.cr-advanced > .h4 + p + .h4 {
+  margin-top: 24px;
+}
+.cr-advanced > .rf-match {
+  margin-top: 20px;
+}
+.cr-advanced > .tn-more {
+  margin-top: 24px;
+}
+.cr-advanced > .rf-sec,
+.cr-advanced > .cr-options {
+  margin-top: 24px;
+}
+.cr-advanced .rf-chip-bar {
+  margin: 0 0 16px;
+  gap: 12px;
+}
+.cr-advanced .rf-recreate,
+.cr-advanced .tn-more {
+  gap: 16px;
+}
+.cr-advanced .tn-more > summary {
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.cr-advanced .cr-drop {
+  margin-top: 8px;
+}
+.cr-advanced .rf-match > .tn-more {
+  display: block;
+  padding: 16px 18px 20px;
+}
+.cr-advanced .rf-match > .tn-more > .tn-field[role='radiogroup'] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin: 0 0 18px;
+}
+.cr-advanced .rf-match > .tn-more > .tn-field[role='radiogroup'] .field-label {
+  flex: 0 0 100%;
+  margin: 0;
+}
+.cr-advanced .rf-recreate {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cr-advanced .rf-recreate > .cr-drop {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+.cr-advanced .rf-recreate > .row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin: 0;
+}
+.cr-advanced .rf-recreate > p.small {
+  margin: 0;
+  line-height: 1.5;
+}
+.cr-advanced > .rf-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px;
+}
+.cr-advanced > .rf-sec > * {
+  margin: 0;
+}
+.cr-advanced > .rf-sec .tn-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.cr-advanced > .rf-sec .tn-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* ---- the New style panel: clean spacing, also for the reference tools inside it ---- */
-.ns-flow { display: flex; flex-direction: column; gap: 28px; padding: 40px; }
+.ns-flow { display: flex; flex-direction: column; gap: 32px; padding: 48px; }
 .ns-flow > .row-actions { justify-content: space-between; align-items: center; }
 .ns-flow > .row-actions .h3 { margin: 0; }
 .ns-flow .chip-group, .ns-flow .row-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-.ns-flow .create-form { display: flex; flex-direction: column; gap: 24px; }
+.ns-flow .create-form { display: flex; flex-direction: column; gap: 28px; }
 .ns-flow .field { display: flex; flex-direction: column; gap: 12px; }
 .ns-flow .field .input { min-height: 52px; }
 .ns-flow .create-form > .btn { min-height: 52px; }
 .ns-flow .field-label { font-weight: 600; }
-.ns-flow .rf-match { display: flex; flex-direction: column; gap: 20px; }
+.ns-flow .rf-match { display: flex; flex-direction: column; gap: 28px; }
 .ns-flow .rf-match > * { margin: 0; }
-.ns-flow .tn-more { border: 1px solid var(--border, #e4e4ea); border-radius: 14px; padding: 20px 24px; }
-.ns-flow .tn-more > summary { margin-bottom: 16px; font-weight: 600; cursor: pointer; }
-.ns-flow .tn-more > *:not(summary) + *:not(summary) { margin-top: 20px; }
+.ns-flow .rf-recreate { display: flex; flex-direction: column; gap: 16px; }
+.ns-flow .tn-more { border: 1px solid var(--border, #e4e4ea); border-radius: 14px; padding: 28px 32px; }
+.ns-flow .tn-more > summary { margin-bottom: 20px; font-weight: 600; cursor: pointer; }
+.ns-flow .tn-more > *:not(summary) + *:not(summary) { margin-top: 24px; }
 .ns-flow .tn-field { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin: 0; }
-.ns-flow .tn-field[role='radiogroup'] { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px; }
+.ns-flow .tn-field[role='radiogroup'] { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 16px; }
 .ns-flow .tn-field[role='radiogroup'] .field-label { flex-basis: 100%; }
 .ns-flow .tn-more p { margin: 0; line-height: 1.5; }
-.ns-flow [class*='drop'] { padding: 28px; border-radius: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.ns-flow [class*='drop'] { padding: 32px; border-radius: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
 .ns-flow [class*='drop'] p { margin: 0; }
 .ns-flow .cr-quiet { margin-left: auto; }
 .cr-style-pic {
@@ -381,6 +487,26 @@
   flex-direction: column;
   gap: 6px;
   align-items: flex-start;
+}
+.cr-steps {
+  list-style: none;
+  counter-reset: quick-step;
+  padding-left: 0;
+}
+.cr-steps > li {
+  counter-increment: quick-step;
+}
+.cr-steps > li + li {
+  margin-top: 32px;
+}
+.cr-steps > li > .h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.cr-steps > li > .h4::before {
+  content: counter(quick-step) '.';
+  font: inherit;
 }
 .cr-photo-actions {
   display: flex;

@@ -14,21 +14,25 @@ const SAMPLE = 'Three small habits make a profile easier to trust. Write a clear
 export const NEW_STYLE_COST = '1 Sonnet call, about 1 minute';
 export const REFERENCE_COST = 'a few Sonnet calls (read, draw, one fix), about 2 minutes';
 
-export function NewStyleFlow({ text, tone, slides, handle, provider, reference, onCreated, onClose }: {
+export function NewStyleFlow({ text, tone, slides, handle, provider, reference, only, onCreated, onClose }: {
   text: string;
   tone: Tone;
   slides: number;
   handle: string;
   provider: WriteProvider | null;
-  reference: ReactNode;
+  reference?: ReactNode;
+  /** "description": only the description way, with no header and no way chips (it sits in the New style box as one tab). */
+  only?: 'description';
   onCreated: (r: { name: string; title: string; script: CarouselScript | null }) => void;
   onClose: () => void;
 }) {
-  const [way, setWay] = useState<'description' | 'reference'>('description');
+  const [way0, setWay] = useState<'description' | 'reference'>('description');
+  const way = only ?? way0;
   const [desc, setDesc] = useState('');
   const [step, setStep] = useState<'idle' | 'confirm' | 'running'>('idle');
   const [msg, setMsg] = useState('');
   const ctl = useRef<AbortController | null>(null);
+  useEffect(() => () => ctl.current?.abort(), []);
   const root = useRef<HTMLElement>(null);
   // Opening the panel brings it into view, so it is clear where the new-style flow went.
   useEffect(() => { root.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); }, []);
@@ -56,7 +60,8 @@ export function NewStyleFlow({ text, tone, slides, handle, provider, reference, 
     onCreated({ name: saved.name, title, script: own ? r.result.script : null });
   };
   return (
-    <section ref={root} className="card ws-card ns-flow" aria-label="New style" data-testid="new-style">
+    <section ref={root} className={only ? "ns-flow" : "card ws-card ns-flow"} aria-label={only ? "New style from a description" : "New style"} data-testid={only ? "new-style-description" : "new-style"}>
+      {!only && (<>
       <div className="row-actions">
         <h2 className="h3">New style</h2>
         <button type="button" className="btn btn-outline btn-sm cr-quiet" onClick={onClose}>Close</button>
@@ -65,6 +70,7 @@ export function NewStyleFlow({ text, tone, slides, handle, provider, reference, 
         <button type="button" className="chip-btn" aria-pressed={way === 'description'} disabled={step === 'running'} onClick={() => setWay('description')}>From a description</button>
         <button type="button" className="chip-btn" aria-pressed={way === 'reference'} disabled={step === 'running'} onClick={() => setWay('reference')}>From a reference picture</button>
       </div>
+      </>)}
       {way === 'description' ? (
         <div className="create-form">
           <label className="field">

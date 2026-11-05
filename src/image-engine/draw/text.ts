@@ -135,6 +135,8 @@ export interface LaidLine {
   words: LaidWord[];
   /** Merged background runs for highlighted words: x and width relative to the box. */
   marks: { x: number; width: number }[];
+  /** Present when the text has runs or letter spacing: the line as pieces with their own weight and colour (x relative to the box). */
+  segments?: { text: string; x: number; width: number; weight: number; color?: string }[];
 }
 export interface TextBlock {
   size: number;
@@ -146,9 +148,172 @@ export interface TextBlock {
 }
 
 
+// ----- text with runs (own colour / weight inside one layer) and letter spacing -----
+
+interface Piece {
+  text: string;
+  weight: number;
+  color?: string;
+}
+interface Tok {
+  text: string;
+  start: number;
+}
+
+/** The characters of text[start, end) as pieces: consecutive characters with the same run style stay together. */
+function piecesOf(layer: TextLayer, start: number, end: number): Piece[] {
+  const base = layer.style.weight;
+  const out: Piece[] = [];
+  for (let i = start; i < end; i++) {
+    const run = layer.runs?.find((r) => i >= r.start && i < r.end);
+    const weight = run?.weight ?? base;
+    const color = run?.color;
+    const last = out[out.length - 1];
+    if (last && last.weight === weight && last.color === color) last.text += layer.text[i];
+    else out.push({ text: layer.text[i], weight, color });
+  }
+  return out;
+}
+const piecesWidth = (ps: Piece[], layer: TextLayer, size: number) => ps.reduce((a, p) => a + measureWidth(p.text, layer.style.font, p.weight, size) + (layer.style.letterSpacing ?? 0) * [...p.text].length, 0);
+
+function wrapStyled(layer: TextLayer, maxWidth: number, size: number): { lines: Tok[][]; wordTooWide: boolean } {
+  const lines: Tok[][] = [];
+  let wordTooWide = false;
+  const spaceW = measureWidth(' ', layer.style.font, layer.style.weight, size) + (layer.style.letterSpacing ?? 0);
+  const tokW = (t: Tok) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size);
+  let offset = 0;
+  for (const para of layer.text.split('\n')) {
+    // Only ordinary white space breaks a line: a no-break space keeps two words together.
+    const toks: Tok[] = [...para.matchAll(/[\S ]+/g)].map((m) => ({ text: m[0], start: offset + (m.index ?? 0) }));
+    offset += para.length + 1;
+    if (!toks.length) {
+      lines.push([]);
+      continue;
+    }
+    let line: Tok[] = [toks[0]];
+    let w = tokW(toks[0]);
+    if (w > maxWidth) wordTooWide = true;
+    for (const t of toks.slice(1)) {
+      const tw = tokW(t);
+      if (w + spaceW + tw <= maxWidth) {
+        line.push(t);
+        w += spaceW + tw;
+      } else {
+        lines.push(line);
+        line = [t];
+        w = tw;
+        if (tw > maxWidth) wordTooWide = true;
+      }
+    }
+    lines.push(line);
+  }
+  return { lines, wordTooWide };
+}
+
+/** Spaces inside a run's text become no-break spaces, so a phrase set apart (the accent) is never broken across lines (when it fits in 92% of the width). */
+function glueRuns(layer: TextLayer): string {
+  if (!layer.runs?.length) return layer.text;
+  const chars = [...layer.text];
+  for (const r of layer.runs) {
+    const sub = layer.text.slice(r.start, r.end);
+    if (!sub.includes(' ') || measureWidth(sub, layer.style.font, layer.style.weight, layer.style.size) > layer.width * 0.92) continue;
+    for (let i = r.start; i < r.end && i < chars.length; i++) if (chars[i] === ' ') chars[i] = '\u00A0';
+  }
+  return chars.join('');
+}
+
+/** Balanced lines for a headline: the narrowest width that keeps the same number of lines, then no single-word last line when the line before it can give a word. */
+function balanceLines(layer: TextLayer, lines: Tok[][], size: number): Tok[][] {
+  const n = lines.length;
+  if (n < 2) return lines;
+  let lo = Math.max(...lines.flat().map((t) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size)));
+  let hi = layer.width;
+  for (let k = 0; k < 14 && hi - lo > 1; k++) {
+    const mid = (lo + hi) / 2;
+    if (wrapStyled(layer, mid, size).lines.length <= n) hi = mid;
+    else lo = mid;
+  }
+  let out = wrapStyled(layer, hi, size).lines;
+  if (out.length !== n) out = lines;
+  const spaceW = measureWidth(' ', layer.style.font, layer.style.weight, size) + (layer.style.letterSpacing ?? 0);
+  const widthOf = (ts: Tok[]) => ts.reduce((a, t) => a + piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size), 0) + spaceW * Math.max(0, ts.length - 1);
+  const last = out[out.length - 1];
+  const prev = out[out.length - 2];
+  const wordsIn = (ts: Tok[]) => ts.reduce((a, t) => a + t.text.split(/[\s ]+/).filter(Boolean).length, 0);
+  if (wordsIn(last) === 1 && prev.length >= 2 && widthOf([prev[prev.length - 1], ...last]) <= layer.width) out = [...out.slice(0, -2), prev.slice(0, -1), [prev[prev.length - 1], ...last]];
+  return out;
+}
+
+function layoutStyled(layer0: TextLayer): TextBlock {
+  const layer: TextLayer = { ...layer0, text: glueRuns(layer0) };
+  const s = layer.style;
+  const ls = s.letterSpacing ?? 0;
+  const tryAt = (size: number) => {
+    let w = wrapStyled(layer, layer.width, size);
+    if (layer.balance && !layer.text.includes('\n')) w = { ...w, lines: balanceLines(layer, w.lines, size) };
+    const lineStep = size * s.lineHeight;
+    const height = w.lines.length * lineStep;
+    return { size, w, lineStep, height, fits: height <= layer.height + 0.01 && !w.wordTooWide };
+  };
+  let fit = tryAt(Math.floor(layer.autoFit ? s.size : s.size));
+  if (layer.autoFit) for (let size = Math.floor(s.size); size >= Math.ceil(layer.autoFit.minSize); size--) {
+    fit = tryAt(size);
+    if (fit.fits) break;
+  }
+  const marked = new Set((layer.highlight?.words ?? []).map(wordKey).filter(Boolean));
+  const wholeLines = new Set(layer.highlight?.lines ?? []);
+  const firstOnly = !!layer.highlight?.onlyFirst;
+  const used = new Set<string>();
+  const top = s.valign === 'middle' ? (layer.height - fit.height) / 2 : s.valign === 'bottom' ? layer.height - fit.height : 0;
+  const spaceW = measureWidth(' ', s.font, s.weight, fit.size) + ls;
+  const lines: LaidLine[] = fit.w.lines.map((toks, i) => {
+    const tw = toks.map((t) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, fit.size));
+    const width = Math.max(0, tw.reduce((a, b) => a + b, 0) + spaceW * Math.max(0, toks.length - 1) - (ls > 0 ? ls : 0));
+    const x0 = s.align === 'center' ? (layer.width - width) / 2 : s.align === 'right' ? layer.width - width : 0;
+    const words: LaidWord[] = [];
+    const segments: NonNullable<LaidLine['segments']> = [];
+    let cx = x0;
+    toks.forEach((t, k) => {
+      words.push({ text: t.text, x: cx, width: tw[k], highlighted: wholeLines.has(i) || (marked.has(wordKey(t.text)) && (!firstOnly || !used.has(wordKey(t.text)) ? (used.add(wordKey(t.text)), true) : false)) });
+      let px = cx;
+      let firstPiece = true;
+      for (const p of piecesOf(layer, t.start, t.start + t.text.length)) {
+        const pw = piecesWidth([p], layer, fit.size);
+        const before = segments[segments.length - 1];
+        // Neighbouring words with the same weight and colour are one piece (one text run per style change, not per word).
+        if (firstPiece && k > 0 && before && before.weight === p.weight && before.color === p.color) {
+          before.text += ' ' + p.text;
+          before.width = px + pw - before.x;
+        } else segments.push({ text: p.text, x: px, width: pw, weight: p.weight, ...(p.color ? { color: p.color } : {}) });
+        px += pw;
+        firstPiece = false;
+      }
+      cx += tw[k] + spaceW;
+    });
+    const marks: LaidLine['marks'] = [];
+    for (const w of words) {
+      if (!w.highlighted) continue;
+      const prev = marks[marks.length - 1];
+      const lastWord = words[words.indexOf(w) - 1];
+      if (prev && lastWord?.highlighted) prev.width = w.x + w.width - prev.x;
+      else marks.push({ x: w.x, width: w.width });
+    }
+    return { text: toks.map((t) => t.text).join(' '), x: x0, y: top + i * fit.lineStep, width, words, marks, segments };
+  });
+  // The no-break spaces were only for wrapping: the lines hold ordinary spaces.
+  for (const l of lines) {
+    l.text = l.text.replace(/\u00A0/g, ' ');
+    for (const w of l.words) w.text = w.text.replace(/\u00A0/g, ' ');
+    for (const g of l.segments ?? []) g.text = g.text.replace(/\u00A0/g, ' ');
+  }
+  return { size: fit.size, lineStep: fit.lineStep, lines, height: fit.height, fits: fit.fits, why: fit.fits ? undefined : fit.w.wordTooWide ? 'word-too-wide' : 'too-tall' };
+}
+
 /** Everything the renderer needs to draw a text layer: size, lines, word positions, highlight runs. */
 export function layoutText(layer: TextLayer): TextBlock {
   const { style: s } = layer;
+  // Runs and letter spacing take the styled path; every older layer keeps the original one, unchanged.
+  if (layer.runs?.length || s.letterSpacing || layer.balance) return layoutStyled(layer);
   const fit = layer.autoFit
     ? fitText({ text: layer.text, font: s.font, weight: s.weight, maxSize: s.size, minSize: layer.autoFit.minSize, lineHeight: s.lineHeight, width: layer.width, height: layer.height })
     : (() => {

@@ -63,6 +63,18 @@ export function findClaudeCli(env: NodeJS.ProcessEnv = process.env, platform = p
 }
 
 export type WriteKind = 'write' | 'draw';
+/** A picture sent with a design call (inspiration for the look): plain name, jpeg or png bytes as base64. */
+export interface WriteImage {
+  name: string;
+  mime: 'image/jpeg' | 'image/png';
+  base64: string;
+}
+export interface WriteUsage {
+  input: number;
+  output: number;
+}
+const imagesLine = (images: WriteImage[]) => (images.length ? `
+The picture files are in the current folder: ${images.map((i) => i.name).join(', ')}. Open each with your Read tool by exactly this name.` : '');
 const API_IDS: Record<string, string> = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
 /** Which model a call uses: the SCRIPT is written by the cheap WRITER_MODEL (default haiku); a design call ("draw") uses DRAW_MODEL, else CAROUSEL_MODEL, else sonnet. */
 export function modelFor(kind: WriteKind, env: NodeJS.ProcessEnv = process.env): string {
@@ -92,14 +104,15 @@ export function killTree(pid: number | undefined) {
 }
 
 /** Runs `claude -p` once with the prompt on stdin. No tools, no saved session, in an empty temp folder so no project files are read. */
-export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, timeoutMs = CLI_TIMEOUT_MS, launcher?: { bin: string; args: string[] }, kind: WriteKind = 'write'): Promise<{ text: string; ms: number }> {
+export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, timeoutMs = CLI_TIMEOUT_MS, launcher?: { bin: string; args: string[] }, kind: WriteKind = 'write', images: WriteImage[] = []): Promise<{ text: string; ms: number; usage?: WriteUsage }> {
   const bin = launcher?.bin ?? findClaudeCli(env);
   if (!bin) return Promise.reject(new WriterFailure(503, 'unavailable', cliStatus(env).reason!));
   const t0 = Date.now();
   return new Promise((resolve, reject) => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'carousel-writer-'));
+    for (const i of images) fs.writeFileSync(path.join(cwd, i.name), Buffer.from(i.base64, 'base64'));
     // `launcher` is a test seam: a stand-in program instead of the real command line.
-    const args = launcher?.args ?? ['-p', '--output-format', 'json', '--no-session-persistence', '--tools', '', '--system-prompt', SYSTEM_PROMPT, '--model', modelFor(kind, env)];
+    const args = launcher?.args ?? ['-p', '--output-format', 'json', '--no-session-persistence', ...(images.length ? ['--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'dontAsk'] : ['--tools', '']), '--system-prompt', SYSTEM_PROMPT, '--model', modelFor(kind, env)];
     const child = spawn(bin, args, { cwd, env: { ...env, CLAUDE_CODE_ENTRYPOINT: 'carousel-writer' }, windowsHide: true, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
@@ -127,7 +140,7 @@ export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.Pr
     child.on('error', (e) => finish(() => reject(new WriterFailure(503, 'unavailable', `Claude Code could not be started: ${e.message}`))));
     child.on('close', (code) =>
       finish(() => {
-        let parsed: { result?: unknown; is_error?: boolean; subtype?: string } | null = null;
+        let parsed: { result?: unknown; is_error?: boolean; subtype?: string; usage?: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } } | null = null;
         try {
           parsed = JSON.parse(out);
         } catch {
@@ -137,18 +150,19 @@ export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.Pr
           const detail = (typeof parsed?.result === 'string' ? parsed.result : err || out).trim().split('\n')[0].slice(0, 300);
           return reject(new WriterFailure(502, 'failed', `Claude Code did not return a script${code ? ` (exit code ${code})` : ''}${detail ? `: ${detail}` : '.'}`));
         }
-        resolve({ text: parsed.result, ms: Date.now() - t0 });
+        const u = parsed.usage;
+        resolve({ text: parsed.result, ms: Date.now() - t0, ...(u ? { usage: { input: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0), output: u.output_tokens ?? 0 } } : {}) });
       }),
     );
     child.stdin.on('error', () => undefined);
-    child.stdin.end(prompt);
+    child.stdin.end(prompt + imagesLine(images));
   });
 }
 
 // ---------- api ----------
 
 /** One call to the Messages API. The key comes from `env` only and appears in no message, log or response. */
-export async function writeWithApi(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, fetchImpl: typeof fetch = fetch, timeoutMs = API_TIMEOUT_MS, kind: WriteKind = 'write'): Promise<{ text: string; ms: number }> {
+export async function writeWithApi(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, fetchImpl: typeof fetch = fetch, timeoutMs = API_TIMEOUT_MS, kind: WriteKind = 'write', images: WriteImage[] = []): Promise<{ text: string; ms: number; usage?: WriteUsage }> {
   const key = env.ANTHROPIC_API_KEY;
   if (!key) throw new WriterFailure(503, 'unavailable', 'No API key is set on the server, so the API writer is off.');
   const t0 = Date.now();
@@ -159,7 +173,7 @@ export async function writeWithApi(prompt: string, signal: AbortSignal, env: Nod
     r = await fetchImpl('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: apiModel(modelFor(kind, env)), max_tokens: 4096, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: apiModel(modelFor(kind, env)), max_tokens: kind === 'draw' ? 16000 : 4096, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: images.length ? [...images.flatMap((i) => [{ type: 'text', text: `The next image is ${i.name}.` }, { type: 'image', source: { type: 'base64', media_type: i.mime, data: i.base64 } }]), { type: 'text', text: prompt }] : prompt }] }),
       signal: both,
     });
   } catch (e) {
@@ -176,10 +190,10 @@ export async function writeWithApi(prompt: string, signal: AbortSignal, env: Nod
     }
     throw new WriterFailure(502, 'failed', `The API refused the request (${r.status})${msg ? `: ${msg.replace(/sk-[A-Za-z0-9_-]+/g, '[key]').slice(0, 200)}` : '.'}`);
   }
-  const j = (await r.json()) as { content?: { type: string; text?: string }[] };
+  const j = (await r.json()) as { content?: { type: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
   const text = (j.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join('');
   if (!text) throw new WriterFailure(502, 'failed', 'The API answered with no text.');
-  return { text, ms: Date.now() - t0 };
+  return { text, ms: Date.now() - t0, ...(j.usage ? { usage: { input: j.usage.input_tokens ?? 0, output: j.usage.output_tokens ?? 0 } } : {}) };
 }
 
 // ---------- HTTP glue (Connect style, used by the Vite dev server and by any future server) ----------
@@ -215,10 +229,16 @@ export function carouselHandler(provider: Provider, opts: { env?: NodeJS.Process
       const ctl = new AbortController();
       res.on('close', () => !res.writableEnded && ctl.abort());
       try {
-        const body = JSON.parse(await readBody(req)) as { prompt?: unknown; kind?: unknown };
+        const body = JSON.parse(await readBody(req)) as { prompt?: unknown; kind?: unknown; images?: unknown };
         const kind: WriteKind = body.kind === 'draw' ? 'draw' : 'write';
         if (typeof body.prompt !== 'string' || body.prompt.trim() === '') throw new WriterFailure(400, 'failed', 'The request has no prompt.');
-        const r = provider === 'dev-cli' ? await writeWithCli(body.prompt, ctl.signal, env, undefined, undefined, kind) : await writeWithApi(body.prompt, ctl.signal, env, opts.fetchImpl, undefined, kind);
+        const raw = Array.isArray(body.images) ? body.images.slice(0, 3) : [];
+        const images: WriteImage[] = raw.map((i: { mime?: unknown; base64?: unknown }, n: number) => {
+          if (typeof i?.base64 !== 'string' || !/^[A-Za-z0-9+/=]+$/.test(i.base64)) throw new WriterFailure(400, 'failed', 'An image could not be read.');
+          const png = i.mime === 'image/png';
+          return { name: `ref${n + 1}.${png ? 'png' : 'jpg'}`, mime: png ? 'image/png' : 'image/jpeg', base64: i.base64 };
+        });
+        const r = provider === 'dev-cli' ? await writeWithCli(body.prompt, ctl.signal, env, undefined, undefined, kind, images) : await writeWithApi(body.prompt, ctl.signal, env, opts.fetchImpl, undefined, kind, images);
         return send(res, 200, r);
       } catch (e) {
         if (e instanceof WriterFailure) return send(res, e.status, { error: e.message, kind: e.kind });

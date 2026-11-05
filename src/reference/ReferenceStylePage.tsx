@@ -8,10 +8,14 @@ import { useDocumentTitle } from '../useDocumentTitle';
 import type { StyleSpec } from '../image-engine/styles/format';
 import { SLIDE_TYPES, type SlideType } from '../image-engine/styles/format';
 import { getStyles } from '../carousel/render';
-import { ensureTemplatesLoaded, saveTemplate, styleNameFor, templateProblem, useTemplatesVersion } from './templates';
+import { ensureTemplatesLoaded, updateTemplatePack, saveTemplate, styleNameFor, templateProblem, useTemplatesVersion } from './templates';
 import { closenessOf, rankMissing, SINGLE_IMAGE_NOTE } from './closeness';
-import { detectGrid, type GridResult } from './grid';
+import type { GridResult } from './grid';
+import { findSheet } from './slides';
+import { failureLines, readWholeSlides, type WholeReadReport } from './wholeRead';
+import { WholeReadPanel } from './WholeReadPanel';
 import { bitmapOf, cut, jpegUrl, pxOfCanvas, previewOf, readerImageOf, samplePhoto } from './images';
+import { expandPdfs } from './pdfPages';
 import { applyFeedback, keptSentence, runLoop, type Round, type SampleContent } from './loop';
 import { startJob, onCancel } from '../live/jobs';
 import { flags, setProfile, speed } from './speed';
@@ -45,6 +49,8 @@ const MAX_IMAGES = 10;
 interface Upload {
   id: string;
   name: string;
+  /** The file's size in bytes (for the report). */
+  bytes?: number;
   bitmap: ImageBitmap;
   thumb: string;
   width: number;
@@ -68,9 +74,30 @@ export interface EmbedProps {
   target?: Target;
   title?: string;
   photo?: { url: string; width: number; height: number; name: string };
+  /** The quick panel drives this reader: add files (images, decks, PDFs), read, and save the result as a style by itself. */
+  controlRef?: { current: ReaderControl | null };
+  /** Called when a read finished and its result was saved as a style (a template). */
+  onStyleSaved?: (s: { name: string; title: string }) => void;
+  /** Called whenever the quick panel's numbers change. */
+  onState?: (s: ReaderState) => void;
+}
+export interface ReaderControl {
+  addFiles: (files: File[]) => Promise<void>;
+  readAndSave: () => Promise<void>;
+  cancel: () => void;
+}
+export interface ReaderState {
+  count: number;
+  busy: boolean;
+  canRead: boolean;
+  noReader: boolean;
+  phase: string;
+  problem: string;
+  notice: string;
+  saved: string;
 }
 
-export default function ReferenceStylePage({ embedded = false, target: forcedTarget, title: forcedTitle, photo: forcedPhoto }: EmbedProps = {}) {
+export default function ReferenceStylePage({ embedded = false, target: forcedTarget, title: forcedTitle, photo: forcedPhoto, controlRef, onStyleSaved, onState }: EmbedProps = {}) {
   useDocumentTitle(embedded ? document.title : 'New style from references');
   const activeRef = useActiveReference();
   const tplVersion = useTemplatesVersion();
@@ -95,8 +122,12 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
   /** Time spent finding the grids when the pictures were added (ms). */
   const gridMs = useRef(0);
 
-  const addFiles = async (files: File[]) => {
+  const addFiles = async (files0: File[]) => {
     const room = MAX_IMAGES - uploads.length;
+    // A PDF becomes one picture per page.
+    const expanded = await expandPdfs(files0, Math.max(0, room));
+    const files = expanded.files;
+    if (expanded.note) setNotice(expanded.note);
     const take = files.filter((f) => f.type.startsWith('image/')).slice(0, Math.max(0, room));
     const skipped = files.length - take.length;
     const next: Upload[] = [];
@@ -105,20 +136,20 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
       try {
         const bm = await bitmapOf(f);
         // Thin gutters can vanish at one size and show at another, so look at three sizes and take the first grid found.
+        // The same guard as chooseSlide (slides.ts): a slide-shaped picture is ONE slide unless it is a real mosaic of 4+ slide-shaped cells with content.
         let grid: GridResult | null = null;
         const tg = performance.now();
-        for (const size of [1400, 900, 600]) {
+        const sheet = findSheet((size) => {
           const small = cut(bm, null, size);
-          const g = detectGrid(pxOfCanvas(small));
-          if (g) {
-            const k = bm.width / small.width;
-            grid = { ...g, cells: g.cells.map((c) => ({ x: Math.round(c.x * k), y: Math.round(c.y * k), width: Math.round(c.width * k), height: Math.round(c.height * k) })) };
-            break;
-          }
+          return { p: pxOfCanvas(small), k: bm.width / small.width };
+        });
+        if (sheet.sheet && sheet.found) {
+          const { g, k } = sheet.found;
+          grid = { ...g, cells: g.cells.map((c) => ({ x: Math.round(c.x * k), y: Math.round(c.y * k), width: Math.round(c.width * k), height: Math.round(c.height * k) })) };
         }
         gridMs.current += performance.now() - tg;
         const t = await jpegUrl(bm, null, 520);
-        next.push({ id: `img${uploads.length + next.length + 1}`, name: f.name, bitmap: bm, thumb: t.url, width: bm.width, height: bm.height, grid, mode: grid ? 'grid' : 'single', ticked: grid ? grid.cells.map(() => true) : [], crop: null, learn: 'everything' });
+        next.push({ id: `img${uploads.length + next.length + 1}`, name: f.name, bytes: f.size, bitmap: bm, thumb: t.url, width: bm.width, height: bm.height, grid, mode: grid ? 'grid' : 'single', ticked: grid ? grid.cells.map(() => true) : [], crop: null, learn: 'everything' });
       } catch {
         msgs.push(`“${f.name}” could not be read as a picture.`);
       }
@@ -126,7 +157,7 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
     if (skipped > 0 && room <= 0) msgs.push(`At most ${MAX_IMAGES} images: the rest were left out.`);
     else if (take.length < files.length) msgs.push(`${files.length - take.length} file${files.length - take.length === 1 ? ' was' : 's were'} not a picture or over the limit of ${MAX_IMAGES} images, and left out.`);
     setUploads((u) => [...u, ...next]);
-    setNotice(msgs.join(' '));
+    setNotice([expanded.note, ...msgs].filter(Boolean).join(' '));
   };
   const patchUpload = (id: string, p: Partial<Upload>) => setUploads((u) => u.map((x) => (x.id === id ? { ...x, ...p } : x)));
   const removeUpload = (id: string) => setUploads((u) => u.filter((x) => x.id !== id));
@@ -237,6 +268,8 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
   const [attempts, setAttempts] = useState<1 | 2 | null>(null);
   const [feedback, setFeedback] = useState('');
   const abort = useRef<AbortController | null>(null);
+  /** The template the last save made (the quick panel selects it). */
+  const saveResult = useRef<{ spec: { name: string }; name: string } | null>(null);
   const ctx = useRef<{ content: SampleContent; spec: StyleSpec; name: string; photoItems: Set<string>; readClamps: string[] } | null>(null);
   const [keptText, setKeptText] = useState('');
 
@@ -343,7 +376,68 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
     else setModeNote('Not read this way yet: press Read references (one model call).');
   };
   const canRead = items.length > 0 && !!readers?.length && !busy && !preparing;
+  // ----- the default route: every slide read whole by a strong vision model, one call each (wholeRead.ts). No measured draft fills in for a failed slide. -----
+  const wholePack = useRef<import('./pack').StylePack | null>(null);
+  const [whole, setWhole] = useState<{ report: WholeReadReport; refs: Record<string, string>; svgs: Record<string, string>; palette: Record<string, string> } | null>(null);
+  const readWhole = async () => {
+    const reader = counted(readers![0], cost, setCostShown);
+    cost.current = freshCost(12);
+    setCostShown(cost.current);
+    abort.current = new AbortController();
+    setBusy(true);
+    setProblem(null);
+    setSaved(null);
+    setOthers(null);
+    setWhole(null);
+    wholePack.current = null;
+    try {
+      const slides: { name: string; image: ReturnType<typeof readerImageOf> }[] = [];
+      const refs: Record<string, string> = {};
+      const small: Record<string, string> = {};
+      const idx: number[] = [];
+      let n = 0;
+      for (const u of uploads) {
+        const pieces: { rect: Rect | null; cell?: number }[] = u.mode === 'grid' && u.grid ? u.grid.cells.flatMap((c, i) => (u.ticked[i] ? [{ rect: c, cell: i }] : [])) : u.mode === 'crop' && u.crop ? [{ rect: u.crop }] : [{ rect: null }];
+        for (const p of pieces) {
+          const long = Math.max(p.rect?.width ?? u.width, p.rect?.height ?? u.height);
+          const j = await jpegUrl(u.bitmap, p.rect, Math.max(1800, Math.min(2600, long)));
+          const name = p.cell !== undefined ? `${u.name} (slide ${p.cell + 1})` : u.name;
+          slides.push({ name, image: readerImageOf(j.url, `ref${slides.length + 1}.jpg`) });
+          refs[name] = j.url;
+          small[name] = (await jpegUrl(u.bitmap, p.rect, 800)).url;
+          idx.push(n++);
+        }
+      }
+      setPhase(`Reading ${Math.min(slides.length, 12)} slide${slides.length === 1 ? '' : 's'}, each as one whole picture…`);
+      const detectedText = idx.map((i) => {
+        try {
+          return (detected[i]?.texts ?? []).map((t) => { const b = t.box as unknown as { x: number; y: number; width: number; height: number }; return [b.x, b.y, b.width, b.height] as [number, number, number, number]; });
+        } catch {
+          return null;
+        }
+      });
+      const r = await readWholeSlides({ reader, slides, signal: abort.current.signal, name: title.trim() || 'Pack from references', detectedText, onProgress: (d, t) => setPhase(`Read ${d} of ${t} slides…`) });
+      const failures = failureLines(r.report);
+      setWhole({ report: r.report, refs, svgs: r.svgByFile, palette: r.report.palette });
+      if (!r.pack) {
+        // The quick panel shows only the message, so the reasons are in it, one line per slide.
+        setProblem({ message: `No slide could be read:\n${failures.join('\n')}`, details: failures });
+        return;
+      }
+      wholePack.current = r.pack;
+      if (failures.length) setNotice(`${failures.length} slide${failures.length === 1 ? '' : 's'} not read (nothing was filled in for ${failures.length === 1 ? 'it' : 'them'}): ${failures.join(' | ')}`);
+      const picked0 = baseOptions.find((s) => s.name === baseName) ?? baseOptions[0];
+      setActiveReference({ spec: withThumb(editState?.spec ?? picked0), thumb: uploads[0]?.thumb ?? '', learn: 'everything', target: 'carousel', ratioNote: null, photoRegion: null, source: 'pack', pack: r.pack, report: { files: uploads.map((u) => ({ name: u.name, bytes: u.bytes, width: u.width, height: u.height })), thumbs: uploads.map((u) => u.thumb), images: small }, whole: r.report });
+      setPhase('');
+    } catch (e) {
+      setPhase('');
+      setProblem({ message: e instanceof ReaderError ? (e.kind === 'cancelled' ? 'Cancelled.' : e.message) : e instanceof Error ? e.message : 'Something went wrong while reading the references.', details: e instanceof ReaderError ? e.problems : [] });
+    } finally {
+      setBusy(false);
+    }
+  };
   const read = async (modeOverride?: 'labels' | 'scene') => {
+    if (!advanced) return readWhole();
     const mode = modeOverride ?? readMode;
     const rawReader = readers![0];
     // One job, two calls at most: the first read, and one Improve the person asks for. The Advanced toggle raises the cap.
@@ -582,7 +676,9 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
     if (clean.marks && clean.marks.length === 0) delete (clean as { marks?: unknown }).marks;
     const preview = shots[0] ? await previewOf(shots[0].blob) : '';
     const t = await saveTemplate({ name, target, spec: { ...clean, name: ctx.current?.name ?? styleNameFor(title || 'style') }, preview, singleImage: items.length === 1, extrapolated: close?.extrapolated, missing: missing.map((m) => m.tool) });
+    if (wholePack.current) await updateTemplatePack(t.id, wholePack.current);
     setSaved({ id: t.id, name: t.name });
+    saveResult.current = t;
     // Show it on the person's photos (all of them, or the built-in one if there are none): what applying a template to something new looks like.
     const pics = ownPics.length ? ownPics : builtin ? [{ ...builtin, name: 'built-in sample' }] : [];
     const t0 = performance.now();
@@ -591,6 +687,29 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
     setOthers({ items: done.map((d) => ({ ...d, name: pics.find((p) => p.id === d.id)?.name ?? '' })), seconds: total });
     (window as unknown as { __template?: unknown }).__template = { applySeconds: total, photos: done.length, modelCalls: 0 };
   };
+
+  // ----- the quick panel's controls: add files, read, and save the result as a style by itself (the same read and the same save as the buttons below) -----
+  const [saveNow, setSaveNow] = useState(false);
+  const readAndSave = async () => {
+    if (!title.trim()) setTitle(`Reference style ${new Date().toLocaleDateString()}`);
+    await read();
+    setSaveNow(true);
+  };
+  useEffect(() => {
+    if (!saveNow || busy || !editState) return;
+    setSaveNow(false);
+    if (problem) return;
+    void save().then(() => {
+      const t = saveResult.current;
+      if (t) onStyleSaved?.({ name: t.spec.name, title: t.name });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveNow, busy, editState, problem]);
+  if (controlRef) controlRef.current = { addFiles, readAndSave, cancel: () => abort.current?.abort() };
+  useEffect(() => {
+    onState?.({ count: uploads.length, busy, canRead, noReader: !!readers && readers.length === 0, phase, problem: problem?.message ?? '', notice, saved: saved?.name ?? '' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploads.length, busy, canRead, readers, phase, problem, notice, saved]);
 
   /** Layout overlap of each reference with its replica: both detected the same way. */
   const [layoutScores, setLayoutScores] = useState<LayoutScore[]>([]);
@@ -637,6 +756,7 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
       target,
       ratioNote: off ? `${off === 1 ? 'The reference is' : 'Some references are'} not ${target === 'carousel' ? '4:5' : '16:9'}; they are fitted into it, not stretched.` : null,
       photoRegion: share && share.width * share.height < 0.8 ? share : null,
+      report: { files: uploads.map((u) => ({ name: u.name, bytes: u.bytes, width: u.width, height: u.height })), thumbs: items.map((i) => i.dataUrl) },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embedded, editState, items, uploads, detected, target]);
@@ -712,11 +832,12 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
           <p className="small muted">Drop 1 to {MAX_IMAGES} images here: carousel decks, thumbnails, single slides or collages. One image is enough.</p>
           <div className="cr-photo-actions">
             <button type="button" className="btn btn-outline btn-sm" disabled={uploads.length >= MAX_IMAGES} onClick={() => fileRef.current?.click()}>Add images</button>
-            <input ref={fileRef} type="file" multiple accept="image/*" className="visually-hidden" tabIndex={-1} aria-label="Choose reference images" onChange={(e) => { void addFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
+            <input ref={fileRef} type="file" multiple accept="image/*,application/pdf" className="visually-hidden" tabIndex={-1} aria-label="Choose reference images" onChange={(e) => { void addFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
             <span className="small muted">{uploads.length} of {MAX_IMAGES} added</span>
           </div>
         </div>
         {notice && <p className="small cr-warn" role="status">{notice}</p>}
+        {whole && <WholeReadPanel report={whole.report} refs={whole.refs} svgs={whole.svgs} palette={whole.palette} />}
         {uploads.length === 1 && items.length <= 1 && <p className="small" role="status">{SINGLE_IMAGE_NOTE}</p>}
         <ul className="rf-uploads" aria-label="Reference images">
           {uploads.map((u) => (

@@ -61,7 +61,19 @@ export interface LinearGradient {
   /** 2 to 6 stops, `at` from 0 to 1, in order. */
   stops: { at: number; color: string }[];
 }
-export type Fill = string | LinearGradient;
+/**
+ * A soft round gradient (a glow): from the centre outwards. cx and cy are fractions of the layer's box (0 to 1, 0.5 is the middle); r is the radius as a fraction of the
+ * box's longer side. Stops go from 0 (the centre) to 1 (the radius); colours may carry alpha (rgba), so a glow can fade to clear.
+ */
+export interface RadialGradient {
+  type: 'radial';
+  cx: number;
+  cy: number;
+  r: number;
+  /** 2 to 6 stops, `at` from 0 to 1, in order. */
+  stops: { at: number; color: string }[];
+}
+export type Fill = string | LinearGradient | RadialGradient;
 
 /**
  * What a layer is for, so the carousel checker knows what may overlap.
@@ -119,6 +131,16 @@ export interface TextStyle {
   lineHeight: number;
   stroke?: { color: string; width: number };
   shadow?: { color: string; blur: number; offsetX: number; offsetY: number };
+  /** Extra space between letters, px at final size (negative tightens). Default 0. */
+  letterSpacing?: number;
+}
+
+/** A stretch of a text layer's own text (character positions start to end, end not included) with its own colour and/or weight: an accent word in the same line. */
+export interface TextRun {
+  start: number;
+  end: number;
+  color?: string;
+  weight?: number;
 }
 
 export interface Highlight {
@@ -145,6 +167,10 @@ export interface TextLayer extends LayerBase {
   /** Shrink the text to fit the box, but never below minSize. */
   autoFit?: { minSize: number };
   highlight?: Highlight;
+  /** Parts of the text with their own colour or weight. They wrap with the text, so one line can hold a heavy red word. Sorted, not overlapping. */
+  runs?: TextRun[];
+  /** Balanced line breaks for a headline: even lines, no single-word last line, a run (the accent phrase) never broken across lines. */
+  balance?: boolean;
 }
 
 export interface ShapeLayer extends LayerBase {

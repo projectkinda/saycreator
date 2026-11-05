@@ -71,7 +71,10 @@ export function loadFonts(): Promise<void> {
       await face.load();
       document.fonts.add(face);
     }),
-  ).then(() => undefined);
+  ).then(async () => {
+    // Warm-up: make the browser resolve every bundled face for text now, so the first measurement (and the first drawing) already uses the real font and not a stand-in.
+    await Promise.all(FACES.map((f) => document.fonts.load(`${f.weight} 32px "${f.family}"`, 'The benefits 0123 ?$%')));
+  });
   return loading;
 }
 

@@ -48,15 +48,22 @@ export function faithfulSvg(svg: string, W: number, slots: FaithfulSlot[], hidde
     el.setAttribute('font-size', String(Math.round((b.size / k) * 100) / 100));
     el.textContent = '';
     for (const line of b.lines) {
-      const px = layer.x + line.x;
-      const py = layer.y + line.y + b.size * 0.82;
-      const x = im[0] * px + im[2] * py + im[4];
-      const y = im[1] * px + im[3] * py + im[5];
-      const t = doc.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-      t.setAttribute('x', String(Math.round(x * 100) / 100));
-      t.setAttribute('y', String(Math.round(y * 100) / 100));
-      t.textContent = line.text;
-      el.appendChild(t);
+      // A line with runs or letter spacing is drawn piece by piece (each piece keeps its colour and weight).
+      const pieces = line.segments?.length ? line.segments.map((g) => ({ text: g.text, dx: g.x, color: g.color, weight: g.weight })) : [{ text: line.text, dx: line.x, color: undefined as string | undefined, weight: undefined as number | undefined }];
+      for (const piece of pieces) {
+        const px = layer.x + piece.dx;
+        const py = layer.y + line.y + b.size * 0.82;
+        const x = im[0] * px + im[2] * py + im[4];
+        const y = im[1] * px + im[3] * py + im[5];
+        const t = doc.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+        t.setAttribute('x', String(Math.round(x * 100) / 100));
+        t.setAttribute('y', String(Math.round(y * 100) / 100));
+        if (piece.color) t.setAttribute('fill', piece.color);
+        if (piece.weight && piece.weight !== layer.style.weight) t.setAttribute('font-weight', String(piece.weight));
+        if (layer.style.letterSpacing) t.setAttribute('letter-spacing', String(layer.style.letterSpacing));
+        t.textContent = piece.text;
+        el.appendChild(t);
+      }
     }
   };
   for (const { layer, srcAll, more } of slots) {

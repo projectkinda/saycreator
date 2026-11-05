@@ -24,6 +24,10 @@ export interface ActiveReference {
   recreate?: import('./recreate').RecreateSpec;
   /** A style pack made on this screen (not saved yet): one design per slide type. */
   pack?: import('./pack').StylePack;
+  /** For the report: the reference files (names and sizes) and the pieces that were read (data URLs, memory only, never stored). */
+  report?: { files: { name: string; bytes?: number; width: number; height: number }[]; thumbs: string[]; /** Each read slide at about 800 px (data URL, memory only), by the name the read used: the inspiration pictures of a Designed call. */ images?: Record<string, string> };
+  /** The whole-slide read's per-slide report (see wholeRead.ts), for report.json. */
+  whole?: import('./wholeRead').WholeReadReport;
   /** The layout of a description (the thumbnail maker draws it itself; carousels get it as the style's free layouts). */
   free?: import('../image-engine/styles/free-spec').FreeLayout;
 }

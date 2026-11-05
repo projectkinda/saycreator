@@ -38,6 +38,19 @@ export interface SlideChoice {
 
 /** `pxAt(size)` gives the picture downsized to `size` px on its long side, with the factor back to its own pixels. Tried at 1400, 900 and 600 px. */
 export function chooseSlide(pxAt: (size: number) => { p: Px; k: number }, mode: 'auto' | 'whole' | 'split'): SlideChoice {
+  const { shaped, found, sheet } = findSheet(pxAt);
+  if (mode === 'whole' || !found || (mode === 'auto' && !sheet)) {
+    return { rect: null, split: false, canSplit: !!found, why: shaped ? 'The picture has a slide’s proportions: read as one slide.' : found ? 'Read as one slide.' : 'One slide.' };
+  }
+  const { g, p, k } = found;
+  const c = g.cells[0];
+  if (lumaSpread(p, c) < 6) return { rect: null, split: false, canSplit: true, why: 'The first piece is nearly flat, so the whole picture is sent.' };
+  return { rect: { x: Math.round(c.x * k), y: Math.round(c.y * k), width: Math.round(c.width * k), height: Math.round(c.height * k) }, split: true, canSplit: true, why: `A sheet of ${g.cells.length} slides (${g.method}): the first slide is sent.` };
+}
+
+/** THE guard for "is this picture a sheet of slides?", used by the picture intake (ReferenceStylePage.addFiles) and by chooseSlide. A slide-shaped picture is ONE slide
+ * unless gutters cut it into four or more slide-shaped pieces that hold content; a picture of another shape is a sheet when any grid is found. */
+export function findSheet(pxAt: (size: number) => { p: Px; k: number }): { shaped: boolean; found: { g: GridResult; p: Px; k: number } | null; sheet: boolean } {
   const p0 = pxAt(600).p;
   const shaped = isSlideShaped(p0.width, p0.height);
   let found: { g: GridResult; p: Px; k: number } | null = null;
@@ -53,11 +66,5 @@ export function chooseSlide(pxAt: (size: number) => { p: Px; k: number }, mode: 
   // A slide-shaped picture is one slide unless it breaks into four or more pieces that are themselves slides and each hold content (a slide's own plain areas and
   // evenly spaced lines inside it must not be read as a grid).
   const sheet = !!found && (!shaped || (found.g.cells.length >= 4 && found.g.cells.every((c) => isSlideShaped(c.width, c.height, 0.16)) && found.g.cells.filter((c) => lumaSpread(found!.p, inner(c)) >= 8).length >= found.g.cells.length * 0.8));
-  if (mode === 'whole' || !found || (mode === 'auto' && !sheet)) {
-    return { rect: null, split: false, canSplit: !!found, why: shaped ? 'The picture has a slide’s proportions: read as one slide.' : found ? 'Read as one slide.' : 'One slide.' };
-  }
-  const { g, p, k } = found;
-  const c = g.cells[0];
-  if (lumaSpread(p, c) < 6) return { rect: null, split: false, canSplit: true, why: 'The first piece is nearly flat, so the whole picture is sent.' };
-  return { rect: { x: Math.round(c.x * k), y: Math.round(c.y * k), width: Math.round(c.width * k), height: Math.round(c.height * k) }, split: true, canSplit: true, why: `A sheet of ${g.cells.length} slides (${g.method}): the first slide is sent.` };
+  return { shaped, found, sheet };
 }

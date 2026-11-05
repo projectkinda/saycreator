@@ -14,7 +14,7 @@ export interface WriteProvider {
   /** For the small dev-only label. */
   label: string;
   /** Sends a prompt, returns the model's text. Throws WriterError. Rejects with kind "cancelled" when the signal aborts. */
-  write(prompt: string, signal: AbortSignal, kind?: 'write' | 'draw'): Promise<{ text: string; ms: number }>;
+  write(prompt: string, signal: AbortSignal, kind?: 'write' | 'draw', images?: { mime: 'image/jpeg' | 'image/png'; base64: string }[]): Promise<{ text: string; ms: number; usage?: { input: number; output: number } }>;
 }
 
 export type WriterErrorKind = 'unavailable' | 'failed' | 'cancelled' | 'timeout' | 'invalid';
@@ -34,23 +34,23 @@ function provider(id: ProviderId): WriteProvider {
   return {
     id,
     label: e.label,
-    async write(prompt, signal, kind) {
+    async write(prompt, signal, kind, images) {
       const t0 = performance.now();
       let r: Response;
       try {
-        r = await fetch(e.write, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, kind: kind ?? 'write' }), signal });
+        r = await fetch(e.write, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, kind: kind ?? 'write', ...(images?.length ? { images } : {}) }), signal });
       } catch (err) {
         if ((err as Error).name === 'AbortError') throw new WriterError('cancelled', 'Cancelled.');
         throw new WriterError('failed', 'The writer could not be reached. Is the app server running?');
       }
-      let body: { text?: string; error?: string; kind?: WriterErrorKind } = {};
+      let body: { text?: string; error?: string; kind?: WriterErrorKind; usage?: { input: number; output: number } } = {};
       try {
         body = await r.json();
       } catch {
         /* not JSON */
       }
       if (!r.ok || typeof body.text !== 'string') throw new WriterError(body.kind ?? (r.status === 503 ? 'unavailable' : r.status === 504 ? 'timeout' : 'failed'), body.error ?? `The writer answered with an error (${r.status}).`);
-      return { text: body.text, ms: performance.now() - t0 };
+      return { text: body.text, ms: performance.now() - t0, ...(body.usage ? { usage: body.usage } : {}) };
     },
   };
 }

@@ -15,9 +15,13 @@ const ROLES = ['decor', 'content', 'container'];
 
 export function validFill(f: unknown, who: string, errors: string[]) {
   if (isColor(f)) return;
-  const g = f as { type?: unknown; angle?: unknown; stops?: { at: unknown; color: unknown }[] } | null;
-  if (!g || typeof g !== 'object' || g.type !== 'linear') return void errors.push(`${who}: the fill must be a colour or a linear gradient.`);
-  if (!num(g.angle)) errors.push(`${who}: the gradient angle must be a number of degrees.`);
+  const g = f as { type?: unknown; angle?: unknown; cx?: unknown; cy?: unknown; r?: unknown; stops?: { at: unknown; color: unknown }[] } | null;
+  if (!g || typeof g !== 'object' || (g.type !== 'linear' && g.type !== 'radial')) return void errors.push(`${who}: the fill must be a colour, a linear gradient or a radial gradient.`);
+  if (g.type === 'radial') {
+    range(errors, who, 'radial gradient centre x', g.cx, -2, 3);
+    range(errors, who, 'radial gradient centre y', g.cy, -2, 3);
+    range(errors, who, 'radial gradient radius', g.r, 0.001, 5);
+  } else if (!num(g.angle)) errors.push(`${who}: the gradient angle must be a number of degrees.`);
   if (!Array.isArray(g.stops) || g.stops.length < 2 || g.stops.length > 6) return void errors.push(`${who}: a gradient needs 2 to 6 colour stops.`);
   let prev = -1;
   for (const s of g.stops) {
@@ -132,6 +136,22 @@ function validateLayer(l: Layer, errors: string[]) {
       if (!['left', 'center', 'right'].includes(s.align)) errors.push(`${who}: align must be left, center or right.`);
       if (s.valign !== undefined && !['top', 'middle', 'bottom'].includes(s.valign)) errors.push(`${who}: valign must be top, middle or bottom.`);
       range(errors, who, 'line height', s.lineHeight, 0.8, 2.5);
+      range(errors, who, 'letter spacing', s.letterSpacing, -20, 100, true);
+      if (l.runs !== undefined) {
+        if (!Array.isArray(l.runs) || l.runs.length > 24) errors.push(`${who}: runs must be a list of at most 24 parts of the text.`);
+        else {
+          let prevEnd = 0;
+          const len = typeof l.text === 'string' ? l.text.length : 0;
+          l.runs.forEach((r, i) => {
+            const w = `${who}: run ${i + 1}`;
+            if (!Number.isInteger(r.start) || !Number.isInteger(r.end) || r.start < prevEnd || r.end <= r.start || r.end > len) errors.push(`${w} must be a stretch of the text (start before end, inside the text, in order, not overlapping).`);
+            else prevEnd = r.end;
+            if (r.color !== undefined && !isColor(r.color)) errors.push(`${w} colour is not a colour.`);
+            range(errors, w, 'weight', r.weight, 100, 900, true);
+            if (r.color === undefined && r.weight === undefined) errors.push(`${w} changes neither colour nor weight.`);
+          });
+        }
+      }
       if (s.stroke) {
         if (!isColor(s.stroke.color)) errors.push(`${who}: the outline colour is not a colour.`);
         range(errors, who, 'outline width', s.stroke.width, 0, 60);

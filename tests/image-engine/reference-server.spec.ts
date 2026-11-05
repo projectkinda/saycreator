@@ -15,7 +15,7 @@ test('the request is checked: a prompt is needed, at most 12 images, only real b
   expect(() => readCall({ prompt: 'x', images: Array.from({ length: 13 }, () => ({ base64: PNG })) })).toThrow(/At most 12/);
   expect(() => readCall({ prompt: 'x', images: [{ base64: 'not base64 !!' }] })).toThrow(/could not be read/);
   const c = readCall(call);
-  expect(c.images.map((i) => i.name)).toEqual(['ref1.jpg', '.._.._evil_name.png']);
+  expect(c.images.map((i) => i.name)).toEqual(['ref1.jpg', 'ref2.png']);
   expect(c.images.every((i) => /^[A-Za-z0-9._-]+$/.test(i.name))).toBe(true);
 });
 
@@ -25,8 +25,9 @@ test('the command-line provider runs in a temporary folder that holds only the i
   const script = "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const fs=require('fs');console.log(JSON.stringify({result:JSON.stringify({files:fs.readdirSync('.').sort(),prompt:s,cwdIsTemp:process.cwd().includes('reference-reader-')})}))})";
   const r = await readWithCli(readCall(call), new AbortController().signal, { PATH: process.env.PATH ?? '' }, 30_000, { bin: process.execPath, args: ['-e', script] });
   const seen = JSON.parse(r.text) as { files: string[]; prompt: string; cwdIsTemp: boolean };
-  expect(seen.files).toEqual(['.._.._evil_name.png', 'ref1.jpg']);
-  expect(seen.prompt).toBe('Read these.');
+  expect(seen.files).toEqual(['ref1.jpg', 'ref2.png']);
+  expect(seen.prompt).toContain('Read these.');
+  expect(seen.prompt).toContain('ref1.jpg (the first picture), ref2.png');
   expect(seen.cwdIsTemp).toBe(true);
   await expect.poll(() => fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('reference-reader-')).length).toBe(before);
 });
@@ -91,4 +92,19 @@ test('the HTTP routes: status says whether each provider is available, and a bad
   expect(JSON.parse(noPrompt.out).error).toMatch(/no prompt/);
   const unknown = await run('api', {}, 'GET', '/nothing');
   expect(unknown.out).toBe('NEXT');
+});
+
+test('picture files get plain names with the extension of their real bytes, and the prompt names each one (never the original .webp name)', async () => {
+  const c = readCall({ prompt: 'Draw it.', images: [{ name: 'designwithrajatpatel_1234567890_long.webp', mime: 'image/jpeg', base64: PNG }] });
+  expect(c.images[0].name).toBe('ref1.jpg');
+  const script = "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const fs=require('fs');const f=fs.readdirSync('.');console.log(JSON.stringify({result:JSON.stringify({files:f,sizes:f.map(x=>fs.statSync(x).size),prompt:s})}))})";
+  const r = await readWithCli(c, new AbortController().signal, { PATH: process.env.PATH ?? '' }, 30_000, { bin: process.execPath, args: ['-e', script] });
+  const seen = JSON.parse(r.text) as { files: string[]; sizes: number[]; prompt: string };
+  expect(seen.files).toEqual(['ref1.jpg']);
+  expect(seen.sizes[0]).toBeGreaterThan(0);
+  expect(seen.prompt).toContain('ref1.jpg');
+  expect(seen.prompt).toContain('Open each with your Read tool by exactly this name.');
+  expect(seen.prompt).not.toMatch(/webp|designwithrajat/);
+  // an empty file fails before the model starts, with the reason
+  await expect(readWithCli({ prompt: 'x', images: [{ name: 'a.jpg', mime: 'image/jpeg', base64: '' }] }, new AbortController().signal, {}, 30_000, { bin: process.execPath, args: ['-e', '1'] })).rejects.toThrow(/did not reach the model/);
 });

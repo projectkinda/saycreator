@@ -1,4 +1,5 @@
 // Overview: one small card per area (status, one sentence, how many items wait for a verdict) and a progress bar over everything.
+import { ReportPanel } from '../../reference/ReportPanel';
 import { AREA_STATUS, StatusChip } from './labui';
 import { useLab, type View } from './labdata';
 
@@ -19,6 +20,7 @@ export default function Overview({ counts }: { counts: Counts }) {
           <div className="res-bar-fill" style={{ width: `${pct}%` }} />
         </div>
       </div>
+      <ReportPanel />
       <div className="res-areas">
         {Object.entries(AREA_STATUS).map(([area, a]) => {
           const c = counts[area] ?? { waiting: 0, total: 0 };

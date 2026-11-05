@@ -20,7 +20,7 @@ export type SlideScript = (
   | { type: 'beforeafter'; beforeLabel: string; before: string; afterLabel: string; after: string }
   | { type: 'quote'; quote: string; by: string; highlight?: string }
   | { type: 'closing'; headline: string; cta: string; highlight?: string }
-) & { element_tags?: string[]; photo?: string; photo_hint?: string };
+) & { element_tags?: string[]; photo?: string; photo_hint?: string; /** 1 to 3 words of the headline the engine sets in the accent colour. */ accent?: string; /** A sequence of 2 to 5 short steps: the engine draws a stepper with one label per node. */ steps?: string[] };
 
 export interface CarouselScript {
   id: string;

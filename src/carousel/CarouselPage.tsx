@@ -1,6 +1,6 @@
 // Images > Make a carousel. Topic to an editable, exportable carousel (or quote cards), with the real image engine in the browser.
 // No keys and no network calls: the script is written by Claude in any chat and pasted here (or loaded from the example).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { composeStyled, type StyledSlide } from '../image-engine/styles/compose';
@@ -17,7 +17,8 @@ import { type WriteRequest } from './writerPrompt';
 import { downloadBlob, exportAllAsZip, slideFileName, zipFileName } from './export';
 import { carouselStyles, composeDoc, getStyles, pickShuffleSalt, renderer, styleByName, type Rendered } from './render';
 import { MatchPanel } from '../reference/MatchPanel';
-import { ACTIVE_STYLE, useActiveReference } from '../reference/active';
+import { ACTIVE_STYLE, activeReference, clearActiveReference, useActiveReference } from '../reference/active';
+import { cancelJob, clearSaved, resetJobs } from '../live/jobs';
 import { sizeOf as sizeOfPic, urlOf as urlOfPic } from './photoLibrary';
 import { ensureTemplatesLoaded, isUserStyle, targetWarning, useTemplatesVersion } from '../reference/templates';
 import { platformOf, platformWarning } from './platform';
@@ -37,6 +38,11 @@ import { saveTemplate, styleNameFor as packStyleName } from '../reference/templa
 import { blankStyle as packBlank } from '../reference/blank';
 import { PASTE_KEY, readStore, useProject, writeStore } from './useProject';
 import { onCancel, startJob, type JobHandle } from '../live/jobs';
+import { ReportPanel } from '../reference/ReportPanel';
+import { NewStyleBox } from './QuickStart';
+import type { ReaderControl, ReaderState } from '../reference/ReferenceStylePage';
+
+const ReferenceStylePage = lazy(() => import('../reference/ReferenceStylePage'));
 import '../styles/carousel.css';
 
 const DEFAULT_STYLE = 'editorial-collage';
@@ -203,9 +209,33 @@ export default function CarouselPage() {
   const libVersion = useLibraryVersion();
   const tplVersion = useTemplatesVersion();
   const refVersion = useActiveReference().version;
+  const [tplLoaded, setTplLoaded] = useState(false);
   useEffect(() => {
-    void ensureTemplatesLoaded();
+    void ensureTemplatesLoaded().then(() => setTplLoaded(true));
   }, []);
+  // The quick panel drives the reference reader (which sits in the Advanced fold): its numbers, and the style it saved.
+  const readerControl = useRef<ReaderControl | null>(null);
+  /** A style the quick read just saved is the selected one: the Advanced reader panel does not switch the page back to the in-memory "Reference" entry. */
+  const justSaved = useRef(false);
+  const [readerState, setReaderState] = useState<ReaderState | null>(null);
+  const [quickSaved, setQuickSaved] = useState('');
+  const onQuickSaved = (s: { name: string; title: string }) => {
+    setOptions({ autoStyle: false });
+    apply(patches.style(s.name, s.title));
+    setQuickSaved(s.title);
+    justSaved.current = true;
+    setNewStyleOpen(false);
+    setNotice('Saved the style ' + s.title + ' and selected it.');
+  };
+  // An old project can name a style that no longer exists (a deleted template, a reference that was only in memory): it opens with the default style and a note.
+  useEffect(() => {
+    if (!tplLoaded || !doc.style || styleByName(doc.style)) return;
+    const def = styleByName(DEFAULT_STYLE) ? DEFAULT_STYLE : getStyles().styles[0]?.spec.name;
+    if (!def || def === doc.style) return;
+    apply(patches.style(def, styleByName(def)?.spec.title ?? def));
+    setNotice('The style this project used is no longer available, so it opens with the default style (' + (styleByName(def)?.spec.title ?? def) + '). Pick another style under Advanced if you like.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tplLoaded, tplVersion, doc.style]);
   const hasPhotoStyle = !!style?.spec.photo;
   const [lowRoom, setLowRoom] = useState('');
   // After a refresh the pictures come back out of the browser's storage.
@@ -478,6 +508,36 @@ export default function CarouselPage() {
     job.begin('draw');
     setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…`, styleWhy: pick?.why, extra: designedOut ? ` Designed mode: ${Object.keys(designedOut.slides).length} slides designed, ${Object.keys(designedOut.fallbacks).length} fell back, ${designedOut.calls} model call${designedOut.calls === 1 ? '' : 's'}.` : '' });
   };
+  const [resetKey, setResetKey] = useState(0);
+  /** Reset page: cancels what is running, then the page is as after a fresh load. Saved templates and Mine styles are not touched. */
+  const resetPage = async () => {
+    if (!window.confirm('Start over? This clears the reference, the text and the slides on this page. Your saved styles stay.')) return;
+    abort.current?.abort();
+    genJob.current?.finish('cancelled', 'Cancelled by Reset page.');
+    genJob.current = null;
+    readerControl.current?.cancel();
+    cancelJob();
+    clearActiveReference(true);
+    pictures.forEach((p) => void removePicture(p.id));
+    startOver(styleByName(DEFAULT_STYLE) ? DEFAULT_STYLE : getStyles().styles[0]?.spec.name ?? DEFAULT_STYLE);
+    setPasted('');
+    setCheck(null);
+    setGen({ phase: 'idle' });
+    setError('');
+    setNotice('');
+    setQuickSaved('');
+    setReaderState(null);
+    setNewStyleOpen(false);
+    setAdvanced(false);
+    setOpen(null);
+    setSel(0);
+    setResetKey((k) => k + 1);
+    // Cancelled jobs write their last line a moment later: wait for that, then clear the Live view and the job record.
+    await new Promise((r) => setTimeout(r, 400));
+    resetJobs();
+    await clearSaved();
+    setNotice('');
+  };
   const cancel = () => {
     if (gen.phase === 'drawing') {
       if (past[past.length - 1]?.label === GEN_LABEL) undo();
@@ -520,6 +580,7 @@ export default function CarouselPage() {
         <div className="page-header-text">
           <p className="small"><Link to="/images">← Back to Images</Link></p>
           <h1 className="page-title">Make a carousel</h1>
+          <div className="row-actions"><button type="button" className="btn btn-outline btn-sm" onClick={() => void resetPage()}>Reset page</button></div>
           <p className="lead">Paste your text, pick a style, press Make carousel, then edit anything. The slides are drawn in your browser from the style, with no design call; your text goes to the writer only when you press the button.</p>
         </div>
       </header>
@@ -575,6 +636,7 @@ export default function CarouselPage() {
         </div>
       )}
 
+      {/* Three steps: your text, a style (the reference box is under it), Generate. Everything else is under Advanced. */}
       <MakeIt
         doc={doc}
         options={options}
@@ -596,18 +658,18 @@ export default function CarouselPage() {
         provider={provider}
         providers={providers}
         styles={<>
-          <StylePicker format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} onNewStyle={() => setNewStyleOpen((v) => !v)} newStyleOpen={newStyleOpen} />
+          <StylePicker key={resetKey} format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} onNewStyle={() => setNewStyleOpen((v) => !v)} newStyleOpen={newStyleOpen} />
           {targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}
         </>}
-      />
-      {newStyleOpen && (
+        referenceBox={<NewStyleBox key={resetKey} open={newStyleOpen} onClose={() => setNewStyleOpen(false)} control={readerControl} state={readerState} saved={quickSaved} description={
         <NewStyleFlow
+          key={resetKey}
           text={doc.topic}
           tone={options.tone}
           slides={options.slides}
           handle={options.handle.trim()}
           provider={provider}
-          reference={<MatchPanel target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} />}
+          only="description"
           onClose={() => setNewStyleOpen(false)}
           onCreated={(r) => {
             setOptions({ autoStyle: false });
@@ -619,11 +681,27 @@ export default function CarouselPage() {
             setNotice('Made the style ' + r.title + ' and selected it.');
           }}
         />
-      )}
+        } />}
+        styleReady={options.autoStyle || !!styleByName(doc.style)}
+      />
+      {notice && <p className="small" role="status">{notice}</p>}
       <DeckFlags doc={doc} />
 
       <details className="card ws-card cr-advanced" open={advanced} onToggle={(e) => setAdvanced((e.target as HTMLDetailsElement).open)}>
         <summary className="h4">Advanced: write the script yourself, options and tools</summary>
+          <h3 className="h4">Styles, New style and the reference tools</h3>
+          <p className="small muted">New style (from a description or a reference), Recreate and Match mode, the pack maker and the saved styles all live here.</p>
+          <h3 className="h4">Recreate and Match mode (from a reference)</h3>
+          <MatchPanel skipReader target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { if (justSaved.current && (activeReference()?.source ?? 'reference') === 'reference') return; setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} />
+
+          <details className="tn-more" aria-label="Reference reader">
+            <summary className="small">Reference reader (match mode: the full reader that steps 1 and 2 use)</summary>
+            <Suspense fallback={<p className="small muted" role="status">Loading…</p>}>
+              <ReferenceStylePage key={resetKey} embedded target="carousel" title={doc.script?.title} controlRef={readerControl} onState={(st) => { if (st.busy) justSaved.current = false; setReaderState(st); }} onStyleSaved={onQuickSaved} />
+            </Suspense>
+          </details>
+          <p className="small"><Link to="/images/styles">Open the Styles page</Link> (your saved styles and templates).</p>
+          <ReportPanel doc={doc} />
         <div className="create-form">
           <h3 className="h4">Options</h3>
       <MakeIt
@@ -650,7 +728,7 @@ export default function CarouselPage() {
         part="options"
       />
           <h3 className="h4">Rebuild a built-in style as a pack (no model call)</h3>
-          <StylePicker rebuildOnly format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => undefined} onPick={() => undefined} />
+          <StylePicker key={resetKey} rebuildOnly format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => undefined} onPick={() => undefined} />
           <h3 className="h4">Write the script yourself</h3>
         <div className="create-form">
           <p className="small muted">Copy a prompt for Claude, paste it in any Claude chat, then paste the JSON it returns here. Or try the example script.</p>

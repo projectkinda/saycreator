@@ -39,6 +39,14 @@ export interface SquareDesign {
   slotMeta?: SlotMeta[];
   canvas: { w: number; h: number };
 }
+/** One reference slide, read whole: its drawing (palette names), editable layers, picture spots and text slots, and the file it came from. */
+export interface PackVariant {
+  svg: string;
+  layers: RLayer[];
+  imageSlots: ImageSlot[];
+  slotMeta: SlotMeta[];
+  fromFile: string;
+}
 export interface StylePack {
   name: string;
   /** Colour names the designs use ("$bg", "$accent", ...). */
@@ -57,6 +65,10 @@ export interface StylePack {
   slotMeta?: Partial<Record<PackType | 'base', SlotMeta[]>>;
   canvas: { w: number; h: number };
   notes: string[];
+  /** Every slide read from the references, by type, in file order (whole-slide read). designs/svgs/imageSlots/slotMeta point at the FIRST variant of each type. */
+  variants?: Partial<Record<PackType, PackVariant[]>>;
+  /** The style brief: the look in plain words (palette roles, fonts, background, chrome, accent rule, type scale), no layouts. Designed mode inherits it instead of copying a sample drawing. */
+  brief?: string;
   /** True for a pack the code built from a stored style's colours and fonts (packFromStyle): the same seven layouts for every style. Shown as "Basic". */
   basic?: boolean;
 }
@@ -93,6 +105,20 @@ export interface PackSlide {
 /** The slide's own words in the pack's design: the editable layers, and the faithful SVG when the pack kept the drawing. No model call. */
 export function packSlide(pack: StylePack, slideType: string, slide: Record<string, unknown>, handle: string, opts: { square?: boolean; images?: ImageRequest[]; slide?: number; /** Which time this slide type has come in the carousel (0 = first): later ones get code-side variants. */ nth?: number } = {}): PackSlide {
   const sq = opts.square && designKey(slideType) === 'quote' && pack.square ? squareView(pack) : pack;
+  // A slide never comes out without its words: when its design has no slot for a role the slide needs (title, body), the content design is used instead, with a warning.
+  let fallbackNote: string | undefined;
+  {
+    const u = designUsed(sq, slideType);
+    const d = u ? sq.designs[u] : undefined;
+    const t = textsOf(slide, handle);
+    const lacks = (design: RLayer[] | undefined, r: 'title' | 'body') => !!t[r] && !design?.some((l) => l.kind === 'text' && l.name.replace(/^body\d+$/, 'body') === r);
+    const missing = (['title', 'body'] as const).filter((r) => lacks(d, r));
+    const needed = (['title', 'body'] as const).filter((r) => t[r]);
+    if (missing.length && missing.length === needed.length && sq.designs.content && u !== 'content' && !(['title', 'body'] as const).some((r) => lacks(sq.designs.content, r) && missing.includes(r))) {
+      fallbackNote = `Warning: the ${u} design has no ${missing.join(' or ')} slot for this slide's words, so the content design is used.`;
+      slideType = 'content';
+    } else if (missing.length) fallbackNote = `Warning: the design has no ${missing.join(' or ')} slot for this slide's words, so they are not shown.`;
+  }
   const used0 = designUsed(sq, slideType);
   const v = opts.nth && used0 && !opts.square ? variantPack(sq, used0, opts.nth) : null;
   const p = v ? v.pack : sq;
@@ -126,7 +152,8 @@ export function packSlide(pack: StylePack, slideType: string, slide: Record<stri
     if (faithful) faithful = injectSlots(faithful, markup);
     layers = withImageLayers(layers, slots, fills, p.palette, veils);
   }
-  return { ...r, layers, canvas: p.canvas, ...(v?.done.length ? { notes: [...r.notes, `Variant for a repeated slide type: ${v.done.map((k) => (k === 'mirror' ? 'mirrored' : 'colours swapped')).join(' and ')}.`] } : {}), ...(v?.done.includes('palette') ? { bg: p.palette.bg } : {}), ...(emptySlots.length ? { emptySlots } : {}), ...(faithful ? { faithful } : {}) };
+  const notes0 = [...(fallbackNote ? [fallbackNote] : []), ...r.notes];
+  return { ...r, notes: notes0, layers, canvas: p.canvas, ...(v?.done.length ? { notes: [...notes0,`Variant for a repeated slide type: ${v.done.map((k) => (k === 'mirror' ? 'mirrored' : 'colours swapped')).join(' and ')}.`] } : {}), ...(v?.done.includes('palette') ? { bg: p.palette.bg } : {}), ...(emptySlots.length ? { emptySlots } : {}), ...(faithful ? { faithful } : {}) };
 }
 
 /** The pack seen as its square quote design: the quote design, canvas and slots are the square ones. */
@@ -175,7 +202,8 @@ function packLayers(pack: StylePack, slideType: string, slide: Record<string, un
   if (!d) return { layers: [], notes: ['The pack has no design.'] };
   const texts = textsOf(slide, handle);
   const key = designKey(slideType);
-  if (key === 'list' && texts.body) {
+  const hasSteps = Array.isArray(slide.steps) && (slide.steps as unknown[]).filter((x) => typeof x === 'string' && x.trim()).length >= 2;
+  if ((key === 'list' || hasSteps) && texts.body) {
     // A design with a body slot per row: item k goes in row k (top to bottom); extra rows are left empty (hidden with their row); more items than rows share the last row.
     const rows = d.filter((l) => l.kind === 'text' && l.name === 'body').sort((a, b) => a.y - b.y);
     if (rows.length >= 2) {
@@ -230,7 +258,7 @@ function packLayers(pack: StylePack, slideType: string, slide: Record<string, un
 // ----- distinct compositions -----
 
 type Box = [number, number, number, number];
-const slotBoxes = (layers: RLayer[], c: { w: number; h: number }): Box[] => layers.filter((l) => l.kind === 'text' && ['kicker', 'tag', 'title', 'body', 'caption', 'number'].includes(l.name)).map((l) => [l.x / c.w, l.y / c.h, l.width / c.w, l.height / c.h]);
+export const slotBoxes = (layers: RLayer[], c: { w: number; h: number }): Box[] => layers.filter((l) => l.kind === 'text' && ['kicker', 'tag', 'title', 'body', 'caption', 'number'].includes(l.name)).map((l) => [l.x / c.w, l.y / c.h, l.width / c.w, l.height / c.h]);
 const near = (a: Box, b: Box, tol: number) => a.every((v, i) => Math.abs(v - b[i]) <= tol);
 /** Two designs look alike when every text slot of one has a slot of the other at about the same place and size (within 6% of the slide). */
 export function sameComposition(a: Box[], b: Box[], tol = 0.06) {
@@ -269,7 +297,7 @@ const SLOTS: Record<PackType, string> = {
 const fontLine = () => FONT_NAMES.map((f) => `"${f}" (weights ${FONT_WEIGHTS[f].join(', ')})`).join('; ');
 
 /** The look-first step: the model lists what the reference shows BEFORE it draws. The block is stripped before parsing (stripInventory). */
-const INVENTORY_RULES = [
+export const INVENTORY_RULES = [
   'LOOK FIRST, THEN DRAW. Start your answer with ONE block <inventory>...</inventory> (plain text, one line per element), BEFORE any <svg>. Look at the whole reference and list EVERY visible element: photos, cut-out people, illustrations, shapes, lines, text, stickers. For each give: kind (photo | cut-out person | illustration | shape | line | text | sticker); position and size as % of the slide (x, y, width, height); colour; rotation in degrees; and its REAL shape (circle | pill | arch | blob | torn edge | scribble | rectangle | other: say what). Do not skip small things (doodles, dots, tape, arrows, underlines).',
   'Then the SVGs must follow that list item by item: every listed element appears in the drawing at its listed place, size, colour, rotation and shape, and nothing is added that is not listed.',
   'SHAPES: use <rect> ONLY for things that really are rectangles. Everything else is a <path>, <circle>, <ellipse> or <polygon> (a blob, sticker, arch, pill, torn edge, scribble, doodle or cut-out outline is never a <rect>). Photos and cut-out people are image slots (data-image-slot), never drawn shapes.',
@@ -497,4 +525,40 @@ export function packFromStyle(spec: StyleSpec): StylePack {
   };
   const pack: StylePack = { name: `${spec.title} pack`, palette, fonts, motifs: [], designs, imageSlots, square: sq, canvas: { ...SIZE }, basic: true, notes: [`Basic pack: the ${spec.title} style's colours and fonts on the standard compositions (the same for every style). A pack made from a reference by the model is better.`] };
   return pack;
+}
+
+// ----- the style brief: what a Designed call inherits from a reference (look and feel, never layouts) -----
+
+/** The pack's look in under 700 characters of plain text: palette with roles, fonts, background treatment, header/footer chrome, accent rule, type scale. No layouts and no per-slide devices. */
+export function styleBriefOf(pack: StylePack): string {
+  const pal = pack.palette;
+  const roles = ([['ground', pal.bg], ['text', pal.text], ['accent', pal.accent], ['muted', pal.muted ?? pal.accent2]] as const).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(', ');
+  const svgs = Object.values(pack.svgs ?? {}).join('\n');
+  const first = Object.values(pack.svgs ?? {})[0] ?? '';
+  const bg: string[] = [];
+  if (/<radialGradient/i.test(svgs)) bg.push('a soft radial glow');
+  if (/<linearGradient/i.test(svgs)) bg.push('a gradient');
+  if (/<pattern/i.test(svgs) || (first.match(/<line/gi) ?? []).length >= 8) bg.push('a fine grid of lines');
+  const meta = Object.values(pack.slotMeta ?? {}).flat();
+  const top = meta.some((m) => m.y < 150 && m.h < 140);
+  const bottom = meta.some((m) => m.y > 1180);
+  const chrome = top && bottom ? 'a small header line at the top and a footer row at the bottom' : top ? 'a small header line at the top' : bottom ? 'a small footer row at the bottom' : 'no header or footer chrome';
+  const titles = Object.values(pack.designs).flat().filter((l): l is RLayer => !!l && l.kind === 'text' && l.name === 'title');
+  const accentWord = titles.some((l) => String((l as { style: { color: unknown } }).style.color) === '$accent') || /<tspan[^>]*fill="\$accent"/i.test(svgs);
+  const size = Math.max(0, ...titles.map((l) => (l as { style: { size: number } }).style.size));
+  const heavy = titles.some((l) => (l as { style: { weight: number } }).style.weight >= 700);
+  const bodies = Object.values(pack.designs).flat().filter((l): l is RLayer => !!l && l.kind === 'text' && l.name === 'body').map((l) => (l as { style: { size: number } }).style.size);
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  // Sane sizes for a 1080 x 1350 slide, whatever the read measured (headline 90 to 150 px, body 36 to 52 px).
+  const head = clamp(Math.round((size || 110) / 10) * 10, 90, 150);
+  const bodyPx = clamp(Math.round((bodies.length ? Math.min(...bodies) : 44) / 2) * 2, 36, 52);
+  const scale = `${heavy ? 'heavy ' : ''}headlines of about ${head} px over body text of about ${bodyPx} px`;
+  return [
+    `Palette: ${roles}.`,
+    `Fonts: headline ${pack.fonts.headline}, body ${pack.fonts.body}.`,
+    `Background: ${bg.length ? bg.join(' and ') + ' over the ground colour' : 'flat ground colour'}.`,
+    `Chrome: ${chrome}.`,
+    accentWord ? 'Accent rule: one key phrase of a headline is set in the accent colour; everything else stays in the text colour.' : 'Accent rule: the accent colour is used sparingly, for one key word or mark per slide.',
+    `Type: ${scale}.`,
+  ].join(' ').slice(0, 690);
 }

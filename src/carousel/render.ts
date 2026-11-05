@@ -16,7 +16,6 @@ import { objectInputs, photoInputs } from './photoLibrary';
 import { targetOfStyle, userStyles } from '../reference/templates';
 import { fillsFor } from '../images/store';
 import { applyPhotoSlots, fillRecreate, recreateFor, textsOf } from '../reference/recreate';
-import { ACTIVE_STYLE } from '../reference/active';
 import { designKey, designUsed, packFor, packSlide } from '../reference/pack';
 import { resolveSvgTokens, svgToPng } from '../reference/faithful';
 import { cleanScript } from './clean';
@@ -70,7 +69,7 @@ function withDesigned(doc: Doc, out: { slides: StyledSlide[]; margin: number }):
     const why = d.fallbacks[String(i)];
     if (!dp) return why ? ({ ...s, notes: [...((s as { notes?: string[] }).notes ?? []), "This slide fell back to the style's own design: " + why] } as typeof s) : s;
     const sc = (doc.script!.slides[i] ?? {}) as unknown as Record<string, unknown>;
-    const r = packSlide(dp, String(sc.type ?? s.type), sc, doc.script!.brand.handle, { images: doc.imageRequests, slide: i });
+    const r = packSlide(dp, String(sc.type ?? s.type), sc, '', { images: doc.imageRequests, slide: i });
     const editable = !!doc.choices[String(i)]?.editable;
     const rec = own ? own.recurring : recurringFor(first?.recurring, i, n);
     const svg = r.faithful ? r.faithful.replace(/<\/svg>\s*$/i, () => resolveSvgTokens(recurringMarkup(rec, dp), dp.palette) + '</svg>') : '';
@@ -84,8 +83,8 @@ function withDesigned(doc: Doc, out: { slides: StyledSlide[]; margin: number }):
 }
 
 function composeBase(doc0: Doc): { slides: StyledSlide[]; margin: number } {
-  // The active reference is in memory only: once it is removed (or the page reloaded) a doc that still names it draws with the default style instead of failing.
-  const doc: Doc = doc0.style === ACTIVE_STYLE && !styleByName(ACTIVE_STYLE) ? { ...doc0, style: styleByName('editorial-collage') ? 'editorial-collage' : (getStyles().styles[0]?.spec.name ?? doc0.style) } : doc0;
+  // A doc that names a style that is not there (a removed template, the in-memory reference after a reload) draws with the default style instead of failing.
+  const doc: Doc = !styleByName(doc0.style) ? { ...doc0, style: styleByName('editorial-collage') ? 'editorial-collage' : (getStyles().styles[0]?.spec.name ?? doc0.style) } : doc0;
   const style = styleByName(doc.style);
   if (!style) throw new Error(`The style "${doc.style}" is not available any more. Pick another one.`);
   if (!doc.script) return { slides: [], margin: style.spec.spacing.margin };

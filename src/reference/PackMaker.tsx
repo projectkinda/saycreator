@@ -47,6 +47,7 @@ export function PackMaker({ kind, description, reference, first }: { kind: 'refe
   const [thumbs, setThumbs] = useState<{ type: string; url: string; blob: Blob }[]>([]);
   const [name, setName] = useState('');
   const abort = useRef<AbortController | null>(null);
+  useEffect(() => () => abort.current?.abort(), []);
   useEffect(() => {
     let live = true;
     void detectReaders().then((r) => live && setReaders(r));

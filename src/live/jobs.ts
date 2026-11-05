@@ -232,3 +232,10 @@ export function onCancel(jobId: string, f: () => void) {
 export function cancelJob() {
   if (current && current.status === 'running') cancellers.get(current.id)?.();
 }
+
+/** Forgets the job on screen and the jobs of this session (the Live view is empty again). Saved records are cleared with clearSaved. */
+export function resetJobs() {
+  current = null;
+  history = [];
+  emit();
+}

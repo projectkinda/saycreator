@@ -41,7 +41,17 @@ const CLEAR = 'rgba(0,0,0,0)';
 /** A plan fill as something Fabric can paint. Gradient coordinates are pixels inside the object, CSS angle convention. */
 function paint(fill: Fill, w: number, h: number) {
   if (typeof fill === 'string') return fill;
-  const a = (fill.angle * Math.PI) / 180;
+  if (fill.type === 'radial') {
+    const cx = fill.cx * w;
+    const cy = fill.cy * h;
+    return new Gradient({
+      type: 'radial',
+      gradientUnits: 'pixels',
+      coords: { x1: cx, y1: cy, r1: 0, x2: cx, y2: cy, r2: Math.max(0.5, fill.r * Math.max(w, h)) },
+      colorStops: fill.stops.map((s) => ({ offset: s.at, color: s.color })),
+    });
+  }
+  const a =(fill.angle * Math.PI) / 180;
   const dx = Math.sin(a);
   const dy = -Math.cos(a);
   const half = (Math.abs(w * dx) + Math.abs(h * dy)) / 2;
@@ -415,15 +425,16 @@ export class FabricAdapter implements CanvasAdapter {
 
     const out: FabricObject[] = [];
     const hl = layer.highlight;
-    const make = (text: string, left: number, top: number, fill: string) =>
+    const make = (text: string, left: number, top: number, fill: string, weight = s.weight) =>
       new FabricText(text, {
         left,
         top,
         originX: 'left',
         originY: 'top',
         fontFamily: s.font,
-        fontWeight: nearestWeight(s.font, s.weight),
+        fontWeight: nearestWeight(s.font, weight),
         fontSize: block.size,
+        charSpacing: ((s.letterSpacing ?? 0) / block.size) * 1000,
         fill,
         lineHeight: 1,
         stroke: s.stroke?.color,
@@ -452,8 +463,10 @@ export class FabricAdapter implements CanvasAdapter {
           );
         }
         // Per word, so highlighted words can use their own text colour.
-        for (const word of line.words) out.push(make(word.text, pad + word.x, top, word.highlighted && hl.textColor ? hl.textColor : s.color));
-      } else if (line.text) out.push(make(line.text, pad + line.x, top, s.color));
+        if (line.segments) for (const seg of line.segments) out.push(make(seg.text, pad + seg.x, top, seg.color ?? s.color, seg.weight));
+        else for (const word of line.words) out.push(make(word.text, pad + word.x, top, word.highlighted && hl.textColor ? hl.textColor : s.color));
+      } else if (line.segments) for (const seg of line.segments) out.push(make(seg.text, pad + seg.x, top, seg.color ?? s.color, seg.weight));
+      else if (line.text) out.push(make(line.text, pad + line.x, top, s.color));
     }
     return out;
   }
