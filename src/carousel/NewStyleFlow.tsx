@@ -1,7 +1,7 @@
 // "New style": the only place a drawing-model (Sonnet) call is made for a whole look. Two ways: from a reference picture (the existing reference panel)
 // or from a description of the look (the Designed code: one call). The cost is shown first and the person confirms. The result is saved as a style,
 // selected, and the page goes back to the normal flow. A style is never made by itself.
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CarouselScript } from '../image-engine/carousel/types';
 import { saveLook } from './DesignedCard';
 import { runDesign } from './MakeIt';
@@ -29,6 +29,9 @@ export function NewStyleFlow({ text, tone, slides, handle, provider, reference, 
   const [step, setStep] = useState<'idle' | 'confirm' | 'running'>('idle');
   const [msg, setMsg] = useState('');
   const ctl = useRef<AbortController | null>(null);
+  const root = useRef<HTMLElement>(null);
+  // Opening the panel brings it into view, so it is clear where the new-style flow went.
+  useEffect(() => { root.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); }, []);
   const own = !textProblem(text);
   const run = async () => {
     if (!provider) return setMsg('No writer is available on this server, so no style can be made.');
@@ -53,7 +56,7 @@ export function NewStyleFlow({ text, tone, slides, handle, provider, reference, 
     onCreated({ name: saved.name, title, script: own ? r.result.script : null });
   };
   return (
-    <section className="card ws-card" aria-label="New style" data-testid="new-style">
+    <section ref={root} className="card ws-card ns-flow" aria-label="New style" data-testid="new-style">
       <div className="row-actions">
         <h2 className="h3">New style</h2>
         <button type="button" className="btn btn-outline btn-sm cr-quiet" onClick={onClose}>Close</button>

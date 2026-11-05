@@ -198,13 +198,14 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
         {styles ? (
           <div>
             <h3 className="h4">Style</h3>
+            <p className="small muted cr-hint">Pick how the slides look, or make a new look with New style.</p>
             {styles}
           </div>
         ) : null}
 
-        <div className="row-actions">
+        <div className="row-actions cr-go">
           {!busy && (
-            <button type="button" className="btn btn-dark btn-lg" disabled={disabled} aria-describedby="cr-why" onClick={onGenerate}>
+            <button type="button" className="btn btn-dark btn-lg cr-make-btn" disabled={disabled} aria-describedby="cr-why" onClick={onGenerate}>
               Make carousel
             </button>
           )}
@@ -213,9 +214,9 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
               Cancel
             </button>
           )}
-          <span id="cr-why" className="small muted">{!busy && why ? why : ''}</span>
+          <span id="cr-why" className="small muted">{!busy ? (why ?? (problem ? 'Add your text above to turn this button on.' : '')) : ''}</span>
         </div>
-        <p className="small muted" data-testid="cost-line">{cost}</p>
+        <p className="small cr-cost" data-testid="cost-line">{cost}</p>
         <p className="small" role="status" aria-live="polite" data-testid="progress">
           {gen.phase === 'writing' && 'Writing the script…'}
           {gen.phase === 'retrying' && 'The first answer needed fixing. Asking again…'}

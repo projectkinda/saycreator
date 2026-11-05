@@ -131,10 +131,13 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
           );
         })}
         {onNewStyle && (
-          <li>
+          <li className="cr-new-li">
             <button type="button" className="card start-opt cr-style cr-new" aria-expanded={!!newStyleOpen} onClick={onNewStyle}>
-              <strong>+ New style</strong>
-              <span className="small muted">From a reference picture or a description. Uses the drawing model, with the cost shown first.</span>
+              <span className="cr-new-plus" aria-hidden="true">+</span>
+              <span className="cr-new-text">
+                <strong>New style</strong>
+                <span className="small muted">Make your own look from a reference picture or a description. The cost is shown before anything runs.</span>
+              </span>
             </button>
           </li>
         )}
@@ -601,7 +604,7 @@ export default function CarouselPage() {
           slides={options.slides}
           handle={options.handle.trim()}
           provider={provider}
-          reference={<MatchPanel target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} describe={{ canvas: { w: 1080, h: 1350 }, hasCutout: false }} />}
+          reference={<MatchPanel target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} />}
           onClose={() => setNewStyleOpen(false)}
           onCreated={(r) => {
             setOptions({ autoStyle: false });
