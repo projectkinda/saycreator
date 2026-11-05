@@ -54,14 +54,14 @@ test('REAL: three generations on the sample texts, through the real Generate but
     await page.reload();
     await expect(page.getByTestId('writer-label')).toContainText(/Claude Code|Claude API/);
     const writerLabel = await page.getByTestId('writer-label').innerText();
-    await page.getByLabel('Your text, idea or article').fill(text);
+    await page.getByLabel('Your text or topic').fill(text);
     await page.getByLabel('Your handle (optional)').fill(inp.handle);
     const calls: Run['calls'] = [];
     const t0 = Date.now();
     page.on('response', (r) => {
       if (/\/(__carousel|api\/carousel)\/write$/.test(r.url())) { calls.push({ ms: Date.now() - t0, status: r.status() }); r.text().then((t) => fs.writeFileSync(path.join(OUT, 'raw-' + inp.id + '-' + calls.length + '.json'), t)).catch(() => undefined); }
     });
-    await page.getByRole('button', { name: 'Generate', exact: true }).click();
+    await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
     await expect(page.getByTestId('progress')).toContainText(/Drawing slide|Done:/, { timeout: 420_000 }).catch(() => undefined);
     const wallMsToScript = Date.now() - t0;
     const errBox = page.getByRole('alert').filter({ hasText: /Your text is kept/ });
@@ -116,14 +116,14 @@ test('REAL: one quote card set (3 cards) from a text with named speakers', async
   await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
   await page.reload();
   await expect(page.getByTestId('writer-label')).toContainText(/Claude Code|Claude API/);
-  await page.getByLabel('Your text, idea or article').fill(text);
+  await page.getByLabel('Your text or topic').fill(text);
   await page.getByRole('button', { name: /^Quote card/ }).click();
   const calls: { ms: number; status: number }[] = [];
   const t0 = Date.now();
   page.on('response', (r) => {
     if (/\/(__carousel|api\/carousel)\/write$/.test(r.url())) calls.push({ ms: Date.now() - t0, status: r.status() });
   });
-  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
   await expect(page.getByTestId('progress')).toContainText(/Done:|Drawing slide/, { timeout: 240_000 });
   const errBox = page.getByRole('alert').filter({ hasText: /Your text is kept/ });
   const error = (await errBox.count()) > 0 ? await errBox.first().innerText() : '';

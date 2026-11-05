@@ -14,7 +14,7 @@ export interface WriteProvider {
   /** For the small dev-only label. */
   label: string;
   /** Sends a prompt, returns the model's text. Throws WriterError. Rejects with kind "cancelled" when the signal aborts. */
-  write(prompt: string, signal: AbortSignal): Promise<{ text: string; ms: number }>;
+  write(prompt: string, signal: AbortSignal, kind?: 'write' | 'draw'): Promise<{ text: string; ms: number }>;
 }
 
 export type WriterErrorKind = 'unavailable' | 'failed' | 'cancelled' | 'timeout' | 'invalid';
@@ -34,11 +34,11 @@ function provider(id: ProviderId): WriteProvider {
   return {
     id,
     label: e.label,
-    async write(prompt, signal) {
+    async write(prompt, signal, kind) {
       const t0 = performance.now();
       let r: Response;
       try {
-        r = await fetch(e.write, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt }), signal });
+        r = await fetch(e.write, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, kind: kind ?? 'write' }), signal });
       } catch (err) {
         if ((err as Error).name === 'AbortError') throw new WriterError('cancelled', 'Cancelled.');
         throw new WriterError('failed', 'The writer could not be reached. Is the app server running?');

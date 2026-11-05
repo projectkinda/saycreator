@@ -5,8 +5,8 @@ import { WriterError, detectProviders, generateScript, type GenerateResult, type
 import { MAX_CHARS, TONES, textProblem, type WriteRequest } from './writerPrompt';
 import { FORMATS, SLIDE_RANGE, type Format, type Issue } from './script';
 import { getStyles } from './render';
-import { packFor } from '../reference/pack';
-import { designDeck, designEstimate, type Designed } from './designed';
+import { designDeck, type Designed } from './designed';
+import { slideBlocks } from './pasted';
 import { PLATFORMS, isPlatform, platformOf, platformWarning, type Platform } from './platform';
 
 /** The style used when the writer does not name one: by tone. Only names that exist are used. */
@@ -75,7 +75,7 @@ export async function runDesign(req: WriteRequest, look: { pack?: import('../ref
   }
 }
 
-export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onCancel, provider, providers, styles }: {
+export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onCancel, provider, providers, styles, part = 'main' }: {
   doc: Doc;
   options: GenerateOptions;
   setTopic: (t: string) => void;
@@ -89,12 +89,17 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
   provider: WriteProvider | null;
   providers: WriteProvider[] | null;
   styles: React.ReactNode;
+  /** "main": the text, the styles and the one button. "options": format, count, platform, handle and tone (they live under Advanced). */
+  part?: 'main' | 'options';
 }) {
   const n = doc.topic.length;
   const problem = useMemo(() => textProblem(doc.topic), [doc.topic]);
   const [lo, hi] = SLIDE_RANGE[doc.format];
   const counts = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-  const why = !provider ? (providers === null ? 'Looking for a writer…' : 'No writer is available on this server yet. Use Advanced below to copy a prompt for Claude and paste the answer.') : null;
+  // Ready-made slide text (one block per slide) needs no writer at all.
+  const ready = !!slideBlocks(doc.topic);
+  const cost = ready ? '0 design calls, 0 writing calls: your slide text is used as it is.' : '0 design calls, 1 small writing call.';
+  const why = !provider && !ready ? (providers === null ? 'Looking for a writer…' : 'No writer is available on this server yet. Use Advanced below to copy a prompt for Claude and paste the answer.') : null;
   const disabled = busy || !!why || !!problem;
   const label = (doc.format === 'quote' ? 'Cards' : 'Slides');
   const platform = isPlatform(options.platform) ? options.platform : null;
@@ -102,9 +107,6 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
   const ceiling = plat ? plat.max : hi;
   const asked = Math.min(hi, Math.max(lo, options.slides), ceiling);
   const [cap, setCap] = useState('');
-  const mode = doc.format === 'carousel' && options.mode !== 'quick' ? 'designed' : 'quick';
-  const chosenPack = !options.autoStyle ? packFor(doc.style) : null;
-  const estimate = designEstimate(asked);
   // A script that is already longer than the platform allows is warned about (it is not cut).
   const platformNote = doc.format === 'carousel' && doc.script ? platformWarning(doc.script.slides.length, platform) : null;
   const choosePlatform = (p: Platform) => {
@@ -118,18 +120,8 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
       setCap('');
     }
   };
-  return (
-    <section className="card ws-card" aria-labelledby="cr-make-h">
-      <h2 id="cr-make-h" className="h3">Make it from your text</h2>
-      <div className="create-form">
-        <label className="field">
-          <span className="field-label">Your text, idea or article</span>
-          <textarea className="cr-source" rows={8} value={doc.topic} onChange={(e) => setTopic(e.target.value)} disabled={busy} aria-describedby="cr-count" placeholder="Paste a paragraph, a rough idea or a whole article. Only what is in it will be used: no facts are added." />
-        </label>
-        <p id="cr-count" className={`small ${n > MAX_CHARS ? 'cr-problem' : 'muted'}`} role={n > MAX_CHARS ? 'alert' : undefined}>
-          {n.toLocaleString('en')} of {MAX_CHARS.toLocaleString('en')} characters{problem ? `. ${problem}` : ''}
-        </p>
-
+  const optionsBlock = (
+    <>
         <div className="cr-options">
           <div role="group" aria-label="Format" className="chip-group">
             {FORMATS.map((f) => (
@@ -176,29 +168,6 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
           </div>
         </div>
 
-        {doc.format === 'carousel' && (
-          <div className="cr-inline" data-testid="mode-box">
-            <span className="field-label" id="cr-mode-l">How the slides are made</span>
-            <div role="group" aria-labelledby="cr-mode-l" className="chip-group">
-              <button type="button" className="chip-btn" aria-pressed={mode === 'designed'} disabled={busy} onClick={() => setOptions({ mode: 'designed' })} title="One model call writes the story and designs every slide.">
-                Designed
-              </button>
-              <button type="button" className="chip-btn" aria-pressed={mode === 'quick'} disabled={busy} onClick={() => setOptions({ mode: 'quick' })} title="The writer writes the story and the app lays it out with the style's templates. No design call.">
-                Quick (free, templates)
-              </button>
-            </div>
-            {mode === 'designed' && !chosenPack && (
-              <label className="cr-inline">
-                <span className="field-label">Look, in a few words (optional)</span>
-                <input type="text" className="cr-input" value={options.brief ?? ''} maxLength={200} placeholder="for example: warm paper, big serif, hand-drawn arrows" disabled={busy} onChange={(e) => setOptions({ brief: e.target.value })} />
-              </label>
-            )}
-            <p className="small muted" role="status" data-testid="estimate">
-              {mode === 'designed' ? `${estimate.text} ${chosenPack ? `The look follows your pack "${chosenPack.name}".` : 'No pack is chosen, so the look comes from the words above.'} Only facts from your text are used.` : 'Quick mode: no design call; the app lays the script out with the style\'s templates.'}
-            </p>
-          </div>
-        )}
-
         {plat && (
           <p className="small muted" role="status" data-testid="platform-cap">
             {cap ? <strong>{cap}. </strong> : null}
@@ -211,6 +180,21 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
           </p>
         )}
 
+    </>
+  );
+  if (part === 'options') return <div className="create-form" data-testid="options">{optionsBlock}</div>;
+  return (
+    <section className="card ws-card" aria-labelledby="cr-make-h">
+      <h2 id="cr-make-h" className="h3">Make it from your text</h2>
+      <div className="create-form">
+        <label className="field">
+          <span className="field-label">Your text or topic</span>
+          <textarea className="cr-source" rows={8} value={doc.topic} onChange={(e) => setTopic(e.target.value)} disabled={busy} aria-describedby="cr-count" placeholder="Paste a paragraph, a rough idea or a whole article. Only what is in it will be used: no facts are added." />
+        </label>
+        <p id="cr-count" className={`small ${n > MAX_CHARS ? 'cr-problem' : 'muted'}`} role={n > MAX_CHARS ? 'alert' : undefined}>
+          {n.toLocaleString('en')} of {MAX_CHARS.toLocaleString('en')} characters{problem ? `. ${problem}` : ''}
+        </p>
+
         {styles ? (
           <div>
             <h3 className="h4">Style</h3>
@@ -221,7 +205,7 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
         <div className="row-actions">
           {!busy && (
             <button type="button" className="btn btn-dark btn-lg" disabled={disabled} aria-describedby="cr-why" onClick={onGenerate}>
-              Generate
+              Make carousel
             </button>
           )}
           {busy && (
@@ -231,6 +215,7 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
           )}
           <span id="cr-why" className="small muted">{!busy && why ? why : ''}</span>
         </div>
+        <p className="small muted" data-testid="cost-line">{cost}</p>
         <p className="small" role="status" aria-live="polite" data-testid="progress">
           {gen.phase === 'writing' && 'Writing the script…'}
           {gen.phase === 'retrying' && 'The first answer needed fixing. Asking again…'}

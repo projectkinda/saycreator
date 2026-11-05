@@ -46,14 +46,18 @@ async function fake(page: Page, answer: (n: number, prompt: string) => { text: s
   return f;
 }
 
+/** Opens the Advanced fold if it is closed (the options, the script tools and the rest live in it). */
+const openAdv = async (page: Page) => {
+  if (!(await page.locator('details.cr-advanced').evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByText('Advanced: write the script yourself').click();
+};
 const open = async (page: Page) => {
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
-  // These tests are about the Quick path (the writer writes the script, the templates draw it); Designed mode has its own spec.
-  await page.getByRole('button', { name: /^Quick \(free, templates\)/ }).click();
+  // The options (slides, tone, handle) live under Advanced.
+  if (!(await page.locator('details.cr-advanced').evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByText('Advanced: write the script yourself').click();
 };
-const source = (page: Page) => page.getByLabel('Your text, idea or article');
-const generate = (page: Page) => page.getByRole('button', { name: 'Generate', exact: true });
+const source = (page: Page) => page.getByLabel('Your text or topic');
+const generate = (page: Page) => page.getByRole('button', { name: 'Make carousel', exact: true });
 const allDrawn = async (page: Page, count = 7) => {
   await expect(page.locator('.cr-card')).toHaveCount(count, { timeout: 30_000 });
   await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(count, { timeout: 30_000 });
@@ -233,6 +237,7 @@ test('refresh and recover: the text, the options, the slides and the history are
   await page.reload();
   await allDrawn(page);
   await expect(source(page)).toHaveValue(TEXT);
+  await openAdv(page);
   await expect(page.getByRole('button', { name: 'Expert', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('listitem', { name: /^Slide 2 of/ }).getByLabel('Headline')).toHaveValue('Edited after generating');
   await page.getByRole('button', { name: /^Undo/ }).click();
@@ -247,7 +252,7 @@ test('no writer available: Generate says why, and the Advanced fold still works'
   await expect(generate(page)).toBeDisabled();
   await expect(page.getByText(/No writer is available on this server yet/)).toBeVisible();
   await expect(page.getByTestId('writer-label')).toContainText('none available');
-  await page.getByText('Advanced: write the script yourself').click();
+  await openAdv(page);
   await page.getByRole('button', { name: 'Try an example script' }).click();
   await allDrawn(page);
 });
@@ -271,7 +276,7 @@ test('the API writer is preferred when the server has a key; the browser only ev
 test('the Advanced fold keeps copy prompt, paste JSON and the example', async ({ page }) => {
   await fake(page, () => ({ text: script(7) }));
   await open(page);
-  await page.getByText('Advanced: write the script yourself').click();
+  await openAdv(page);
   await expect(page.getByRole('button', { name: 'Copy prompt for Claude' })).toBeVisible();
   await expect(page.getByLabel('Paste the script Claude wrote (JSON)')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try an example script' })).toBeVisible();

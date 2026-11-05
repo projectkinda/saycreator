@@ -38,9 +38,9 @@ test('real Designed run on the example script text', async ({ page }) => {
     if (/\/__carousel\/write|\/api\/carousel\/write/.test(r.url())) answer = (((await r.json().catch(() => ({}))) as { text?: string }).text) ?? '';
   });
   await page.goto('/images/carousel');
-  await page.getByLabel('Your text, idea or article').fill(TEXT);
+  await page.getByLabel('Your text or topic').fill(TEXT);
   const t0 = Date.now();
-  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
   await expect(page.getByTestId('designed-card')).toBeVisible({ timeout: 12 * 60_000 });
   await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(7, { timeout: 120_000 });
   const seconds = Math.round((Date.now() - t0) / 1000);

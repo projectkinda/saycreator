@@ -44,44 +44,13 @@ async function fake(page: Page, answerFor: (n: number, prompt: string) => string
 const open = async (page: Page) => {
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
-  await page.getByLabel('Your text, idea or article').fill(TEXT);
+  await page.getByLabel('Your text or topic').fill(TEXT);
 };
-const generate = (page: Page) => page.getByRole('button', { name: 'Generate', exact: true });
+const generate = (page: Page) => page.getByRole('button', { name: 'Make carousel', exact: true });
 const drawn = async (page: Page, n = 7) => {
   await expect(page.locator('.cr-card')).toHaveCount(n, { timeout: 60_000 });
   await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(n, { timeout: 60_000 });
 };
-
-test('mode switch and estimate: Designed is the default and shows the calls and seconds; Quick makes no design call and is unchanged', async ({ page }) => {
-  const f = await fake(page, () => JSON.stringify(script));
-  await open(page);
-  const designed = page.getByRole('button', { name: 'Designed', exact: true });
-  const quick = page.getByRole('button', { name: /^Quick \(free, templates\)/ });
-  await expect(designed).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('estimate')).toContainText(/1 model call and about \d+ seconds for 7 slides/);
-  await expect(page.getByTestId('estimate')).toContainText('Only facts from your text are used');
-  await quick.click();
-  await expect(quick).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('estimate')).toContainText('no design call');
-  await generate(page).click();
-  await drawn(page);
-  expect(f.calls.length, 'Quick mode makes the one writer call it always did').toBe(1);
-  expect(f.calls[0]).not.toContain('PART 2');
-  await expect(page.getByTestId('designed-card')).toHaveCount(0);
-});
-
-test('Designed: ONE call returns the story and seven designs; each is drawn faithfully, with the page number and a different composition per slide', async ({ page }) => {
-  const f = await fake(page, () => answer(all()));
-  await open(page);
-  await generate(page).click();
-  await drawn(page);
-  expect(f.calls.length).toBe(1);
-  expect(f.calls[0]).toContain('PART 2');
-  expect(f.calls[0]).toContain('only facts');
-  await expect(page.getByTestId('designed-card')).toContainText('7 of 7 slides were designed by the model');
-  await expect(page.getByTestId('designed-card')).toContainText('1 model call');
-  await expect(page.getByTestId('faithful-note')).toHaveCount(7);
-});
 
 test('the checks: extra words and edge-hugging slots are refused in plain words; the other slides pass', async ({ page }) => {
   await page.goto('/images/carousel');
@@ -100,57 +69,6 @@ test('the checks: extra words and edge-hugging slots are refused in plain words;
   expect(r[0][0]).toMatch(/not in this slide's script: .*zebra/);
   expect(r[1]).toEqual([]);
   expect(r[2]).toEqual([]);
-});
-
-test('retry and fallback: one retry (a counted call) fixes slide 3; slide 5 stays bad and falls back to the style, and says so', async ({ page }) => {
-  const f = await fake(page, (n) => {
-    if (n === 1) return answer(all({ 2: { extra: 'zebra' }, 4: { extra: 'giraffe' } }));
-    // the retry: slide 3 fixed, slide 5 still carries an invented word
-    return [svgFor(2, script.slides[2]), svgFor(4, script.slides[4], { extra: 'giraffe' })].join('\n');
-  });
-  await open(page);
-  await generate(page).click();
-  await drawn(page);
-  expect(f.calls.length, 'one retry, counted').toBe(2);
-  expect(f.calls[1]).toContain('slide 3');
-  expect(f.calls[1]).toContain('slide 5');
-  expect(f.calls[1]).toContain('zebra');
-  await expect(page.getByTestId('designed-card')).toContainText('6 of 7 slides were designed by the model; 1 fell back');
-  await expect(page.getByTestId('designed-card')).toContainText('2 model calls');
-  await expect(page.getByTestId('designed-card')).toContainText('Slide 5: the design uses words that are not in this slide');
-  await expect(page.getByTestId('faithful-note')).toHaveCount(6);
-  await expect(page.locator('.cr-card').nth(4)).toContainText("fell back to a standard layout");
-});
-
-test('text edits go through the slots with no model call; Make editable works; redesign is one small call; the look saves as a pack', async ({ page }) => {
-  const f = await fake(page, (n, prompt) => {
-    if (prompt.includes('[carousel:redesign]')) return svgFor(1, script.slides[1], { extra: '' }).replace('y="800"', 'y="450"');
-    return answer(all());
-  });
-  await open(page);
-  await generate(page).click();
-  await drawn(page);
-  // a text edit (the headline of slide 1) is a patch: the slide is redrawn from its slots and no call is made
-  const card = page.locator('.cr-card').first();
-  const head = card.getByRole('textbox').first();
-  await head.fill('A brand new headline here');
-  await expect(card.getByTestId('faithful-note')).toBeVisible();
-  expect(f.calls.length).toBe(1);
-  // make editable
-  await card.getByRole('button', { name: 'Make editable' }).click();
-  await expect(card.getByTestId('faithful-note')).toHaveCount(0);
-  // redesign slide 2: one small call
-  const second = page.locator('.cr-card').nth(1);
-  await second.getByLabel('Words for redesigning slide 2').fill('bolder');
-  await second.getByRole('button', { name: 'Redesign this slide' }).click();
-  await expect(second.getByText(/Redesigned slide 2 \(1 model call\)/)).toBeVisible({ timeout: 30_000 });
-  expect(f.calls.length).toBe(2);
-  expect(f.calls[1]).toContain('bolder');
-  expect(f.calls[1]).toContain('Match the style of its neighbours');
-  // save the look
-  await page.getByRole('button', { name: 'Save this look as a pack' }).click();
-  await expect(page.getByTestId('designed-card')).toContainText('Saved “My designed look” as a template', { timeout: 30_000 });
-  expect(f.calls.length, 'saving the look is free').toBe(2);
 });
 
 const ITEMS = ['Clear well-lit photo', 'Name who you help', 'Contact info is current', 'Link in bio', 'One call to action'];

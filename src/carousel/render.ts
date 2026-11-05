@@ -18,6 +18,7 @@ import { fillsFor } from '../images/store';
 import { applyPhotoSlots, fillRecreate, recreateFor, textsOf } from '../reference/recreate';
 import { designUsed, packFor, packSlide } from '../reference/pack';
 import { resolveSvgTokens, svgToPng } from '../reference/faithful';
+import { cleanScript } from './clean';
 import { deckFallbackPack, recurringFor, recurringLayers, recurringMarkup } from './designed';
 import { faithfulChecks, UNCHECKED } from '../reference/faithfulChecks';
 import type { Layer } from '../image-engine/types';
@@ -48,7 +49,10 @@ export const styleByName = (name: string) => getStyles().styles.find((s) => s.sp
 
 /** The plans for every slide of the doc, with the person's layout and element choices applied. Not drawn yet. */
 export function composeDoc(doc: Doc): { slides: StyledSlide[]; margin: number } {
-  return withDesigned(doc, composeBase(doc));
+  // Words that are notes to the person ("Placeholder: ...", "Note: ...", "TODO", [in brackets]) are never drawn; the deck card lists them.
+  const c = doc.script ? cleanScript(doc.script) : null;
+  const d = c && c.flags.length ? { ...doc, script: c.script } : doc;
+  return withDesigned(d, composeBase(d));
 }
 
 /** Designed mode: a slide with its own design is drawn from it (faithfully, text through its slots); one that fell back keeps the style's drawing and says why. */
@@ -61,7 +65,7 @@ function withDesigned(doc: Doc, out: { slides: StyledSlide[]; margin: number }):
   const n = doc.script.slides.length;
   const slides = out.slides.map((s, i) => {
     const own = d.slides[String(i)];
-    const dp = own?.pack ?? fb;
+    const dp = own?.pack ?? (d.fallbacks[String(i)] ? fb : null);
     const why = d.fallbacks[String(i)];
     if (!dp) return why ? ({ ...s, notes: [...((s as { notes?: string[] }).notes ?? []), "This slide fell back to the style's own design: " + why] } as typeof s) : s;
     const sc = (doc.script!.slides[i] ?? {}) as unknown as Record<string, unknown>;

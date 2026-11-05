@@ -91,8 +91,8 @@ test('one-shot carousel with the real writer', async ({ page }) => {
   await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
   await page.reload();
   await expect(page.getByTestId('writer-label')).toContainText(/Claude Code|Claude API/);
-  await page.getByLabel('Your text, idea or article').fill(text);
-  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await page.getByLabel('Your text or topic').fill(text);
+  await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
   await expect(page.getByTestId('progress')).toContainText('Done:', { timeout: 600_000 });
   await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(await page.locator('.cr-card').count(), { timeout: 90_000 });
   const job = await readJob(page);

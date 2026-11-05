@@ -73,7 +73,7 @@ const open = async (page: Page) => {
   await page.reload();
   await expect(page.getByTestId('writer-label')).toContainText('Claude Code');
 };
-const source = (page: Page) => page.getByLabel('Your text, idea or article');
+const source = (page: Page) => page.getByLabel('Your text or topic');
 
 /** Waits for every slide, saves each as its own PNG, and returns the phone-check failures and the picture sizes. */
 async function collect(page: Page, name: string, count: number) {
@@ -107,7 +107,7 @@ test('quote cards: three square cards from a text', async ({ page }) => {
   await source(page).fill(SOURCE);
   await page.getByRole('button', { name: /^Quote card/ }).click();
   await expect(page.getByRole('combobox', { name: /^Cards/ })).toHaveValue('3');
-  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
   const r = await collect(page, 'quote-cards', 3);
   expect(r.sizes).toEqual(['1080x1080']);
   expect(calls[0]).toContain('a set of 3 quote cards');
@@ -121,7 +121,7 @@ test('a 3-slide carousel', async ({ page }) => {
   await open(page);
   await source(page).fill(SOURCE);
   await page.getByRole('combobox', { name: /^Slides/ }).selectOption('3');
-  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
   const r = await collect(page, 'carousel-3', 3);
   expect(r.sizes).toEqual(['1080x1350']);
   expect(calls[0]).toContain('3-slide carousel');
@@ -135,7 +135,7 @@ test('a 10-slide carousel', async ({ page }) => {
   await open(page);
   await source(page).fill(SOURCE);
   await page.getByRole('combobox', { name: /^Slides/ }).selectOption('10');
-  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
   const r = await collect(page, 'carousel-10', 10);
   expect(r.sizes).toEqual(['1080x1350']);
   expect(calls[0]).toContain('10-slide carousel');
@@ -151,12 +151,12 @@ test('a text right under the 12,000-character limit is sent whole; one character
   expect(near.length).toBeGreaterThan(11_900);
   expect(near.length).toBeLessThanOrEqual(12_000);
   await source(page).fill(near);
-  await expect(page.getByRole('button', { name: 'Generate', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Make carousel', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
   const r = await collect(page, 'near-limit', 7);
   expect(calls[0]).toContain(near);
   expect(r.failures, JSON.stringify(r.failures)).toEqual([]);
   await source(page).fill(near + ' ' + 'x'.repeat(30));
   await expect(page.getByText(/The limit is 12,000/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Generate', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Make carousel', exact: true })).toBeDisabled();
 });

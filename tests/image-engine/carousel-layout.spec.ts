@@ -9,17 +9,17 @@ test('four groups, one open at a time; the preview shows an empty state, then th
   const groups = ['Content', 'Style', 'Reference', 'Edit'];
   for (const g of groups) await expect(page.getByRole('heading', { name: g, exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Content', exact: true })).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByLabel('Your text, idea or article')).toBeVisible();
+  await expect(page.getByLabel('Your text or topic')).toBeVisible();
   await expect(page.getByText('Match a reference', { exact: true })).toBeHidden();
   await expect(page.getByText('Your slides appear here')).toBeVisible();
   // Opening another group closes the first.
   await page.getByRole('button', { name: 'Reference', exact: true }).click();
   await expect(page.getByText('Match a reference', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Your text, idea or article')).toBeHidden();
+  await expect(page.getByLabel('Your text or topic')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Content', exact: true })).toHaveAttribute('aria-expanded', 'false');
   // "Open all groups" shows everything, and is remembered.
   await page.getByRole('button', { name: 'Open all groups' }).click();
-  await expect(page.getByLabel('Your text, idea or article')).toBeVisible();
+  await expect(page.getByLabel('Your text or topic')).toBeVisible();
   await expect(page.getByText('Match a reference', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'One group at a time' })).toBeVisible();

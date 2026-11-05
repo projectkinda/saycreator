@@ -120,7 +120,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
         )}
         {onRedesign && (
           <div className="tn-field" data-testid={`redesign-${index}`}>
-            <span className="field-label">Redesign this slide (one small model call)</span>
+            <span className="field-label">Redesign this slide: 1 Sonnet call, about 30 seconds (runs only when you press the button)</span>
             <input className="input" value={rdWords} disabled={rdBusy} placeholder="optional: bolder, with a clock icon" aria-label={`Words for redesigning slide ${index + 1}`} onChange={(e) => setRdWords(e.target.value)} />
             <button type="button" className="btn btn-outline btn-sm" disabled={rdBusy} onClick={async () => { setRdBusy(true); setRdMsg(''); setRdMsg(await onRedesign(rdWords)); setRdBusy(false); }}>
               {rdBusy ? 'Redesigning…' : 'Redesign this slide'}

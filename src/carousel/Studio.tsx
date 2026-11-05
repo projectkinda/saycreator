@@ -52,7 +52,7 @@ export function PreviewStage({ items, selected, onSelect, onOpen, count }: { ite
     return (
       <div className="cr-stage-empty">
         <strong>Your slides appear here</strong>
-        <span className="small muted">Paste your text in Content and press Generate.</span>
+        <span className="small muted">Paste your text, pick a style and press Make carousel.</span>
       </div>
     );
   const i = Math.min(selected, count - 1);

@@ -84,7 +84,11 @@ test.describe('the API provider (key on the server only), with a fake fetch', ()
     expect(seen!.url).toBe('https://api.anthropic.com/v1/messages');
     expect(seen!.headers['x-api-key']).toBe(KEY);
     expect(seen!.body.messages[0].content).toBe('the prompt');
-    expect(seen!.body.model).toBe('claude-sonnet-5-5');
+    expect(seen!.body.model, 'the script is written by the cheap model by default').toBe('claude-haiku-5-5');
+    await writeWithApi('x', never, { ANTHROPIC_API_KEY: KEY, WRITER_MODEL: 'sonnet' }, f);
+    expect(seen!.body.model, 'WRITER_MODEL changes it').toBe('claude-sonnet-5-5');
+    await writeWithApi('x', never, { ANTHROPIC_API_KEY: KEY }, f, undefined, 'draw');
+    expect(seen!.body.model, 'a design call uses the draw model').toBe('claude-sonnet-5-5');
   });
   test('an error from the API never carries the key into the message', async () => {
     const f = (async () => new Response(JSON.stringify({ error: { message: `invalid x-api-key ${KEY}` } }), { status: 401 })) as unknown as typeof fetch;

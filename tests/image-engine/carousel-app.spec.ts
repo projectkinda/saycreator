@@ -32,6 +32,8 @@ const EXAMPLE = exampleScript('carousel');
 const open = async (page: Page) => {
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
+  // The format, count, handle and tone options live under Advanced.
+  if (!(await page.locator('details.cr-advanced').evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByText('Advanced: write the script yourself').click();
 };
 /** The copy-prompt, paste and example tools live in the Advanced fold since Step 9. */
 const openAdvanced = async (page: Page) => {
@@ -86,8 +88,11 @@ test('the Images screen has a Make a carousel action that opens the editor, with
   await page.getByRole('link', { name: 'Make a carousel' }).click();
   await expect(page).toHaveURL(/\/images\/carousel$/);
   await expect(page.getByRole('heading', { name: 'Make it from your text' })).toBeVisible();
-  await expect(page.getByLabel('Your text, idea or article')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Generate', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Your text or topic')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Make carousel', exact: true })).toBeVisible();
+  // The format options are under Advanced (closed to start with).
+  await expect(page.locator('details.cr-advanced')).toHaveJSProperty('open', false);
+  await page.getByText('Advanced: write the script yourself').click();
   await expect(page.getByRole('button', { name: /^Carousel/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: /^Quote card/ })).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByRole('heading', { name: 'Style', exact: true })).toBeVisible();
@@ -97,7 +102,7 @@ test('the Images screen has a Make a carousel action that opens the editor, with
   const styles = page.getByRole('list', { name: 'Styles' }).getByRole('listitem');
   expect(await styles.count()).toBeGreaterThanOrEqual(5); // "Pick for me" and every stored style
   await expect(page.getByRole('button', { name: /^Pick for me/ })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('list', { name: 'Styles' }).locator('img')).toHaveCount((await styles.count()) - 1, { timeout: 30_000 });
+  await expect(page.getByRole('list', { name: 'Styles' }).locator('img')).toHaveCount((await styles.count()) - 2, { timeout: 30_000 }); // not "Pick for me" and not "New style"
   const ok = await page.getByRole('list', { name: 'Styles' }).locator('img').evaluateAll((els) => els.every((e) => (e as HTMLImageElement).naturalWidth > 0));
   expect(ok).toBe(true);
   await shot(page, 'start', 'Start: format, style, script', 'Pick a format, pick a style (each has a small preview), then get a script.');
@@ -105,7 +110,7 @@ test('the Images screen has a Make a carousel action that opens the editor, with
 
 test('Advanced: Copy prompt for Claude puts the topic, the format and the rules on the clipboard', async ({ page }) => {
   await open(page);
-  await page.getByLabel('Your text, idea or article').fill('Why small teams should write down decisions');
+  await page.getByLabel('Your text or topic').fill('Why small teams should write down decisions');
   await openAdvanced(page);
   await page.getByRole('button', { name: 'Copy prompt for Claude' }).click();
   await expect(page.getByText(/Prompt copied/)).toBeVisible();
@@ -120,6 +125,7 @@ test('Advanced: Copy prompt for Claude puts the topic, the format and the rules 
   const norm = (s: string) => s.replace(/\r/g, ''); // Windows clipboards turn line ends into CRLF
   expect(norm(await page.getByLabel('The prompt to paste into Claude').inputValue())).toBe(norm(text));
   // Quote cards ask for something different.
+  await openAdvanced(page);
   await page.getByRole('button', { name: /^Quote card/ }).click();
   await page.getByRole('button', { name: 'Copy prompt for Claude' }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('quote cards');
@@ -395,7 +401,7 @@ test('refresh and recover: the script, the edits, the style and the undo history
 test('a broken or unknown saved project never crashes the page', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('creator.carousel.project.v1', JSON.stringify({ project: { doc: { version: 1, format: 'carousel', style: 'gone', topic: 'kept', script: { slides: [1, 2] }, choices: {} }, past: [], future: [] } })));
   await open(page);
-  await expect(page.getByLabel('Your text, idea or article')).toHaveValue('kept');
+  await expect(page.getByLabel('Your text or topic')).toHaveValue('kept');
   await expect(page.getByText('No script yet')).toBeVisible();
   await page.addInitScript(() => localStorage.setItem('creator.carousel.project.v1', '{not json'));
   await page.reload();
@@ -404,11 +410,13 @@ test('a broken or unknown saved project never crashes the page', async ({ page }
 
 test('quote cards: a different format, square, with its own example; changing format keeps the script safe with undo', async ({ page }) => {
   await loadExample(page);
+  await openAdvanced(page);
   await page.getByRole('button', { name: /^Quote card/ }).click();
   await expect(page.getByText(/script was for the other format, so it was cleared/)).toBeAttached();
   await expect(page.getByText('No script yet')).toBeVisible();
   await undoBtn(page).click();
   await allDrawn(page);
+  await openAdvanced(page);
   await page.getByRole('button', { name: /^Quote card/ }).click();
   await openAdvanced(page);
   await page.getByRole('button', { name: 'Try an example script' }).click();

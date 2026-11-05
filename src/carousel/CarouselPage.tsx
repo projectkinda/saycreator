@@ -7,8 +7,10 @@ import { composeStyled, type StyledSlide } from '../image-engine/styles/compose'
 import { useDocumentTitle } from '../useDocumentTitle';
 import { validateScript, validateScriptText, exampleScript, formatOf, scriptPrompt, SLIDE_RANGE, type Format, type ScriptResult } from './script';
 import { DEFAULT_OPTIONS, patches } from './doc';
-import { MakeIt, runDesign, runGenerate, useWriters, type GenState } from './MakeIt';
-import { DesignedCard } from './DesignedCard';
+import { MakeIt, runGenerate, useWriters, type GenState } from './MakeIt';
+import { DeckFlags, DesignedCard } from './DesignedCard';
+import { NewStyleFlow } from './NewStyleFlow';
+import { scriptFromBlocks, slideBlocks } from './pasted';
 import { redesignSlide, type Designed } from './designed';
 import { pickStyle } from './pickStyle';
 import { type WriteRequest } from './writerPrompt';
@@ -38,12 +40,15 @@ import { onCancel, startJob, type JobHandle } from '../live/jobs';
 import '../styles/carousel.css';
 
 const DEFAULT_STYLE = 'editorial-collage';
+/** Designed slides come only from "New style" and "Redesign this slide", never from Make carousel. */
+const noDesign = (): Designed | undefined => undefined;
 
 // ---------- style picker with a small preview of each style ----------
 
-function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; value: string; auto: boolean; onAuto: () => void; onPick: (name: string, title: string) => void }) {
+function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyleOpen, rebuildOnly }: { format: Format; value: string; auto: boolean; onAuto: () => void; onPick: (name: string, title: string) => void; onNewStyle?: () => void; newStyleOpen?: boolean; rebuildOnly?: boolean }) {
   useTemplatesVersion();
-  const styles = carouselStyles();
+  // Mine first, then the built-in ones.
+  const styles = [...carouselStyles()].sort((a, b) => Number(isUserStyle(b.spec.name)) - Number(isUserStyle(a.spec.name)));
   const { problems } = getStyles();
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [packNote, setPackNote] = useState('');
@@ -58,6 +63,7 @@ function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; 
     setPackNote(`Saved “${name}” (Mine): ${Object.keys(pack.designs).length} designs${check.ok ? ', each with its own composition' : `, but ${check.alike.length} pair(s) look alike`}. The ${st.spec.title} style is unchanged.`);
   };
   useEffect(() => {
+    if (rebuildOnly) return;
     let live = true;
     const f = formatOf(format);
     (async () => {
@@ -87,6 +93,19 @@ function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [format, styles]);
+  if (rebuildOnly)
+    return (
+      <>
+        <ul className="cr-rebuild" aria-label="Rebuild as pack">
+          {styles.filter((st) => !isUserStyle(st.spec.name)).map((st) => (
+            <li key={st.spec.name}>
+              <button type="button" className="btn btn-outline btn-sm" aria-label={'Rebuild the ' + st.spec.title + ' style as a pack'} onClick={() => void rebuild(st)}>Rebuild {st.spec.title} as pack</button>
+            </li>
+          ))}
+        </ul>
+        {packNote && <p className="small" role="status" data-testid="pack-note">{packNote}</p>}
+      </>
+    );
   return (
     <>
       <ul className="grid cr-styles" aria-label="Styles">
@@ -108,10 +127,17 @@ function StylePicker({ format, value, auto, onAuto, onPick }: { format: Format; 
                 {auto && value === st.spec.name && <span className="chip chip-tag">In use</span>}
                 {st.warnings.some((w) => /phone-size checker needs at least 32 px/.test(w)) && <span className="chip chip-warn">Some text is below phone size</span>}
               </button>
-              {!isUserStyle(st.spec.name) && <button type="button" className="btn btn-outline btn-sm cr-quiet" aria-label={`Rebuild the ${st.spec.title} style as a pack`} onClick={() => void rebuild(st)}>Rebuild as pack</button>}
             </li>
           );
         })}
+        {onNewStyle && (
+          <li>
+            <button type="button" className="card start-opt cr-style cr-new" aria-expanded={!!newStyleOpen} onClick={onNewStyle}>
+              <strong>+ New style</strong>
+              <span className="small muted">From a reference picture or a description. Uses the drawing model, with the cost shown first.</span>
+            </button>
+          </li>
+        )}
       </ul>
       {packNote && <p className="small" role="status" data-testid="pack-note">{packNote}</p>}
       {problems.length > 0 && (
@@ -186,6 +212,7 @@ export default function CarouselPage() {
   const [pasted, setPasted] = useState(() => readStore(PASTE_KEY) ?? '');
   const [check, setCheck] = useState<ScriptResult | null>(null);
   const [notice, setNotice] = useState('');
+  const [newStyleOpen, setNewStyleOpen] = useState(false);
   const [copied, setCopied] = useState('');
   const [showPrompt, setShowPrompt] = useState(false);
   const [error, setError] = useState('');
@@ -378,7 +405,23 @@ export default function CarouselPage() {
 
   const GEN_LABEL = 'Generate from your text';
   const generate = async () => {
-    if (!provider || busy) return;
+    if (busy) return;
+    // A chosen style that is missing or broken is an error, never a reason to generate: the picker stays and no model is called.
+    if (!options.autoStyle && !styleByName(doc.style)) return setGen({ phase: 'error', message: 'The chosen style "' + doc.style + '" is missing or broken. Pick another style below. Nothing was generated and no model was called.' });
+    // Ready-made slide text (one block per slide) becomes the slides as it is: no writer call at all.
+    const blocks = slideBlocks(doc.topic);
+    if (blocks) {
+      const built = scriptFromBlocks(blocks, doc.format, options.handle.trim());
+      if (!built.script) return setGen({ phase: 'error', message: 'Your slide text could not be used as slides.', problems: built.errors });
+      const known0 = carouselStyles().map((x) => x.spec.name);
+      const pick0 = options.autoStyle ? pickStyle({ text: doc.topic, tone: options.tone, slideTypes: built.script.slides.map((x) => x.type), styles: carouselStyles(), writerSuggestion: known0[0] ?? null }) : null;
+      const gp0 = patches.generate(built.script, pick0 ? pick0.name : null, GEN_LABEL);
+      const done0 = apply({ ...gp0, ops: [...gp0.ops, { path: ['designed'], value: undefined }] });
+      if (!done0.ok) return setGen({ phase: 'error', message: 'The slides could not be used: ' + done0.reasons[0] });
+      setNotice('');
+      return setGen({ phase: 'drawing', ms: 0, attempts: 1, message: 'Drawing slide 1 of ' + built.script.slides.length + '…', extra: ' Your slide text was used as it is: no model was called.' });
+    }
+    if (!provider) return;
     const ctl = new AbortController();
     abort.current = ctl;
     const [lo, hi] = SLIDE_RANGE[doc.format];
@@ -398,11 +441,9 @@ export default function CarouselPage() {
     onCancel(job.id, () => ctl.abort());
     job.begin('write');
     job.waiting('the writer');
-    const designedMode = doc.format === 'carousel' && options.mode !== 'quick';
-    const r = designedMode
-      ? await runDesign(req, { pack: options.autoStyle ? null : packFor(doc.style), brief: options.brief }, options.handle.trim(), provider, ctl.signal, (phase) => setGen({ phase }))
-      : await runGenerate(req, provider, ctl.signal, (phase) => setGen({ phase }));
-    const designedOut = r.ok && designedMode ? (r as { designed?: Designed }).designed : undefined;
+    // Only the script is written here (the cheap writer model). The slides are filled by code from the chosen style: no design call.
+    const r = await runGenerate(req, provider, ctl.signal, (phase) => setGen({ phase }));
+    const designedOut = noDesign();
     job.waiting(null);
     abort.current = null;
     if (!r.ok) {
@@ -473,7 +514,7 @@ export default function CarouselPage() {
         <div className="page-header-text">
           <p className="small"><Link to="/images">← Back to Images</Link></p>
           <h1 className="page-title">Make a carousel</h1>
-          <p className="lead">Paste your text, press Generate, then edit anything. The slides are drawn in your browser; your text goes to the writer only when you press Generate.</p>
+          <p className="lead">Paste your text, pick a style, press Make carousel, then edit anything. The slides are drawn in your browser from the style, with no design call; your text goes to the writer only when you press the button.</p>
         </div>
       </header>
       <p className="visually-hidden" role="status" aria-live="polite">{notice}</p>
@@ -528,10 +569,57 @@ export default function CarouselPage() {
         </div>
       )}
 
-          <div className="cr-groups-tools">
-            <button type="button" className="btn btn-outline btn-sm cr-quiet" aria-pressed={g.all} onClick={() => g.setAll(!g.all)}>{g.all ? 'One group at a time' : 'Open all groups'}</button>
-          </div>
-          <Group id="content" title="Content" hint="Text, format, photos" g={g}>
+      <MakeIt
+        doc={doc}
+        options={options}
+        setTopic={setTopic}
+        setOptions={(o) => setOptions(o)}
+        onFormat={(f) => {
+          pickFormat(f);
+          const [lo, hi] = SLIDE_RANGE[f];
+          setOptions({ slides: f === 'quote' ? 3 : 7 > hi ? hi : 7 < lo ? lo : 7 });
+        }}
+        onHandle={(h) => {
+          setOptions({ handle: h });
+          if (doc.script) apply(patches.handle(h.trim() || '@yourname'));
+        }}
+        busy={busy}
+        gen={gen}
+        onGenerate={generate}
+        onCancel={cancel}
+        provider={provider}
+        providers={providers}
+        styles={<>
+          <StylePicker format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} onNewStyle={() => setNewStyleOpen((v) => !v)} newStyleOpen={newStyleOpen} />
+          {targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}
+        </>}
+      />
+      {newStyleOpen && (
+        <NewStyleFlow
+          text={doc.topic}
+          tone={options.tone}
+          slides={options.slides}
+          handle={options.handle.trim()}
+          provider={provider}
+          reference={<MatchPanel target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} describe={{ canvas: { w: 1080, h: 1350 }, hasCutout: false }} />}
+          onClose={() => setNewStyleOpen(false)}
+          onCreated={(r) => {
+            setOptions({ autoStyle: false });
+            if (r.script) {
+              const gp = patches.generate({ ...r.script, brand: { ...r.script.brand, handle: options.handle.trim() || r.script.brand.handle } }, r.name, 'New style: ' + r.title);
+              apply({ ...gp, ops: [...gp.ops, { path: ['designed'], value: undefined }] });
+            } else apply(patches.style(r.name, r.title));
+            setNewStyleOpen(false);
+            setNotice('Made the style ' + r.title + ' and selected it.');
+          }}
+        />
+      )}
+      <DeckFlags doc={doc} />
+
+      <details className="card ws-card cr-advanced" open={advanced} onToggle={(e) => setAdvanced((e.target as HTMLDetailsElement).open)}>
+        <summary className="h4">Advanced: write the script yourself, options and tools</summary>
+        <div className="create-form">
+          <h3 className="h4">Options</h3>
       <MakeIt
         doc={doc}
         options={options}
@@ -553,10 +641,11 @@ export default function CarouselPage() {
         provider={provider}
         providers={providers}
         styles={null}
+        part="options"
       />
-
-      <details className="card ws-card cr-advanced" open={advanced} onToggle={(e) => setAdvanced((e.target as HTMLDetailsElement).open)}>
-        <summary className="h4">Advanced: write the script yourself</summary>
+          <h3 className="h4">Rebuild a built-in style as a pack (no model call)</h3>
+          <StylePicker rebuildOnly format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => undefined} onPick={() => undefined} />
+          <h3 className="h4">Write the script yourself</h3>
         <div className="create-form">
           <p className="small muted">Copy a prompt for Claude, paste it in any Claude chat, then paste the JSON it returns here. Or try the example script.</p>
           <div className="row-actions">
@@ -605,20 +694,17 @@ export default function CarouselPage() {
             <button type="button" className="btn btn-dark btn-lg" disabled={!check || check.errors.length > 0} onClick={() => useScript(pasted)}>Use this script</button>
           </div>
         </div>
-      </details>
-
+              <h3 className="h4">Designed slides, pictures and photos</h3>
       <DesignedCard doc={doc} />
       <ImageRequestsPanel doc={doc} apply={apply} />
       <PhotosStrip pictures={pictures} supported={hasPhotoStyle} styleTitle={style?.spec.title ?? 'This style'} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onCutout={makeCutout} editableCutouts={cutouts.ids} onEditCutout={(id) => void editCutout(id)} usedOn={usedOn} storageProblem={currentStorageProblem()} lowRoom={lowRoom} />
       {editing && <CutoutEditor record={editing} onSave={(r) => void saveEdited(r)} onClose={() => setEditing(null)} />}
+          <div className="cr-groups-tools">
+            <button type="button" className="btn btn-outline btn-sm cr-quiet" aria-pressed={g.all} onClick={() => g.setAll(!g.all)}>{g.all ? 'One group at a time' : 'Open all groups'}</button>
+          </div>
+        </div>
+      </details>
 
-          </Group>
-          <Group id="style" title="Style" hint="Styles and templates" g={g}>
-            <><StylePicker format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} />{targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}</>
-          </Group>
-          <Group id="reference" title="Reference" hint="Match a reference, describe the look" g={g}>
-            <MatchPanel target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} describe={{ canvas: { w: 1080, h: 1350 }, hasCutout: false }} />
-          </Group>
           <Group id="edit" title="Edit" hint="Each slide, its layers and photos" g={g}>
         {!hasWork && (
           <div className="card empty">
@@ -654,12 +740,12 @@ export default function CarouselPage() {
                 palette={style.spec.palettes[s.palette]}
                 hasPhotoStyle={hasPhotoStyle}
                 addFiles={addFiles}
-                onRedesign={doc.designed && doc.script && provider ? async (words) => {
-                  const look = { pack: options.autoStyle ? null : packFor(doc.style), brief: options.brief };
+                onRedesign={doc.script && provider ? async (words) => {
+                  const look = { pack: packFor(doc.style), brief: options.brief || 'the look of the "' + (style?.spec.title ?? doc.style) + '" style' };
                   try {
                     const r = await redesignSlide(doc.script!, i, doc.designed, look, words, provider, new AbortController().signal);
                     if (!r.ok) return `Could not redesign slide ${i + 1}: ${r.reasons[0] ?? 'the design could not be used'} The current look is kept (${r.calls} calls).`;
-                    const d = doc.designed!;
+                    const d = doc.designed ?? { slides: {}, fallbacks: {}, notes: [], calls: 0, ms: 0 };
                     const { [String(i)]: _gone, ...fallbacks } = d.fallbacks;
                     apply(patches.setDesigned({ ...d, slides: { ...d.slides, [String(i)]: { pack: r.pack, ...(r.recurring?.length ? { recurring: r.recurring } : {}) } }, fallbacks, calls: d.calls + r.calls }, `Redesign slide ${i + 1}`));
                     return `Redesigned slide ${i + 1} (${r.calls} model call${r.calls === 1 ? '' : 's'}). Undo brings the old design back.`;

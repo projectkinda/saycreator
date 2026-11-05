@@ -62,6 +62,14 @@ export function findClaudeCli(env: NodeJS.ProcessEnv = process.env, platform = p
   return null;
 }
 
+export type WriteKind = 'write' | 'draw';
+const API_IDS: Record<string, string> = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
+/** Which model a call uses: the SCRIPT is written by the cheap WRITER_MODEL (default haiku); a design call ("draw") uses DRAW_MODEL, else CAROUSEL_MODEL, else sonnet. */
+export function modelFor(kind: WriteKind, env: NodeJS.ProcessEnv = process.env): string {
+  return kind === 'draw' ? env.DRAW_MODEL || env.CAROUSEL_MODEL || 'sonnet' : env.WRITER_MODEL || 'haiku';
+}
+export const apiModel = (name: string) => API_IDS[name] ?? name;
+
 export function cliStatus(env: NodeJS.ProcessEnv = process.env): { available: boolean; reason?: string } {
   const bin = findClaudeCli(env);
   if (!bin) return { available: false, reason: 'The Claude Code command line tool was not found on this computer. Install it, or set CLAUDE_BIN to its full path.' };
@@ -84,14 +92,14 @@ export function killTree(pid: number | undefined) {
 }
 
 /** Runs `claude -p` once with the prompt on stdin. No tools, no saved session, in an empty temp folder so no project files are read. */
-export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, timeoutMs = CLI_TIMEOUT_MS, launcher?: { bin: string; args: string[] }): Promise<{ text: string; ms: number }> {
+export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, timeoutMs = CLI_TIMEOUT_MS, launcher?: { bin: string; args: string[] }, kind: WriteKind = 'write'): Promise<{ text: string; ms: number }> {
   const bin = launcher?.bin ?? findClaudeCli(env);
   if (!bin) return Promise.reject(new WriterFailure(503, 'unavailable', cliStatus(env).reason!));
   const t0 = Date.now();
   return new Promise((resolve, reject) => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'carousel-writer-'));
     // `launcher` is a test seam: a stand-in program instead of the real command line.
-    const args = launcher?.args ?? ['-p', '--output-format', 'json', '--no-session-persistence', '--tools', '', '--system-prompt', SYSTEM_PROMPT];
+    const args = launcher?.args ?? ['-p', '--output-format', 'json', '--no-session-persistence', '--tools', '', '--system-prompt', SYSTEM_PROMPT, '--model', modelFor(kind, env)];
     const child = spawn(bin, args, { cwd, env: { ...env, CLAUDE_CODE_ENTRYPOINT: 'carousel-writer' }, windowsHide: true, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
@@ -140,7 +148,7 @@ export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.Pr
 // ---------- api ----------
 
 /** One call to the Messages API. The key comes from `env` only and appears in no message, log or response. */
-export async function writeWithApi(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, fetchImpl: typeof fetch = fetch, timeoutMs = API_TIMEOUT_MS): Promise<{ text: string; ms: number }> {
+export async function writeWithApi(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, fetchImpl: typeof fetch = fetch, timeoutMs = API_TIMEOUT_MS, kind: WriteKind = 'write'): Promise<{ text: string; ms: number }> {
   const key = env.ANTHROPIC_API_KEY;
   if (!key) throw new WriterFailure(503, 'unavailable', 'No API key is set on the server, so the API writer is off.');
   const t0 = Date.now();
@@ -151,7 +159,7 @@ export async function writeWithApi(prompt: string, signal: AbortSignal, env: Nod
     r = await fetchImpl('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: env.CAROUSEL_MODEL || 'claude-sonnet-5-5', max_tokens: 4096, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: apiModel(modelFor(kind, env)), max_tokens: 4096, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: prompt }] }),
       signal: both,
     });
   } catch (e) {
@@ -207,9 +215,10 @@ export function carouselHandler(provider: Provider, opts: { env?: NodeJS.Process
       const ctl = new AbortController();
       res.on('close', () => !res.writableEnded && ctl.abort());
       try {
-        const body = JSON.parse(await readBody(req)) as { prompt?: unknown };
+        const body = JSON.parse(await readBody(req)) as { prompt?: unknown; kind?: unknown };
+        const kind: WriteKind = body.kind === 'draw' ? 'draw' : 'write';
         if (typeof body.prompt !== 'string' || body.prompt.trim() === '') throw new WriterFailure(400, 'failed', 'The request has no prompt.');
-        const r = provider === 'dev-cli' ? await writeWithCli(body.prompt, ctl.signal, env) : await writeWithApi(body.prompt, ctl.signal, env, opts.fetchImpl);
+        const r = provider === 'dev-cli' ? await writeWithCli(body.prompt, ctl.signal, env, undefined, undefined, kind) : await writeWithApi(body.prompt, ctl.signal, env, opts.fetchImpl, undefined, kind);
         return send(res, 200, r);
       } catch (e) {
         if (e instanceof WriterFailure) return send(res, e.status, { error: e.message, kind: e.kind });

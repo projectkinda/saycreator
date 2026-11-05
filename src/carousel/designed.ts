@@ -317,7 +317,7 @@ export async function designDeck(req: WriteRequest, look: Look, handle: string, 
   let ms = 0;
   const ask = async (prompt: string) => {
     onPhase(calls === 0 ? 'writing' : 'retrying');
-    const a = await p.write(prompt, signal);
+    const a = await p.write(prompt, signal, 'draw');
     calls += 1;
     ms += a.ms;
     return a.text;
@@ -378,7 +378,7 @@ export async function redesignSlide(script: CarouselScript, index: number, desig
   let problems: string[] | undefined;
   let calls = 0;
   for (let tryNo = 0; tryNo < 2; tryNo++) {
-    const a = await p.write(buildRedesignPrompt(slide, index, script.slides.length, script.brand.handle, look, near, words, problems), signal);
+    const a = await p.write(buildRedesignPrompt(slide, index, script.slides.length, script.brand.handle, look, near, words, problems), signal, 'draw');
     calls += 1;
     const block = svgsOf(a.text).get(index) ?? svgsOf(a.text).get(0);
     const c = await checkOne(index, script, block, look, palette);
