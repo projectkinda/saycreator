@@ -4,8 +4,9 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { packPicture } from './packRender';
 import { blankStyle } from './blank';
 import { setActiveReference } from './active';
-import { readerImageOf } from './images';
-import { buildPackPrompt, callPack, distinctCheck, hasTextSlots, PACK_CAP, PACK_TYPES, parsePack, type PackType, type StylePack } from './pack';
+import { bitmapFromUrl, cut, pxOfCanvas, readerImageOf } from './images';
+import { detectRegions } from './regions';
+import { buildPackPrompt, callPack, distinctCheck, hasTextSlots, PACK_CAP, PACK_TYPES, parsePack, retryIfBlocky, type PackType, type StylePack } from './pack';
 import { detectReaders, type ReferenceReader } from './reader';
 import type { RLayer } from './recreate';
 import { saveTemplate, styleNameFor } from './templates';
@@ -67,7 +68,18 @@ export function PackMaker({ kind, description, reference, first }: { kind: 'refe
     const t0 = performance.now();
     try {
       const images = kind === 'reference' && reference ? [readerImageOf(reference.url, 'reference.jpg')] : [];
-      const text = await callPack(readers![0], buildPackPrompt({ kind, types, description, firstSvg: first?.svg }), images, abort.current.signal);
+      let text = await callPack(readers![0], buildPackPrompt({ kind, types, description, firstSvg: first?.svg }), images, abort.current.signal);
+      // The block check (no model): mostly plain rectangles from a reference that is not rectangular gets ONE more call, counted in the cap.
+      if (kind === 'reference' && reference && used < PACK_CAP) {
+        const detected = await bitmapFromUrl(reference.url).then((bm) => detectRegions(pxOfCanvas(cut(bm, null, 1000)))).catch(() => null);
+        const b = await retryIfBlocky({ reader: readers![0], text, detected, build: (blocks) => buildPackPrompt({ kind, types, description, firstSvg: first?.svg, blocks }), images, signal: abort.current.signal, canRetry: true });
+        if (b.retried) {
+          used++;
+          ls.forEach((l) => l());
+          setMsg(`Mostly plain rectangles (${Math.round(b.check.share * 100)}%): drew it once more.`);
+        }
+        text = b.text;
+      }
       const r = await parsePack(text, name.trim() || (kind === 'description' ? `Pack: ${(description ?? '').slice(0, 24)}` : 'Pack from a reference'));
       if (!r.ok) {
         setMsg(`The designs could not be used: ${r.reasons.join(' ')}`);
@@ -116,7 +128,7 @@ export function PackMaker({ kind, description, reference, first }: { kind: 'refe
         <button type="button" role="radio" aria-checked={size === 'quick'} className="chip-btn" onClick={() => setSize('quick')}>Quick (cover and one content slide)</button>
         <button type="button" role="radio" aria-checked={size === 'full'} className="chip-btn" onClick={() => setSize('full')}>Full set (7 slide types)</button>
       </div>
-      <p className="small muted" role="status" aria-label="Pack estimate">Estimate: 1 model call (2 if a design comes without text), about {types.length * SECONDS_PER_DESIGN} s, {types.length} designs ({types.join(', ')}). Pack calls used: {calls} of {PACK_CAP}.</p>
+      <p className="small muted" role="status" aria-label="Pack estimate">Estimate: 1 model call (2 if a design comes without text or is mostly plain rectangles), about {types.length * SECONDS_PER_DESIGN} s, {types.length} designs ({types.join(', ')}). Pack calls used: {calls} of {PACK_CAP}.</p>
       <div className="row-actions">
         <button type="button" className="btn btn-outline btn-sm" disabled={busy || noReader || !needs || calls >= PACK_CAP} onClick={() => void make()}>{busy ? 'Working…' : 'Make the set'}</button>
         {busy && <button type="button" className="btn btn-outline btn-sm" onClick={() => abort.current?.abort()}>Cancel</button>}

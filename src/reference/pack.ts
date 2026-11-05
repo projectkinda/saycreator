@@ -13,6 +13,7 @@ import { faithfulSvg, resolveSvgTokens, type FaithfulSlot } from './faithful';
 import { extractImageSlots, injectSlots, scrimFor, slotMarkup, type ImageSlot } from '../images/slots';
 import { fillsFor, type ImageRequest } from '../images/store';
 import type { ReaderImage, ReferenceReader } from './reader';
+import type { Detected } from './regions';
 
 export const PACK_TYPES = ['cover', 'step', 'content', 'list', 'stat', 'quote', 'cta'] as const;
 export type PackType = (typeof PACK_TYPES)[number];
@@ -248,9 +249,19 @@ const SLOTS: Record<PackType, string> = {
 };
 const fontLine = () => FONT_NAMES.map((f) => `"${f}" (weights ${FONT_WEIGHTS[f].join(', ')})`).join('; ');
 
-export function buildPackPrompt(o: { kind: 'reference' | 'description'; types: PackType[]; description?: string; firstSvg?: string; retry?: string }): string {
+/** The look-first step: the model lists what the reference shows BEFORE it draws. The block is stripped before parsing (stripInventory). */
+const INVENTORY_RULES = [
+  'LOOK FIRST, THEN DRAW. Start your answer with ONE block <inventory>...</inventory> (plain text, one line per element), BEFORE any <svg>. Look at the whole reference and list EVERY visible element: photos, cut-out people, illustrations, shapes, lines, text, stickers. For each give: kind (photo | cut-out person | illustration | shape | line | text | sticker); position and size as % of the slide (x, y, width, height); colour; rotation in degrees; and its REAL shape (circle | pill | arch | blob | torn edge | scribble | rectangle | other: say what). Do not skip small things (doodles, dots, tape, arrows, underlines).',
+  'Then the SVGs must follow that list item by item: every listed element appears in the drawing at its listed place, size, colour, rotation and shape, and nothing is added that is not listed.',
+  'SHAPES: use <rect> ONLY for things that really are rectangles. Everything else is a <path>, <circle>, <ellipse> or <polygon> (a blob, sticker, arch, pill, torn edge, scribble, doodle or cut-out outline is never a <rect>). Photos and cut-out people are image slots (data-image-slot), never drawn shapes.',
+].join('\n');
+
+export function buildPackPrompt(o: { kind: 'reference' | 'description'; types: PackType[]; description?: string; firstSvg?: string; retry?: string; /** The block check's message, for the one retry. */ blocks?: string; /** false: the old prompt without the look-first step (measuring only). */ inventory?: boolean }): string {
+  const inv = o.kind === 'reference' && o.inventory !== false;
   return [
-    '[pack:new] You design a STYLE PACK for carousel slides: one SVG slide design per slide type, all in one look. You are drawing designs, not describing them. Reply with the SVGs only (no code fence, no explanation).',
+    '[pack:new] You design a STYLE PACK for carousel slides: one SVG slide design per slide type, all in one look. You are drawing designs, not describing them. ' + (inv ? 'Reply with the <inventory> block and then the SVGs only (no code fence, no other explanation).' : 'Reply with the SVGs only (no code fence, no explanation).'),
+    inv ? INVENTORY_RULES : '',
+    o.blocks ? `Your previous answer was mostly plain rectangles. ${o.blocks} Redraw the designs with the real shapes from your inventory (paths, circles, ellipses, polygons); keep <rect> only for real rectangles. Make ONLY the slide types listed above again.` : '',
     o.kind === 'reference'
       ? 'The first picture is the reference slide (the file reference.jpg in the current folder; look at it with your Read tool). The look of the pack must be the reference\'s look: its colours, type, motifs and mood.' + (o.firstSvg ? ` Its first slide design, already drawn, is:\n${o.firstSvg.slice(0, 9000)}` : '')
       : `The look to design, in the person's words: "${(o.description ?? '').slice(0, 400)}".`,
@@ -263,6 +274,7 @@ export function buildPackPrompt(o: { kind: 'reference' | 'description'; types: P
     o.retry ? `Your previous answer was refused for: ${o.retry}. Make ONLY the slide types listed above again.` : '',
     'Photos are never drawn as abstract shapes: a photo region is always an image slot. Image slots (optional, where a photo or picture would fit on that slide type, at most 2 per design): draw one as <rect data-image-slot="background|inset|half-bleed|strip|cutout" data-mask="rect|rounded|circle|arch|blob" data-fit="cover|contain" data-scrim="0.4" data-scrim-from="bottom" x=".." y=".." width=".." height=".."/> (a strip also has data-count="2" or "3"). NEVER an <image> and never a link or picture data: the slot stays empty until the person adds a picture. Keep the text slots clear of it or on its scrim.',
     'ALSO make one extra <svg data-type="quote" data-format="square" viewBox="0 0 1080 1080"> after the others: a 1:1 quote post for the same look (data-role title for the quote and caption for who said it), composed for a square, not the 4:5 quote scaled down. It may have a background or inset image slot too.',
+    'Use <rect> only for things that really are rectangles; everything else is a <path>, <circle>, <ellipse> or <polygon>. Photos and cut-outs are image slots, never shapes.',
     'Graphics (motifs, shapes, doodles, patterns, dots) are plain shapes and paths; every group of them is a <g id="short-name">. Allowed elements only: svg, g, path, circle, ellipse, rect, line, polyline, polygon, defs, linearGradient, radialGradient, stop, clipPath, mask, pattern, text, tspan. No images, no scripts, no external references. The first element of each design is the full-size background <rect>.',
   ].filter(Boolean).join('\n');
 }
@@ -278,7 +290,77 @@ export const hasTextSlots = (layers: RLayer[]) => layers.some((l) => l.kind === 
 
 export const slotMetaOf = (layers: RLayer[]): SlotMeta[] =>
   layers.filter((l): l is RLayer & TextLayer => l.kind === 'text').map((l) => ({ role: l.name, x: Math.round(l.x), y: Math.round(l.y), w: Math.round(l.width), h: Math.round(l.height), minSize: l.slot?.minSize ?? 32, ...(l.slot?.maxSize ? { maxSize: l.slot.maxSize } : {}), ...(l.slot?.maxLines ? { maxLines: l.slot.maxLines } : {}) }));
-export async function parsePack(text: string, name: string, fallbackPalette?: Record<string, string>): Promise<PackAnswer | { ok: false; reasons: string[] }> {
+/** Removes the <inventory> block (the look-first listing) from an answer; an unclosed one is cut at the first <svg>. */
+export function stripInventory(text: string): string {
+  let t = text.replace(/<inventory\b[^>]*>[\s\S]*?<\/inventory>/gi, '');
+  const open = /<inventory\b[^>]*>/i.exec(t);
+  if (open) {
+    const svgAt = t.indexOf('<svg', open.index);
+    t = svgAt < 0 ? t.slice(0, open.index) : t.slice(0, open.index) + t.slice(svgAt);
+  }
+  return t.trim();
+}
+
+/** The "block check" (no model): the share of drawn shapes that are plain <rect>. The full-size background rect and image-slot rects are not counted. */
+export function rectShare(text: string): { shapes: number; rects: number; share: number } {
+  let shapes = 0;
+  let rects = 0;
+  for (const b of stripInventory(text).match(/<svg[\s\S]*?<\/svg>/gi) ?? []) {
+    let first = true;
+    for (const m of b.matchAll(/<(rect|path|circle|ellipse|polygon|polyline)\b([^>]*)>/gi)) {
+      const tag = m[1].toLowerCase();
+      const attrs = m[2];
+      if (first && tag === 'rect') {
+        first = false; // the background
+        continue;
+      }
+      first = false;
+      if (/data-image-slot/i.test(attrs)) continue;
+      shapes++;
+      if (tag === 'rect') rects++;
+    }
+  }
+  return { shapes, rects, share: shapes ? rects / shapes : 0 };
+}
+
+/** Whether the reference measured as not rectangular (regions.ts): a quarter or more of its photos, shapes and graphics are round, pill, rounded, rings or marks. */
+export function notRectangular(d: Detected | null | undefined): boolean {
+  if (!d) return false;
+  const total = d.photos.length + d.shapes.length + d.graphics.length;
+  if (total === 0) return false;
+  const odd = d.photos.filter((p) => p.shape === 'circle' || p.shape === 'rounded').length + d.shapes.filter((s) => s.kind !== 'rect' && s.kind !== 'bar').length + d.graphics.length;
+  return odd / total >= 0.25;
+}
+
+export interface BlockCheck {
+  shapes: number;
+  rects: number;
+  share: number;
+  notRect: boolean;
+  /** True when a retry is due: more than 60% of the shapes are plain rectangles and the reference is not rectangular. */
+  blocky: boolean;
+  message: string;
+}
+export function blockCheck(text: string, detected: Detected | null | undefined): BlockCheck {
+  const r = rectShare(text);
+  const nr = notRectangular(detected);
+  const blocky = r.shapes >= 3 && r.share > 0.6 && nr;
+  return { ...r, notRect: nr, blocky, message: `${r.rects} of ${r.shapes} drawn shapes (${Math.round(r.share * 100)}%) were <rect>, but the reference has round, pill, rounded or free-form shapes.` };
+}
+
+/** After the first answer: when the block check fails, ONE more draw call with the check result in the prompt (the caller's cap counts it). Returns the text to parse. */
+export async function retryIfBlocky(o: { reader: ReferenceReader; text: string; detected: Detected | null | undefined; build: (blocks: string) => string; images: ReaderImage[]; signal: AbortSignal; canRetry: boolean }): Promise<{ text: string; retried: boolean; check: BlockCheck; after?: BlockCheck }> {
+  const check = blockCheck(o.text, o.detected);
+  if (!check.blocky || !o.canRetry) return { text: o.text, retried: false, check };
+  const again = await callPack(o.reader, o.build(check.message), o.images, o.signal);
+  const after = blockCheck(again, o.detected);
+  // The retry replaces the first answer only when it has designs and is not blockier.
+  const better = /<svg/i.test(again) && after.share <= check.share;
+  return { text: better ? again : o.text, retried: true, check, after };
+}
+
+export async function parsePack(text0: string, name: string, fallbackPalette?: Record<string, string>): Promise<PackAnswer | { ok: false; reasons: string[] }> {
+  const text = stripInventory(text0);
   const blocks = text.match(/<svg[\s\S]*?<\/svg>/gi) ?? [];
   if (blocks.length === 0) return { ok: false, reasons: [`The answer has no <svg> designs. The reader said: "${text.replace(/\s+/g, ' ').slice(0, 160)}"`] };
   let palette: Record<string, string> = {};

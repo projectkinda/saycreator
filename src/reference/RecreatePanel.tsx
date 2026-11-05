@@ -47,7 +47,8 @@ export async function referenceAt1400(file: File, mode: 'auto' | 'whole' | 'spli
     bm.close();
     return { url: await blobUrl(file), name: file.name, width: meta.srcW, height: meta.srcH, ...meta };
   }
-  const j = await jpegUrl(bm, choice.rect, 1400);
+  // A slide cut out of a sheet can be a few hundred px wide: it is scaled UP to 1400 px so the reader gets a full-size picture (no new detail, but a size it reads well).
+  const j = await jpegUrl(bm, choice.rect, 1400, !!choice.rect);
   bm.close();
   return { url: j.url, name: file.name, width: j.width, height: j.height, ...meta };
 }

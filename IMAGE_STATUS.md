@@ -615,3 +615,26 @@ Thumbnails are parked while carousels and quote posts are the focus: the Images 
 - **Requests:** `planImageRequests` (code, not the writer model: a few scrubbed title words, mood and palette words) and "put X as the background here" on a slide; list with Generate, Generate all (count and estimate), cap 5, counter, Upload instead, Regenerate, Remove, treatments, focal click. Pictures cached in IndexedDB, never remade silently.
 - **Quote posts:** packs may carry a square 1:1 quote design (asked for in every pack prompt, built by the code for rebuilt styles); quote posts use it; a pack without one says so and offers "Make a square quote design" (1 model call, estimate first).
 - **Not done / untested:** the writer model does not return the requests (the code planner does); the panel and the slide input are not covered by a browser test; the real provider was never called; empty placeholders also appear in exports.
+
+## Step 16a: look first, then draw (pack designs)
+
+**What changed**: a reference pack call now starts with an `<inventory>` block (every element: kind, position and size in %, colour, rotation, real shape) and the SVG follows it item by item; the block is stripped before parsing. New rule: `<rect>` only for real rectangles; photos and cut-outs are image slots. A no-model block check (share of drawn shapes that are plain `<rect>`; the background and image slots are not counted) makes ONE retry, counted in the pack cap, when the share is over 60% and the reference measured as not rectangular (`regions.ts`: 25% or more of its photos, shapes and graphics are round, pill, rounded, rings or marks). `READER_DRAW_MODEL` picks the draw model (then `READER_MODEL`, then `CAROUSEL_MODEL`); read calls are unchanged; documented in `.env.example`. Recreate and PackMaker already send one slide at 1400 px (`referenceAt1400`), so that part needed no change.
+
+**Real run** (`REAL_LAYOUT=1`, `pack-draw-real.spec.ts`; the five sets of Step 14e, one cover design each, same model both ways; before = old prompt, after = new). Text overlap = share of the reference's detected text area covered by the drawn text slots.
+
+| set | slide sent | not rectangular | text overlap before / after | plain-rect share before / after | model calls before / after | seconds before / after |
+|---|---|---|---|---|---|---|
+| deck-a | 333x415 (cut from a sheet) | yes | 37% / 46% | 33% (2/6) / 20% (1/5) | 1 / 1 | 13.1 / 24.7 |
+| deck-b | 195x346 (cut from a sheet) | yes | 88% / 77% | 50% (3/6) / 0% (0/8) | 1 / 1 | 15.1 / 29.2 |
+| deck-c | 194x266 (cut from a sheet) | yes | 21% / 15% | 40% (4/10) / 50% (2/4) | 1 / 1 | 16.2 / 17.2 |
+| single | 347x392 (cut from a sheet) | yes | 7% / 6% | 25% (1/4) / 0% (0/0) | 1 / 1 | 15.2 / 14.7 |
+| laptop | 245x368 (cut from a sheet) | yes | 48% / 41% | 6% (1/16) / 0% (0/28) | 1 / 1 | 16.5 / 36.1 |
+
+**Mean over the sets where both worked (5)**: text overlap 40.2% before, 37.0% after; plain-rect share 30.8% before, 14.0% after; calls 1.0 before, 1.0 after; seconds 15.2 before, 24.4 after.
+
+**Honest notes**: single runs, not repeated, so differences of a few points are noise. A slide cut from a mosaic can be tiny (the "single" file is a 9-slide sheet; its slide is 347 x 392 px; 1400 px is a ceiling and nothing is upscaled), so the model sees little detail however the prompt is worded. The block check only fires when `regions.ts` finds round shapes; blobs and torn edges are mostly seen as rectangles there, so it under-triggers. Unit tests: `pack-blocks.spec.ts` (strip, prompt, block share, mocked-reader retry, model order). `pack-fixes.spec.ts` "no text slots" test fails at `Match a reference` (that summary is no longer where the test looks since the Simple flow commit); not caused by this step and not fixed here.
+
+**Step 16a, second run (slides cut from a sheet are scaled UP to 1400 px)**: `cut`/`jpegUrl` got an `upscale` option; `referenceAt1400` uses it for a slide cut out of a sheet (it was 195 to 415 px wide before, now 789 to 1400). Same five sets, same spec, single run each (old prompt vs new prompt, both now on the bigger picture): text-region overlap **30% before, 47% after** (per set after: 57, 69, 56, 15, 39; before: 33, 29, 36, 9, 43); plain-rect share **29% before, 12% after**; model calls 1 and 1 (the block check did not fire); seconds about 14 before, 20 after. Previous run for comparison (small crops): overlap 40% to 37%, rect share 31% to 14%. The new prompt now helps on 4 of 5 sets; laptop is slightly worse. Single runs, so treat small differences as noise.
+**Correction**: the earlier note that the block check "under-triggers because `regions.ts` sees blobs as rectangles" was a guess. `regions.ts` does return rounded, pill and circle kinds; the check did not fire because no answer was over 60% rects. Nothing was changed in the detector.
+- **Second run (Step 16a)**: old prompt 30% text overlap and 29% plain-rect share, new prompt 47% and 12%. Single runs, so the noise is about as large as the gap; the 60% target was not reached.
+- **Source resolution**: the reference files are mosaics whose single slides are only 195 to 415 px wide, so source resolution is probably the ceiling.

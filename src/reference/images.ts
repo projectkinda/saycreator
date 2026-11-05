@@ -14,11 +14,11 @@ function canvasOf(w: number, h: number): OffscreenCanvas {
 }
 
 /** A piece of a picture, scaled so its long side is at most `max`. */
-export function cut(src: ImageBitmap | HTMLImageElement | ImageBitmap, rect: Rect | null, max: number): OffscreenCanvas {
+export function cut(src: ImageBitmap | HTMLImageElement | ImageBitmap, rect: Rect | null, max: number, upscale = false): OffscreenCanvas {
   const sw = (src as ImageBitmap).width;
   const sh = (src as ImageBitmap).height;
   const r = rect ?? { x: 0, y: 0, width: sw, height: sh };
-  const k = Math.min(1, max / Math.max(r.width, r.height));
+  const k = upscale ? max / Math.max(r.width, r.height) : Math.min(1, max / Math.max(r.width, r.height));
   const c = canvasOf(r.width * k, r.height * k);
   const g = c.getContext('2d', { willReadFrequently: true })!;
   g.imageSmoothingQuality = 'high';
@@ -43,8 +43,8 @@ export const dataUrlOf = (b: Blob) =>
   });
 
 /** A JPEG data URL of a piece of a picture (the copy the screen keeps in memory and the reader is sent). */
-export async function jpegUrl(src: ImageBitmap, rect: Rect | null, max = 1400): Promise<{ url: string; width: number; height: number }> {
-  const c = cut(src, rect, max);
+export async function jpegUrl(src: ImageBitmap, rect: Rect | null, max = 1400, upscale = false): Promise<{ url: string; width: number; height: number }> {
+  const c = cut(src, rect, max, upscale);
   return { url: await dataUrlOf(await blobOf(c)), width: c.width, height: c.height };
 }
 
