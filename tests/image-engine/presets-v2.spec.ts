@@ -50,6 +50,7 @@ test('presets v2: rhythm, case, weights, gradient through the library', async ({
       const sizes: Record<string, number> = {};
       const clipped: string[] = [];
       let minC = 99;
+      let minD = 99; // display text (96 px and up) needs 3:1, smaller text 4.5:1
       for (const l of layers) {
         if (l.kind !== 'text' || !l.text) continue;
         const chrome = String(l.name).startsWith('recurring');
@@ -61,9 +62,9 @@ test('presets v2: rhythm, case, weights, gradient through the library', async ({
         const hl = l.highlight && l.highlight.color && l.highlight.color.length >= 7 && !/^(transparent|none)$/i.test(l.highlight.color) ? l.highlight : null;
         const pairs: [string, string][] = [[l.style.color, bg]];
         for (const r of l.runs ?? []) pairs.push(hl ? [r.color, hl.color] : [r.color, bg]);
-        for (const [a, b] of pairs) { const r = ratio(a, b); minC = Math.min(minC, r); if (r < 4.5) low.push(`${chrome ? 'chrome ' : ''}${l.name} ${a} on ${b} = ${r.toFixed(2)}`); }
+        for (const [a, b] of pairs) { const r = ratio(a, b); const disp = l.style.size >= 96; if (disp) minD = Math.min(minD, r); else minC = Math.min(minC, r); if (r < (disp ? 3 : 4.5)) low.push(`${chrome ? 'chrome ' : ''}${l.name} ${a} on ${b} = ${r.toFixed(2)}`); }
       }
-      return { layout, minContrast: Math.round(minC * 100) / 100, low, sizes, clipped };
+      return { layout, minContrast: Math.round(minC * 100) / 100, minDisplay: Math.round(minD * 100) / 100, low, sizes, clipped };
     };
 
     const out: any = { presets: {} };
@@ -97,6 +98,7 @@ test('presets v2: rhythm, case, weights, gradient through the library', async ({
         rows['text/card'] = ratio(g.text, g.surface);
         const accentRead = ratio(plain.F.accentInk ?? plain.F.accent, plain.F.bg);
         rows['accent as text/ground'] = accentRead;
+        rows['accent display/ground'] = Math.min(...stops.map((x) => ratio(plain.F.accentDisplay ?? plain.F.accent, x)));
         // when the accent cannot be text the phrase sits on a marker bar: the pair is the ink on the bar
         const ink = rgbOf(g.onAccent ?? g.text);
         void ink;
@@ -169,7 +171,7 @@ test('presets v2: rhythm, case, weights, gradient through the library', async ({
     for (const c of p.checks) for (const [k, v] of Object.entries<number>(c.sizes)) sizes[k] = Math.min(sizes[k] ?? 999, v);
     const smaller = Object.entries(sizes).filter(([k, v]) => res.baseSizes[k] !== undefined && v < res.baseSizes[k]).map(([k, v]) => `${k} ${v} < ${res.baseSizes[k]}`);
     const fail = (p.checks as any[]).filter((c) => c.low.length).map((c, i) => ({ slide: p.checks.indexOf(c) + 1, layout: c.layout, why: c.low }));
-    const groundFails = (p.grounds as any[]).flatMap((g) => Object.entries<number>(g.pairs).filter(([k, v]) => v < 4.5 && !(k === 'accent as text/ground' && g.accentMode === 'marker bar')).map(([k, v]) => `${g.ground.bg}: ${k} ${v}`));
+    const groundFails = (p.grounds as any[]).flatMap((g) => Object.entries<number>(g.pairs).filter(([k, v]) => v < (k.startsWith('accent display') ? 3 : 4.5) && !(k === 'accent as text/ground' && g.accentMode === 'marker bar')).map(([k, v]) => `${g.ground.bg}: ${k} ${v}`));
     return [id, {
       rhythm: (p.style.rhythm ?? []).map((g: any) => g.bg + (g.gradient ? ' (gradient)' : '')), caseStyle: p.style.caseStyle ?? 'none', weights: p.style.weights ?? null, background: p.style.background,
       distinctLayouts: new Set(ls).size, adjacentSameFamily: ls.filter((l, i) => i > 0 && FAMILY[l] === FAMILY[ls[i - 1]]).length,

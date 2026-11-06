@@ -112,11 +112,14 @@ test('accent on a dark ground: lightened just enough for 4.5:1 text (same hue), 
     const bar = await L.buildSlide('stat-bar', 0, { number: '$500,000', label: 'for 5% of it', bar: '5' }, m.style, { handle: '@q', index: 5, total: 7 });
     const st = await L.buildSlide('statement', 0, { headline: 'Flip your hoodie today', accent: ['hoodie'] }, m.style, { handle: '@q', index: 0, total: 7 });
     const title = (st.layers as any[]).find((l) => l.kind === 'text' && l.name === 'title');
+    // small accent text (under 96 px): the last timeline entry is set in the accent at 44 px
+    const tl = await L.buildSlide('timeline', 0, { title: 'How it flips', labels: ['Zip', 'Fold', 'Pull'], events: ['Zip the hood in', 'Fold the sleeves', 'Pull the straps'] }, m.style, { handle: '@q', index: 2, total: 7 });
+    const small = (tl.layers as any[]).filter((l) => l.kind === 'text' && l.style.size < 96 && /^#[0-9a-f]{6}$/i.test(l.style.color) && K.hueOf(l.style.color) < 10 && Math.max(...[1, 3, 5].map((i: number) => parseInt(l.style.color.slice(i, i + 2), 16))) - Math.min(...[1, 3, 5].map((i: number) => parseInt(l.style.color.slice(i, i + 2), 16))) > 120).map((l) => [l.style.color, lum(l.style.color, '#0A0A0A'), lum(l.style.color, '#161616'), l.style.size]);
     const lime = D.styleFromPack(light);
     return {
       notes: m.notes, brand: m.style.palette.accent, lightened: lk.color, changed: lk.changed, ratio: lum(lk.color, '#161616'), before: lum('#CC0000', '#161616'),
       hueShift: Math.abs(K.hueOf(lk.color) - K.hueOf('#CC0000')),
-      numberColor: num.style.color, numberRatio: lum(num.style.color, '#0A0A0A'),
+      numberColor: num.style.color, numberRatio: lum(num.style.color, '#0A0A0A'), numberRatioCard: lum(num.style.color, '#161616'), small,
       barUsesBrand: /fill="#CC0000"/i.test(bar.svg),
       runs: (title.runs ?? []).map((x: any) => [x.color, lum(x.color, '#0A0A0A')]),
       limeNotes: lime.notes.filter((n: string) => /Accent text/.test(n)),
@@ -130,13 +133,23 @@ test('accent on a dark ground: lightened just enough for 4.5:1 text (same hue), 
   expect(r.hueShift).toBeLessThan(3);
   expect(r.brand).toBe('#CC0000');
   expect(r.notes.join(' ')).toMatch(/Accent text: #CC0000 is 3\.4:1 on #0A0A0A.*uses #[0-9A-F]{6}.*brand accent #CC0000 is unchanged/);
-  expect(r.numberColor.toUpperCase()).toBe(r.lightened);
-  expect(r.numberRatio).toBeGreaterThanOrEqual(4.5);
+  // the big numeral is DISPLAY text: the brand colour, 3:1 on the hardest ground (not the lightened small-text accent)
+  expect(r.numberColor.toUpperCase()).toBe('#CC0000');
+  expect(r.numberRatio).toBeGreaterThanOrEqual(3);
+  expect(r.numberRatioCard).toBeGreaterThanOrEqual(3);
+  // small accent text keeps the lightened 4.5:1 accent
+  expect(r.small.length).toBeGreaterThan(0);
+  for (const [c, a, b] of r.small) {
+    expect(String(c).toUpperCase()).toBe(r.lightened);
+    expect(a).toBeGreaterThanOrEqual(4.5);
+    expect(b).toBeGreaterThanOrEqual(4.5);
+  }
   expect(r.barUsesBrand).toBe(true);
   expect(r.runs.length).toBeGreaterThan(0);
+  // the 140 px headline's accent phrase is display text too
   for (const [c, ratio] of r.runs) {
-    expect(String(c).toUpperCase()).toBe(r.lightened);
-    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(String(c).toUpperCase()).toBe('#CC0000');
+    expect(ratio).toBeGreaterThanOrEqual(3);
   }
   expect(r.limeNotes).toEqual([]); // a light ground is left to the marker guard
   expect(r.limeBrand).toBe('#D9F76A');

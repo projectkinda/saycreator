@@ -50,16 +50,30 @@ test('(b) the accent colour is the same in Shapes off, subtle and bold', async (
       const cols = new Set<string>();
       for (const s of Object.values<any>(res.slides)) for (const l of s.built.layers as any[]) if (l.kind === 'text') {
         const cs = [...(l.runs ?? []).map((x: any) => x.color), l.name === 'number' ? l.style.color : ''].filter(Boolean) as string[];
-        // an accent TEXT colour: a red (hue 0, saturated) that is not the plain brand red used on shapes
-        for (const c of cs) if (/^#[0-9a-f]{6}$/i.test(c) && hue(c).sat > 0.5 && (hue(c).h < 0.3 || hue(c).h > 5.7)) cols.add(c.toUpperCase());
+        // accent TEXT colours, by role: display (text of 96 px and up) and small (under 96 px)
+        for (const c of cs) if (/^#[0-9a-f]{6}$/i.test(c) && hue(c).sat > 0.5 && (hue(c).h < 0.3 || hue(c).h > 5.7)) cols.add((l.style.size >= 96 ? 'display ' : 'small ') + c.toUpperCase());
       }
       modes[shapes] = [...cols].sort();
     }
     return modes;
   }, lib);
+  // two accent roles, each identical in all three Shapes modes (display: the brand colour here; small: the lightened one)
   const all = new Set(Object.values(r).flat());
-  expect(all.size, 'one accent text colour in all three modes: ' + JSON.stringify(r)).toBe(1);
-  for (const m of ['off', 'subtle', 'bold']) expect(r[m].length).toBe(1);
+  expect(all.size, 'the same accent roles in all three modes: ' + JSON.stringify(r)).toBeLessThanOrEqual(2);
+  const disp = new Set(Object.values(r).flat().filter((x) => x.startsWith('display ')));
+  const smal = new Set(Object.values(r).flat().filter((x) => x.startsWith('small ')));
+  expect(disp.size).toBe(1);
+  expect(smal.size).toBeLessThanOrEqual(1);
+  // the display accent stays close to the brand red (#CC0000) and reads 3:1 on the deck's hardest ground (#2A2A2A); the small-text accent is the lighter one
+  const dc = [...disp][0].replace('display ', '');
+  const sc = [...smal][0]?.replace('small ', '');
+  const lumv = (h: string) => { const c = [1, 3, 5].map((i) => { const v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const ratioOn = (a: string, b: string) => (Math.max(lumv(a), lumv(b)) + 0.05) / (Math.min(lumv(a), lumv(b)) + 0.05);
+  expect(ratioOn(dc, '#2A2A2A')).toBeGreaterThanOrEqual(3);
+  expect(ratioOn(dc, '#0A0A0A')).toBeGreaterThanOrEqual(3);
+  if (sc) expect(ratioOn(sc, '#2A2A2A'), 'small accent text reads 4.5:1').toBeGreaterThanOrEqual(4.5);
+  if (sc) expect(parseInt(dc.slice(1, 3), 16), 'the display accent is closer to the brand than the small one').toBeLessThanOrEqual(parseInt(sc.slice(1, 3), 16));
+  for (const m of ['off', 'subtle', 'bold']) expect(r[m].filter((x) => x.startsWith('display ')).length).toBe(1);
 });
 
 test('(c) the picker never offers a layout that drops the slide\'s required text', async ({ page }) => {
