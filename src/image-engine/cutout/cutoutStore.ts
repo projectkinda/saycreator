@@ -71,3 +71,13 @@ export async function listCutouts(): Promise<CutoutRecord[]> {
   }
 }
 if (typeof window !== 'undefined') (window as unknown as { __cutouts: unknown }).__cutouts = { list: listCutouts, get: getCutout };
+
+/** Removes every stored cutout. Used by Reset page and Start over. */
+export async function clearCutouts(): Promise<void> {
+  const db = await open();
+  await new Promise<void>((ok, no) => {
+    const r = db.transaction('cutouts', 'readwrite').objectStore('cutouts').clear();
+    r.onsuccess = () => ok();
+    r.onerror = () => no(r.error);
+  });
+}

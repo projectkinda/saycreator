@@ -2,13 +2,14 @@
 // the phone checks from its slot data); a slide that still fails after one retry falls back to the pack or template design and says so.
 // A designed slide is stored as a one-design pack, so the faithful renderer, the slots (text edits refit with no model call), "Make editable" and the picture slots all work as for packs.
 import type { CarouselScript } from '../image-engine/carousel/types';
-import { designKey, packFromStyle, parsePack, slotMetaOf, styleBriefOf, type StylePack } from '../reference/pack';
+import { designKey, packFromStyle, parsePack, signatureDevices, slotMetaOf, styleBriefOf, type SignatureDevices, type StylePack } from '../reference/pack';
 import { activeReference } from '../reference/active';
 import { FONT_NAMES, fillRecreate, textsOf, type RLayer } from '../reference/recreate';
-import { layoutText } from '../image-engine/draw/text';
+import { layoutText, measureWidth } from '../image-engine/draw/text';
 import { FONT_WEIGHTS } from '../image-engine/fonts';
 import type { FontFamily, Layer, TextLayer } from '../image-engine/types';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
+import type { LibraryReport } from './designLibrary';
 import { cleanPaste, validateScriptText } from './script';
 import { buildRetryPrompt, buildWritePrompt, type WriteRequest } from './writerPrompt';
 
@@ -22,10 +23,14 @@ export interface Recurring {
   fill: string;
   anchor: 'start' | 'middle' | 'end';
   text: string;
+  /** A drawn part of the profile header instead of text: the avatar circle or the verified tick (x, y is the centre, size the radius). */
+  shape?: 'avatar' | 'tick';
 }
 export interface DesignedSlide {
   pack: StylePack;
   recurring?: Recurring[];
+  /** A slide drawn by the layout library (the default route): the finished drawing and its layers. The slide is drawn from this, not from the pack. */
+  built?: { svg: string; layers: Layer[]; bg: string };
 }
 export interface Designed {
   /** By slide number ("0" is the first). A slide that has none uses the pack or template design. */
@@ -40,7 +45,60 @@ export interface Designed {
   layouts?: Record<string, string | null>;
   /** Tokens the design calls used (when the writer reports them). */
   tokens?: { input: number; output: number };
+  /** What the first design call sent: picture sizes, prompt and body bytes. */
+  requestBytes?: RequestBytes;
+  /** The library route (the default): layouts, cuts, retries, fallbacks, tokens (see designLibrary.ts). */
+  library?: LibraryReport;
 }
+/**
+ * Which route makes the slides. A reference style that is active (a pack from a reference) makes Designed the default: one model call writes the story and designs every
+ * slide from the style brief and the inspiration pictures. The template fill ("pack") is for Quick, for ready-made slide text (no model), for a style that is not the
+ * active reference, and as the fallback when Designed fails. `reason` says in words which and why, and goes into report.json.
+ */
+export function chooseRoute(o: { style: string; activeStyle: string; pack: StylePack | null; mode?: 'designed' | 'quick'; slideText?: boolean; /** The library pack of a built-in preset (null when the style is not a preset, or the template route flag is on). */ presetPack?: StylePack | null; format?: 'carousel' | 'quote' }): { route: 'designed' | 'pack'; reason: string } {
+  if (o.slideText) return { route: 'pack', reason: 'Ready-made slide text was used as it is: no model was called.' };
+  if (o.style !== o.activeStyle && o.presetPack) {
+    if (o.mode === 'quick') return { route: 'pack', reason: 'Quick was chosen: the preset\'s templates fill the slides, no design call.' };
+    if (o.format === 'quote') return { route: 'pack', reason: 'Square quote cards use the preset\'s templates (the layout library draws 1080x1350 only).' };
+    return { route: 'designed', reason: 'A built-in style ("' + o.style + '") is chosen, so the layout library draws it (the template route is behind the creator.templateRoute flag).' };
+  }
+  if (o.style !== o.activeStyle) return { route: 'pack', reason: 'No reference style is active (style: ' + o.style + '), so that style\'s templates fill the slides.' };
+  if (!o.pack) return { route: 'pack', reason: 'The active reference has no pack to design from, so the template fill ran.' };
+  if (o.mode === 'quick') return { route: 'pack', reason: 'Quick was chosen: templates fill the slides, no design call.' };
+  return { route: 'designed', reason: 'A reference style is active ("' + o.pack.name + '"), so Designed mode is the default.' };
+}
+
+/** The size of what one design call sends: each picture (bytes as sent, format), the prompt (characters) and the whole request body (bytes of the JSON). */
+export interface RequestBytes {
+  images: { bytes: number; format: 'jpeg' | 'png' }[];
+  prompt: number;
+  body: number;
+}
+let lastRequest: RequestBytes | null = null;
+/** The size of the last request a design call tried to send (also when it failed), for the error message and the report. */
+export const lastRequestBytes = (): RequestBytes | null => lastRequest;
+/** The message the person sees when Designed mode fails: the real reason, and how big the request was. */
+export function designFailureMessage(reason: string, req: RequestBytes | null): string {
+  const kb = (n: number) => Math.round(n / 1000) + ' KB';
+  const size = req ? ' The request was ' + kb(req.body) + ' (' + req.images.length + ' picture' + (req.images.length === 1 ? '' : 's') + (req.images.length ? ': ' + req.images.map((i) => kb(i.bytes)).join(', ') : '') + ').' : '';
+  return 'Designed mode failed: ' + reason.replace(/\s+/g, ' ').trim() + size + ' Nothing was replaced and no template fill was run. Retry, or use the quick templates instead.';
+}
+/** Re-encodes a JPEG (base64): longest side at most maxSide px, the given quality. The inspiration pictures stay small (about 100 KB each). */
+export async function compressJpeg(base64: string, maxSide = 700, quality = 0.7): Promise<string> {
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const bm = await createImageBitmap(new Blob([bytes]));
+  const k = Math.min(1, maxSide / Math.max(bm.width, bm.height));
+  const c = new OffscreenCanvas(Math.max(1, Math.round(bm.width * k)), Math.max(1, Math.round(bm.height * k)));
+  c.getContext('2d')!.drawImage(bm, 0, 0, c.width, c.height);
+  bm.close();
+  const out = new Uint8Array(await (await c.convertToBlob({ type: 'image/jpeg', quality })).arrayBuffer());
+  let s = '';
+  for (let i = 0; i < out.length; i += 0x8000) s += String.fromCharCode(...out.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
 /** The look the designs follow: a chosen pack, or a short brief in words. */
 export interface Look {
   pack?: StylePack | null;
@@ -301,7 +359,7 @@ export const titleFloor = (slide: Record<string, unknown>, layout: string | null
 /** Fills the slide's own words into a design the way the renderer does (a checklist's item k goes in row k). Null for a one-row checklist, which the renderer grows itself. */
 function fillerFor(pack: StylePack, key: keyof StylePack['designs'], slide: Record<string, unknown>, handle: string): ((ls: RLayer[]) => Layer[]) | null {
   const layers = pack.designs[key] ?? [];
-  const texts: Partial<Record<string, string>> = { ...textsOf(slide as never, handle) };
+  const texts: Partial<Record<string, string>> = { ...(textsOf(slide as never, handle) as Record<string, string>) };
   const rowsMode = (key === 'list' || (Array.isArray(slide.steps) && slide.steps.length >= 2)) && !!texts.body;
   const rows = rowsMode ? layers.filter((l) => l.kind === 'text' && l.name === 'body').sort((a, b) => a.y - b.y) : [];
   if (rowsMode && rows.length < 2) return null;
@@ -570,6 +628,12 @@ export function resolveCollisions(pack: StylePack, key: keyof StylePack['designs
       }
     }
     if (!hit) break;
+    const pair = [String(hit.a.l.name), String(hit.b.l.name)];
+    if (pair.includes('tag') && pair.includes('number')) {
+      problems.push('the tag and the number overlap: put them in separate places (they are never moved over each other).');
+      skip.add(hit.a.l.id + '|' + hit.b.l.id);
+      continue;
+    }
     const upper = hit.a.y0 <= hit.b.y0 ? hit.a : hit.b;
     const lower = upper === hit.a ? hit.b : hit.a;
     const name = (x: Box) => String(x.l.name ?? x.l.id);
@@ -606,6 +670,41 @@ export function resolveCollisions(pack: StylePack, key: keyof StylePack['designs
   return { pack: out, problems, notes };
 }
 
+/**
+ * The last guards on a finished design, measured on the slide as it will be drawn: it must show at least 3 words, no text may measure under the 32 px limit (the check used to
+ * read the design size, so 30 px text passed), and no card or box may be empty (a flat solid shape of some size with no text and nothing else inside it).
+ */
+export function finalGuards(pack: StylePack, key: keyof StylePack['designs'], slide: Record<string, unknown>, handle: string): string[] {
+  const layers = pack.designs[key];
+  const fill = layers ? fillerFor(pack, key, slide, handle) : null;
+  if (!layers || !fill) return [];
+  const filled = fill(layers);
+  const byId = new Map(filled.map((l) => [l.id, l]));
+  const texts = filled.filter((l): l is TextLayer => l.kind === 'text' && l.visible !== false && !!(l as TextLayer).text?.trim());
+  const out: string[] = [];
+  const words = texts.reduce((a, l) => a + l.text.trim().split(/\s+/).length, 0);
+  if (words < 3) out.push('the slide shows only ' + words + ' word' + (words === 1 ? '' : 's') + ': it needs at least 3 words of its own text, so draw the text slots its words need.');
+  for (const t of texts) {
+    const size = layoutText(t).size;
+    if (size < 32) out.push('the ' + String((t as { name?: string }).name) + ' text measures ' + Math.round(size * 10) / 10 + ' px, under the 32 px limit.');
+  }
+  const canvasA = pack.canvas.w * pack.canvas.h;
+  for (const l of layers) {
+    if (l.kind !== 'shape' || l.id === 'bg' || l.name === 'background' || String(l.name).startsWith('photo-slot') || byId.get(l.id)?.visible === false) continue;
+    const a = l.width * l.height;
+    const f = (l as { fill?: unknown }).fill;
+    if (a < 30000 || a > 0.35 * canvasA || typeof f !== 'string' || (/^rgba/i.test(f) && Number(/,\s*([\d.]+)\)$/.exec(f)?.[1] ?? 1) < 0.9)) continue;
+    const hasText = texts.some((t) => {
+      const cx = t.x + t.width / 2;
+      const cy = t.y + Math.min(t.height, layoutText(t).height) / 2;
+      return cx >= l.x && cx <= l.x + l.width && cy >= l.y && cy <= l.y + l.height;
+    });
+    const hasOther = layers.some((o) => o.id !== l.id && o.kind !== 'text' && o.width * o.height < a && o.x >= l.x - 4 && o.y >= l.y - 4 && o.x + o.width <= l.x + l.width + 4 && o.y + o.height <= l.y + l.height + 4);
+    if (!hasText && !hasOther) out.push('there is an empty box (the ' + String(l.name ?? 'shape') + ', ' + Math.round(l.width) + ' x ' + Math.round(l.height) + ' px) with no text in it: put text in it or leave it out.');
+  }
+  return out;
+}
+
 export interface Repeat {
   role: string;
   phrase: string;
@@ -625,7 +724,7 @@ export function repeatedText(slides: Record<string, unknown>[], handle: string):
     const hasItems = Array.isArray(slide.items) && slide.items.length > 0;
     let field = 0;
     for (const [role, text] of Object.entries(textsOf(slide as never, handle))) {
-      if (!text || role === 'accent' || (role === 'caption' && hasItems)) continue;
+      if (!text || typeof text !== 'string' || role === 'accent' || role === 'accents' || role === 'accentStyle' || (role === 'caption' && hasItems)) continue;
       field++;
       const w = tokens(text);
       for (let k = 0; k + 3 <= w.length; k++) {
@@ -700,17 +799,33 @@ export function titleBottom(pack: StylePack, key: keyof StylePack['designs'], sl
   return t.y + (b.lines.length ? b.lines[b.lines.length - 1].y + b.lineStep : 0);
 }
 
+/** "@quick.flip" -> "Quick flip": the name shown in the profile header when the person gave only a handle. */
+/** Title Case for a person's name: the first letter of every word (and of each part after a hyphen or apostrophe) is a capital; letters already capital stay ("McKenzie", "DJ"). */
+export const titleCaseName = (name: string): string =>
+  name.trim().replace(/\s+/g, ' ').replace(/(^|[\s\-'’])(\p{Ll})/gu, (_m, pre: string, c: string) => pre + c.toUpperCase());
+export const profileName = (handle: string) => {
+  const t = (handle || '@yourname').replace(/^@/, '').replace(/[._-]+/g, ' ').trim() || 'your name';
+  return titleCaseName(t);
+};
 /**
- * The chrome: handle, slide counter and swipe cue, drawn by the code at fixed places on every slide (handle top left, counter bottom left, swipe cue bottom right). Whatever
- * the model drew for them is stripped (splitRecurring), and the handle is not put in the kicker either.
+ * The chrome, drawn by the code at fixed places on every slide, never by the model (whatever it drew is stripped). Without a profile-header signature: the handle top left, the
+ * counter bottom left, the swipe cue bottom right. With it: an avatar circle, the name, a verified tick and the handle at the top left, in place of the small handle. All text is
+ * at least 32 px. (A photo of the person in the avatar is not wired yet: the avatar is a placeholder.)
  */
-export function chromeItems(handle: string, i: number, n: number, palette: Record<string, string>): Recurring[] {
-  const fill = palette.muted ? '$muted' : '$text';
-  const base = { size: 30, font: '', weight: 500, fill };
-  const out: Recurring[] = [
-    { ...base, x: 48, y: 92, anchor: 'start', text: handle || '@yourname' },
-    { ...base, x: 48, y: 1292, anchor: 'start', text: (i + 1) + ' / ' + n },
-  ];
+export function chromeItems(handle: string, i: number, n: number, palette: Record<string, string>, devices?: SignatureDevices | null): Recurring[] {
+  const tok = (...names: string[]) => '$' + (names.find((k) => palette[k]) ?? 'text');
+  const muted = tok('muted', 'text');
+  const base = { size: 32, font: '', weight: 500, fill: muted };
+  const out: Recurring[] = [];
+  if (devices?.profileHeader) {
+    const name = profileName(handle);
+    const nameW = measureWidth(name, 'Instrument Sans', 600, 34);
+    out.push({ ...base, shape: 'avatar', x: 82, y: 92, size: 34, fill: tok('surface', 'muted', 'text'), anchor: 'start', text: '' });
+    out.push({ ...base, x: 136, y: 86, size: 34, weight: 600, fill: '$text', anchor: 'start', text: name });
+    out.push({ ...base, shape: 'tick', x: Math.round(136 + nameW + 22), y: 74, size: 13, fill: '$accent', anchor: 'start', text: '' });
+    out.push({ ...base, x: 136, y: 122, anchor: 'start', text: handle || '@yourname' });
+  } else out.push({ ...base, x: 48, y: 92, anchor: 'start', text: handle || '@yourname' });
+  out.push({ ...base, x: 48, y: 1292, anchor: 'start', text: (i + 1) + ' / ' + n });
   if (i < n - 1) out.push({ ...base, x: 1032, y: 1292, anchor: 'end', text: 'swipe →' });
   return out;
 }
@@ -738,21 +853,47 @@ export function splitRecurring(block: string): { block: string; recurring: Recur
   return { block: out, recurring };
 }
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-/** The recurring items as SVG text (colour names still unresolved), added to the filled drawing. */
+/** The recurring items as SVG (colour names still unresolved), added to the filled drawing. */
 export function recurringMarkup(rec: Recurring[] | undefined, pack: StylePack): string {
-  return (rec ?? []).map((r) => '<text x="' + r.x + '" y="' + r.y + '" font-size="' + r.size + '" font-family="' + (r.font || pack.fonts.body) + '" font-weight="' + r.weight + '" fill="' + r.fill + '" text-anchor="' + r.anchor + '">' + esc(r.text) + '</text>').join('');
+  return (rec ?? [])
+    .map((r) => {
+      const q = r.size;
+      if (r.shape === 'avatar')
+        return '<circle cx="' + r.x + '" cy="' + r.y + '" r="' + q + '" fill="' + r.fill + '"/><circle cx="' + r.x + '" cy="' + Math.round(r.y - q * 0.2) + '" r="' + Math.round(q * 0.28) + '" fill="$bg" fill-opacity="0.55"/><ellipse cx="' + r.x + '" cy="' + Math.round(r.y + q * 0.55) + '" rx="' + Math.round(q * 0.55) + '" ry="' + Math.round(q * 0.38) + '" fill="$bg" fill-opacity="0.55"/>';
+      if (r.shape === 'tick')
+        return '<circle cx="' + r.x + '" cy="' + r.y + '" r="' + q + '" fill="' + r.fill + '"/><path d="M ' + Math.round(r.x - q * 0.45) + ' ' + r.y + ' L ' + Math.round(r.x - q * 0.1) + ' ' + Math.round(r.y + q * 0.38) + ' L ' + Math.round(r.x + q * 0.48) + ' ' + Math.round(r.y - q * 0.34) + '" fill="none" stroke="#FFFFFF" stroke-width="' + Math.max(2, Math.round(q * 0.28)) + '" stroke-linecap="round" stroke-linejoin="round"/>';
+      return '<text x="' + r.x + '" y="' + r.y + '" font-size="' + r.size + '" font-family="' + (r.font || pack.fonts.body) + '" font-weight="' + r.weight + '" fill="' + r.fill + '" text-anchor="' + r.anchor + '">' + esc(r.text) + '</text>';
+    })
+    .join('');
 }
-/** The recurring items as text layers (for the editable form). */
+/** The recurring items as layers (for the editable form, and for the phone checks: they are measured like any other text). */
 export function recurringLayers(rec: Recurring[] | undefined, pack: StylePack, id: string): Layer[] {
-  return (rec ?? []).map((r, k) => {
+  const hex = (c: string) => (c.startsWith('$') ? pack.palette[c.slice(1)] ?? '#888888' : c);
+  const out: Layer[] = [];
+  (rec ?? []).forEach((r, k) => {
+    const base = { rotation: 0, opacity: 1, role: 'decor' as const };
+    const q = r.size;
+    if (r.shape === 'avatar') {
+      out.push({ ...base, kind: 'shape', id: id + '-avatar' + k, name: 'recurring-avatar', shape: 'ellipse', x: r.x - q, y: r.y - q, width: 2 * q, height: 2 * q, fill: hex(r.fill) } as unknown as Layer);
+      out.push({ ...base, opacity: 0.55, kind: 'shape', id: id + '-avatar-head' + k, name: 'recurring-avatar', shape: 'ellipse', x: r.x - q * 0.28, y: r.y - q * 0.2 - q * 0.28, width: q * 0.56, height: q * 0.56, fill: hex('$bg') } as unknown as Layer);
+      out.push({ ...base, opacity: 0.55, kind: 'shape', id: id + '-avatar-body' + k, name: 'recurring-avatar', shape: 'ellipse', x: r.x - q * 0.55, y: r.y + q * 0.55 - q * 0.38, width: q * 1.1, height: q * 0.76, fill: hex('$bg') } as unknown as Layer);
+      return;
+    }
+    if (r.shape === 'tick') {
+      out.push({ ...base, kind: 'shape', id: id + '-tick' + k, name: 'recurring-tick', shape: 'ellipse', x: r.x - q, y: r.y - q, width: 2 * q, height: 2 * q, fill: hex(r.fill) } as unknown as Layer);
+      const w = q * 0.96;
+      const h = q * 0.75;
+      out.push({ ...base, kind: 'path', id: id + '-tick-mark' + k, name: 'recurring-tick', x: r.x - q * 0.45, y: r.y - q * 0.38, width: w, height: h, d: 'M ' + (q * 0.02).toFixed(1) + ' ' + (q * 0.38).toFixed(1) + ' L ' + (q * 0.35).toFixed(1) + ' ' + (q * 0.76).toFixed(1) + ' L ' + (q * 0.93).toFixed(1) + ' ' + (q * 0.04).toFixed(1), stroke: { color: '#FFFFFF', width: Math.max(2, Math.round(q * 0.28)), cap: 'round', join: 'round' } } as unknown as Layer);
+      return;
+    }
     const font = ((FONT_NAMES as string[]).includes(r.font) ? r.font : pack.fonts.body) as FontFamily;
     const ws = FONT_WEIGHTS[font];
     const weight = ws.reduce((b, w) => (Math.abs(w - r.weight) < Math.abs(b - r.weight) ? w : b), ws[0]);
     const width = Math.ceil(r.text.length * r.size * 0.62) + 8;
     const x = r.anchor === 'middle' ? r.x - width / 2 : r.anchor === 'end' ? r.x - width : r.x;
-    const hex = r.fill.startsWith('$') ? pack.palette[r.fill.slice(1)] ?? '#888888' : r.fill;
-    return { kind: 'text', id: id + '-recurring' + k, name: 'recurring', role: 'content', x, y: r.y - r.size * 0.82, width, height: Math.ceil(r.size * 1.3), rotation: 0, opacity: 1, text: r.text, style: { font, weight, size: r.size, color: hex, align: r.anchor === 'middle' ? 'center' : r.anchor === 'end' ? 'right' : 'left', valign: 'top', lineHeight: 1.15 } } as unknown as Layer;
+    out.push({ kind: 'text', id: id + '-recurring' + k, name: 'recurring', role: 'content', x, y: r.y - r.size * 0.82, width, height: Math.ceil(r.size * 1.3), rotation: 0, opacity: 1, text: r.text, style: { font, weight, size: r.size, color: hex(r.fill), align: r.anchor === 'middle' ? 'center' : r.anchor === 'end' ? 'right' : 'left', valign: 'top', lineHeight: 1.15 } } as unknown as Layer);
   });
+  return out;
 }
 async function checkOne(i: number, script: CarouselScript, block: string | undefined, look: Look, deckPalette: Record<string, string> | null): Promise<Checked> {
   const slide = script.slides[i] as unknown as Record<string, unknown>;
@@ -776,8 +917,10 @@ async function checkOne(i: number, script: CarouselScript, block: string | undef
   const r = await parsePack(typed, `Slide ${i + 1}`, forced);
   const shown = engineStepper ? withEngineStepper(block, steps, current, bounds) : block;
   if (!r.ok) return { pack: null, problems: checkDesign(slide, script.brand.handle, script.slides.length, shown, null, r.reasons) };
-  const pack = { ...r.pack, ...(forced ? { palette: forced } : {}) };
-  const chrome = chromeItems(script.brand.handle, i, script.slides.length, pack.palette);
+  // The reference's signature devices (a marker accent, a profile header) travel with every designed slide of that deck.
+  const refDevices = look.pack ? (look.pack.devices ?? signatureDevices(look.pack)) : null;
+  const pack = { ...r.pack, ...(forced ? { palette: forced } : {}), ...(refDevices ? { devices: refDevices } : {}) };
+  const chrome = chromeItems(script.brand.handle, i, script.slides.length, pack.palette, refDevices);
   const problems = checkDesign(slide, script.brand.handle, script.slides.length, shown, pack, r.problems.filter((p) => !/left out/.test(p)));
   if (problems.length) return { pack: null, problems, recurring: chrome };
   const fitted = fitSlots(clampSlots(pack, key), key, slide, script.brand.handle, layoutOf(block));
@@ -785,6 +928,8 @@ async function checkOne(i: number, script: CarouselScript, block: string | undef
   const balanced = balanceVertical(fitted.pack, key, slide, script.brand.handle, layoutOf(block));
   const col = resolveCollisions(balanced, key, slide, script.brand.handle, layoutOf(block));
   if (col.problems.length) return { pack: null, problems: col.problems, recurring: chrome };
+  const last = finalGuards(col.pack, key, slide, script.brand.handle);
+  if (last.length) return { pack: null, problems: last, recurring: chrome };
   return { pack: col.pack, problems: [], recurring: chrome };
 }
 function deckPaletteOf(blocks: Iterable<string>): Record<string, string> | null {
@@ -837,9 +982,13 @@ export async function designDeck(req: WriteRequest, look: Look, handle: string, 
   let calls = 0;
   let ms = 0;
   const tokens = { input: 0, output: 0 };
-  const pics = inspirationImages(look);
+  // At most 3 inspiration pictures, each re-encoded as a small JPEG (longest side 700 px, quality 0.7).
+  const pics = await Promise.all(inspirationImages(look).slice(0, 3).map(async (p) => ({ ...p, base64: await compressJpeg(p.base64).catch(() => p.base64) })));
+  let requestBytes: RequestBytes | undefined;
   const ask = async (prompt: string) => {
     onPhase(calls === 0 ? 'writing' : 'retrying');
+    lastRequest = { images: pics.map((x) => ({ bytes: Math.floor((x.base64.length * 3) / 4), format: 'jpeg' as const })), prompt: prompt.length, body: JSON.stringify({ prompt, kind: 'draw', ...(pics.length ? { images: pics } : {}) }).length };
+    requestBytes ??= lastRequest;
     const a = await p.write(prompt, signal, 'draw', pics.length ? pics : undefined);
     calls += 1;
     ms += a.ms;
@@ -913,7 +1062,7 @@ export async function designDeck(req: WriteRequest, look: Look, handle: string, 
       }
     }
   }
-  const designed: Designed = { slides: {}, fallbacks: {}, notes: [], calls, ms, layouts: Object.fromEntries(tags.map((t, i) => [String(i), t])), ...(tokens.input || tokens.output ? { tokens } : {}) };
+  const designed: Designed = { slides: {}, fallbacks: {}, notes: [], calls, ms, layouts: Object.fromEntries(tags.map((t, i) => [String(i), t])), ...(tokens.input || tokens.output ? { tokens } : {}), ...(requestBytes ? { requestBytes } : {}) };
   designed.notes.unshift(...retryWhy);
   if (storyWhy.length) designed.notes.unshift('Retry for the story (the first answer could not be used as a script): ' + storyWhy.join(' | '));
   for (const [i, rs] of rep.offenders)
@@ -985,4 +1134,10 @@ export function packFromDesigned(designed: Designed, script: CarouselScript, nam
     if (d.imageSlots?.[used]) pack.imageSlots![key] = d.imageSlots[used];
   }
   return pack;
+}
+
+/** Forgets what a design call remembered in memory (the last request size and the recoloured fallback packs). Used by Reset page and Start over. */
+export function resetDesignedState() {
+  lastRequest = null;
+  fallbackCache.clear();
 }

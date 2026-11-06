@@ -52,6 +52,8 @@ export interface Doc {
   imageRequests?: ImageRequest[];
   /** Designed mode: the model's own design for each slide (a slide without one uses the style). */
   designed?: Designed;
+  /** Which route made the slides and why (for report.json): "designed" (one design call) or "pack" (template fill). */
+  route?: { route: 'designed' | 'pack'; reason: string; /** Set when Designed mode failed: the real reason. */ error?: string; requestBytes?: import('./designed').RequestBytes };
   script: CarouselScript | null;
   /** By slide number, "0" for the first slide. */
   choices: Record<string, SlideChoice>;
@@ -182,6 +184,8 @@ export const patches = {
   editField: (i: number, field: string, label: string, value: unknown): DocPatch => ({ label: `Edit ${label.toLowerCase()} on slide ${i + 1}`, coalesce: `field:${i}:${field}`, ops: [{ path: slidePath(i, field), value }] }),
   editTags: (i: number, tags: string[]): DocPatch => ({ label: `Change tags on slide ${i + 1}`, coalesce: `tags:${i}`, ops: [{ path: slidePath(i, 'element_tags'), value: tags }] }),
   setImageRequests: (list: ImageRequest[], label = 'Change the image requests'): DocPatch => ({ label, ops: [{ path: ['imageRequests'], value: list }] }),
+  /** One slide's script form and the designed deck together (the layout picker and Rewrite text): one Undo step. */
+  setSlideDesign: (i: number, slide: unknown, d: Designed, label: string): DocPatch => ({ label, ops: [{ path: slidePath(i), value: slide }, { path: ['designed'], value: d }] }),
   setDesigned: (d: Designed | undefined, label = 'Change the slide designs'): DocPatch => ({ label, ops: [{ path: ['designed'], value: d }] }),
   makeEditable: (i: number): DocPatch => ({ label: `Make slide ${i + 1} editable`, ops: [{ path: ['choices', String(i), 'editable'], value: true }] }),
   layout: (i: number, layout: string): DocPatch => ({ label: `Change layout on slide ${i + 1}`, ops: [{ path: ['choices', String(i), 'layout'], value: layout }] }),

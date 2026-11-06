@@ -1,0 +1,747 @@
+// Designed mode, library route (the default): the model only CHOOSES - for each slide a layout id, the text of that layout's fields, up to 3 accent phrases and optional
+// suggestions (variant, density, cut, invert). It never draws and never outputs SVG. The code does the rest: validates every slide against its layout's budgets, rotates the
+// variants and the cuts over the deck, draws each slide with the layout library (src/carousel/layouts) and, for a slide that cannot be made, retries once (one extra call for
+// the failing slides only) and then falls back to a plain version of the SAME layout. The old standard template look is never the fallback.
+// The old route (the model draws SVG) is still in designed.ts, behind the flag `legacySvgRoute()` (off by default).
+import type { CarouselScript } from '../image-engine/carousel/types';
+import type { Layer } from '../image-engine/types';
+import { signatureDevices, styleBriefOf, type PackGround, type StyleOverrides, type StylePack } from '../reference/pack';
+import { FONT_NAMES, type RLayer } from '../reference/recreate';
+import type { Designed, DesignedSlide, Look } from './designed';
+import { LAYOUT_IDS, buildSlide, cutsOf, layoutDef, rotateCuts, rotateVariants, validateSlideContent, type Built, type Cut, type Fields, type LayoutId, type LayoutStyle } from './layouts';
+import { coloursFor, fromHsl, inkOn, lightenForText, quietOn, readableInk, toHsl } from './layouts/cuts';
+import { contrast } from './layouts/draw';
+import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
+import { WriterError, type GenerateResult, type WriteProvider } from './writer';
+import type { WriteRequest } from './writerPrompt';
+import { TONES } from './writerPrompt';
+
+/** The old route, where the model draws every slide as SVG, stays available behind this flag (off by default): localStorage "creator.legacySvgRoute" = "1" or VITE_LEGACY_SVG_ROUTE=1. */
+export const legacySvgRoute = (): boolean => {
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('creator.legacySvgRoute') === '1') return true;
+  } catch {
+    /* no storage */
+  }
+  return (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_LEGACY_SVG_ROUTE === '1';
+};
+
+/** The template route (a preset's own templates fill the slides, no library) stays available behind this flag (off by default): localStorage "creator.templateRoute" = "1" or VITE_TEMPLATE_ROUTE=1. */
+export const templateRoute = (): boolean => {
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('creator.templateRoute') === '1') return true;
+  } catch {
+    /* no storage */
+  }
+  return (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_TEMPLATE_ROUTE === '1';
+};
+
+// ----- the reference style -> LayoutStyle tokens -----
+const HEX = /^#[0-9a-f]{6}$/i;
+const mixHex = (a: string, b: string, t: number): string => {
+  const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [ar, ag, ab] = p(a);
+  const [br, bg, bb] = p(b);
+  const c = (x: number, y: number) => Math.round(x + (y - x) * t).toString(16).padStart(2, '0');
+  return ('#' + c(ar, br) + c(ag, bg) + c(ab, bb)).toUpperCase();
+};
+/** The bundled font nearest to a name: the name itself when it is bundled, else a bundled family that shares a word, else the default. */
+export const nearestFont = (name: string | undefined, fallback: LayoutStyle['fonts']['headline']): LayoutStyle['fonts']['headline'] => {
+  const names = FONT_NAMES as string[];
+  if (name && names.includes(name)) return name as LayoutStyle['fonts']['headline'];
+  const words = (name ?? '').toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2);
+  const hit = names.find((n) => words.some((w) => n.toLowerCase().includes(w)));
+  return (hit ?? fallback) as LayoutStyle['fonts']['headline'];
+};
+/** A plane device: a filled block (not the page) that touches a canvas edge and takes at least 14% of the slide, on at least 40% of the read slides. */
+const hasPlane = (ls: RLayer[], W: number, H: number, bg: string): boolean =>
+  ls.some((l) => {
+    if (l.kind !== 'shape' || l.id === 'bg' || l.name === 'background') return false;
+    const fill = (l as { fill?: unknown }).fill;
+    if (typeof fill !== 'string' || fill.toUpperCase() === bg) return false;
+    const a = l.width * l.height;
+    const touches = l.x <= 2 || l.y <= 2 || l.x + l.width >= W - 2 || l.y + l.height >= H - 2;
+    return touches && a >= 0.14 * W * H && a < 0.9 * W * H;
+  });
+export interface DeviceReport {
+  slides: number;
+  /** How many slides must show a device for it to count (40%, at least 1). */
+  need: number;
+  /** On how many slides each device was seen. */
+  seen: { marker: number; underline: number; planes: number; profileHeader: number };
+  /** What was decided from that. */
+  decided: { marker: boolean; underline: boolean; planes: boolean; profileHeader: boolean };
+  perSlide: { file: string; /** The reader answered the yes/no checks for this slide (else the drawn geometry decided). */ answered: boolean; marker: boolean; underline: boolean; planes: boolean; profileHeader: boolean }[];
+}
+/** Per-slide device counts (marker, underline, planes, profile header), so a borderline case (3 of 10 slides, say) can be seen. The 40% rule decides. */
+export function deviceReport(pack: StylePack): DeviceReport {
+  const reads = Object.values(pack.variants ?? {}).flatMap((arr) => (arr ?? []).map((v) => v));
+  const W = pack.canvas?.w ?? 1080;
+  const H = pack.canvas?.h ?? 1350;
+  const bg = (pack.palette.bg ?? '').toUpperCase();
+  const perSlide = reads.map((v) => {
+    const one = signatureDevices({ ...pack, variants: { cover: [v] } } as StylePack);
+    return { file: v.fromFile, answered: !!v.devices, marker: one.counts.marker > 0, underline: one.counts.underline > 0, profileHeader: one.counts.profileHeader > 0, planes: v.devices?.planes ?? hasPlane(v.layers as RLayer[], W, H, bg) };
+  });
+  const n = perSlide.length;
+  const need = Math.max(1, Math.ceil(0.4 * n));
+  const seen = { marker: perSlide.filter((s) => s.marker).length, underline: perSlide.filter((s) => s.underline).length, planes: perSlide.filter((s) => s.planes).length, profileHeader: perSlide.filter((s) => s.profileHeader).length };
+  return { slides: n, need, seen, decided: { marker: n > 0 && seen.marker >= need, underline: n > 0 && seen.underline >= need, planes: n > 0 && seen.planes >= need, profileHeader: n > 0 && seen.profileHeader >= need }, perSlide };
+}
+export function detectPlanes(pack: StylePack): boolean {
+  const reads = Object.values(pack.variants ?? {}).flat().map((v) => v!.layers as RLayer[]);
+  const slides = reads.length ? reads : (Object.keys(pack.designs) as (keyof StylePack['designs'])[]).map((k) => (pack.designs[k] ?? []) as RLayer[]);
+  if (!slides.length) return false;
+  const W = pack.canvas?.w ?? 1080;
+  const H = pack.canvas?.h ?? 1350;
+  const bg = (pack.palette.bg ?? '').toUpperCase();
+  const has = slides.filter((ls) =>
+    ls.some((l) => {
+      if (l.kind !== 'shape' || l.id === 'bg' || l.name === 'background') return false;
+      const fill = (l as { fill?: unknown }).fill;
+      if (typeof fill !== 'string' || fill.toUpperCase() === bg) return false;
+      const a = l.width * l.height;
+      const touches = l.x <= 2 || l.y <= 2 || l.x + l.width >= W - 2 || l.y + l.height >= H - 2;
+      return touches && a >= 0.14 * W * H && a < 0.9 * W * H;
+    }),
+  ).length;
+  return has >= Math.max(1, Math.ceil(0.4 * slides.length));
+}
+export const DEFAULT_STYLE: LayoutStyle = { palette: { bg: '#FFFFFF', text: '#111111', muted: '#5C5C5C', accent: '#2F5BEA', surface: '#F1F1F1' }, fonts: { headline: 'Schibsted Grotesk', body: 'Instrument Sans' }, background: 'flat', devices: { marker: false, profileHeader: false, underline: false, planes: false }, accentStyle: 'text' };
+/** The person's changes laid over what was detected: each toggle wins over the reader. Shapes: off = no planes, subtle = thin surface-toned planes, bold = accent planes. */
+export function applyOverrides(style: LayoutStyle, ov?: StyleOverrides | null): { style: LayoutStyle; notes: string[] } {
+  if (!ov) return { style, notes: [] };
+  const notes: string[] = [];
+  const devices = { ...style.devices };
+  let accentStyle = style.accentStyle;
+  let planeStrength = style.planeStrength;
+  if (ov.marker !== undefined) {
+    devices.marker = ov.marker;
+    accentStyle = ov.marker ? 'marker' : 'text';
+    notes.push('Override: highlight marker ' + (ov.marker ? 'on' : 'off') + '.');
+  }
+  if (ov.underline !== undefined) {
+    devices.underline = ov.underline;
+    notes.push('Override: underline ' + (ov.underline ? 'on' : 'off') + '.');
+  }
+  if (ov.profileHeader !== undefined) {
+    devices.profileHeader = ov.profileHeader;
+    notes.push('Override: profile header ' + (ov.profileHeader ? 'on' : 'off') + '.');
+  }
+  if (ov.shapes) {
+    devices.planes = ov.shapes !== 'off';
+    planeStrength = ov.shapes === 'off' ? undefined : ov.shapes;
+    notes.push('Override: shapes ' + ov.shapes + '.');
+  }
+  return { style: { ...style, devices, accentStyle, ...(planeStrength ? { planeStrength } : { planeStrength: undefined }) }, notes };
+}
+/** Maps a reference style (the pack the whole-slide read made, with its style brief and signature devices) to the tokens the layouts use. */
+const HEX6 = /^#[0-9a-f]{6}$/i;
+/** One ground of a rhythm made readable: the ink with the best contrast over every colour of the ground (gradient stops included), a muted ink and a card colour that clear 4.5:1 too. */
+export function fixGround(g: PackGround, notes: string[]): NonNullable<LayoutStyle['rhythm']>[number] {
+  const hx = (v: string | undefined, fb: string) => (v && HEX6.test(v) ? v.toUpperCase() : fb);
+  const stops = g.gradient?.stops.map((s) => ({ at: s.at, color: hx(s.color, hx(g.bg, '#FFFFFF')) }));
+  const all = stops ? stops.map((s) => s.color) : [hx(g.bg, '#FFFFFF')];
+  const minOn = (c: string, on: string[]) => Math.min(...on.map((s) => contrast(c, s)));
+  // the ground colour is the stop that reads worst against the ink, so every check against bg holds on the whole gradient
+  const text0 = hx(g.text, '#111111');
+  const bg = all.reduce((w, s) => (contrast(text0, s) < contrast(text0, w) ? s : w), all[0]);
+  let text = text0;
+  if (minOn(text0, all) < 4.5) {
+    text = [text0, '#FFFFFF', '#000000'].reduce((b, c) => (minOn(c, all) > minOn(b, all) ? c : b));
+    notes.push(`Ground ${bg}: the ink ${text0} reads ${minOn(text0, all).toFixed(1)}:1, so ${text} (${minOn(text, all).toFixed(1)}:1) is used.`);
+  }
+  // A ground whose ink reads under 6:1 (a mid-tone red with black ink: 4.6:1) is moved along its lightness, hue and saturation kept, until the ink reads at 6:1, so text on it is
+  // comfortable and not borderline. Gradient grounds keep their stops (they are checked on every stop instead).
+  let bgFinal = bg;
+  if (!stops && contrast(text, bg) < 6) {
+    const inkDark = contrast(text, '#FFFFFF') > contrast(text, '#000000');
+    const [h, s, l0] = toHsl(bg);
+    for (let k = 1; k <= 24; k++) {
+      const c = fromHsl(h, s, l0 + (inkDark ? 1 : -1) * 0.01 * k);
+      if (contrast(text, c) >= 6) {
+        notes.push(`Ground ${bg}: the ink ${text} read ${contrast(text, bg).toFixed(1)}:1 on it, so the ground is ${c} (same hue, ${contrast(text, c).toFixed(1)}:1).`);
+        bgFinal = c;
+        break;
+      }
+    }
+  }
+  const allFinal = stops ? all : [bgFinal];
+  const bgOrig = bg;
+  void bgOrig;
+  const accent = hx(g.accent, text);
+  const surface0 = hx(g.surface, mixHex(bgFinal, text, 0.08));
+  // a card colour the ink cannot be read on (a dark card on a lime ground) is replaced by a card close to the ground
+  const cardBad = allFinal.some((st) => contrast(surface0, st) < 1.4) || contrast(text, surface0) < 4.5;
+  // a card (and a bar track) must be told apart from the ground (at least 1.4:1) and keep the ink readable on it
+  const cards = [0.1, 0.14, 0.2, 0.28, 0.36, 0.46, 0.58].flatMap((k) => [mixHex(bgFinal, '#FFFFFF', k), mixHex(bgFinal, '#000000', k), mixHex(bgFinal, text, k)]).filter((c) => allFinal.every((st) => contrast(c, st) >= 1.4) && contrast(text, c) >= 4.5);
+  const surface = cardBad ? cards[0] ?? bgFinal : surface0;
+  if (cardBad) notes.push(`Ground ${bgFinal}: the card colour ${surface0} is too close to the ground or unreadable under the ink, so cards use ${surface}.`);
+  const mutedMin = Math.max(4.5, Math.min(6, Math.min(...allFinal.map((s) => contrast(text, s))) * 0.7));
+  const muted = quietOn(text, [...allFinal, surface], hx(g.muted, mixHex(text, bgFinal, 0.4)), mutedMin);
+  const onAccent = readableInk(accent, [hx(g.onAccent, text), text, bgFinal, '#FFFFFF', '#000000']);
+  void inkOn;
+  return { bg: bgFinal, text, muted, accent, surface, onAccent, ...(stops ? { gradient: { angle: g.gradient!.angle, stops } } : {}) };
+}
+export function styleFromPack(pack: StylePack | null | undefined): { style: LayoutStyle; notes: string[] } {
+  if (!pack) return { style: DEFAULT_STYLE, notes: ['No reference style: a neutral light style is used.'] };
+  const notes: string[] = [];
+  const pal = pack.palette;
+  const hex = (v: string | undefined, fb: string) => (v && HEX.test(v) ? v.toUpperCase() : fb);
+  const bg = hex(pal.bg, '#FFFFFF');
+  const text = hex(pal.text, '#111111');
+  const accent = hex(pal.accent, text);
+  const quiet = mixHex(text, bg, 0.4);
+  const muted = quietOn(text, bg, hex(pal.muted ?? pal.accent2, quiet), 4.5);
+  const surface0 = hex(pal.surface, mixHex(bg, text, 0.08));
+  // a surface the read gave as the same colour as the ground would make every card and bar invisible: it is made a little darker (or lighter)
+  const surface = contrast(surface0, bg) < 1.04 ? mixHex(bg, text, 0.06) : surface0;
+  if (surface !== surface0) notes.push(`The surface colour ${surface0} is the same as the ground ${bg}: cards use ${surface} instead.`);
+  const svgs = Object.values(pack.svgs ?? {}).join('\n') + Object.values(pack.variants ?? {}).flat().map((v) => v!.svg).join('\n');
+  const first = Object.values(pack.svgs ?? {})[0] ?? '';
+  const background: LayoutStyle['background'] = /<radialGradient/i.test(svgs) ? 'glow' : /<pattern/i.test(svgs) || (first.match(/<line/gi) ?? []).length >= 8 ? 'grid' : 'flat';
+  const d = pack.devices ?? signatureDevices(pack);
+  const planes = detectPlanes(pack);
+  const headline = nearestFont(pack.fonts?.headline, 'Schibsted Grotesk');
+  const body = nearestFont(pack.fonts?.body, 'Instrument Sans');
+  if (headline !== pack.fonts?.headline || body !== pack.fonts?.body) notes.push(`Fonts mapped to the nearest bundled ones: headline ${headline}, body ${body}.`);
+  const dr = deviceReport(pack);
+  if (dr.slides) notes.push(`Devices seen (need ${dr.need} of ${dr.slides} slides): marker ${dr.seen.marker}, underline ${dr.seen.underline}, planes ${dr.seen.planes}, profile header ${dr.seen.profileHeader}.`);
+  notes.push(`Style tokens: background ${background}; marker ${d.marker}, profile header ${d.profileHeader}, underline ${d.underline}, planes ${planes}; accent ${d.marker ? 'marker' : 'text'}.`);
+  const lk = lightenForText(accent, bg);
+  if (lk.changed) notes.push(`Accent text: ${accent} is ${contrast(accent, bg).toFixed(1)}:1 on ${bg} (under 4.5:1 for large text), so accent text uses ${lk.color} (${contrast(lk.color, bg).toFixed(1)}:1, same hue). The brand accent ${accent} is unchanged.`);
+  const base: LayoutStyle = { palette: { bg, text, muted, accent, surface }, fonts: { headline, body }, background, devices: { marker: d.marker, profileHeader: d.profileHeader, underline: d.underline, planes }, accentStyle: d.marker ? 'marker' : 'text' };
+  // A preset's look (palette rhythm, case, weights, gradient) rides on the pack: every ground is made readable here, never by shrinking text.
+  if (pack.look) {
+    const L = pack.look;
+    const grounds = (L.rhythm ?? []).map((g) => fixGround(g, notes));
+    if (grounds.length) {
+      base.palette = { bg: grounds[0].bg, text: grounds[0].text, muted: grounds[0].muted, accent: grounds[0].accent, surface: grounds[0].surface, onAccent: grounds[0].onAccent };
+      if (grounds.length >= 2) base.rhythm = grounds;
+      else if (L.closing) base.rhythm = undefined;
+      if (grounds[0].gradient) {
+        base.background = 'gradient';
+        base.gradient = grounds[0].gradient;
+      }
+    }
+    if (L.closing) base.closing = fixGround(L.closing, notes);
+    if (L.flavour) base.flavour = L.flavour as LayoutStyle['flavour'];
+    if (L.caseStyle && L.caseStyle !== 'none') base.caseStyle = L.caseStyle;
+    if (L.weights) base.weights = { headline: L.weights.headline, body: L.weights.body };
+    notes.push(`Preset look: ${grounds.length} ground${grounds.length === 1 ? '' : 's'} in the rhythm, case ${L.caseStyle ?? 'none'}, weights ${L.weights ? L.weights.headline + '/' + L.weights.body : 'default'}${grounds.some((g) => g.gradient) ? ', gradient ground' : ''}.`);
+  }
+  const ov = applyOverrides(base, pack.overrides);
+  notes.push(...ov.notes);
+  return { style: ov.style, notes };
+}
+
+// ----- what the model is told -----
+const GOOD_FOR: Record<LayoutId, string> = {
+  statement: 'a bold claim or the cover hook: one huge headline, optional kicker and caption',
+  'lead-statement': 'a story beat: a short lead-in line over a heavy headline',
+  'big-question': 'a hook or turn as a question, set huge with a drawn question mark',
+  'split-text': 'a headline with a short explaining paragraph',
+  'big-stat': 'one hero number with a short label (at most 5 words)',
+  'stat-bar': 'a share or amount as a number plus a bar (for example $500,000 for 5%)',
+  stepper: '2 to 5 ordered steps',
+  'step-numeral': 'ONE step shown with a giant numeral',
+  checklist: '3 to 5 benefits or to-dos with check icons',
+  'numbered-list': '3 to 5 ordered or ranked items',
+  comparison: 'two things set against each other (before/after, myth/fact)',
+  quote: 'a quote with its attribution',
+  'feature-slider': 'one feature that slides, toggles or locks',
+  'cta-button': 'the closing call to action with a button',
+  'card-grid': '3 to 4 short categories or benefits as cards',
+  'photo-led': "a headline with the person's own photo (only when a photo exists)",
+  'listicle-numeral': 'one numbered list entry with a huge numeral',
+  'stat-grid': '3 to 4 small figures, the first as the hero',
+  timeline: '3 to 5 events in order, the last one highlighted',
+  spotlight: 'a product or subject with exactly 3 numbered callouts',
+};
+const FIELD_NOTE: Record<string, string> = {
+  bar: 'percent filled, a whole number 0-100',
+  position: 'handle position, a whole number 0-100',
+  current: 'which step is active, 1-based',
+  step: 'the step number 1-9',
+  numeral: 'a whole number',
+  numbers: 'parallel to "labels"',
+  labels: 'parallel to the other list',
+  cardTitles: 'parallel to "cardLines"',
+  cardLines: 'parallel to "cardTitles"',
+  events: 'parallel to "labels"',
+  label: 'finishes the number: number + label read as ONE phrase, e.g. "30%" + "off for early backers"',
+  paragraph: 'ONE idea, at most 14 words, no second sentence',
+  callouts: 'exactly 3',
+};
+const fieldLine = (id: LayoutId): string => {
+  const def = layoutDef(id)!;
+  const parts = def.fields.map((f) => `${f.name}${f.required ? '' : '?'} (${f.list ? `list of ${f.list.min === f.list.max ? f.list.min : f.list.min + '-' + f.list.max}, each ≤${f.max} chars` : `≤${f.max} chars`}${f.maxWords ? `, ≤${f.maxWords} words` : ''}${FIELD_NOTE[f.name] ? '; ' + FIELD_NOTE[f.name] : ''})`);
+  return `- ${id}: ${GOOD_FOR[id]}. Fields: ${parts.join(', ')}.`;
+};
+export const DENSE_LAYOUTS = ['statement', 'big-question', 'cta-button'];
+
+export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutStyle, brief: string, n: number): string {
+  const tone = TONES.find((t) => t.id === req.tone)!;
+  const ids = LAYOUT_IDS.filter((id) => look.hasPhoto || id !== 'photo-led');
+  const example = { title: 'Short name of this carousel', note: 'optional, only if the text is thin', slides: [{ layout: 'statement', variant: 1, fields: { kicker: 'Small line', headline: 'The big promise in a few words', caption: 'One line that makes people swipe.' }, accents: ['big promise'], density: 'normal', cut: 'edge-h' }, { layout: 'checklist', fields: { title: 'Before you start', items: ['Short item', 'Short item', 'Short item'] }, accents: [] }] };
+  return [
+    '[carousel:library]',
+    `Turn the text between the markers into a ${n}-slide carousel. You only CHOOSE and WRITE: for every slide pick ONE layout id from the menu and write the text of its fields. You never draw: no SVG, no HTML, no coordinates, no colours. The code draws every slide from your choice.`,
+    '',
+    '<text>',
+    req.text.trim(),
+    '</text>',
+    '',
+    'Reply with ONE JSON object and nothing else (no code fence, no explanation). Format:',
+    JSON.stringify(example, null, 2),
+    '',
+    'Layouts (id: what it is good for. Fields: name, a trailing ? means optional, with its length limit; a list field is a JSON list of strings). Respect every limit; text over a limit is refused:',
+    ...ids.map(fieldLine),
+    '',
+    'Rules:',
+    `- Write ${n} slides. Slide 1 is a strong hook (statement, big-question or lead-statement; at most 8 words). The last slide is a cta-button with a call to action. In between choose the layout that suits THAT slide's content.`,
+    '- Variety: no two consecutive slides use the same layout, and no layout is used more than twice. Use "stepper" for 2 to 5 ordered steps, "stat-bar" or "big-stat" for a figure, "checklist" for benefits, "comparison" for two things set against each other, "quote" only for words that are in the text.',
+    '- Stats: the "label" of big-stat and stat-bar is the continuation of the number, so "number label" reads as one phrase: "30%" + "off for early backers" (never a label that starts a new sentence, such as "Early backers save" under a 30%). split-text: the paragraph is ONE idea in at most 14 words.',
+    '- Facts: use only facts, claims and numbers that are in the text. Never invent statistics, names, quotes, dates or results. If a slide would want a figure the text does not give, use a layout without one. A big-stat or stat-bar number must be a real figure from the text.',
+    `- "accents": up to 3 phrases (1 to 3 words each) copied EXACTLY from the slide's headline, question or quote text, the words that carry the meaning (never filler such as the, a, and, of, to). The code sets them in the accent colour or on a marker bar.`,
+    '- "density": "statement" is optional and ONLY for a statement, big-question or cta-button whose headline is 4 words or fewer: the code then drops the secondary copy and sets the headline huge. Otherwise leave it out.',
+    style.devices.planes ? '- "cut": optional suggestion, one of plain, edge-h, angle, curve (a colour plane the slide is cut by). "invert": optional suggestion (true swaps field and plane colours). The code may override both to keep the deck varied.' : '- This style is flat (no colour planes): "cut" and "invert" are not needed.',
+    '- "variant" is optional (1 or 2) and only a suggestion: the code alternates variants.',
+    style.flavour && (style.flavour.prefer?.length || style.flavour.avoid?.length) ? `- This look suits${style.flavour.cover ? ' a cover set as "' + style.flavour.cover + '" and' : ''} these layouts: ${(style.flavour.prefer ?? []).join(', ') || 'any'}.${style.flavour.avoid?.length ? ' Use these only when the content really needs them: ' + style.flavour.avoid.join(', ') + '.' : ''}` : '',
+    `- Tone: ${tone.label} (${tone.how}). Plain, specific language. No hashtags, no emoji, no links.`,
+    `- The look the code will draw (for the feel of the copy only): ${brief.slice(0, 500)}`,
+    `- If the text is too thin for ${n} different slides, write fewer (at least ${SLIDE_RANGE.carousel[0]}) and add a top-level "note" saying so. Never pad. Add a short top-level "title" (at most 6 words).`,
+  ].join('\n');
+}
+
+// ----- reading the answer -----
+export interface SlideSpec {
+  layout: string;
+  variant?: 0 | 1;
+  fields: Fields;
+  accents: string[];
+  density?: 'statement';
+  cut?: Cut;
+  invert?: boolean;
+  /** What the person chose for this slide in the layout picker: the deck rotation and the style toggles keep it. */
+  pin?: { variant?: 0 | 1; cut?: Cut; invert?: false | 'full' | 'tint' };
+}
+export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+export function toSpec(raw: unknown): SlideSpec | null {
+  if (!isObj(raw)) return null;
+  const fields: Fields = {};
+  if (isObj(raw.fields)) for (const [k, v] of Object.entries(raw.fields)) fields[k] = Array.isArray(v) ? v.map((x) => String(x)) : typeof v === 'string' || typeof v === 'number' ? String(v) : '';
+  const cuts: Cut[] = ['plain', 'edge-h', 'edge-v', 'angle', 'curve'];
+  return {
+    layout: String(raw.layout ?? '').trim().toLowerCase(),
+    ...(raw.variant === 1 || raw.variant === 2 ? { variant: (raw.variant - 1) as 0 | 1 } : {}),
+    fields,
+    accents: (Array.isArray(raw.accents) ? raw.accents : typeof raw.accents === 'string' && raw.accents ? [raw.accents] : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 3),
+    ...(raw.density === 'statement' ? { density: 'statement' as const } : {}),
+    ...(typeof raw.cut === 'string' && (cuts as string[]).includes(raw.cut) ? { cut: raw.cut as Cut } : {}),
+    ...(raw.invert === true ? { invert: true } : {}),
+  };
+}
+export function parseLibraryAnswer(text: string): { title: string; note: string | null; slides: SlideSpec[]; errors: string[] } {
+  const errors: string[] = [];
+  let j: unknown;
+  try {
+    j = JSON.parse(cleanPaste(text));
+  } catch (e) {
+    return { title: '', note: null, slides: [], errors: ['The answer is not valid JSON: ' + (e as Error).message.slice(0, 120)] };
+  }
+  if (!isObj(j) || !Array.isArray(j.slides)) return { title: '', note: null, slides: [], errors: ['The answer has no "slides" list.'] };
+  const slides = j.slides.map(toSpec);
+  slides.forEach((s, i) => !s && errors.push(`Slide ${i + 1} is not an object like {"layout": "...", "fields": {...}}.`));
+  const [lo, hi] = SLIDE_RANGE.carousel;
+  if (j.slides.length < lo || j.slides.length > hi) errors.push(`A carousel needs ${lo} to ${hi} slides (this answer has ${j.slides.length}).`);
+  return { title: typeof j.title === 'string' ? j.title.trim() : '', note: typeof j.note === 'string' && j.note.trim() ? j.note.trim() : null, slides: slides.filter((s): s is SlideSpec => !!s), errors };
+}
+
+// ----- checking and repairing one slide -----
+export const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
+export const clip = (s: string, max: number): string => {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const sp = cut.lastIndexOf(' ');
+  return (sp > max * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,;:.-]+$/, '');
+};
+/** The slide's fields as the layout takes them (with its accent phrases). */
+export const fieldsOf = (s: SlideSpec): Fields => ({ ...s.fields, ...(s.accents.length ? { accent: s.accents } : {}) });
+/** Problems that need the model (or a repair): unknown layout, photo without a photo, fields over budget or missing. */
+export function slideProblems(s: SlideSpec, look: Look): string[] {
+  const id = s.layout;
+  if (!layoutDef(id)) return [`"${s.layout}" is not a layout (use one of: ${LAYOUT_IDS.join(', ')}).`];
+  if (id === 'photo-led' && !look.hasPhoto) return ['photo-led is only for the person\'s own photo and there is none: choose another layout.'];
+  return validateSlideContent(id, fieldsOf(s)).errors;
+}
+/** Trims every field to its budget; null when a required list cannot reach its minimum. */
+export function repairFields(id: string, f: Fields): Fields | null {
+  const def = layoutDef(id);
+  if (!def) return null;
+  const texts = Object.values(f).flatMap((v) => (Array.isArray(v) ? v : [v])).map((x) => String(x).trim()).filter(Boolean);
+  const out: Fields = {};
+  for (const spec of def.fields) {
+    const v = f[spec.name];
+    if (spec.list) {
+      const list = (Array.isArray(v) ? v : typeof v === 'string' && v ? v.split(/\n|;/) : []).map((x) => String(x).trim()).filter(Boolean).slice(0, spec.list.max).map((x) => clip(x, spec.max));
+      if (list.length < spec.list.min) return spec.required ? null : out;
+      out[spec.name] = list;
+      continue;
+    }
+    let s = (typeof v === 'string' ? v : Array.isArray(v) ? v.join(' ') : '').trim();
+    if (spec.percent) s = String(Math.min(100, Number(s.match(/\d+/)?.[0] ?? '')) || '');
+    if (spec.name === 'step') s = /^[1-9]$/.test(s) ? s : '1';
+    if (spec.maxWords) s = s.split(/\s+/).slice(0, spec.maxWords).join(' ');
+    s = clip(s, spec.max);
+    if (!s && spec.required) s = clip(texts.find((t) => !Object.values(out).flat().includes(t)) ?? '', spec.max);
+    if (spec.percent && !s && spec.required) s = '50';
+    if (s) out[spec.name] = s;
+  }
+  return validateSlideContent(id, out).ok ? out : null;
+}
+/** The script slide (the app's own slide types) that stands for a library slide: for the editor, exports and the report. The slide is DRAWN from the library, not from this. */
+export function scriptSlideOf(layout: string, f: Fields): Record<string, unknown> {
+  const s = (k: string) => (typeof f[k] === 'string' ? (f[k] as string) : '');
+  const a = (k: string) => (Array.isArray(f[k]) ? (f[k] as string[]) : []);
+  const tags = { element_tags: ['idea', 'message'] };
+  const pair = (x: string[], y: string[]) => x.map((t, i) => (y[i] ? `${t}: ${y[i]}` : t));
+  switch (layout) {
+    case 'statement': return { type: 'cover', headline: s('headline'), ...(s('kicker') ? { kicker: s('kicker') } : {}), ...(s('caption') ? { sub: s('caption') } : {}), ...tags };
+    case 'lead-statement': return { type: 'cover', kicker: s('lead'), headline: s('headline'), ...tags };
+    case 'big-question': return { type: 'cover', headline: s('question'), ...(s('line') ? { sub: s('line') } : {}), ...tags };
+    case 'photo-led': return { type: 'cover', headline: s('headline'), ...(s('kicker') ? { kicker: s('kicker') } : {}), ...tags };
+    case 'split-text': return { type: 'content', headline: s('headline'), body: s('paragraph'), ...tags };
+    case 'feature-slider': return { type: 'content', headline: s('title'), body: s('body'), ...tags };
+    case 'stepper': return { type: 'content', headline: s('title'), body: a('steps').join('. '), steps: a('steps'), ...tags };
+    case 'step-numeral': return { type: 'step', number: Number(s('step')) || 1, headline: s('title'), body: s('body'), ...tags };
+    case 'listicle-numeral': return { type: 'step', number: Number(s('numeral')) || 1, headline: s('title'), body: s('body') || s('title'), ...tags };
+    case 'big-stat': return { type: 'stat', value: s('number'), label: s('label'), ...(s('source') ? { note: s('source') } : {}), ...tags };
+    case 'stat-bar': return { type: 'stat', value: s('number'), label: s('label'), ...(s('note') ? { note: s('note') } : {}), ...tags };
+    case 'checklist': case 'numbered-list': return { type: 'checklist', headline: s('title'), items: a('items'), ...tags };
+    case 'comparison': return { type: 'beforeafter', beforeLabel: s('leftLabel'), before: s('leftText'), afterLabel: s('rightLabel'), after: s('rightText'), ...tags };
+    case 'quote': return { type: 'quote', quote: s('quote'), by: s('author'), ...tags };
+    case 'cta-button': return { type: 'closing', headline: s('headline'), cta: s('button'), ...tags };
+    case 'card-grid': return { type: 'checklist', headline: s('title') || 'In short', items: pair(a('cardTitles'), a('cardLines')).slice(0, 6), ...tags };
+    case 'stat-grid': return { type: 'checklist', headline: s('title') || 'In numbers', items: pair(a('numbers'), a('labels')).slice(0, 6), ...tags };
+    case 'timeline': return { type: 'checklist', headline: s('title'), items: pair(a('labels'), a('events')).slice(0, 6), ...tags };
+    case 'spotlight': return { type: 'checklist', headline: s('subject'), items: a('callouts'), ...tags };
+    default: return { type: 'content', headline: s('headline') || s('title') || 'Slide', body: Object.values(f).flat().join('. ').slice(0, 250) || 'Slide', ...tags };
+  }
+}
+
+// ----- the report -----
+export interface LibraryReport {
+  route: 'library';
+  provider: string;
+  tokenNote: string;
+  calls: number;
+  tokens: { input: number; output: number } | null;
+  seconds: number;
+  layouts: string[];
+  variants: number[];
+  cuts: string[];
+  inverts: string[];
+  densities: string[];
+  /** What the model suggested (cut, invert, density) next to what the code used. */
+  suggested: { cut: (string | null)[]; invert: boolean[]; density: (string | null)[] };
+  retries: { slide: number; reasons: string[] }[];
+  fallbacks: { slide: number; layout: string; level: string; reason: string }[];
+  /** Cuts or densities the code dropped without a model call (the cut did not fit the content, the headline was too long for statement density). */
+  codeAdjustments: string[];
+  style: LayoutStyle;
+  styleNotes: string[];
+  /** The final slides (layout, fields, accents, suggestions): the deck can be drawn again from this with no model call (the style toggles do). */
+  plan?: { title: string; specs: SlideSpec[] };
+  /** How many times the deck was drawn again from the plan. */
+  redraws?: number;
+  /** What the deck was drawn from: a built-in preset's name, or 'reference' (the active reference style). The style toggles redraw it only for the same source. */
+  source?: string;
+  /** The palette-rhythm ground of each slide (an index into the style's rhythm, -1 = the closing ground, null = no rhythm). */
+  grounds?: (number | null)[];
+}
+
+// ----- the deck -----
+export const stubPack = (style: LayoutStyle, name: string): StylePack => {
+  const c = coloursFor({ ...style.palette, onAccent: style.palette.onAccent ?? style.palette.bg }, {});
+  return { name, palette: { bg: style.palette.bg, text: style.palette.text, accent: style.palette.accent, muted: style.palette.muted, surface: style.palette.surface, onAccent: c.F.onAccent }, fonts: { ...style.fonts }, motifs: [], designs: {}, canvas: { w: 1080, h: 1350 }, notes: ['Drawn by the layout library: no pack designs.'] };
+};
+
+export interface Drawn {
+  built: Built | null;
+  cut: Cut;
+  invert: boolean;
+  density: 'normal' | 'statement';
+  adjustments: string[];
+  problems: string[];
+}
+/** Draws one slide. A density or cut that does not fit is dropped by the code (no model call); only a plain failure is a problem. */
+export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyle, o: { handle: string; index: number; total: number; cut: Cut; invert: false | 'full' | 'tint'; density: 'normal' | 'statement'; ground?: number }): Promise<Drawn> {
+  const f = fieldsOf(spec);
+  const adjustments: string[] = [];
+  const headline = typeof f.headline === 'string' ? f.headline : typeof f.question === 'string' ? f.question : '';
+  let density = o.density;
+  if (density === 'statement' && (!DENSE_LAYOUTS.includes(spec.layout) || words(headline) > 4)) {
+    adjustments.push(`slide ${o.index + 1}: statement density dropped (${DENSE_LAYOUTS.includes(spec.layout) ? 'the headline is longer than 4 words' : 'not for ' + spec.layout}).`);
+    density = 'normal';
+  }
+  const tries: { cut: Cut; invert: false | 'full' | 'tint'; density: 'normal' | 'statement' }[] = [{ cut: o.cut, invert: o.invert, density }];
+  if (density === 'statement') tries.push({ cut: o.cut, invert: o.invert, density: 'normal' });
+  if (o.cut !== 'plain') tries.push({ cut: 'plain', invert: o.invert, density: 'normal' });
+  if (o.invert) tries.push({ cut: 'plain', invert: false, density: 'normal' });
+  let last: Built | null = null;
+  for (const [k, t] of tries.entries()) {
+    const b = await buildSlide(spec.layout, variant, f, style, { handle: o.handle, index: o.index, total: o.total, cut: cutsOf(spec.layout).includes(t.cut) ? t.cut : 'plain', invert: t.invert, density: t.density, ...(o.ground !== undefined ? { ground: o.ground } : {}) });
+    last = b;
+    if (b.ok) {
+      if (k > 0) adjustments.push(`slide ${o.index + 1}: drawn with ${t.cut}${t.invert ? ' + invert' : ''}${t.density === 'statement' ? ' + statement density' : ''} instead of ${o.cut}${o.invert ? ' + invert' : ''}${density === 'statement' ? ' + statement density' : ''} (that did not fit: ${tries[k - 1] && last ? 'content too big for it' : ''}).`);
+      return { built: b, cut: t.cut, invert: !!t.invert, density: t.density, adjustments, problems: [] };
+    }
+  }
+  return { built: null, cut: 'plain', invert: false, density: 'normal', adjustments, problems: (last?.errors ?? ['it could not be drawn']).slice(0, 4) };
+}
+
+function buildRetry(first: string, specs: SlideSpec[], why: Map<number, string[]>): string {
+  return [
+    first,
+    '',
+    'The slides so far (JSON):',
+    JSON.stringify(specs),
+    '',
+    'These slides cannot be used, for these reasons:',
+    ...[...why].flatMap(([i, ps]) => ps.slice(0, 5).map((p) => `- slide ${i + 1}: ${p}`)),
+    '',
+    `Reply with ONLY a JSON object {"slides": {${[...why.keys()].map((i) => `"${i + 1}": {...}`).join(', ')}}} holding the corrected slide for slide number ${[...why.keys()].map((i) => i + 1).join(', ')} (same shape as before: layout, fields, accents, ...). No other slides, no code fence, no explanation. Keep each text within its limit.`,
+  ].join('\n');
+}
+
+export async function designLibraryDeck(req: WriteRequest, look: Look, handle: string, p: WriteProvider, signal: AbortSignal, onPhase: (ph: 'writing' | 'retrying') => void = () => undefined): Promise<GenerateResult & { designed: Designed }> {
+  const t0 = performance.now();
+  const { style, notes: styleNotes } = styleFromPack(look.pack);
+  const brief = look.pack ? look.pack.brief ?? styleBriefOf(look.pack) : look.brief?.trim() || 'a clean, confident look';
+  const [lo, hi] = SLIDE_RANGE[req.format];
+  const n = Math.min(hi, Math.max(lo, req.slides));
+  const first = buildLibraryPrompt(req, look, style, brief, n);
+  let calls = 0;
+  let ms = 0;
+  const tokens = { input: 0, output: 0 };
+  const ask = async (prompt: string) => {
+    onPhase(calls === 0 ? 'writing' : 'retrying');
+    const a = await p.write(prompt, signal, 'write');
+    calls += 1;
+    ms += a.ms;
+    tokens.input += a.usage?.input ?? 0;
+    tokens.output += a.usage?.output ?? 0;
+    return a.text;
+  };
+  let text = await ask(first);
+  let parsed = parseLibraryAnswer(text);
+  if (parsed.errors.length || parsed.slides.length < lo) {
+    text = await ask([first, '', 'Your previous answer was:', text.slice(0, 6000), '', 'It cannot be used, for these reasons:', ...parsed.errors.map((e) => '- ' + e), '', 'Reply again with the corrected JSON object only.'].join('\n'));
+    parsed = parseLibraryAnswer(text);
+  }
+  if (parsed.errors.length || parsed.slides.length < lo) throw new WriterError('invalid', 'The writer answered twice, but neither answer could be used as a slide list.', parsed.errors.map((message) => ({ severity: 'error' as const, path: '', message })));
+  let specs = parsed.slides.slice(0, hi);
+  const suggested = { cut: specs.map((s) => s.cut ?? null), invert: specs.map((s) => !!s.invert), density: specs.map((s) => s.density ?? null) };
+
+  /** The deck's rotation: variants and cuts over the whole deck. A layout the rotation would change (repeated or over-used) is a problem for the retry. */
+  const rotate = () => {
+    const ids = specs.map((s) => s.layout as LayoutId);
+    const rv = rotateVariants(ids.map((layout) => ({ layout: layoutDef(layout) ? layout : ('statement' as LayoutId) })), { photo: !!look.hasPhoto, flavour: style.flavour });
+    const count: Record<string, number> = {};
+    const variants = specs.map((s, i) => {
+      const same = rv[i].layout === s.layout;
+      const c = count[s.layout] ?? 0;
+      count[s.layout] = c + 1;
+      return same ? rv[i].variant : ((c % 2) as 0 | 1);
+    });
+    const repeats = new Map<number, string>();
+    rv.forEach((r, i) => layoutDef(specs[i].layout) && r.layout !== specs[i].layout && repeats.set(i, r.note || `the layout "${specs[i].layout}" repeats or is over-used`));
+    const rc = rotateCuts(ids.map((layout) => ({ layout: layoutDef(layout) ? layout : ('statement' as LayoutId) })), style, { suggest: specs.map((s) => ({ cut: s.cut })) });
+    return { variants, repeats, cuts: rc };
+  };
+  const drawAll = async (only?: Set<number>, prev?: Map<number, Drawn>) => {
+    const rot = rotate();
+    const out = new Map<number, Drawn>(prev ?? []);
+    for (let i = 0; i < specs.length; i++) {
+      if (only && !only.has(i)) continue;
+      const pr = slideProblems(specs[i], look);
+      if (pr.length) {
+        out.set(i, { built: null, cut: 'plain', invert: false, density: 'normal', adjustments: [], problems: pr });
+        continue;
+      }
+      const d = await drawOne(specs[i], specs[i].variant !== undefined && !rot.repeats.has(i) ? rot.variants[i] : rot.variants[i], style, { handle, index: i, total: specs.length, cut: rot.cuts[i].cut, invert: rot.cuts[i].invert, density: specs[i].density ?? 'normal', ground: rot.cuts[i].ground });
+      if (rot.repeats.has(i)) d.problems = [...d.problems, 'layout: ' + rot.repeats.get(i)!];
+      out.set(i, d);
+    }
+    return { out, rot };
+  };
+  let { out: drawn, rot } = await drawAll();
+  const failing = () => new Map<number, string[]>([...drawn].filter(([, d]) => d.problems.length || !d.built).map(([i, d]) => [i, d.problems.length ? d.problems : ['it could not be drawn']]));
+  const retries: LibraryReport['retries'] = [];
+  const bad = failing();
+  // The repeats only matter when they are the sole problem of a slide that otherwise drew: the retry asks for another layout.
+  if (bad.size && calls < 3) {
+    for (const [i, why] of bad) retries.push({ slide: i + 1, reasons: why });
+    const answer = await ask(buildRetry(first, specs, bad));
+    let fix: unknown;
+    try {
+      fix = JSON.parse(cleanPaste(answer));
+    } catch {
+      fix = null;
+    }
+    const slidesObj = isObj(fix) ? fix.slides : null;
+    const changed = new Set<number>();
+    for (const i of bad.keys()) {
+      const raw = Array.isArray(slidesObj) ? slidesObj[i] : isObj(slidesObj) ? slidesObj[String(i + 1)] : null;
+      const sp = toSpec(raw);
+      if (sp) {
+        specs = specs.map((s, k) => (k === i ? { ...sp, cut: sp.cut ?? s.cut } : s));
+        changed.add(i);
+      }
+    }
+    // the layouts changed, so the rotation changes: redraw the whole deck (no model call)
+    ({ out: drawn, rot } = await drawAll());
+  }
+  // Slides still failing: a plain version of the SAME layout (fields trimmed to their budgets), never the old template look.
+  const fallbacks: LibraryReport['fallbacks'] = [];
+  const adjustments: string[] = [];
+  for (const [i, why] of failing()) {
+    const sp = specs[i];
+    const reason = why.join(' | ').slice(0, 300);
+    let done: Drawn | null = null;
+    let level = 'plain version of the same layout';
+    const fixed = layoutDef(sp.layout) && !(sp.layout === 'photo-led' && !look.hasPhoto) ? repairFields(sp.layout, fieldsOf(sp)) : null;
+    if (fixed) for (const v of [rot.variants[i], (1 - rot.variants[i]) as 0 | 1]) {
+      const d = await drawOne({ ...sp, fields: Object.fromEntries(Object.entries(fixed).filter(([k]) => k !== 'accent')) as Fields, density: undefined }, v, style, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
+      if (d.built) { done = d; break; }
+    }
+    if (!done) {
+      // the fields cannot be repaired for that layout: the plain statement layout with the text that is there
+      level = 'plain statement layout (the fields could not be repaired for the chosen layout)';
+      const text0 = Object.values(sp.fields).flat().map((x) => String(x).trim()).filter(Boolean)[0] ?? 'Slide ' + (i + 1);
+      done = await drawOne({ layout: 'statement', fields: { headline: clip(text0, 60) }, accents: [] }, 0, style, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
+      specs = specs.map((s, k) => (k === i ? { layout: 'statement', fields: { headline: clip(text0, 60) }, accents: [] } : s));
+    } else specs = specs.map((s, k) => (k === i ? { ...s, fields: fixed!, density: undefined } : s));
+    fallbacks.push({ slide: i + 1, layout: specs[i].layout, level, reason });
+    if (done) drawn.set(i, done);
+  }
+  for (const d of drawn.values()) adjustments.push(...d.adjustments);
+  // the script (the app's own slide types) the editor, the exports and the report use; the slides are drawn from the library
+  const raw = { title: parsed.title || 'Carousel', brand: { handle }, slides: specs.map((s) => scriptSlideOf(s.layout, s.fields)) };
+  let v = validateScriptText(JSON.stringify(raw), req.format);
+  if (!v.script) {
+    raw.slides = raw.slides.map((s, i) => (v.errors.some((e) => e.path.startsWith(`slides[${i}]`)) ? { type: 'content', headline: clip(String(s.headline ?? s.quote ?? 'Slide ' + (i + 1)), 90), body: clip(JSON.stringify(specs[i].fields), 250), element_tags: ['idea', 'message'] } : s));
+    v = validateScriptText(JSON.stringify(raw), req.format);
+  }
+  if (!v.script) throw new WriterError('invalid', 'The slides could not be turned into a script.', v.errors);
+  const script: CarouselScript = { ...v.script, brand: { ...v.script.brand, handle: handle.trim() || v.script.brand.handle } };
+  const designed: Designed = { slides: {}, fallbacks: {}, notes: [], calls, ms, layouts: {}, ...(tokens.input || tokens.output ? { tokens } : {}) };
+  specs.forEach((s, i) => {
+    const d = drawn.get(i);
+    if (!d?.built) return;
+    const ds: DesignedSlide = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg } };
+    designed.slides[String(i)] = ds;
+    designed.layouts![String(i)] = s.layout;
+  });
+  const seconds = Math.round((performance.now() - t0) / 100) / 10;
+  const report: LibraryReport = {
+    route: 'library',
+    provider: p.id,
+    tokenNote: p.id === 'dev-cli' ? 'Provider is dev-cli (the Claude Code command line): these token numbers include its own overhead (system prompt, tools, cache reads), so they are inflated. Use the api provider (a key set on the server) for real numbers.' : 'Real usage reported by the API provider.',
+    calls,
+    tokens: tokens.input || tokens.output ? tokens : null,
+    seconds,
+    layouts: specs.map((s) => s.layout),
+    variants: rot.variants.map((x) => x + 1),
+    cuts: specs.map((_, i) => drawn.get(i)?.cut ?? 'plain'),
+    inverts: specs.map((_, i) => (drawn.get(i)?.invert ? (rot.cuts[i]?.invert ?? 'full') : 'none') as string),
+    densities: specs.map((_, i) => drawn.get(i)?.density ?? 'normal'),
+    suggested,
+    retries,
+    fallbacks,
+    codeAdjustments: adjustments,
+    style,
+    styleNotes,
+    plan: { title: parsed.title || 'Carousel', specs },
+    grounds: rot.cuts.map((c) => c.ground ?? null),
+  };
+  designed.library = report;
+  designed.notes.push(...retries.map((r) => `Retry for slide ${r.slide}: ${r.reasons.join('; ')}`), ...fallbacks.map((f) => `Slide ${f.slide} fell back to a ${f.level}: ${f.reason}`), ...adjustments);
+  return { script, style: null, note: parsed.note, attempts: calls > 1 ? 2 : 1, ms, warnings: v.warnings, provider: p.id, designed };
+}
+
+/** One slide in a plain version of its own layout (fields trimmed to their budgets), else the plain statement layout. Used when the deck is drawn again. */
+async function plainSameLayout(sp: SlideSpec, v: 0 | 1, style: LayoutStyle, o: { handle: string; index: number; total: number }, hasPhoto: boolean): Promise<{ d: Drawn; spec: SlideSpec }> {
+  const fixed = layoutDef(sp.layout) && !(sp.layout === 'photo-led' && !hasPhoto) ? repairFields(sp.layout, fieldsOf(sp)) : null;
+  if (fixed)
+    for (const vv of [v, (1 - v) as 0 | 1]) {
+      const spec = { ...sp, fields: Object.fromEntries(Object.entries(fixed).filter(([k]) => k !== 'accent')) as Fields, density: undefined };
+      const d = await drawOne(spec, vv, style, { ...o, cut: 'plain', invert: false, density: 'normal' });
+      if (d.built) return { d, spec };
+    }
+  const text0 = Object.values(sp.fields).flat().map((x) => String(x).trim()).filter(Boolean)[0] ?? 'Slide ' + (o.index + 1);
+  const spec: SlideSpec = { layout: 'statement', fields: { headline: clip(text0, 60) }, accents: [] };
+  return { d: await drawOne(spec, 0, style, { ...o, cut: 'plain', invert: false, density: 'normal' }), spec };
+}
+
+/**
+ * Draws the deck again from its stored plan with the style as it is NOW (the person's overrides applied): no model call. The variants and the cuts are rotated again, because
+ * the style decides whether planes are used.
+ */
+export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: string): Promise<{ slides: Record<string, DesignedSlide>; layouts: Record<string, string>; library: LibraryReport }> {
+  if (!lib.plan) throw new Error('This deck has no stored plan to draw again.');
+  const { style, notes: styleNotes } = styleFromPack(look.pack);
+  let specs = lib.plan.specs;
+  const ids = specs.map((s) => (layoutDef(s.layout) ? (s.layout as LayoutId) : ('statement' as LayoutId)));
+  const rv = rotateVariants(ids.map((layout) => ({ layout })), { photo: !!look.hasPhoto, flavour: style.flavour });
+  const count: Record<string, number> = {};
+  const variants = specs.map((s, i) => {
+    const same = rv[i].layout === s.layout;
+    const c = count[s.layout] ?? 0;
+    count[s.layout] = c + 1;
+    return same ? rv[i].variant : ((c % 2) as 0 | 1);
+  });
+  const rc = rotateCuts(ids.map((layout) => ({ layout })), style, { suggest: specs.map((s) => ({ cut: s.cut })) });
+  // a slide the person set in the layout picker keeps its variant, cut and invert
+  specs.forEach((s, i) => {
+    if (s.pin?.variant !== undefined) variants[i] = s.pin.variant;
+    if (s.pin?.cut !== undefined) rc[i] = { ...rc[i], cut: s.pin.cut };
+    if (s.pin && 'invert' in s.pin) rc[i] = { ...rc[i], invert: s.pin.invert ?? false };
+  });
+  const slides: Record<string, DesignedSlide> = {};
+  const layouts: Record<string, string> = {};
+  const drawn: Drawn[] = [];
+  const adjustments: string[] = [];
+  for (let i = 0; i < specs.length; i++) {
+    const o = { handle, index: i, total: specs.length };
+    let d = slideProblems(specs[i], look).length ? null : await drawOne(specs[i], variants[i], style, { ...o, cut: rc[i].cut, invert: rc[i].invert, density: specs[i].density ?? 'normal', ground: rc[i].ground });
+    if (!d?.built) {
+      const f = await plainSameLayout(specs[i], variants[i], style, o, !!look.hasPhoto);
+      d = f.d;
+      specs = specs.map((s, k) => (k === i ? f.spec : s));
+      adjustments.push(`slide ${i + 1}: drawn plain (same layout) after the style changed.`);
+    }
+    adjustments.push(...d.adjustments);
+    drawn.push(d);
+    if (d.built) {
+      slides[String(i)] = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg } };
+      layouts[String(i)] = specs[i].layout;
+    }
+  }
+  const library: LibraryReport = {
+    ...lib,
+    layouts: specs.map((s) => s.layout),
+    variants: variants.map((x) => x + 1),
+    cuts: drawn.map((d) => d.cut),
+    inverts: drawn.map((d, i) => (d.invert ? (rc[i].invert || 'full') : 'none') as string),
+    densities: drawn.map((d) => d.density),
+    codeAdjustments: adjustments,
+    style,
+    styleNotes,
+    plan: { ...lib.plan, specs },
+    redraws: (lib.redraws ?? 0) + 1,
+    grounds: rc.map((c) => c.ground ?? null),
+  };
+  return { slides, layouts, library };
+}

@@ -46,6 +46,36 @@ export interface PackVariant {
   imageSlots: ImageSlot[];
   slotMeta: SlotMeta[];
   fromFile: string;
+  /** What the reader answered, yes or no, about the devices on this slide (the whole-slide prompt asks). The answer decides before the drawn geometry does. */
+  devices?: { marker?: boolean; underline?: boolean; profileHeader?: boolean; planes?: boolean };
+}
+/** What the person changed on the detected devices. Stored with the style, never overwritten by a read or the read cache. */
+export interface StyleOverrides {
+  marker?: boolean;
+  underline?: boolean;
+  profileHeader?: boolean;
+  shapes?: 'off' | 'subtle' | 'bold';
+}
+/** One ground of a preset's palette rhythm (hex colours, optional linear gradient over the ground). */
+export interface PackGround {
+  bg: string;
+  text: string;
+  muted: string;
+  accent: string;
+  surface: string;
+  onAccent?: string;
+  gradient?: { angle: number; stops: { at: number; color: string }[] };
+}
+/** What a stored preset (style.json) asks for beyond one palette, carried to the layout library by styleFromPack. */
+export interface PackLook {
+  /** The preset's rhythm in order, repeats kept (at most 6 entries). */
+  rhythm?: PackGround[];
+  /** The preset's closing ground (byType.closing). */
+  closing?: PackGround;
+  flavour?: { cover?: string; coverVariant?: 0 | 1; prefer?: string[]; avoid?: string[]; variants?: Record<string, 0 | 1> };
+  caseStyle?: 'none' | 'upper' | 'lower';
+  weights?: { headline: number; body: number };
+  gradient?: { angle: number; stops: { at: number; color: string }[] };
 }
 export interface StylePack {
   name: string;
@@ -69,8 +99,16 @@ export interface StylePack {
   variants?: Partial<Record<PackType, PackVariant[]>>;
   /** The style brief: the look in plain words (palette roles, fonts, background, chrome, accent rule, type scale), no layouts. Designed mode inherits it instead of copying a sample drawing. */
   brief?: string;
+  /** The signature devices found in the read slides (see signatureDevices): used by the style brief and by the engine (marker accents, the profile header). */
+  devices?: SignatureDevices;
   /** True for a pack the code built from a stored style's colours and fonts (packFromStyle): the same seven layouts for every style. Shown as "Basic". */
   basic?: boolean;
+  /** The person's changes to the detected devices (see StyleOverrides). */
+  overrides?: StyleOverrides;
+  /** A preset's palette rhythm, case and weights (set by packFromStyle). Packs read from references do not have it. */
+  look?: PackLook;
+  /** The key of the whole-slide read this pack came from (the read cache key), so the person's overrides can be found again for the same pictures. */
+  readKey?: string;
 }
 
 /** The design key for a script slide type. */
@@ -201,6 +239,7 @@ function packLayers(pack: StylePack, slideType: string, slide: Record<string, un
   const d = used ? pack.designs[used] : undefined;
   if (!d) return { layers: [], notes: ['The pack has no design.'] };
   const texts = textsOf(slide, handle);
+  if (texts.accent && !texts.accentStyle) texts.accentStyle = pack.devices?.marker ? 'marker' : 'text';
   const key = designKey(slideType);
   const hasSteps = Array.isArray(slide.steps) && (slide.steps as unknown[]).filter((x) => typeof x === 'string' && x.trim()).length >= 2;
   if ((key === 'list' || hasSteps) && texts.body) {
@@ -496,6 +535,20 @@ const text = (role: string, x: number, y: number, w: number, h: number, size: nu
 const block = (name: string, x: number, y: number, w: number, h: number, fill: string, o: { ellipse?: boolean; radius?: number } = {}): RLayer =>
   ({ kind: 'shape', id: `${name}${++uid}`, name, role: 'decor', x: (x / 100) * SIZE.w, y: (y / 100) * SIZE.h, width: (w / 100) * SIZE.w, height: (h / 100) * SIZE.h, rotation: 0, opacity: 1, shape: o.ellipse ? 'ellipse' : 'rect', fill, ...(o.radius ? { radius: o.radius } : {}) }) as RLayer;
 
+const gradientOf = (v: unknown): PackGround['gradient'] => {
+  const g = v as { type?: string; angle?: number; stops?: { at: number; color: string }[] } | undefined;
+  return g && typeof g === 'object' && g.type === 'linear' && Array.isArray(g.stops) && g.stops.length >= 2 ? { angle: g.angle ?? 180, stops: g.stops.map((s) => ({ at: s.at, color: s.color })) } : undefined;
+};
+/** The grounds of a preset's rhythm: each palette used, in order of first use, at most 3. Every colour is a hex string; a gradient ground keeps its gradient. */
+const groundOfName = (spec: StyleSpec, n: string): PackGround => {
+  const p = spec.palettes[n] as unknown as Record<string, unknown>;
+  const g = spec.library?.gradients?.[n] ?? gradientOf(p.bg);
+  return { bg: solid(p.bg), text: solid(p.text), muted: solid(p.muted ?? p.text), accent: solid(p.accent), surface: solid(p.surface ?? p.bg), onAccent: solid(p.onAccent), ...(g ? { gradient: g } : {}) };
+};
+const groundsOf = (spec: StyleSpec): PackGround[] => {
+  const names = (spec.rhythm && spec.rhythm.length ? spec.rhythm : Object.keys(spec.palettes)).filter((n) => spec.palettes[n]).slice(0, 6);
+  return names.map((n) => groundOfName(spec, n));
+};
 export function packFromStyle(spec: StyleSpec): StylePack {
   const pal0 = Object.values(spec.palettes)[0] as unknown as Record<string, unknown>;
   const palette: Record<string, string> = { bg: solid(pal0.bg), text: solid(pal0.text), accent: solid(pal0.accent), onAccent: solid(pal0.onAccent), surface: solid(pal0.surface), muted: solid(pal0.muted) };
@@ -524,6 +577,8 @@ export function packFromStyle(spec: StyleSpec): StylePack {
     content: [slot('content-inset', 'inset', 616, 675, 389, 405, 'rounded')],
   };
   const pack: StylePack = { name: `${spec.title} pack`, palette, fonts, motifs: [], designs, imageSlots, square: sq, canvas: { ...SIZE }, basic: true, notes: [`Basic pack: the ${spec.title} style's colours and fonts on the standard compositions (the same for every style). A pack made from a reference by the model is better.`] };
+  const closeName = spec.byType?.closing;
+  pack.look = { rhythm: groundsOf(spec), ...(closeName && spec.palettes[closeName] ? { closing: groundOfName(spec, closeName) } : {}), ...(spec.library?.flavour ? { flavour: spec.library.flavour } : {}), caseStyle: spec.caseStyle === 'upper' ? 'upper' : spec.caseStyle === 'lower' ? 'lower' : 'none', weights: { headline: spec.fonts.headlineWeight ?? 800, body: spec.fonts.bodyWeight ?? 500 }, ...(gradientOf((Object.values(spec.palettes)[0] as unknown as { bg?: unknown }).bg) ? { gradient: gradientOf((Object.values(spec.palettes)[0] as unknown as { bg?: unknown }).bg) } : {}) };
   return pack;
 }
 
@@ -560,5 +615,59 @@ export function styleBriefOf(pack: StylePack): string {
     `Chrome: ${chrome}.`,
     accentWord ? 'Accent rule: one key phrase of a headline is set in the accent colour; everything else stays in the text colour.' : 'Accent rule: the accent colour is used sparingly, for one key word or mark per slide.',
     `Type: ${scale}.`,
-  ].join(' ').slice(0, 690);
+    ...deviceLines(pack.devices ?? signatureDevices(pack)),
+  ].join(' ').slice(0, 1000);
+}
+
+// ----- signature devices: what the reference does on many of its slides (found from the stored drawings, no model) -----
+
+export interface SignatureDevices {
+  /** An accent-coloured filled rectangle behind text, on at least 40% of the slides. */
+  marker: boolean;
+  /** A round picture spot with a name or handle beside it near the top, on at least 40% of the slides. */
+  profileHeader: boolean;
+  /** A thin accent stroke under the last block of text, on at least 40% of the slides. */
+  underline: boolean;
+  slides: number;
+  counts: { marker: number; profileHeader: number; underline: number };
+}
+const SHARE = 0.4;
+
+/** Detects the signature devices in every slide read (the variants; or the one design per type of an older pack). Pure geometry on the drawn layers. */
+export function signatureDevices(pack: StylePack): SignatureDevices {
+  const reads = Object.values(pack.variants ?? {}).flat().map((v) => ({ layers: v!.layers as RLayer[], slots: v!.imageSlots, ans: v!.devices }));
+  const slides = reads.length ? reads : (Object.keys(pack.designs) as (keyof StylePack['designs'])[]).map((k) => ({ layers: (pack.designs[k] ?? []) as RLayer[], slots: pack.imageSlots?.[k] ?? [], ans: undefined as PackVariant['devices'] }));
+  const accent = (pack.palette.accent ?? '').toUpperCase();
+  const isAccent = (c: unknown) => typeof c === 'string' && (c === '$accent' || (!!accent && c.toUpperCase() === accent));
+  const area = (l: { width: number; height: number }) => l.width * l.height;
+  const inter = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) =>
+    Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  const counts = { marker: 0, profileHeader: 0, underline: 0 };
+  for (const s of slides) {
+    const texts = s.layers.filter((l) => l.kind === 'text' && String((l as { text?: string }).text ?? '').trim());
+    // (a) marker: an accent-coloured filled rectangle (not full-bleed) with text lying on it
+    const marker = s.layers.some((r) => r.kind === 'shape' && (r as { shape?: string }).shape === 'rect' && isAccent((r as { fill?: unknown }).fill) && r.height <= 260 && r.width < 0.9 * pack.canvas.w && texts.some((t) => inter(r, t) >= 0.6 * Math.min(area(r), area(t))));
+    // (b) profile header: a round picture spot (or a round shape) near the top with text to its right
+    const rounds = [...s.slots.filter((x) => x.mask === 'circle' && x.w <= 220).map((x) => ({ x: x.x, y: x.y, width: x.w, height: x.h })), ...s.layers.filter((l) => l.kind === 'shape' && (l as { shape?: string }).shape === 'ellipse' && l.width >= 40 && l.width <= 220 && Math.abs(l.width - l.height) <= 12).map((l) => ({ x: l.x, y: l.y, width: l.width, height: l.height }))];
+    const profile = rounds.some((c) => c.y < 300 && texts.some((t) => t.x >= c.x + c.width * 0.5 && t.y >= c.y - 70 && t.y <= c.y + c.height + 70));
+    // (c) underline: a thin accent stroke just under the last (lowest) block of text
+    const body = texts.filter((t) => t.y + t.height <= 1220);
+    const last = body.reduce<RLayer | null>((m, t) => (!m || t.y + t.height > m.y + m.height ? t : m), null);
+    const underline = !!last && s.layers.some((e) => e.kind !== 'text' && e.height <= 12 && e.width >= 60 && (isAccent((e as { fill?: unknown }).fill) || isAccent((e as { stroke?: { color?: unknown } }).stroke?.color)) && e.y >= last.y + last.height * 0.5 && e.y <= last.y + last.height + 70 && Math.min(e.x + e.width, last.x + last.width) - Math.max(e.x, last.x) >= 0.4 * e.width);
+    // the reader's yes/no answer for this slide decides; the drawn geometry is the fallback when it gave none
+    if (s.ans?.marker ?? marker) counts.marker++;
+    if (s.ans?.profileHeader ?? profile) counts.profileHeader++;
+    if (s.ans?.underline ?? underline) counts.underline++;
+  }
+  const need = Math.max(1, Math.ceil(SHARE * slides.length));
+  return { marker: slides.length > 0 && counts.marker >= need, profileHeader: slides.length > 0 && counts.profileHeader >= need, underline: slides.length > 0 && counts.underline >= need, slides: slides.length, counts };
+}
+/** The devices as short plain lines for the style brief (empty when there are none). */
+export function deviceLines(d: SignatureDevices): string[] {
+  return [
+    d.marker ? 'Signature: key phrases sit on an accent-coloured marker bar (a rounded filled rectangle behind the words, dark text on it).' : '',
+    d.profileHeader ? 'Signature: slides carry a profile header at the top (round avatar, name with a verified tick, @handle).' : '',
+    d.underline ? 'Signature: a thin accent line sits under the last block of text.' : '',
+    d.marker || d.profileHeader ? 'The engine draws the ' + [d.marker ? 'marker accents' : '', d.profileHeader ? 'profile header' : ''].filter(Boolean).join(' and the ') + ' itself: do not draw ' + (d.marker && d.profileHeader ? 'them' : 'it') + '.' : '',
+  ].filter(Boolean);
 }

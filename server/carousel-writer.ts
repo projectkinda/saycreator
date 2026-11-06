@@ -15,7 +15,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 export const SYSTEM_PROMPT = 'You write short social-media copy (carousel scripts, thumbnail titles) as strict JSON. You never add commentary. You never invent facts, statistics, names or quotes that are not in the text you are given.';
-const MAX_BODY = 80_000;
+// The writer route takes the prompt (about 20 KB) and, for a Designed call, up to 3 inspiration pictures as base64 (about 150 KB each). It was 80 KB: text only.
+export const MAX_BODY = 2_000_000;
 export const CLI_TIMEOUT_MS = 240_000;
 export const API_TIMEOUT_MS = 120_000;
 
@@ -60,6 +61,19 @@ export function findClaudeCli(env: NodeJS.ProcessEnv = process.env, platform = p
     }
   }
   return null;
+}
+
+/**
+ * USAGE_LOG=<file>: one JSON line per API call with the model and the token counts and nothing else (no prompt, no answer, never the key). The cost script
+ * (scripts/cost-real) reads it to total the reader and the writer apart.
+ */
+export function logUsage(env: NodeJS.ProcessEnv, row: { route: 'writer' | 'reader'; provider: string; model: string; kind: string; input: number; output: number; cacheWrite?: number; cacheRead?: number; ms: number }) {
+  if (!env.USAGE_LOG) return;
+  try {
+    fs.appendFileSync(env.USAGE_LOG, JSON.stringify({ t: new Date().toISOString(), ...row }) + '\n');
+  } catch {
+    /* a log that cannot be written is not an error */
+  }
 }
 
 export type WriteKind = 'write' | 'draw';
@@ -163,6 +177,7 @@ export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.Pr
 
 /** One call to the Messages API. The key comes from `env` only and appears in no message, log or response. */
 export async function writeWithApi(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, fetchImpl: typeof fetch = fetch, timeoutMs = API_TIMEOUT_MS, kind: WriteKind = 'write', images: WriteImage[] = []): Promise<{ text: string; ms: number; usage?: WriteUsage }> {
+  const model = apiModel(modelFor(kind, env));
   const key = env.ANTHROPIC_API_KEY;
   if (!key) throw new WriterFailure(503, 'unavailable', 'No API key is set on the server, so the API writer is off.');
   const t0 = Date.now();
@@ -173,7 +188,7 @@ export async function writeWithApi(prompt: string, signal: AbortSignal, env: Nod
     r = await fetchImpl('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: apiModel(modelFor(kind, env)), max_tokens: kind === 'draw' ? 16000 : 4096, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: images.length ? [...images.flatMap((i) => [{ type: 'text', text: `The next image is ${i.name}.` }, { type: 'image', source: { type: 'base64', media_type: i.mime, data: i.base64 } }]), { type: 'text', text: prompt }] : prompt }] }),
+      body: JSON.stringify({ model, max_tokens: kind === 'draw' ? 16000 : 4096, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: images.length ? [...images.flatMap((i) => [{ type: 'text', text: `The next image is ${i.name}.` }, { type: 'image', source: { type: 'base64', media_type: i.mime, data: i.base64 } }]), { type: 'text', text: prompt }] : prompt }] }),
       signal: both,
     });
   } catch (e) {
@@ -190,7 +205,8 @@ export async function writeWithApi(prompt: string, signal: AbortSignal, env: Nod
     }
     throw new WriterFailure(502, 'failed', `The API refused the request (${r.status})${msg ? `: ${msg.replace(/sk-[A-Za-z0-9_-]+/g, '[key]').slice(0, 200)}` : '.'}`);
   }
-  const j = (await r.json()) as { content?: { type: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+  const j = (await r.json()) as { content?: { type: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } };
+  logUsage(env, { route: 'writer', provider: 'api', model, kind, input: j.usage?.input_tokens ?? 0, output: j.usage?.output_tokens ?? 0, ...(j.usage?.cache_creation_input_tokens ? { cacheWrite: j.usage.cache_creation_input_tokens } : {}), ...(j.usage?.cache_read_input_tokens ? { cacheRead: j.usage.cache_read_input_tokens } : {}), ms: Date.now() - t0 });
   const text = (j.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join('');
   if (!text) throw new WriterFailure(502, 'failed', 'The API answered with no text.');
   return { text, ms: Date.now() - t0, ...(j.usage ? { usage: { input: j.usage.input_tokens ?? 0, output: j.usage.output_tokens ?? 0 } } : {}) };

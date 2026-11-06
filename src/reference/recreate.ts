@@ -751,12 +751,21 @@ export function accentPhrase(headline: string, accent: string): { start: number;
   return best;
 }
 
-export function textsOf(s: SlideLike, handle: string): Partial<Record<RecreateRole, string>> & { accent?: string } {
+export function textsOf(s: SlideLike, handle: string): Partial<Record<RecreateRole, string>> & { accent?: string; accents?: string[]; accentStyle?: 'marker' | 'text' } {
+  // The accent is a phrase, or {phrase, style}: style "marker" sets it on a bar of the accent colour, "text" colours the words.
+  // One phrase, or up to 3 (a list of phrases or {phrase, style}); the first one's style counts.
+  const accAll = Array.isArray(s.accent) ? (s.accent as unknown[]) : [s.accent as unknown];
+  const phraseOf = (a: unknown) => (typeof a === 'string' ? str(a) : a && typeof a === 'object' ? str((a as { phrase?: unknown }).phrase) : '');
+  const accPhrases = accAll.map(phraseOf).filter(Boolean).slice(0, 3);
+  const acc = accAll[0];
+  const accentPhrase0 = accPhrases[0] ?? '';
+  const accStyle = acc && typeof acc === 'object' ? (acc as { style?: unknown }).style : undefined;
+  const accentStyle = accStyle === 'marker' || accStyle === 'text' ? accStyle : undefined;
   const items = Array.isArray(s.items) ? (s.items as unknown[]).map(str).filter(Boolean) : [];
   // A slide with "steps" (2 to 5 short texts) shows them one per row, in place of its body.
   const steps = Array.isArray(s.steps) ? (s.steps as unknown[]).map(str).filter(Boolean).slice(0, 5) : [];
   const body = steps.length >= 2 ? steps.join('\n') : str(s.body) || str(s.sub) || str(s.note) || str(s.cta) || items.join('\n') || str(s.author);
-  if (s.type === 'stat') return { kicker: str(s.kicker) || handle, tag: '', title: str(s.label), body: str(s.note), caption: '', number: str(s.value), accent: str(s.accent) };
+  if (s.type === 'stat') return { kicker: str(s.kicker) || handle, tag: '', title: str(s.label), body: str(s.note), caption: '', number: str(s.value), accent: accentPhrase0, ...(accPhrases.length > 1 ? { accents: accPhrases } : {}), ...(accentStyle ? { accentStyle } : {}) };
   return {
     kicker: str(s.kicker) || handle,
     tag: typeof s.number === 'number' ? `STEP ${s.number}` : '',
@@ -764,7 +773,9 @@ export function textsOf(s: SlideLike, handle: string): Partial<Record<RecreateRo
     body,
     caption: str(s.label) && str(s.value) ? str(s.label) : items[0] ?? '',
     number: typeof s.number === 'number' ? String(s.number) : str(s.value),
-    accent: str(s.accent),
+    accent: accentPhrase0,
+    ...(accPhrases.length > 1 ? { accents: accPhrases } : {}),
+    ...(accentStyle ? { accentStyle } : {}),
   };
 }
 
@@ -847,10 +858,30 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
     // The slide's accent phrase (1 to 3 words of the headline) is a run in the accent colour; a phrase that is not in the headline is ignored.
     const accent = (texts as { accent?: string }).accent;
     const accentColour = rec.palette.accent;
+    // accent TEXT may use a lightened copy of the accent (palette.accentInk: same hue, 4.5:1 on a dark ground); bars and shapes keep the accent itself
+    const runColour = rec.palette.accentInk ?? accentColour;
     if (role === 'title') filled.balance = true;
     if (role === 'title' && accent && accentColour) {
-      const hit = accentPhrase(text, accent);
-      if (hit) filled.runs = [{ start: hit.start, end: hit.end, color: accentColour }];
+      const phrases = [accent, ...((texts as { accents?: string[] }).accents ?? []).slice(1)];
+      const hits = phrases
+        .map((p) => accentPhrase(text, p))
+        .filter((h): h is { start: number; end: number } => !!h)
+        .sort((x, y) => x.start - y.start)
+        .filter((h, i, all) => i === 0 || h.start >= all[i - 1].end);
+      if (hits.length) {
+        // style "marker": a rounded bar of the accent colour behind the phrase, dark text on it. Whatever the style, an accent colour under 3:1 against the background cannot be read as text: it becomes a marker.
+        let style: 'marker' | 'text' = (texts as { accentStyle?: 'marker' | 'text' }).accentStyle ?? 'text';
+        if (style === 'text' && contrastOf(runColour, rec.palette.bg ?? '#FFFFFF') < 3) {
+          style = 'marker';
+          notes.push('The accent colour has under 3:1 contrast against the background as text, so the phrase is set on a marker.');
+        }
+        if (style === 'marker') {
+          const ink = markerInk(rec.palette, accentColour);
+          const pad = Math.round(filled.style.size * 0.16);
+          filled.runs = hits.map((h) => ({ start: h.start, end: h.end, color: ink }));
+          filled.highlight = { words: hits.flatMap((h) => text.slice(h.start, h.end).split(/\s+/).filter(Boolean)), color: accentColour, textColor: ink, paddingX: pad, paddingY: 0, radius: pad, hugLine: true, onlyFirst: hits.length === 1 };
+        } else filled.runs = hits.map((h) => ({ start: h.start, end: h.end, color: runColour }));
+      }
     }
     // The sample's accent runs go to the same words of the new text (the last or the first words), or are dropped when they have no such place.
     const sample = (l as TextLayer).runs;
@@ -1019,4 +1050,23 @@ export function withPhotos(layers: RLayer[], src: string | null): RLayer[] {
 
 export async function callRecreate(reader: ReferenceReader, prompt: string, images: ReaderImage[], signal: AbortSignal): Promise<string> {
   return (await reader.read({ role: 'draw', prompt, images }, signal)).text;
+}
+
+// ----- contrast, for the accent guard -----
+const lum = (hex: string): number => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim()) ?? /^rgba?\((\d+),\s*(\d+),\s*(\d+)/i.exec(hex);
+  const rgb = m ? (m.length === 2 ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : [Number(m[1]), Number(m[2]), Number(m[3])]) : [0, 0, 0];
+  const [r, g, b] = rgb.map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+/** WCAG contrast ratio of two colours (hex or rgb()). */
+export const contrastOf = (a: string, b: string): number => {
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+/** The text colour on a marker: the darkest of the palette's own colours (and near-black) that reads at 4.5:1, else the most readable one. */
+export function markerInk(palette: Record<string, string>, accent: string): string {
+  const cands = [palette.bg, palette.text, '#111111', '#FFFFFF'].filter(Boolean) as string[];
+  const dark = cands.filter((c) => lum(c) < 0.3).sort((x, y) => lum(x) - lum(y)).find((c) => contrastOf(c, accent) >= 4.5);
+  return dark ?? cands.sort((x, y) => contrastOf(y, accent) - contrastOf(x, accent))[0];
 }

@@ -65,6 +65,12 @@ function withDesigned(doc: Doc, out: { slides: StyledSlide[]; margin: number }):
   const n = doc.script.slides.length;
   const slides = out.slides.map((s, i) => {
     const own = d.slides[String(i)];
+    if (own?.built) {
+      // A slide of the layout library: the finished drawing and its layers are used as they are.
+      const ed = !!doc.choices[String(i)]?.editable;
+      const fb = !ed ? { faithful: { svg: own.built.svg, layers: own.built.layers, canvas: { w: 1080, h: 1350 }, bg: own.built.bg } } : {};
+      return { ...s, ...fb, plan: { ...s.plan, layers: own.built.layers }, notes: ['Drawn by the layout library (' + (d.layouts?.[String(i)] ?? 'layout') + ').'] } as typeof s;
+    }
     const dp = own?.pack ?? (d.fallbacks[String(i)] ? fb : null);
     const why = d.fallbacks[String(i)];
     if (!dp) return why ? ({ ...s, notes: [...((s as { notes?: string[] }).notes ?? []), "This slide fell back to the style's own design: " + why] } as typeof s) : s;
@@ -73,7 +79,8 @@ function withDesigned(doc: Doc, out: { slides: StyledSlide[]; margin: number }):
     const editable = !!doc.choices[String(i)]?.editable;
     const rec = own ? own.recurring : recurringFor(first?.recurring, i, n);
     const svg = r.faithful ? r.faithful.replace(/<\/svg>\s*$/i, () => resolveSvgTokens(recurringMarkup(rec, dp), dp.palette) + '</svg>') : '';
-    const layers = editable || !svg ? [...r.layers, ...recurringLayers(rec, dp, 'd' + i)] : r.layers;
+    // The chrome is always in the plan's layers, so the phone checks (32 px minimum, overlaps) measure it like any other text.
+    const layers = [...r.layers, ...recurringLayers(rec, dp, 'd' + i)];
     const f = !editable && svg ? { faithful: { svg, layers: [...r.layers, ...recurringLayers(rec, dp, 'd' + i)], canvas: r.canvas ?? dp.canvas, bg: dp.palette.bg ?? '#FFFFFF' } } : {};
     const more = editable ? ['Made editable: this slide now draws from layers. Gradients, patterns and fine drawing parts can look a little different from the designed drawing.'] : [];
     const head = own ? 'Designed by the model for this slide.' : "This slide fell back to a standard layout in the deck's colours and fonts: " + (why ?? 'its design could not be used');

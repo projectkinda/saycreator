@@ -206,3 +206,10 @@ export function requestFromText(text: string, slide: number, palette: Record<str
   const colours = [...new Set([palette.bg, palette.accent].filter(Boolean).map((c) => colourWord(c)))].join(', ');
   return { id: `img-${Date.now().toString(36)}-${slide}-${Math.random().toString(36).slice(2, 5)}`, slide, kind, prompt: `${what}; ${HINT[kind]}; ${colours}; no text`, alt: `${kind} picture for slide ${slide + 1}: ${what}`, generations: 0 };
 }
+
+/** Empties the picture-slot images (the originals kept in the browser and in memory). Used by Reset page and Start over. */
+export async function clearOriginals() {
+  originals.clear();
+  await tx('readwrite', (s) => s.clear());
+  bump();
+}
