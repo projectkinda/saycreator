@@ -160,7 +160,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   };
   // Shapes: subtle = a thinner, surface-toned plane; bold = a thicker accent plane
   const pk = st0.planeStrength === 'subtle' ? 0.8 : st0.planeStrength === 'bold' ? 1.18 : 1;
-  const colours = coloursFor(paletteOf(st0), { tone: o.tone ?? (st0.planeStrength === 'subtle' ? 'surface' : undefined), invert: o.invert });
+  const colours = coloursFor(paletteOf(st0), { tone: o.tone ?? (st0.planeStrength === 'subtle' ? 'surface' : undefined), invert: o.invert, tints: !((st0.rhythm?.length ?? 0) > 1) });
   const { F, P } = colours;
   // layouts see the style as drawn on the field (an inverted slide has other roles)
   const st: LayoutStyle = { ...st0, background: o.invert && st0.background === 'gradient' ? 'flat' : st0.background, accentStyle: F.accent === F.text || contrast(F.accentInk ?? F.accent, F.bg) < 4.5 ? 'marker' : st0.accentStyle, palette: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface, onAccent: F.onAccent } };

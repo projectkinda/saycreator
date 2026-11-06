@@ -169,10 +169,10 @@ export interface Colours {
  * The colours of a slide. The plane takes `tone` (accent, surface or the ink colour) and has its own roles (text, muted, accent, surface re-derived for it, so part B on the
  * plane keeps its contrast). `invert: 'full'` swaps field and plane colours; `invert: 'tint'` only moves the field to the surface colour (for flat styles with no planes).
  */
-export function coloursFor(base: Pal, opts: { tone?: PlaneTone; invert?: false | 'full' | 'tint' }): Colours {
+export function coloursFor(base: Pal, opts: { tone?: PlaneTone; invert?: false | 'full' | 'tint'; /** The deck uses tinted slides (the card colour as a ground). A palette rhythm does not: then the card colour does not decide how light the accent text must be. Default true. */ tints?: boolean }): Colours {
   const tone = opts.tone ?? 'accent';
   const plane0 = tone === 'ink' ? base.text : tone === 'surface' ? base.surface : base.accent;
-  const baseRoles: Roles = { bg: base.bg, text: base.text, muted: base.muted, accent: base.accent, surface: base.surface, onAccent: base.onAccent, ...accentTextOf(base.accent, base.bg, base.text, [base.surface]) };
+  const baseRoles: Roles = { bg: base.bg, text: base.text, muted: base.muted, accent: base.accent, surface: base.surface, onAccent: base.onAccent, ...accentTextOf(base.accent, base.bg, base.text, opts.tints === false ? [] : [base.surface]) };
   let F = baseRoles;
   let planeFill = plane0;
   let inverted = false;
