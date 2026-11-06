@@ -8,11 +8,11 @@ import path from 'node:path';
 test.skip(!process.env.REAL_PRESETS, 'real run only when REAL_PRESETS=1');
 test.setTimeout(Number(process.env.PRESET_TIMEOUT_MIN || 30) * 60_000);
 test.use({ viewport: { width: 1300, height: 1000 } });
-const OUT = path.resolve(process.cwd(), 'out/presets-real');
+const OUT = path.resolve(process.cwd(), process.env.PRESET_OUT ?? 'out/presets-real');
 const TEXT = "Quick Flip is a Kickstarter project: a hoodie that flips into a backpack in 10 seconds. Slide the zip and bite the clasp, and the hoodie locks into a backpack. To flip it, zip the hood into the pocket, fold the sleeves behind you, then pull the straps and go. The shell is waterproof, it fits a 16-inch laptop, it is machine washable and it flips in 10 seconds. The team is raising $500,000 for 5% of the company and is open to 20 backers only. Early backers save 30%. One early backer said: \"I stopped carrying a bag the day this arrived.\"";
 const PRESETS = [{ id: 'hot-flat', re: /Hot flat/ }, { id: 'editorial-collage', re: /editorial/i }, { id: 'glass-gradient', re: /Soft gradient|glass/i }];
 
-for (const p of PRESETS) {
+for (const p of PRESETS.filter((x) => !process.env.PRESET_ONLY || process.env.PRESET_ONLY.split(',').includes(x.id))) {
   test('real preset: ' + p.id, async ({ page }) => {
     const writes: { prompt: string; answer: string; usage?: { input: number; output: number }; url: string }[] = [];
     const refs: string[] = [];

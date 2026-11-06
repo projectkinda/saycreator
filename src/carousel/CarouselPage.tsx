@@ -550,6 +550,10 @@ export default function CarouselPage() {
       return setGen({ phase: 'error', message: 'The script could not be used: ' + done.reasons[0] + ' Your text is kept.' });
     }
     job.end('apply', pick ? `style: ${pick.name}` : undefined);
+    {
+      const sw = designedOut?.library?.flavour?.swaps ?? [];
+      if (sw.length) setNotice(`Flavour: ${sw.length} layout${sw.length === 1 ? '' : 's'} changed to suit ${styleByName(presetUsed ?? '')?.spec.title ?? 'the style'}: ${sw.map((w) => `slide ${w.slide} ${w.from} to ${w.to}`).join('; ')}. Undo takes back the whole carousel; the layout picker changes any slide.`);
+    }
     job.begin('draw');
     setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…`, styleWhy: (presetUsed ? pickPre : pick)?.why, extra: designedOut ? ` Designed mode: ${Object.keys(designedOut.slides).length} slides designed, ${Object.keys(designedOut.fallbacks).length} fell back, ${designedOut.calls} model call${designedOut.calls === 1 ? '' : 's'}.` : '' });
   };

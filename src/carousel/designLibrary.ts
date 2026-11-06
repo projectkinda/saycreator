@@ -14,6 +14,7 @@ import { contrast } from './layouts/draw';
 import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
+import { flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { TONES } from './writerPrompt';
 
 /** The old route, where the model draws every slide as SVG, stays available behind this flag (off by default): localStorage "creator.legacySvgRoute" = "1" or VITE_LEGACY_SVG_ROUTE=1. */
@@ -208,7 +209,8 @@ export function styleFromPack(pack: StylePack | null | undefined): { style: Layo
   const dr = deviceReport(pack);
   if (dr.slides) notes.push(`Devices seen (need ${dr.need} of ${dr.slides} slides): marker ${dr.seen.marker}, underline ${dr.seen.underline}, planes ${dr.seen.planes}, profile header ${dr.seen.profileHeader}.`);
   notes.push(`Style tokens: background ${background}; marker ${d.marker}, profile header ${d.profileHeader}, underline ${d.underline}, planes ${planes}; accent ${d.marker ? 'marker' : 'text'}.`);
-  const lk = lightenForText(accent, bg);
+  // the lightened accent of the deck: it reads on the ground and on the card / tint colour, so every slide uses the same one
+  const lk = lightenForText(accent, [bg, surface].reduce((w, s) => (contrast(accent, s) < contrast(accent, w) ? s : w), bg));
   if (lk.changed) notes.push(`Accent text: ${accent} is ${contrast(accent, bg).toFixed(1)}:1 on ${bg} (under 4.5:1 for large text), so accent text uses ${lk.color} (${contrast(lk.color, bg).toFixed(1)}:1, same hue). The brand accent ${accent} is unchanged.`);
   const base: LayoutStyle = { palette: { bg, text, muted, accent, surface }, fonts: { headline, body }, background, devices: { marker: d.marker, profileHeader: d.profileHeader, underline: d.underline, planes }, accentStyle: d.marker ? 'marker' : 'text' };
   // A preset's look (palette rhythm, case, weights, gradient) rides on the pack: every ground is made readable here, never by shrinking text.
@@ -227,6 +229,7 @@ export function styleFromPack(pack: StylePack | null | undefined): { style: Layo
     if (L.closing) base.closing = fixGround(L.closing, notes);
     if (L.flavour) base.flavour = L.flavour as LayoutStyle['flavour'];
     if (L.caseStyle && L.caseStyle !== 'none') base.caseStyle = L.caseStyle;
+    if (L.caseExceptions?.length) base.caseExceptions = L.caseExceptions;
     if (L.weights) base.weights = { headline: L.weights.headline, body: L.weights.body };
     notes.push(`Preset look: ${grounds.length} ground${grounds.length === 1 ? '' : 's'} in the rhythm, case ${L.caseStyle ?? 'none'}, weights ${L.weights ? L.weights.headline + '/' + L.weights.body : 'default'}${grounds.some((g) => g.gradient) ? ', gradient ground' : ''}.`);
   }
@@ -278,6 +281,17 @@ const fieldLine = (id: LayoutId): string => {
   const parts = def.fields.map((f) => `${f.name}${f.required ? '' : '?'} (${f.list ? `list of ${f.list.min === f.list.max ? f.list.min : f.list.min + '-' + f.list.max}, each ≤${f.max} chars` : `≤${f.max} chars`}${f.maxWords ? `, ≤${f.maxWords} words` : ''}${FIELD_NOTE[f.name] ? '; ' + FIELD_NOTE[f.name] : ''})`);
   return `- ${id}: ${GOOD_FOR[id]}. Fields: ${parts.join(', ')}.`;
 };
+/** What KIND of content a layout suits, in plain words (for the preset's shape line in the writer prompt). */
+const KIND: Partial<Record<LayoutId, string>> = {
+  'card-grid': 'card lists', 'stat-grid': 'sets of figures', comparison: 'comparisons', spotlight: 'three callouts', checklist: 'short lists', stepper: 'step sequences', 'numbered-list': 'ranked lists', timeline: 'timelines',
+  statement: 'big statements', 'lead-statement': 'big statements', 'big-question': 'big questions', 'big-stat': 'one big figure', 'stat-bar': 'a share with a bar', quote: 'quotes', 'split-text': 'a headline with one idea', 'feature-slider': 'one feature',
+  'step-numeral': 'numbered steps', 'listicle-numeral': 'numbered entries', 'cta-button': 'a closing call to action',
+};
+/** The preset's shape line: the kinds of content its preferred layouts suit, the layouts, and the honesty rule. Short on purpose (about 60 tokens). */
+export function flavourLine(fl: NonNullable<LayoutStyle['flavour']>): string {
+  const kinds = [...new Set((fl.prefer ?? []).map((l) => KIND[l]).filter(Boolean))].slice(0, 4);
+  return `- This look suits ${kinds.join(', ') || 'any content'} (layouts: ${(fl.prefer ?? []).join(', ') || 'any'}${fl.avoid?.length ? '; avoid unless needed: ' + fl.avoid.join(', ') : ''}). Use these forms where the topic honestly allows; never invent content to fit.`;
+}
 export const DENSE_LAYOUTS = ['statement', 'big-question', 'cta-button'];
 
 export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutStyle, brief: string, n: number): string {
@@ -307,7 +321,8 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     '- "density": "statement" is optional and ONLY for a statement, big-question or cta-button whose headline is 4 words or fewer: the code then drops the secondary copy and sets the headline huge. Otherwise leave it out.',
     style.devices.planes ? '- "cut": optional suggestion, one of plain, edge-h, angle, curve (a colour plane the slide is cut by). "invert": optional suggestion (true swaps field and plane colours). The code may override both to keep the deck varied.' : '- This style is flat (no colour planes): "cut" and "invert" are not needed.',
     '- "variant" is optional (1 or 2) and only a suggestion: the code alternates variants.',
-    style.flavour && (style.flavour.prefer?.length || style.flavour.avoid?.length) ? `- This look suits${style.flavour.cover ? ' a cover set as "' + style.flavour.cover + '" and' : ''} these layouts: ${(style.flavour.prefer ?? []).join(', ') || 'any'}.${style.flavour.avoid?.length ? ' Use these only when the content really needs them: ' + style.flavour.avoid.join(', ') + '.' : ''}` : '',
+    style.flavour && (style.flavour.prefer?.length || style.flavour.avoid?.length) ? flavourLine(style.flavour) : '',
+    look.pack?.look ? '- Every title and headline stands alone as a complete phrase: write "How to pack it", not a fragment like "To pack it".' : '',
     `- Tone: ${tone.label} (${tone.how}). Plain, specific language. No hashtags, no emoji, no links.`,
     `- The look the code will draw (for the feel of the copy only): ${brief.slice(0, 500)}`,
     `- If the text is too thin for ${n} different slides, write fewer (at least ${SLIDE_RANGE.carousel[0]}) and add a top-level "note" saying so. Never pad. Add a short top-level "title" (at most 6 words).`,
@@ -366,6 +381,54 @@ export const clip = (s: string, max: number): string => {
   const sp = cut.lastIndexOf(' ');
   return (sp > max * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,;:.-]+$/, '');
 };
+/** The optional one-line texts a layout may take: the code trims these a little when they are over their limit (a required headline or title goes to the retry instead). */
+const OPTIONAL_TEXT = new Set(['kicker', 'caption', 'source', 'note', 'line', 'sub']);
+const DANGLING = /\s+(?:and|of|the|with)$/i;
+/**
+ * A deterministic fix for an optional text that is over its limit by 20% or less: cut at the last word boundary that fits, drop a dangling "and", "of", "the" or "with", and keep
+ * the result only when at least 60% of the text survives. Otherwise the text is left as it is (the retry call asks for a new one). Returns the trimmed text or null.
+ */
+export function trimAtWord(text: string, max: number): string | null {
+  const t = text.trim();
+  if (t.length <= max || t.length > max * 1.2) return null;
+  let cut = t.slice(0, max + 1);
+  const sp = cut.lastIndexOf(' ');
+  if (sp <= 0) return null;
+  cut = (cut.length > max && t[max] !== ' ' ? cut.slice(0, sp) : cut.slice(0, max)).trim();
+  for (;;) {
+    const before = cut;
+    cut = cut.replace(/[\s,;:\u2013\u2014-]+$/u, '').replace(DANGLING, '').trim();
+    if (cut === before) break;
+  }
+  return cut && cut.length <= max && cut.length >= 0.6 * t.length ? cut : null;
+}
+export interface Trim {
+  slide: number;
+  field: string;
+  from: string;
+  to: string;
+  max: number;
+}
+/** Applies trimAtWord to the optional text fields of every slide (before the slides are checked). */
+export function trimOptionalFields(specs: SlideSpec[]): { specs: SlideSpec[]; trims: Trim[] } {
+  const trims: Trim[] = [];
+  const out = specs.map((sp, i) => {
+    const def = layoutDef(sp.layout);
+    if (!def) return sp;
+    let fields = sp.fields;
+    for (const fs0 of def.fields) {
+      const v = sp.fields[fs0.name];
+      if (fs0.required || fs0.list || fs0.percent || !OPTIONAL_TEXT.has(fs0.name) || typeof v !== 'string') continue;
+      const t = trimAtWord(v, fs0.max);
+      if (t !== null) {
+        trims.push({ slide: i + 1, field: fs0.name, from: v, to: t, max: fs0.max });
+        fields = { ...fields, [fs0.name]: t };
+      }
+    }
+    return fields === sp.fields ? sp : { ...sp, fields };
+  });
+  return { specs: out, trims };
+}
 /** The slide's fields as the layout takes them (with its accent phrases). */
 export const fieldsOf = (s: SlideSpec): Fields => ({ ...s.fields, ...(s.accents.length ? { accent: s.accents } : {}) });
 /** Problems that need the model (or a repair): unknown layout, photo without a photo, fields over budget or missing. */
@@ -455,6 +518,10 @@ export interface LibraryReport {
   plan?: { title: string; specs: SlideSpec[] };
   /** How many times the deck was drawn again from the plan. */
   redraws?: number;
+  /** Optional texts the code trimmed at a word boundary instead of asking the writer again. */
+  trims?: { slide: number; field: string; from: string; to: string; max: number }[];
+  /** The preset flavour pass: layouts moved to a preferred one (slide, from, to, why) and the slides that stayed with the reason. Presets only. */
+  flavour?: { swaps: FlavourSwap[]; kept: FlavourKept[] };
   /** What the deck was drawn from: a built-in preset's name, or 'reference' (the active reference style). The style toggles redraw it only for the same source. */
   source?: string;
   /** The palette-rhythm ground of each slide (an index into the style's rhythm, -1 = the closing ground, null = no rhythm). */
@@ -495,7 +562,8 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
     last = b;
     if (b.ok) {
       if (k > 0) adjustments.push(`slide ${o.index + 1}: drawn with ${t.cut}${t.invert ? ' + invert' : ''}${t.density === 'statement' ? ' + statement density' : ''} instead of ${o.cut}${o.invert ? ' + invert' : ''}${density === 'statement' ? ' + statement density' : ''} (that did not fit: ${tries[k - 1] && last ? 'content too big for it' : ''}).`);
-      return { built: b, cut: t.cut, invert: !!t.invert, density: t.density, adjustments, problems: [] };
+      if (b.cut !== t.cut) adjustments.push(`slide ${o.index + 1}: the ${t.cut} plane would hold no content for ${spec.layout}, so it is drawn with no plane.`);
+      return { built: b, cut: b.cut, invert: !!t.invert, density: t.density, adjustments, problems: [] };
     }
   }
   return { built: null, cut: 'plain', invert: false, density: 'normal', adjustments, problems: (last?.errors ?? ['it could not be drawn']).slice(0, 4) };
@@ -542,7 +610,13 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   }
   if (parsed.errors.length || parsed.slides.length < lo) throw new WriterError('invalid', 'The writer answered twice, but neither answer could be used as a slide list.', parsed.errors.map((message) => ({ severity: 'error' as const, path: '', message })));
   let specs = parsed.slides.slice(0, hi);
+  // optional one-line texts a little over their limit are trimmed by the code (no retry call for a kicker one character long)
+  const tr = trimOptionalFields(specs);
+  specs = tr.specs;
   const suggested = { cut: specs.map((s) => s.cut ?? null), invert: specs.map((s) => !!s.invert), density: specs.map((s) => s.density ?? null) };
+  // A preset's flavour: layouts it avoids move to ones it prefers where the slide's text fits (deterministic, no model call; references have no flavour).
+  const fp = look.pack?.look?.flavour ? flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, '')) : null;
+  if (fp) specs = fp.specs;
 
   /** The deck's rotation: variants and cuts over the whole deck. A layout the rotation would change (repeated or over-used) is a problem for the retry. */
   const rotate = () => {
@@ -665,8 +739,12 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     styleNotes,
     plan: { title: parsed.title || 'Carousel', specs },
     grounds: rot.cuts.map((c) => c.ground ?? null),
+    ...(fp ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : {}),
+    ...(tr.trims.length ? { trims: tr.trims } : {}),
   };
   designed.library = report;
+  report.codeAdjustments.unshift(...tr.trims.map((t) => `slide ${t.slide}: ${t.field} "${t.from}" is ${t.from.length} characters, over its limit of ${t.max}: trimmed to "${t.to}" at a word boundary by the code (no retry call).`));
+  if (fp) designed.notes.push(...fp.swaps.map((w) => `Flavour: slide ${w.slide} ${w.from} -> ${w.to} (${w.why})${w.droppedOptional.length ? '; leaves out ' + w.droppedOptional.map((t) => '"' + t.slice(0, 24) + '"').join(', ') : ''}.`));
   designed.notes.push(...retries.map((r) => `Retry for slide ${r.slide}: ${r.reasons.join('; ')}`), ...fallbacks.map((f) => `Slide ${f.slide} fell back to a ${f.level}: ${f.reason}`), ...adjustments);
   return { script, style: null, note: parsed.note, attempts: calls > 1 ? 2 : 1, ms, warnings: v.warnings, provider: p.id, designed };
 }

@@ -167,6 +167,8 @@ export interface StyleSpec {
   notReproduced?: string[];
   /** Tokens for the layout library (designLibrary.ts): gradients per palette and the layout flavour. The app's own template route ignores them. Optional. */
   library?: {
+    /** Words that keep their written case when the style sets headlines in lower or upper case (brand names). */
+    caseExceptions?: string[];
     gradients?: Record<string, { angle: number; stops: { at: number; color: string }[] }>;
     flavour?: { cover?: string; coverVariant?: 0 | 1; prefer?: string[]; avoid?: string[]; variants?: Record<string, 0 | 1> };
   };
