@@ -157,10 +157,10 @@ test('layout picker: options map the text without inventing any; a pick redraws 
   expect(ids0[0]).toBe('statement');
   expect(ids0).toEqual(expect.arrayContaining(['lead-statement', 'big-question', 'split-text']));
   for (const no of ['big-stat', 'stat-bar', 'cta-button', 'photo-led', 'comparison']) expect(ids0, `${no} needs text the slide does not have`).not.toContain(no);
-  // the checklist (title + 3 items) can be a numbered list, a stepper or a bare statement that leaves the items out
+  // the checklist (title + 3 items) can be a numbered list or a stepper; a bare statement would leave the items out, so it is never offered
   const ids4 = r.opts4.map((x: [string, number]) => x[0]);
-  expect(ids4).toEqual(expect.arrayContaining(['numbered-list', 'stepper', 'statement']));
-  expect(r.opts4.find((x: [string, number]) => x[0] === 'statement')[1], 'the statement leaves the items out').toBeGreaterThan(0);
+  expect(ids4).toEqual(expect.arrayContaining(['numbered-list', 'stepper']));
+  expect(ids4).not.toContain('statement');
   expect(r.opts6.map((x: [string, number]) => x[0])).not.toContain('stat-bar');
   // the pictures
   const kinds = new Set(r.tiles.map((t: any) => t.kind));

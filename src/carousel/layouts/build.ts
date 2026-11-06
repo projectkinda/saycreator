@@ -2,6 +2,7 @@
 // balanceVertical, resolveCollisions, finalGuards, packSlide (accent phrases with the contrast guard, marker) and stepperSvg. Nothing here re-implements fit, collision,
 // balance or accent. New here: the cut (a plane the layout composes around, carrying part B of the layout), invert, density, the profile chrome.
 import { loadFonts } from '../../image-engine/fonts';
+import { layoutText } from '../../image-engine/draw/text';
 import type { Layer } from '../../image-engine/types';
 import { designKey, packSlide, parsePack, slotMetaOf, type SignatureDevices, type StylePack } from '../../reference/pack';
 import { markerInk, type RLayer } from '../../reference/recreate';
@@ -99,9 +100,45 @@ export function groundOf(st: LayoutStyle, index: number, ground?: number): Layou
 }
 const HEADLINE_FIELDS = new Set(['headline', 'title', 'question', 'quote', 'subject']);
 /** Case transform of the headline fields (and the accent phrases): not kickers, captions, body, handles or counters. */
-export function caseFields(f: Fields, mode: LayoutStyle['caseStyle']): Fields {
+/** Brands that keep their spelling under a case transform (case-insensitive match, put back to this spelling). */
+export const BRANDS = ['Kickstarter', 'YouTube', 'Instagram', 'TikTok', 'LinkedIn', 'iPhone', 'iOS', 'AI'];
+const mixedCase = (w: string) => w !== w.toLowerCase() && w !== w.toUpperCase() && w !== w[0].toUpperCase() + w.slice(1).toLowerCase();
+const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * After the transform, words that must keep their written case are put back: the style's own list and the built-in brands (a canonical spelling: "Kickstarter"), and the words of
+ * the carousel's handle / name wherever the slide's text wrote them (their spelling as written: "Quick Flip"). Under upper case only the mixed-case brands (iPhone, YouTube, iOS)
+ * are kept: a plain name in capitals is already as written.
+ */
+export function restoreBrands(orig: string, out: string, mode: 'upper' | 'lower', canon: string[], written: string[]): string {
+  if (orig.length !== out.length) return out;
+  let res = out;
+  const put = (at: number, text: string) => {
+    res = res.slice(0, at) + text + res.slice(at + text.length);
+  };
+  for (const w of canon) {
+    if (mode === 'upper' && !mixedCase(w)) continue;
+    for (const m of orig.matchAll(new RegExp('(?<![\\p{L}\\p{N}])' + reEsc(w) + '(?![\\p{L}\\p{N}])', 'giu'))) put(m.index ?? 0, w);
+  }
+  if (mode === 'lower') {
+    const set = new Set(written.map((w) => w.toLowerCase()));
+    for (const w of written)
+      for (const m of orig.matchAll(new RegExp('(?<![\\p{L}\\p{N}])' + reEsc(w) + '(?![\\p{L}\\p{N}])', 'giu'))) {
+        if (m[0] === m[0].toLowerCase()) continue;
+        const at = m.index ?? 0;
+        // a capital at the start of a sentence is not a brand mark, unless the next word is also a word of the name ("Quick Flip")
+        const sentenceStart = at === 0 || /[.!?]\s*$/.test(orig.slice(0, at));
+        const next = /^\s+([\p{L}\p{N}]+)/u.exec(orig.slice(at + m[0].length))?.[1]?.toLowerCase();
+        if (!sentenceStart || (next && set.has(next))) put(at, m[0]);
+      }
+  }
+  return res;
+}
+/** The words of a handle ("@quick.flip" -> quick, flip) that can be a brand name (3 letters or more). */
+export const handleWords = (handle: string): string[] => handle.replace(/^@/, '').split(/[._\-\s]+/).filter((w) => w.length >= 3);
+export function caseFields(f: Fields, mode: LayoutStyle['caseStyle'], ex: { canon?: string[]; written?: string[] } = {}): Fields {
   if (!mode || mode === 'none') return f;
-  const t = (x: string) => (mode === 'upper' ? x.toLocaleUpperCase() : x.toLocaleLowerCase());
+  const canon = [...new Set([...(ex.canon ?? []), ...BRANDS])];
+  const t = (x: string) => restoreBrands(x, mode === 'upper' ? x.toLocaleUpperCase() : x.toLocaleLowerCase(), mode, canon, ex.written ?? []);
   const out: Fields = { ...f };
   for (const [k, v] of Object.entries(f)) if (HEADLINE_FIELDS.has(k) && typeof v === 'string') out[k] = t(v);
   if (Array.isArray(f.accent)) out.accent = f.accent.map(t);
@@ -110,7 +147,7 @@ export function caseFields(f: Fields, mode: LayoutStyle['caseStyle']): Fields {
 }
 export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fields, st00: LayoutStyle, o: BuildOpts): Promise<Built> {
   const st0 = groundOf(st00, o.index, o.ground);
-  const fields = caseFields(fields0, st0.caseStyle);
+  const fields = caseFields(fields0, st0.caseStyle, { canon: st0.caseExceptions, written: handleWords(o.handle ?? '') });
   const cut = o.cut ?? 'plain';
   // the planner reads the style's weights while it plans (a plan is synchronous)
   const planWith = (variant2: 0 | 1, style: LayoutStyle, cx: Cx) => {
@@ -237,6 +274,19 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       if (Number(t.getAttribute('font-size')) >= 300) t.querySelectorAll('tspan').forEach((s) => s.setAttribute('x', String(Number(s.getAttribute('x')) - plan.bleedLeft!)));
     });
     done = new XMLSerializer().serializeToString(doc.documentElement);
+  }
+  // A plane that holds no text and no shape (this layout does not carry content on a plane, or the content did not reach it) is an empty coloured band: the slide is drawn plain instead.
+  if (cut !== 'plain') {
+    const items = [...r.layers].filter((l) => l.kind !== 'image' && !/background/.test(String(l.name)) && l.height < 700 && (l.kind !== 'text' || (l as unknown as { text?: string }).text));
+    const carries = items.some((l) => {
+      const hh = l.kind === 'text' ? layoutText(l as never).height : l.height;
+      return g.on(l.x + l.width / 2, l.y + hh / 2);
+    });
+    if (!carries) {
+      const plain = await buildSlide(layoutId, variant, fields0, st00, { ...o, cut: 'plain' });
+      plain.notes.push(`The ${cut} plane would hold no content, so the slide is drawn with no plane.`);
+      return plain;
+    }
   }
   return { ok: problems.length === 0, errors: problems, svg: done, layers: [...r.layers, ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
 }

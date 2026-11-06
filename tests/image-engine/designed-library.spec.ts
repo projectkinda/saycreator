@@ -89,7 +89,8 @@ test('library route: choose-only deck, one retry for the failing slides, plain f
   expect(r.one.svg).toBe(true);
   expect(r.one.layouts).toEqual(['statement', 'lead-statement', 'stepper', 'feature-slider', 'checklist', 'stat-bar', 'cta-button']);
   expect(r.one.densities[0]).toBe('statement');
-  expect(r.one.cuts[0]).toBe('edge-h'); // the model's suggested cut, allowed by the rotation
+  // the model suggested edge-h, but the dense statement has no second part for the plane: an empty plane is never drawn, so the slide is plain
+  expect(r.one.cuts[0]).toBe('plain');
   expect(r.one.tokens).toEqual({ input: 1000, output: 200 });
   expect(r.one.note).toMatch(/dev-cli.*inflated/);
   expect(r.one.fallbacksLegacy).toBe(0);

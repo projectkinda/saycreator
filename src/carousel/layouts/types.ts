@@ -50,6 +50,8 @@ export interface LayoutStyle {
   flavour?: Flavour;
   /** Case of the headlines only (not handles, counters or body). */
   caseStyle?: 'none' | 'upper' | 'lower';
+  /** Words that keep their written case under the case transform (brands): the style's own list; the built-in brands and the carousel's handle words are added by the builder. */
+  caseExceptions?: string[];
   /** The weight of heavy (headline) text and of body text; the nearest bundled weight is used. Default: 800 and 500. */
   weights?: { headline: number; body: number };
   background: 'flat' | 'glow' | 'grid' | 'gradient';

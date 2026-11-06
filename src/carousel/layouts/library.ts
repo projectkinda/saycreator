@@ -77,8 +77,18 @@ const withAccent = (slide0: Record<string, unknown>, headline: string, f: Fields
   if (st.accentStyle === 'marker' && typeof slide.headline === 'string') slide = { ...slide, headline: slide.headline.replace(/[.,;:]+$/, '') };
   return { ...slide, accent: phrases.length === 1 ? { phrase: phrases[0], style: st.accentStyle } : phrases.map((p) => ({ phrase: p, style: st.accentStyle })) };
 };
-const heroTitle = (d: Draw, text: string, align: 'left' | 'center', size = 140, gap = 0, lines = 3) => d.text('title', text, { size, weight: 800, font: 'h', lines, min: 72, align, gap });
-const kickerOf = (d: Draw, text: string, align: 'left' | 'center', gap = 24) => text && d.text('kicker', text, { size: 42, weight: 600, fill: '$muted', align, lines: 1, gap });
+/** A headline of three words or fewer is set big (up to 220 px, the statement mechanism puts it back after the engine's fit): the longest word must still fit the width. */
+const heroTitle = (d: Draw, text: string, align: 'left' | 'center', size = 140, gap = 0, lines = 3) => {
+  let sz = size;
+  const ws = text.trim().split(/\s+/).filter(Boolean);
+  if (ws.length <= 3 && d.cxo?.density !== 'statement' && (d.cxo?.cut ?? 'plain') === 'plain' && size < 220) {
+    sz = 220;
+    const widest = (z: number) => Math.max(...ws.map((w) => measureWidth(w, d.st.fonts.headline, nearestWeight(d.st.fonts.headline, 800), z)));
+    while (sz > size && widest(sz) > d.w * 0.96) sz -= 6;
+  }
+  return d.text('title', text, { size: sz, max: Math.max(sz, 150), weight: 800, font: 'h', lines, min: 72, align, gap });
+};
+const kickerOf = (d: Draw, text: string, align: 'left' | 'center', gap = 24) => text && d.text('kicker', text, { size: 48, weight: 600, fill: '$muted', align, lines: 1, gap });
 const mk = (d: Draw, p: Pick<Plan, 'type' | 'fitAs' | 'slide'> & Partial<Plan>): Plan => ({
   slots: d.slots,
   shapes: d.shapes.join(''),
@@ -133,7 +143,7 @@ const LAYOUT_LIST: LayoutDef[] = [
         if (v === 0) {
           // a small kicker line over a huge headline that sits on the bottom (a rule on top of the slide holds the top)
           if (d.real && plain) d.shape('<rect x="' + d.x0 + '" y="' + (d.fy0 + 10) + '" width="' + d.w + '" height="12" rx="6" fill="$accent"/>');
-          d.text('kicker', str(f, 'lead'), { size: 42, weight: 600, fill: '$muted', lines: 2, gap: 20 });
+          d.text('kicker', str(f, 'lead'), { size: 48, weight: 600, fill: '$muted', lines: 2, gap: 20 });
         } else d.text('kicker', str(f, 'lead'), { size: 84, weight: 300, fill: '$muted', lines: 2, min: 48, gap: 48 });
         d.part();
         heroTitle(d, head, 'left', v === 0 ? 150 : 140);
@@ -211,16 +221,29 @@ const LAYOUT_LIST: LayoutDef[] = [
         };
         const accList = Array.isArray(f.accent) ? arr(f, 'accent').slice(0, 3).map(stripArticle) : str(f, 'accent') ? [stripArticle(str(f, 'accent'))] : [lastWord(head)];
         // the headline column: half the width, wider when the headline cannot be set without a lone short word at half
-        let lw = 0;
-        let tsz = 72;
-        for (const ratio of [0.5, 0.55, 0.6]) {
-          lw = Math.round((cx.field.w - gutter) * ratio);
-          const t = sized(head, 'h', lw, 150, 72, 1.05, 5, { phrases: accList.filter(Boolean), marker: st.accentStyle === 'marker' });
-          tsz = t.size;
-          if (t.ok) break;
+        // The column split that gives the biggest block: a short headline with a wide word needs a wider column to be set big, and a block that is too short leaves the slide
+        // half empty. Every candidate must set the headline without a lone short word; ties keep the narrower headline column.
+        const acc = { phrases: accList.filter(Boolean), marker: st.accentStyle === 'marker' };
+        const hfam = st.fonts.headline;
+        const bfam = st.fonts.body;
+        const hwt = nearestWeight(hfam, 800);
+        const bwt = nearestWeight(bfam, 500);
+        let best: { lw: number; tsz: number; psz: number; ok: boolean; h: number } | null = null;
+        for (const ratio of [0.5, 0.45, 0.55, 0.6, 0.65]) {
+          const w1 = Math.round((cx.field.w - gutter) * ratio);
+          const t = sized(head, 'h', w1, 150, 72, 1.05, 5, acc);
+          const p = sized(para, 'b', cx.field.w - gutter - w1, 88, 44, 1.3, 14);
+          const th = lineTexts(head, hfam, hwt, t.size, w1, 1.05, acc).length * t.size * 1.05;
+          const ph = lineTexts(para, bfam, bwt, p.size, cx.field.w - gutter - w1, 1.3).length * p.size * 1.3;
+          const h = Math.max(th, ph);
+          if (!best || (t.ok && !best.ok) || (t.ok === best.ok && h > best.h + 8)) best = { lw: w1, tsz: t.size, psz: p.size, ok: t.ok, h };
         }
+        // a short block (under 70% of the free height) is not set in columns: the stacked layout below scales the type up to fill the field
+        if (best!.h >= 0.7 * fieldH) {
+        const lw = best!.lw;
+        const tsz = best!.tsz;
         const rw = cx.field.w - gutter - lw;
-        const psz = sized(para, 'b', rw, 80, 44, 1.3, 14).size;
+        const psz = best!.psz;
         const d = place(st, cx, 'center', (d) => {
           const y0 = d.y;
           const t = d.text('title', head, { x: d.x0, w: lw, size: tsz, max: tsz, weight: 800, font: 'h', lines: 5, min: 72, at: y0 });
@@ -232,11 +255,12 @@ const LAYOUT_LIST: LayoutDef[] = [
           d.y = y0 + h;
         });
         return mk(d, { type: 'content', fitAs: 'split-cols', slide: withAccent({ type: 'content', headline: head, body: para }, head, f, st) });
+        }
       }
       const d = place(st, cx, 'center', (d) => {
-        heroTitle(d, head, 'left', 130, 24);
+        heroTitle(d, head, 'left', 130, cx.cut === 'plain' ? 56 : 24);
         d.part();
-        d.text('body', para, { size: 44, fill: '$text', lines: 7, lh: 1.3 });
+        d.text('body', para, { size: 44, max: 72, fill: '$text', lines: 7, lh: 1.3 });
       });
       return mk(d, { type: 'cover', fitAs: 'split-text', slide: withAccent({ type: 'cover', headline: head, sub: para }, head, f, st) });
     },
@@ -310,7 +334,7 @@ const LAYOUT_LIST: LayoutDef[] = [
         if (v === 0) d.reserve(steps.length * 124);
         else {
           const n = steps.length;
-          const pitch = Math.min(200, Math.max(128, Math.floor((d.by1 - top - 14) / n)));
+          const pitch = Math.min(n <= 3 ? 280 : 200, Math.max(128, Math.floor((d.by1 - top - 14) / n)));
           const r = 60;
           const cxn = d.x0 + r;
           if (n >= 2) d.rect(cxn - 2, top + pitch / 2, 4, pitch * (n - 1), '$muted');
@@ -345,7 +369,7 @@ const LAYOUT_LIST: LayoutDef[] = [
       const d = place(st, cx, 'center', (d) => {
         const y0 = d.y;
         const colx = v === 0 ? d.x0 + nw + 32 : d.x0;
-        d.text('tag', 'STEP ' + n, { x: colx, w: cw, size: 40, weight: 700, fill: '$muted', lines: 1, gap: 20, align: 'left' });
+        d.text('tag', 'STEP ' + n, { x: colx, w: cw, size: 48, weight: 700, fill: '$muted', lines: 1, gap: 20, align: 'left' });
         d.text('title', str(f, 'title'), { x: colx, w: cw, size: 76, weight: 800, font: 'h', lines: 3, min: 72, gap: 24 });
         d.text('body', str(f, 'body'), { x: colx, w: cw, size: 44, fill: '$muted', lines: 6 });
         const nx = v === 0 ? d.x0 : d.x0 + d.w - nw;
@@ -371,14 +395,15 @@ const LAYOUT_LIST: LayoutDef[] = [
         const x = v === 0 ? d.x0 + S(84) : d.x0;
         items.forEach((it) => {
           const m = measure(it, st.fonts.body, nearestWeight(st.fonts.body, 500), 48, d.w - (x - d.x0), 1.25);
-          const h = Math.max(m.h + 2, S(56));
+          // short lists: the rows grow with the type scale (items up to 72 px) and breathe, so three short items do not leave the slide half empty
+          const h = Math.max(m.h + 2, S(64));
           if (v === 0) checkIcon(d, d.x0 + S(28), d.y + h / 2, S(28));
-          d.text('body', it, { x, w: d.w - (x - d.x0), size: 48, lines: 2, min: 44, boxH: h });
+          d.text('body', it, { x, w: d.w - (x - d.x0), size: 48, max: 72, lines: 2, min: 44, boxH: h });
           if (v === 1) {
-            d.y += 24;
+            d.gap(32);
             d.rect(d.x0, d.y, d.w, 3, '$muted', { opacity: 0.45 });
-            d.y += 30;
-          } else d.y += 42;
+            d.gap(40);
+          } else d.gap(52);
         });
       });
       return mk(d, { type: 'checklist', fitAs: 'checklist', slide: { type: 'checklist', headline: str(f, 'title'), items } });
@@ -772,25 +797,30 @@ const LAYOUT_LIST: LayoutDef[] = [
       const pad = CARD_PAD;
       const bm = (t: string, size: number, w: number, wt = 500) => measure(t, st.fonts.body, nearestWeight(st.fonts.body, wt), size, w, 1.25);
       const d = place(st, cx, 'center', (d) => {
+        // A hero card for the subject (an accent card, the subject set big in its ink, a short accent rule under it) and three numbered callouts, all on the type scale: the card and the
+        // rows grow with the text until the block fills the free area. Callouts are body text (44 px and up, 48 and up when the scale allows).
         const plateW = v === 0 ? d.w : Math.round(d.w * 0.5);
         const rx = v === 0 ? d.x0 : d.x0 + plateW + 28;
         const rw = v === 0 ? d.w : d.w - plateW - 28;
-        const tw = rw - 120 - 16;
-        const hs = cs.map((c) => Math.max(bm(c, 44, tw).h + 2, 72));
-        const listH = hs.reduce((a, b) => a + b, 0) + 22 * 2;
-        const subjectH = bm(str(f, 'subject'), 88, plateW - 2 * pad, 800).h + 2;
-        const plateH = v === 0 ? 380 : Math.max(480, listH);
+        const badge = S(38);
+        const tx = rx + 120 + 16; // the number's text slot is 120 px wide (the engine's narrowest), centred on the badge
+        const tw = rw - (tx - rx);
+        const hs = cs.map((c) => Math.max(bm(c, 56, tw).h + 2, S(112)));
+        const rowGap = S(30);
+        const listH = hs.reduce((a, b) => a + b, 0) + rowGap * (cs.length - 1);
+        const plateH = v === 0 ? S(400) : Math.max(S(560), listH);
         const y0 = d.y;
-        d.rect(d.x0, y0, plateW, plateH, '$surface', { rx: 36 });
-        d.text('title', str(f, 'subject'), { x: d.x0 + pad, w: plateW - 2 * pad, size: 88, weight: 800, font: 'h', align: 'center', lines: 3, min: 72, at: y0 + (plateH - subjectH) / 2 });
-        let y = v === 0 ? y0 + plateH + 40 : y0 + (plateH - listH) / 2;
+        d.rect(d.x0, y0, plateW, plateH, '$accent', { rx: 40 });
+        d.text('title', str(f, 'subject'), { x: d.x0 + pad, w: plateW - 2 * pad, size: 100, max: 150, weight: 800, font: 'h', fill: '$onAccent', align: 'center', lines: 3, min: 72, at: y0 + S(24), boxH: plateH - S(24) - S(70) });
+        d.rect(d.x0 + plateW / 2 - 70, y0 + plateH - S(54), 140, 10, '$onAccent', { rx: 5 });
+        let y = v === 0 ? y0 + plateH + S(56) : y0 + (plateH - listH) / 2;
         cs.forEach((c, i) => {
-          d.circle(rx + 60, y + hs[i] / 2, 34, '$accent');
-          d.text('body', String(i + 1), { x: rx, w: 120, size: 44, weight: 800, font: 'h', fill: '$onAccent', align: 'center', lines: 1, min: 44, at: y, boxH: hs[i] });
-          d.text('body', c, { x: rx + 120 + 16, w: tw, size: 44, lines: 3, min: 44, at: y, boxH: hs[i] });
-          y += hs[i] + 22;
+          d.circle(rx + 60, y + hs[i] / 2, badge, '$accent');
+          d.text('body', String(i + 1), { x: rx, w: 120, size: 52, max: 72, weight: 800, font: 'h', fill: '$onAccent', align: 'center', lines: 1, min: 44, at: y, boxH: hs[i] });
+          d.text('body', c, { x: tx, w: tw, size: 56, max: 72, lines: 3, min: 44, at: y, boxH: hs[i] });
+          y += hs[i] + rowGap;
         });
-        d.y = v === 0 ? y - 22 : y0 + plateH;
+        d.y = v === 0 ? y - rowGap : y0 + plateH;
       });
       return mk(d, { type: 'checklist', fitAs: 'spotlight', slide: { type: 'checklist', headline: str(f, 'subject') } });
     },

@@ -94,9 +94,13 @@ export function lightenForText(accent: string, surface: string, min = 4.5): { co
   return { color: accent, changed: false };
 }
 /** The accent as text on a surface: itself when it reads at 4.5:1, a lightened copy on a dark surface, else itself at 3:1, else the text colour. */
-export function accentTextOf(accent: string, surface: string, text: string): { accentText: string; accentInk?: string } {
+export function accentTextOf(accent: string, surface: string, text: string, refs: string[] = []): { accentText: string; accentInk?: string } {
   if (contrast(accent, surface) >= 4.5) return { accentText: accent };
-  const lk = lightenForText(accent, surface);
+  // A deck has ONE lightened accent: on a dark surface it is lightened until it reads on the hardest dark ground of the deck (`refs`: the ground, the card/tint colour), so the
+  // same accent is not pure red on one slide and coral on the next (Shapes off / subtle / bold, tinted slides).
+  const isDark = (s: string) => contrast('#FFFFFF', s) > contrast('#000000', s);
+  const worst = isDark(surface) ? [surface, ...refs.filter(isDark)].reduce((w, s) => (contrast(accent, s) < contrast(accent, w) ? s : w), surface) : surface;
+  const lk = lightenForText(accent, worst);
   if (lk.changed) return { accentText: lk.color, accentInk: lk.color };
   // under 4.5:1 the accent is not used as text: the text colour is (the engine then sets accent phrases on a marker bar)
   return { accentText: text };
@@ -168,7 +172,7 @@ export interface Colours {
 export function coloursFor(base: Pal, opts: { tone?: PlaneTone; invert?: false | 'full' | 'tint' }): Colours {
   const tone = opts.tone ?? 'accent';
   const plane0 = tone === 'ink' ? base.text : tone === 'surface' ? base.surface : base.accent;
-  const baseRoles: Roles = { bg: base.bg, text: base.text, muted: base.muted, accent: base.accent, surface: base.surface, onAccent: base.onAccent, ...accentTextOf(base.accent, base.bg, base.text) };
+  const baseRoles: Roles = { bg: base.bg, text: base.text, muted: base.muted, accent: base.accent, surface: base.surface, onAccent: base.onAccent, ...accentTextOf(base.accent, base.bg, base.text, [base.surface]) };
   let F = baseRoles;
   let planeFill = plane0;
   let inverted = false;
@@ -178,7 +182,7 @@ export function coloursFor(base: Pal, opts: { tone?: PlaneTone; invert?: false |
     planeFill = base.bg;
   } else if (opts.invert === 'tint' && base.surface !== base.bg) {
     inverted = true;
-    F = { ...baseRoles, bg: base.surface, surface: base.bg, muted: quietOn(base.text, [base.surface, base.bg], base.muted, 4.5), ...accentTextOf(base.accent, base.surface, base.text) };
+    F = { ...baseRoles, bg: base.surface, surface: base.bg, muted: quietOn(base.text, [base.surface, base.bg], base.muted, 4.5), ...accentTextOf(base.accent, base.surface, base.text, [base.bg]) };
   }
   const P = opts.invert === 'full' ? baseRoles : rolesFor(planeFill, base);
   return { F, P: { ...P, bg: planeFill, ...accentTextOf(P.accent, planeFill, P.text) }, edge: contrast(planeFill, F.bg) < 1.5, inverted };

@@ -25,6 +25,8 @@ export interface Picked {
  * Picks the layout and variant of every slide of a deck: no two consecutive slides share a layout, no layout is used more than twice, and the variants of a layout alternate
  * (first use variant 1, second use variant 2). A request that breaks a rule falls back to the next candidate for the slide's shape, then to any layout that obeys the rules.
  */
+/** The key of the "no neighbours" rule: a layout is its own family, except that step-numeral and listicle-numeral are ONE family (two giant numerals side by side look the same). */
+export const neighbourFamily = (l: string): string => (l === 'step-numeral' || l === 'listicle-numeral' ? 'numeral' : l);
 export function rotateVariants(deck: DeckItem[], opts: { photo?: boolean; flavour?: Flavour } = {}): Picked[] {
   const fl = opts.flavour;
   // a preset's flavour orders the layouts a replacement is taken from: liked first, avoided last (the neighbour and twice-at-most rules still decide)
@@ -33,7 +35,7 @@ export function rotateVariants(deck: DeckItem[], opts: { photo?: boolean; flavou
   const out: Picked[] = [];
   deck.forEach((item, i) => {
     const prev = out[i - 1]?.layout;
-    const ok = (id: LayoutId) => id !== prev && (used[id] ?? 0) < 2 && (opts.photo || id !== 'photo-led');
+    const ok = (id: LayoutId) => (!prev || neighbourFamily(id) !== neighbourFamily(prev)) && (used[id] ?? 0) < 2 && (opts.photo || id !== 'photo-led');
     const wanted = item.layout ? [item.layout, ...(item.shape ? layoutFor(item.shape) : [])] : item.shape ? layoutFor(item.shape) : [];
     const pool = [...wanted, ...LAYOUT_IDS.filter((id) => id !== 'photo-led' || !!opts.photo).sort((a, b) => rank(a) - rank(b))];
     const layout = pool.find(ok) ?? pool[0];
@@ -43,7 +45,7 @@ export function rotateVariants(deck: DeckItem[], opts: { photo?: boolean; flavou
     // the first use of a layout takes the preset's preferred variant (the cover its cover variant), the second the other one
     const pv = i === 0 && fl?.coverVariant !== undefined ? fl.coverVariant : fl?.variants?.[layout];
     const variant = (pv === undefined ? n % 2 : n % 2 === 0 ? pv : 1 - pv) as 0 | 1;
-    out.push({ layout, variant, note: first && first !== layout ? `"${first}" was replaced by "${layout}" (${first === prev ? 'it repeats the slide before' : (used[first] ?? 0) >= 2 ? 'it is already used twice' : 'it is not allowed here'}).` : '' });
+    out.push({ layout, variant, note: first && first !== layout ? `"${first}" was replaced by "${layout}" (${first === prev || (prev && neighbourFamily(first) === neighbourFamily(prev)) ? 'it repeats the slide before' : (used[first] ?? 0) >= 2 ? 'it is already used twice' : 'it is not allowed here'}).` : '' });
   });
   return out;
 }

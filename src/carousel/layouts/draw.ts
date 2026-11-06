@@ -38,7 +38,7 @@ export const getScale = () => K;
 /** A size or length that grows with the type scale (icon radii, row heights, quote marks). */
 export const S = (n: number) => Math.round(n * K);
 /** The largest a text of each role may grow to (the engine's own caps: titles 150 px). */
-const ROLE_MAX: Record<string, number> = { kicker: 48, tag: 44, caption: 56, body: 64, title: 150, number: 600 };
+const ROLE_MAX: Record<string, number> = { kicker: 48, tag: 48, caption: 56, body: 64, title: 150, number: 600 };
 /** Measures text at the scaled size. */
 export function measure(text: string, font: FontFamily, weight: number, size: number, width: number, lh: number): { n: number; h: number } {
   return measureRaw(text, font, weight, Math.round(size * K), width, lh);

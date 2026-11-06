@@ -14,7 +14,7 @@ export function chromeFor(o: { handle: string; name?: string; index: number; tot
     out.push({ ...base, shape: 'avatar', x: 84, y: 96, size: 36, fill: '$fMuted', anchor: 'start', text: '' });
     out.push({ ...base, x: 140, y: 92, size: 40, weight: 700, fill: '$fText', anchor: 'start', text: name });
     out.push({ ...base, shape: 'tick', x: Math.round(140 + nameW + 24), y: 78, size: 13, fill: '$fAccent', anchor: 'start', text: '' });
-    out.push({ ...base, x: 140, y: 134, anchor: 'start', text: handle });
+    out.push({ ...base, x: 140, y: 139, anchor: 'start', text: handle });
   } else out.push({ ...base, x: 48, y: 92, anchor: 'start', text: handle });
   out.push({ ...base, x: 48, y: 1288, anchor: 'start', text: o.index + 1 + ' / ' + o.total });
   if (o.index < o.total - 1) out.push({ ...base, x: 1032, y: 1288, anchor: 'end', text: 'swipe →' });

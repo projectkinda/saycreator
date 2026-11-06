@@ -105,7 +105,8 @@ test('accent on a dark ground: lightened just enough for 4.5:1 text (same hue), 
     const { dark, light } = new Function(packs + ' return { dark, light };')();
     const lum = (a: string, b: string) => C.contrastRgb(C.parseColor(a).rgb, C.parseColor(b).rgb);
     const m = D.styleFromPack(dark);
-    const lk = K.lightenForText('#CC0000', '#0A0A0A');
+    // the deck's ONE lightened accent reads on the ground and on the card colour (#161616 is the lighter of the two)
+    const lk = K.lightenForText('#CC0000', '#161616');
     const big = await L.buildSlide('big-stat', 0, { number: '10 sec', label: 'to flip it', source: 'Measured' }, m.style, { handle: '@q', index: 1, total: 7 });
     const num = (big.layers as any[]).find((l) => l.kind === 'text' && l.name === 'number');
     const bar = await L.buildSlide('stat-bar', 0, { number: '$500,000', label: 'for 5% of it', bar: '5' }, m.style, { handle: '@q', index: 5, total: 7 });
@@ -113,7 +114,7 @@ test('accent on a dark ground: lightened just enough for 4.5:1 text (same hue), 
     const title = (st.layers as any[]).find((l) => l.kind === 'text' && l.name === 'title');
     const lime = D.styleFromPack(light);
     return {
-      notes: m.notes, brand: m.style.palette.accent, lightened: lk.color, changed: lk.changed, ratio: lum(lk.color, '#0A0A0A'), before: lum('#CC0000', '#0A0A0A'),
+      notes: m.notes, brand: m.style.palette.accent, lightened: lk.color, changed: lk.changed, ratio: lum(lk.color, '#161616'), before: lum('#CC0000', '#161616'),
       hueShift: Math.abs(K.hueOf(lk.color) - K.hueOf('#CC0000')),
       numberColor: num.style.color, numberRatio: lum(num.style.color, '#0A0A0A'),
       barUsesBrand: /fill="#CC0000"/i.test(bar.svg),
