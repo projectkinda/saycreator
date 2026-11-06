@@ -103,5 +103,45 @@
     "block": "accent",
     "scrim": "$bg",
     "elements": true
+  },
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "gradients": {
+      "dark": {
+        "angle": 150,
+        "stops": [
+          {
+            "at": 0,
+            "color": "#0B1210"
+          },
+          {
+            "at": 1,
+            "color": "#1E5E4A"
+          }
+        ]
+      }
+    },
+    "flavour": {
+      "cover": "statement",
+      "coverVariant": 0,
+      "prefer": [
+        "card-grid",
+        "stat-bar",
+        "big-stat",
+        "comparison",
+        "spotlight",
+        "stat-grid",
+        "checklist"
+      ],
+      "avoid": [
+        "quote",
+        "listicle-numeral",
+        "split-text"
+      ],
+      "variants": {
+        "stat-bar": 0,
+        "big-stat": 1
+      }
+    }
   }
 }

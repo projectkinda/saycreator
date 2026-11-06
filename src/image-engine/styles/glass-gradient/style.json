@@ -498,5 +498,45 @@
     "scrim": "$bg",
     "glass": true,
     "field": true
+  },
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "gradients": {
+      "dusk": {
+        "angle": 160,
+        "stops": [
+          {
+            "at": 0,
+            "color": "#0C0A09"
+          },
+          {
+            "at": 1,
+            "color": "#6B3216"
+          }
+        ]
+      }
+    },
+    "flavour": {
+      "cover": "statement",
+      "coverVariant": 1,
+      "prefer": [
+        "card-grid",
+        "comparison",
+        "stat-grid",
+        "feature-slider",
+        "split-text",
+        "checklist",
+        "spotlight"
+      ],
+      "avoid": [
+        "step-numeral",
+        "listicle-numeral",
+        "big-stat"
+      ],
+      "variants": {
+        "statement": 1,
+        "checklist": 1
+      }
+    }
   }
 }

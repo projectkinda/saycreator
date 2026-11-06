@@ -461,5 +461,30 @@
     ],
     "block": "accent",
     "scrim": "$bg"
+  },
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "flavour": {
+      "cover": "lead-statement",
+      "coverVariant": 1,
+      "prefer": [
+        "lead-statement",
+        "statement",
+        "quote",
+        "big-stat",
+        "split-text",
+        "step-numeral"
+      ],
+      "avoid": [
+        "card-grid",
+        "stat-grid",
+        "comparison",
+        "feature-slider"
+      ],
+      "variants": {
+        "statement": 0,
+        "quote": 0
+      }
+    }
   }
 }

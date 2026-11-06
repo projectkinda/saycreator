@@ -67,5 +67,31 @@
     "Monochrome photographs, the strip of three photos, soft grey gradient bands: no photo treatments built and our gradients are straight linear only.",
     "The serif-italic phrase inside a heading: serif italic is not bundled and a substitute would be worse, so it is not faked.",
     "The reference's small logo mark and round arrow button in the top corners: the round arrow button exists as a tool but is not used in these layouts."
-  ]
+  ],
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "flavour": {
+      "cover": "statement",
+      "coverVariant": 1,
+      "prefer": [
+        "statement",
+        "split-text",
+        "quote",
+        "lead-statement",
+        "checklist",
+        "big-question"
+      ],
+      "avoid": [
+        "stat-bar",
+        "big-stat",
+        "stat-grid",
+        "card-grid"
+      ],
+      "variants": {
+        "statement": 1,
+        "quote": 1,
+        "split-text": 0
+      }
+    }
+  }
 }

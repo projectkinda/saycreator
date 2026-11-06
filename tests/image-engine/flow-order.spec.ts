@@ -91,6 +91,8 @@ test('reading a reference adds a Mine style to the same list and selects it', as
 });
 
 test('Generate needs text and a style, and uses the selected style', async ({ page }) => {
+  // these two test the template flow (a script from the writer fills the style's templates): the preset now goes to the layout library unless this flag is set
+  await page.addInitScript(() => localStorage.setItem('creator.templateRoute', '1'));
   await fakeReader(page, usual);
   await page.goto('/images/carousel');
   const calls = await fakeWriter(page, await scriptJson(page));
@@ -115,6 +117,8 @@ test('Generate needs text and a style, and uses the selected style', async ({ pa
 });
 
 test('Reset page still clears the text, the slides and the style', async ({ page }) => {
+  // these two test the template flow (a script from the writer fills the style's templates): the preset now goes to the layout library unless this flag is set
+  await page.addInitScript(() => localStorage.setItem('creator.templateRoute', '1'));
   await fakeReader(page, usual);
   await page.goto('/images/carousel');
   const calls = await fakeWriter(page, await scriptJson(page));

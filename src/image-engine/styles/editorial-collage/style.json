@@ -110,5 +110,33 @@
     "block": "marker",
     "scrim": "$bg",
     "elements": true
+  },
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "flavour": {
+      "cover": "statement",
+      "coverVariant": 1,
+      "prefer": [
+        "statement",
+        "lead-statement",
+        "split-text",
+        "quote",
+        "big-question",
+        "checklist",
+        "listicle-numeral"
+      ],
+      "avoid": [
+        "stat-bar",
+        "stat-grid",
+        "feature-slider",
+        "timeline"
+      ],
+      "variants": {
+        "statement": 1,
+        "big-question": 0,
+        "quote": 1,
+        "split-text": 1
+      }
+    }
   }
 }

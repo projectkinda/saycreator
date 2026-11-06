@@ -109,5 +109,35 @@
     "block": "accent",
     "scrim": "$bg",
     "elements": true
+  },
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "flavour": {
+      "cover": "statement",
+      "coverVariant": 0,
+      "prefer": [
+        "statement",
+        "big-stat",
+        "stat-bar",
+        "checklist",
+        "numbered-list",
+        "cta-button",
+        "step-numeral",
+        "lead-statement"
+      ],
+      "avoid": [
+        "quote",
+        "comparison",
+        "card-grid",
+        "spotlight",
+        "timeline"
+      ],
+      "variants": {
+        "statement": 0,
+        "big-stat": 0,
+        "checklist": 0,
+        "cta-button": 0
+      }
+    }
   }
 }

@@ -165,6 +165,11 @@ export interface StyleSpec {
   knownLintConflicts?: string[];
   /** What the reference had that this style does not reproduce, and why. */
   notReproduced?: string[];
+  /** Tokens for the layout library (designLibrary.ts): gradients per palette and the layout flavour. The app's own template route ignores them. Optional. */
+  library?: {
+    gradients?: Record<string, { angle: number; stops: { at: number; color: string }[] }>;
+    flavour?: { cover?: string; coverVariant?: 0 | 1; prefer?: string[]; avoid?: string[]; variants?: Record<string, 0 | 1> };
+  };
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
