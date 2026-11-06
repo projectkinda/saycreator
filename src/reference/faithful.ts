@@ -40,6 +40,24 @@ export function faithfulSvg(svg: string, W: number, slots: FaithfulSlot[], hidde
     const m = ctm(el);
     const im = inv(m);
     const k = Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1;
+    // The marker: a rounded bar behind each marked word run, sized from the measured width and the line height.
+    if (layer.highlight) {
+      const hl = layer.highlight;
+      for (const line of b.lines)
+        for (const mk of line.marks) {
+          const baseline = layer.y + line.y + b.size * 0.82;
+          const px = layer.x + mk.x - hl.paddingX;
+          const py = baseline - b.size * 0.89;
+          const rect = doc.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          rect.setAttribute('x', String(Math.round((im[0] * px + im[2] * py + im[4]) * 100) / 100));
+          rect.setAttribute('y', String(Math.round((im[1] * px + im[3] * py + im[5]) * 100) / 100));
+          rect.setAttribute('width', String(Math.round(((mk.width + 2 * hl.paddingX) / k) * 100) / 100));
+          rect.setAttribute('height', String(Math.round(((b.size * 1.12) / k) * 100) / 100));
+          rect.setAttribute('rx', String(Math.round((hl.radius / k) * 100) / 100));
+          rect.setAttribute('fill', hl.color);
+          el.parentNode?.insertBefore(rect, el);
+        }
+    }
     el.removeAttribute('x');
     el.removeAttribute('y');
     el.removeAttribute('textLength');

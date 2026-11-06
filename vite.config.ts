@@ -277,7 +277,7 @@ function carouselWriters(): Plugin {
     name: 'carousel-writers',
     apply: 'serve',
     configureServer(server) {
-      const env = { ...process.env, ...loadEnv('development', process.cwd(), ['ANTHROPIC_', 'CLAUDE_', 'CAROUSEL_', 'IMAGE_', 'WRITER_', 'DRAW_']) };
+      const env = { ...process.env, ...loadEnv('development', process.cwd(), ['ANTHROPIC_', 'CLAUDE_', 'CAROUSEL_', 'IMAGE_', 'WRITER_', 'DRAW_', 'READER_', 'USAGE_']) };
       server.middlewares.use('/__carousel', carouselHandler('dev-cli', { env }));
       server.middlewares.use('/api/carousel', carouselHandler('api', { env }));
       // The reference reader (a model with vision): the same two providers, for reading the look of reference images.

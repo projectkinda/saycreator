@@ -53,7 +53,10 @@ export function clearActiveReference(removed = false, only?: 'reference' | 'desc
   if (only && (current?.source ?? 'reference') !== only) return;
   if (!current && !removed) return;
   current = null;
-  if (removed) clears++;
+  if (removed) {
+    clears++;
+    showDetected = false;
+  }
   bump();
 }
 export const activeStyle = (): LoadedStyle | null => current?.style ?? null;

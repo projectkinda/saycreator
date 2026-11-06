@@ -2,7 +2,7 @@
 // as its own SVG layout. The measuring code (regions.ts) does not set boxes, sizes or colours here; it is only a checker afterwards (textOverlap). A slide whose read fails
 // is reported (which slide, why) and is NOT filled in from a measured draft.
 import { buildRecreatePrompt } from './recreate';
-import { INVENTORY_RULES, PACK_TYPES, SIZE, parsePack, sameComposition, slotBoxes, stripInventory, styleBriefOf, type PackType, type PackVariant, type StylePack } from './pack';
+import { INVENTORY_RULES, PACK_TYPES, SIZE, parsePack, sameComposition, slotBoxes, signatureDevices, stripInventory, styleBriefOf, type PackType, type PackVariant, type StylePack } from './pack';
 import type { ReaderImage, ReferenceReader } from './reader';
 
 export const READ_MAX = 12;
@@ -21,6 +21,8 @@ export interface SlideReport {
   model: string;
   seconds: number;
   ok: boolean;
+  /** The reader's yes/no answers about the devices on this slide. */
+  devices?: NonNullable<PackVariant['devices']>;
   /** Why the read failed or the SVG was refused, in plain words. */
   reasons: string[];
   /** What the sanitiser left out or changed. */
@@ -49,6 +51,8 @@ export interface WholeReadResult {
 /** One line per failed slide: the file and its real reason (server error text, HTTP status, or the sanitiser's reasons). */
 export const failureLines = (r: { slides: Pick<SlideReport, 'file' | 'ok' | 'reasons'>[] }): string[] => r.slides.filter((s) => !s.ok).map((s) => `${s.file}: ${s.reasons.join(' ').replace(/\s+/g, ' ').trim() || 'failed with no reason given'}`);
 
+/** Four yes/no checks about one slide, each with a one-line definition, answered first so the same picture gets the same answer every time. */
+export const DEVICE_CHECKS = 'DEVICE CHECKS: start your answer with ONE line <devices>marker=yes|no underline=yes|no profile=yes|no shapes=yes|no</devices>, then the <inventory> block, then the <svg>. Answer yes ONLY if you can see it: marker = a filled colour box behind part of a text line (like a highlighter bar); underline = a thin accent-coloured line directly under the last block of text; profile = a small round picture or avatar with a name or handle beside it, near the top; shapes = a filled colour block that touches a slide edge and takes at least 14% of the slide. Then draw exactly what you answered: yes means the drawing HAS that device (a marker is a <rect> in the accent colour behind those words; a profile is a circle with its name text beside it), no means it does NOT.';
 export function buildWholeSlidePrompt(): string {
   return [
     buildRecreatePrompt({ w: SIZE.w, h: SIZE.h, ownRoles: [] }).replace('[recreate:new]', '[whole-slide:new]'),
@@ -56,6 +60,7 @@ export function buildWholeSlidePrompt(): string {
     `This is ONE reference slide, shown whole at full resolution. Draw it as ONE <svg viewBox="0 0 ${SIZE.w} ${SIZE.h}"> (after the <inventory> block), with data-type on the <svg> root: one of ${PACK_TYPES.join(' | ')} (the kind of slide it is).`,
     'The <svg> also has data-palette=\'{"bg":"#...","text":"#...","accent":"#...","accent2":"#...","surface":"#...","muted":"#..."}\' with the reference\'s REAL colours; "accent" is the reference\'s real accent colour (a red accent is red, never dark grey). In the drawing use colours ONLY as palette names (fill="$accent"), never hex.',
     'Text slots: every text is a <text> with data-role (kicker, tag, title, body, caption, number), data-min-size (32 or more) and data-max-lines. Image slots (data-image-slot) only for real photographs.',
+    DEVICE_CHECKS,
     'NEVER approximate non-photo art (3D shapes, glows, blobs, illustrations, icons, logos) with a plain <rect>: draw it with paths, circles, ellipses, gradients, or, when you cannot, add data-cant-draw="what it is" to a <g> or shape at its place.',
   ].join('\n');
 }
@@ -100,6 +105,13 @@ export async function readWholeSlides(o: { reader: ReferenceReader; slides: Whol
       const { text } = await o.reader.read({ role: 'draw', pin: true, prompt, images: [slides[i].image] }, o.signal);
       r.seconds = Math.round((Date.now() - t0) / 100) / 10;
       r.cantDraw = (text.match(/data-cant-draw\s*=/gi) ?? []).length;
+      const dm = /<devices>([\s\S]*?)<\/devices>/i.exec(text)?.[1] ?? '';
+      const yn = (k: string) => {
+        const m = new RegExp('\\b' + k + '\\s*=\\s*(yes|no)\\b', 'i').exec(dm);
+        return m ? m[1].toLowerCase() === 'yes' : undefined;
+      };
+      const ans = dm ? { marker: yn('marker'), underline: yn('underline'), profileHeader: yn('profile'), planes: yn('shapes') } : undefined;
+      if (ans) r.devices = ans;
       const body = stripInventory(text);
       const first = /<svg[\s\S]*?<\/svg>/i.exec(body)?.[0];
       const a = await parsePack(first ?? body, o.name ?? 'Pack from references');
@@ -117,7 +129,7 @@ export async function readWholeSlides(o: { reader: ReferenceReader; slides: Whol
       r.sanitiser = [...a.problems, ...a.pack.notes];
       r.slots = a.pack.slotMeta?.[type]?.length ?? 0;
       r.imageSlots = a.pack.imageSlots?.[type]?.length ?? 0;
-      parsed[i] = { type, pack: a.pack, v: { svg: a.pack.svgs[type]!, layers: a.pack.designs[type]!, imageSlots: a.pack.imageSlots?.[type] ?? [], slotMeta: a.pack.slotMeta?.[type] ?? [], fromFile: slides[i].name } };
+      parsed[i] = { type, pack: a.pack, v: { svg: a.pack.svgs[type]!, layers: a.pack.designs[type]!, imageSlots: a.pack.imageSlots?.[type] ?? [], slotMeta: a.pack.slotMeta?.[type] ?? [], fromFile: slides[i].name, ...(ans ? { devices: ans } : {}) } };
       const det = o.detectedText?.[i];
       if (det) r.textOverlap = textOverlap(a.pack.slotMeta?.[type]?.map((m) => [m.x / SIZE.w, m.y / SIZE.h, m.w / SIZE.w, m.h / SIZE.h] as Box) ?? [], det);
     } catch (e) {
@@ -170,6 +182,7 @@ export async function readWholeSlides(o: { reader: ReferenceReader; slides: Whol
     if (!reps.some((r) => sameComposition(r, b))) reps.push(b);
   }
   const pack: StylePack = { name: o.name ?? 'Pack from references', palette, fonts, motifs: [], designs, svgs, slotMeta, ...(Object.keys(imageSlots).length ? { imageSlots } : {}), variants, canvas: { ...SIZE }, notes: [`Read whole: ${ok.length} of ${slides.length} slides, ${reps.length} distinct composition${reps.length === 1 ? '' : 's'}.`, ...reports.filter((r) => !r.ok).map((r) => `${r.file}: not read (${r.reasons.join(' ')})`)] };
+  pack.devices = signatureDevices(pack);
   pack.brief = styleBriefOf(pack);
   return { pack, report: { route: 'whole-slide', slides: reports, palette, fonts, distinctCompositions: reps.length, failed }, svgByFile };
 }

@@ -7,18 +7,28 @@ import { composeStyled, type StyledSlide } from '../image-engine/styles/compose'
 import { useDocumentTitle } from '../useDocumentTitle';
 import { validateScript, validateScriptText, exampleScript, formatOf, scriptPrompt, SLIDE_RANGE, type Format, type ScriptResult } from './script';
 import { DEFAULT_OPTIONS, patches } from './doc';
-import { MakeIt, runGenerate, useWriters, type GenState } from './MakeIt';
+import { MakeIt, runDesign, runGenerate, useWriters, type GenState } from './MakeIt';
 import { DeckFlags, DesignedCard } from './DesignedCard';
 import { NewStyleFlow } from './NewStyleFlow';
 import { scriptFromBlocks, slideBlocks } from './pasted';
-import { redesignSlide, type Designed } from './designed';
+import { clearPageState } from './resetState';
+import { DetectedStyleBox } from './DetectedStyle';
+import { legacySvgRoute, redrawLibraryDeck, templateRoute } from './designLibrary';
+import { presetKey, presetPackFor } from './presets';
+import { previewOptions, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice, type PickTile } from './designLibraryPick';
+import { LayoutPicker } from './LayoutPicker';
+import { setActiveReference as setActiveRef } from '../reference/active';
+import { saveOverrides } from '../reference/overrides';
+import { templates as savedTemplates, updateTemplatePack } from '../reference/templates';
+import type { StyleOverrides, StylePack } from '../reference/pack';
+import { chooseRoute, designFailureMessage, inspirationImages, lastRequestBytes, redesignSlide, type Designed } from './designed';
 import { pickStyle } from './pickStyle';
 import { type WriteRequest } from './writerPrompt';
 import { downloadBlob, exportAllAsZip, slideFileName, zipFileName } from './export';
 import { carouselStyles, composeDoc, getStyles, pickShuffleSalt, renderer, styleByName, type Rendered } from './render';
 import { MatchPanel } from '../reference/MatchPanel';
 import { ACTIVE_STYLE, activeReference, clearActiveReference, useActiveReference } from '../reference/active';
-import { cancelJob, clearSaved, resetJobs } from '../live/jobs';
+import { cancelJob } from '../live/jobs';
 import { sizeOf as sizeOfPic, urlOf as urlOfPic } from './photoLibrary';
 import { ensureTemplatesLoaded, isUserStyle, targetWarning, useTemplatesVersion } from '../reference/templates';
 import { platformOf, platformWarning } from './platform';
@@ -440,8 +450,10 @@ export default function CarouselPage() {
   };
 
   const GEN_LABEL = 'Generate from your text';
-  const generate = async () => {
+  const generate = async (override?: unknown) => {
     if (busy) return;
+    // "Use quick templates instead" after a failed Designed run: this one time the templates fill the slides.
+    const quickAfter = typeof (override as { quickAfterFail?: unknown } | undefined)?.quickAfterFail === 'string' ? (override as { quickAfterFail: string }).quickAfterFail : null;
     // A chosen style that is missing or broken is an error, never a reason to generate: the picker stays and no model is called.
     if (!options.autoStyle && !styleByName(doc.style)) return setGen({ phase: 'error', message: 'The chosen style "' + doc.style + '" is missing or broken. Pick another style below. Nothing was generated and no model was called.' });
     // Ready-made slide text (one block per slide) becomes the slides as it is: no writer call at all.
@@ -452,7 +464,7 @@ export default function CarouselPage() {
       const known0 = carouselStyles().map((x) => x.spec.name);
       const pick0 = options.autoStyle ? pickStyle({ text: doc.topic, tone: options.tone, slideTypes: built.script.slides.map((x) => x.type), styles: carouselStyles(), writerSuggestion: known0[0] ?? null }) : null;
       const gp0 = patches.generate(built.script, pick0 ? pick0.name : null, GEN_LABEL);
-      const done0 = apply({ ...gp0, ops: [...gp0.ops, { path: ['designed'], value: undefined }] });
+      const done0 = apply({ ...gp0, ops: [...gp0.ops, { path: ['designed'], value: undefined }, { path: ['route'], value: chooseRoute({ style: doc.style, activeStyle: ACTIVE_STYLE, pack: null, slideText: true }) }] });
       if (!done0.ok) return setGen({ phase: 'error', message: 'The slides could not be used: ' + done0.reasons[0] });
       setNotice('');
       return setGen({ phase: 'drawing', ms: 0, attempts: 1, message: 'Drawing slide 1 of ' + built.script.slides.length + '…', extra: ' Your slide text was used as it is: no model was called.' });
@@ -477,9 +489,41 @@ export default function CarouselPage() {
     onCancel(job.id, () => ctl.abort());
     job.begin('write');
     job.waiting('the writer');
-    // Only the script is written here (the cheap writer model). The slides are filled by code from the chosen style: no design call.
-    const r = await runGenerate(req, provider, ctl.signal, (phase) => setGen({ phase }));
-    const designedOut = noDesign();
+    // With a reference style active, Designed mode is the default: ONE design call writes the story and designs every slide from the style brief and the inspiration
+    // pictures (the same call the test harness makes). The template fill (pack route) is the fallback when Designed fails, and what Quick chooses.
+    const refPack = doc.style === ACTIVE_STYLE ? (activeReference()?.pack ?? null) : null;
+    // A built-in preset is drawn by the layout library. "Pick for me" chooses the preset BEFORE the call (from the tone and the words of the text: the slide types are not known yet).
+    const presetsOnly = carouselStyles().filter((x) => !isUserStyle(x.spec.name));
+    const pickPre = options.autoStyle && doc.style !== ACTIVE_STYLE && !templateRoute() && !quickAfter && presetsOnly.length ? pickStyle({ text: doc.topic, tone: options.tone, slideTypes: [], styles: presetsOnly, writerSuggestion: null }) : null;
+    const presetName = doc.style === ACTIVE_STYLE ? null : pickPre?.name ?? doc.style;
+    const presetPack = presetName ? presetPackFor(presetName) : null;
+    const plan = chooseRoute({ style: pickPre ? presetName! : doc.style, activeStyle: ACTIVE_STYLE, pack: refPack, mode: quickAfter ? 'quick' : doc.style === ACTIVE_STYLE ? options.mode : undefined, presetPack, format: doc.format });
+    const presetUsed = plan.route === 'designed' && !refPack && presetPack ? presetName : null;
+    const look = { pack: refPack ?? (presetUsed ? presetPack : null), brief: '', hasPhoto: pictures.length > 0 };
+    let routeNote: { route: 'designed' | 'pack'; reason: string; error?: string; requestBytes?: ReturnType<typeof lastRequestBytes> & object } = quickAfter ? { route: 'pack', reason: 'Quick templates were chosen after Designed mode failed: ' + quickAfter.slice(0, 200) } : plan;
+    let designedOut: Designed | undefined = noDesign();
+    let r: Awaited<ReturnType<typeof runGenerate>>;
+    if (plan.route === 'designed') {
+      const d = await runDesign(req, look, options.handle.trim(), provider, ctl.signal, (phase) => setGen({ phase }));
+      if (d.ok) {
+        r = { ok: true, result: d.result };
+        designedOut = d.designed.library ? { ...d.designed, library: { ...d.designed.library, source: presetUsed ?? 'reference' } } : d.designed;
+        routeNote = { route: 'designed', reason: plan.reason + ' ' + d.designed.calls + ' model call' + (d.designed.calls === 1 ? '' : 's') + ', ' + inspirationImages(look).length + ' inspiration picture' + (inspirationImages(look).length === 1 ? '' : 's') + ', style brief ' + (refPack?.brief ? 'from the reference read' : 'derived from the pack') + '.' };
+      } else if (d.state.message?.startsWith('Cancelled')) {
+        r = d;
+      } else {
+        // Designed failed: no silent template fill. The person sees the real reason and picks Retry or the quick templates; nothing is replaced.
+        const reason = d.state.message ?? 'no message';
+        const sent = lastRequestBytes();
+        job.waiting(null);
+        job.fail('write', reason);
+        job.finish('failed', reason);
+        genJob.current = null;
+        abort.current = null;
+        apply({ label: 'Record why Designed mode failed', ops: [{ path: ['route'], value: { route: 'designed', reason: 'Designed mode failed: ' + reason.slice(0, 300), error: reason, ...(sent ? { requestBytes: sent } : {}) } }] });
+        return setGen({ phase: 'error', message: designFailureMessage(reason, sent), designFailed: reason, problems: d.state.problems });
+      }
+    } else r = await runGenerate(req, provider, ctl.signal, (phase) => setGen({ phase }));
     job.waiting(null);
     abort.current = null;
     if (!r.ok) {
@@ -494,10 +538,11 @@ export default function CarouselPage() {
     const known = carouselStyles().map((x) => x.spec.name);
     // "Pick for me": scored from the tone, the words of the text and the slide types; the writer's own suggestion counts one point.
     const pick = options.autoStyle ? pickStyle({ text: doc.topic, tone: options.tone, slideTypes: result.script.slides.map((x) => x.type), styles: carouselStyles(), writerSuggestion: result.style && known.includes(result.style) ? result.style : null }) : null;
-    const style = pick ? pick.name : null;
+    // A designed deck keeps the reference style it was designed from; "Pick for me" only applies to the template route.
+    const style = routeNote.route === 'designed' ? presetUsed : pick ? pick.name : null;
     const withHandle = { ...result.script, brand: { ...result.script.brand, handle: options.handle.trim() || result.script.brand.handle } };
     const gp = patches.generate(withHandle, style, GEN_LABEL);
-    const done = apply({ ...gp, ops: [...gp.ops, { path: ['designed'], value: designedOut }] });
+    const done = apply({ ...gp, ops: [...gp.ops, { path: ['designed'], value: designedOut }, { path: ['route'], value: routeNote }] });
     if (!done.ok) {
       job.fail('apply', done.reasons[0]);
       job.finish('failed', done.reasons[0]);
@@ -506,9 +551,74 @@ export default function CarouselPage() {
     }
     job.end('apply', pick ? `style: ${pick.name}` : undefined);
     job.begin('draw');
-    setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…`, styleWhy: pick?.why, extra: designedOut ? ` Designed mode: ${Object.keys(designedOut.slides).length} slides designed, ${Object.keys(designedOut.fallbacks).length} fell back, ${designedOut.calls} model call${designedOut.calls === 1 ? '' : 's'}.` : '' });
+    setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…`, styleWhy: (presetUsed ? pickPre : pick)?.why, extra: designedOut ? ` Designed mode: ${Object.keys(designedOut.slides).length} slides designed, ${Object.keys(designedOut.fallbacks).length} fell back, ${designedOut.calls} model call${designedOut.calls === 1 ? '' : 's'}.` : '' });
   };
   const [resetKey, setResetKey] = useState(0);
+  /** The detected-style toggles: the choice is kept with the style (apart from the read cache) and the deck is drawn again from its stored plan, no model call. */
+  const handleOverrides = async (ov: StyleOverrides | null) => {
+    // The style in use: a built-in preset (kept under "preset:<name>", never in the reference cache) or the active reference.
+    const presetBase = presetPackFor(doc.style, false);
+    let pack: StylePack;
+    if (presetBase) {
+      saveOverrides(presetKey(doc.style), ov);
+      pack = { ...presetBase, overrides: ov ?? undefined };
+    } else {
+      const a = activeReference();
+      if (!a?.pack) return;
+      pack = { ...a.pack, overrides: ov ?? undefined };
+      setActiveRef({ ...a, pack });
+      if (pack.readKey) saveOverrides(pack.readKey, ov);
+      const t = pack.readKey ? savedTemplates().find((x) => x.pack && (x.pack as { readKey?: string }).readKey === pack.readKey) : null;
+      if (t) await updateTemplatePack(t.id, pack as never).catch(() => undefined);
+    }
+    const lib = doc.designed?.library;
+    if (lib?.plan && doc.designed && (lib.source ?? 'reference') !== (presetBase ? doc.style : 'reference')) {
+      setNotice('Saved with this style. The slides on the page were drawn from another style, so it applies the next time you make a carousel.');
+    } else if (lib?.plan && doc.designed) {
+      const out = await redrawLibraryDeck(lib, { pack, hasPhoto: pictures.length > 0 }, options.handle.trim());
+      apply(patches.setDesigned({ ...doc.designed, slides: out.slides, layouts: out.layouts, library: out.library }, 'Change the style devices'));
+      setNotice('Style devices changed: the slides were drawn again from the same plan, no model call.');
+    }
+  };
+  // ----- the layout picker and Rewrite text (library decks): the code draws; only Rewrite text calls the model -----
+  const pickLook = { hasPhoto: pictures.length > 0 };
+  const pickHandle = () => options.handle.trim() || doc.script?.brand.handle || '';
+  const pickLoad = (i: number, onTile: (t: PickTile) => void) => {
+    const lib = doc.designed?.library;
+    return lib?.plan ? previewOptions(lib, pickLook, pickHandle(), i, onTile).then(() => undefined) : Promise.resolve();
+  };
+  /** Puts a redrawn slide into the deck as ONE undo step (the script form of the slide too when its layout or text changed). */
+  const putSlide = (i: number, r: Extract<Awaited<ReturnType<typeof redrawLibrarySlide>>, { ok: true }>, label: string, extraCalls = 0, usage?: { input: number; output: number }): string | null => {
+    const d0 = doc.designed;
+    if (!d0 || !doc.script) return 'There is no deck to change.';
+    const sc = scriptWithSlide(doc.script, i, r.scriptSlide, doc.format);
+    const same = JSON.stringify(doc.script.slides[i]) === JSON.stringify(sc.ok ? sc.script.slides[i] : null);
+    if (!sc.ok) return 'The new slide could not be used as a script slide: ' + sc.reasons[0];
+    const d = { ...d0, slides: { ...d0.slides, [String(i)]: r.slide }, layouts: { ...(d0.layouts ?? {}), [String(i)]: r.layout }, library: r.library, calls: d0.calls + extraCalls, ...(usage ? { tokens: { input: (d0.tokens?.input ?? 0) + usage.input, output: (d0.tokens?.output ?? 0) + usage.output } } : {}) };
+    apply(patches.setSlideDesign(i, same ? doc.script.slides[i] : sc.script.slides[i], d, label));
+    return null;
+  };
+  const pickChoose = async (i: number, c: PickChoice): Promise<string> => {
+    const lib = doc.designed?.library;
+    if (!lib?.plan) return 'This deck has no stored plan to draw from.';
+    const r = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, c);
+    if (!r.ok) return `Could not redraw slide ${i + 1}: ${r.reasons[0]} The slide is unchanged.`;
+    const bad = putSlide(i, r, c.layout ? `Change slide ${i + 1} to ${r.layout}` : `Redraw slide ${i + 1}`);
+    return bad ?? `Redrew slide ${i + 1}${c.layout ? ' as ' + r.layout : ''} in code: no model call. Undo brings the old one back.`;
+  };
+  const pickRewrite = async (i: number, words: string): Promise<string> => {
+    const lib = doc.designed?.library;
+    if (!lib?.plan) return 'This deck has no stored plan to draw from.';
+    if (!provider) return 'No writer is connected, so the text cannot be rewritten.';
+    try {
+      const r = await rewriteSlideText(lib, pickLook, pickHandle(), i, doc.topic, words, provider, new AbortController().signal);
+      if (!r.ok) return `Could not rewrite slide ${i + 1}: ${r.reasons[0]} The text is kept (${r.calls} call${r.calls === 1 ? '' : 's'}).`;
+      const bad = putSlide(i, r.slide, `Rewrite the text of slide ${i + 1}`, r.calls, r.tokens);
+      return bad ?? `Rewrote the text of slide ${i + 1} (${r.calls} model call${r.calls === 1 ? '' : 's'}), same layout. Undo brings the old text back.`;
+    } catch (e) {
+      return `Could not rewrite slide ${i + 1}: ${(e as Error).message}`;
+    }
+  };
   /** Reset page: cancels what is running, then the page is as after a fresh load. Saved templates and Mine styles are not touched. */
   const resetPage = async () => {
     if (!window.confirm('Start over? This clears the reference, the text and the slides on this page. Your saved styles stay.')) return;
@@ -534,8 +644,7 @@ export default function CarouselPage() {
     setResetKey((k) => k + 1);
     // Cancelled jobs write their last line a moment later: wait for that, then clear the Live view and the job record.
     await new Promise((r) => setTimeout(r, 400));
-    resetJobs();
-    await clearSaved();
+    await clearPageState();
     setNotice('');
   };
   const cancel = () => {
@@ -609,9 +718,16 @@ export default function CarouselPage() {
               disabled={!hasWork && !doc.topic}
               onClick={() => {
                 if (window.confirm('Start over? This removes the script, every edit and your pictures from this browser.')) {
+                  // The same clean-up as Reset page: the reference with its pack and report, the pictures, the caches and the pasted text all go. Saved styles stay.
+                  abort.current?.abort();
+                  readerControl.current?.cancel();
+                  clearActiveReference(true);
                   pictures.forEach((p) => void removePicture(p.id));
-                  startOver(doc.style);
-                  setNotice('Started over.');
+                  startOver(doc.style === ACTIVE_STYLE ? (styleByName(DEFAULT_STYLE) ? DEFAULT_STYLE : getStyles().styles[0]?.spec.name ?? DEFAULT_STYLE) : doc.style);
+                  setPasted('');
+                  setGen({ phase: 'idle' });
+                  setResetKey((k) => k + 1);
+                  void clearPageState().then(() => setNotice('Started over: the reference, pictures and caches are cleared. Your saved styles stay.'));
                 }
               }}
             >
@@ -653,7 +769,8 @@ export default function CarouselPage() {
         }}
         busy={busy}
         gen={gen}
-        onGenerate={generate}
+        onGenerate={() => void generate()}
+        onUseQuick={() => void generate({ quickAfterFail: gen.designFailed ?? 'Designed mode failed' })}
         onCancel={cancel}
         provider={provider}
         providers={providers}
@@ -661,6 +778,7 @@ export default function CarouselPage() {
           <StylePicker key={resetKey} format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} onNewStyle={() => setNewStyleOpen((v) => !v)} newStyleOpen={newStyleOpen} />
           {targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}
         </>}
+        styleExtra={<DetectedStyleBox pack={presetPackFor(doc.style)} onChange={(ov) => void handleOverrides(ov)} hasDeck={!!doc.designed?.library?.plan} />}
         referenceBox={<NewStyleBox key={resetKey} open={newStyleOpen} onClose={() => setNewStyleOpen(false)} control={readerControl} state={readerState} saved={quickSaved} description={
         <NewStyleFlow
           key={resetKey}
@@ -720,7 +838,8 @@ export default function CarouselPage() {
         }}
         busy={busy}
         gen={gen}
-        onGenerate={generate}
+        onGenerate={() => void generate()}
+        onUseQuick={() => void generate({ quickAfterFail: gen.designFailed ?? 'Designed mode failed' })}
         onCancel={cancel}
         provider={provider}
         providers={providers}
@@ -824,7 +943,7 @@ export default function CarouselPage() {
                 palette={style.spec.palettes[s.palette]}
                 hasPhotoStyle={hasPhotoStyle}
                 addFiles={addFiles}
-                onRedesign={doc.script && provider ? async (words) => {
+                onRedesign={legacySvgRoute() && !doc.designed?.library?.plan && doc.script && provider ? async (words) => {
                   const look = { pack: packFor(doc.style), brief: options.brief || 'the look of the "' + (style?.spec.title ?? doc.style) + '" style' };
                   try {
                     const r = await redesignSlide(doc.script!, i, doc.designed, look, words, provider, new AbortController().signal);
@@ -837,6 +956,7 @@ export default function CarouselPage() {
                     return `Could not redesign slide ${i + 1}: ${(e as Error).message}`;
                   }
                 } : undefined}
+                picker={doc.designed?.library?.plan ? <LayoutPicker index={i} load={(onTile) => pickLoad(i, onTile)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
                 onImageText={(text) => {
                   const r = requestFromText(text, i, packFor(doc.style)?.palette ?? {});
                   if (!r) return 'Say what the picture should show.';

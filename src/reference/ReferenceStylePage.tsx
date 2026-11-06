@@ -12,7 +12,7 @@ import { ensureTemplatesLoaded, updateTemplatePack, saveTemplate, styleNameFor, 
 import { closenessOf, rankMissing, SINGLE_IMAGE_NOTE } from './closeness';
 import type { GridResult } from './grid';
 import { findSheet } from './slides';
-import { failureLines, readWholeSlides, type WholeReadReport } from './wholeRead';
+import { buildWholeSlidePrompt, failureLines, readWholeSlides, type WholeReadReport, type WholeReadResult } from './wholeRead';
 import { WholeReadPanel } from './WholeReadPanel';
 import { bitmapOf, cut, jpegUrl, pxOfCanvas, previewOf, readerImageOf, samplePhoto } from './images';
 import { expandPdfs } from './pdfPages';
@@ -20,7 +20,8 @@ import { applyFeedback, keptSentence, runLoop, type Round, type SampleContent } 
 import { startJob, onCancel } from '../live/jobs';
 import { flags, setProfile, speed } from './speed';
 import { draftSpec } from './draft';
-import { cacheClear, cacheCount, cacheGet, cacheKey, cachePut } from './cache';
+import { cacheClear, cacheCount, cacheGet, cacheKey, cachePut, wholeKey } from './cache';
+import { withOverrides } from './overrides';
 import { applyToPhotos, renderOwn, type OwnShot } from './own';
 import { changedPaths, edit as editSpec, redo as redoEdit, replaceSpec, startEdit, undo as undoEdit, type EditState, type Origin } from './edit';
 import { ADVANCED_CAP, counted, DEFAULT_CAP, freshCost, type Cost } from './cost';
@@ -28,7 +29,7 @@ import { Editor, ResultPanel } from './LiveEditor';
 import { coverPlaced } from './edit';
 import { BLANK_NAME, blankStyle } from './blank';
 import { describeMeasured, measure } from './measure';
-import { detectReaders, ReaderError, readStyle, type ReferenceReader } from './reader';
+import { detectReaders, ReaderError, readStyle, type ReadOutcome, type ReferenceReader } from './reader';
 import { applyPatches, checkSpec, defaultThumbnail, sectionsFor } from './spec';
 import { normaliseLayouts } from './layoutRules';
 import { detectRegions, type Detected } from './regions';
@@ -416,7 +417,17 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
           return null;
         }
       });
-      const r = await readWholeSlides({ reader, slides, signal: abort.current.signal, name: title.trim() || 'Pack from references', detectedText, onProgress: (d, t) => setPhase(`Read ${d} of ${t} slides…`) });
+      // Saved style: the same pictures read with the same reader prompt before are not read again (no model call).
+      const wkey = await wholeKey({ images: slides.map((s) => s.image.base64), prompt: buildWholeSlidePrompt(), readerId: reader.id }).catch(() => '');
+      const hit = wkey ? ((await cacheGet(wkey)) as unknown as WholeReadResult | null) : null;
+      const fromCache = !!hit?.pack;
+      console.debug('[whole-cache]', JSON.stringify({ lookup: true, key: wkey.slice(0, 10), slides: slides.length, hit: fromCache }));
+      const r: WholeReadResult = fromCache ? { ...hit!, pack: { ...hit!.pack!, name: title.trim() || hit!.pack!.name } } : await readWholeSlides({ reader, slides, signal: abort.current.signal, name: title.trim() || 'Pack from references', detectedText, onProgress: (d, t) => setPhase(`Read ${d} of ${t} slides…`) });
+      const storedNow = !fromCache && wkey && r.pack && failureLines(r.report).length === 0 ? await cachePut(wkey, r as unknown as ReadOutcome) : null;
+      console.debug('[whole-cache]', JSON.stringify({ key: wkey.slice(0, 10), slides: slides.length, hit: fromCache, stored: storedNow, failures: failureLines(r.report).length }));
+      // The person's saved overrides for these pictures are laid back on the pack AFTER the cache was written, so the cache holds only what the reader said and never overwrites them.
+      if (r.pack) r.pack = withOverrides(r.pack, wkey);
+      if (fromCache) setNotice('Using saved style: these pictures were read before with the same reader prompt, so no model call was made.');
       const failures = failureLines(r.report);
       setWhole({ report: r.report, refs, svgs: r.svgByFile, palette: r.report.palette });
       if (!r.pack) {
@@ -437,6 +448,8 @@ export default function ReferenceStylePage({ embedded = false, target: forcedTar
     }
   };
   const read = async (modeOverride?: 'labels' | 'scene') => {
+    // Any read of these pictures marks them as read, so the embedded auto-read (below) does not read them a second time after a manual read.
+    autoKey.current = items.map((i) => i.id + i.learn).join('|') + target;
     if (!advanced) return readWhole();
     const mode = modeOverride ?? readMode;
     const rawReader = readers![0];

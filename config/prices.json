@@ -1,0 +1,9 @@
+{
+  "note": "USD per 1,000,000 tokens, from the Anthropic pricing page. LEFT BLANK ON PURPOSE: fill in the numbers (a plain number such as 3 or 0.8, not a string). A model with a blank price gets no USD figure. The cache keys are optional and only used when the log shows cache tokens.",
+  "currency": "USD",
+  "models": {
+    "claude-haiku-5-5": { "inputPerMTok": null, "outputPerMTok": null, "cacheWritePerMTok": null, "cacheReadPerMTok": null },
+    "claude-sonnet-5-5": { "inputPerMTok": null, "outputPerMTok": null, "cacheWritePerMTok": null, "cacheReadPerMTok": null },
+    "claude-opus-5-5": { "inputPerMTok": null, "outputPerMTok": null, "cacheWritePerMTok": null, "cacheReadPerMTok": null }
+  }
+}

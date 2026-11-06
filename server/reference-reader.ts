@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { WriterFailure, apiStatus, cliStatus, findClaudeCli, killTree } from './carousel-writer';
+import { WriterFailure, apiStatus, cliStatus, findClaudeCli, killTree, logUsage } from './carousel-writer';
 
 export const READER_SYSTEM = 'You describe the visual style of reference images as strict JSON, using only the vocabulary you are given. You never write code, SVG or drawing instructions, and you never copy text, logos or faces from the images.';
 const MAX_BODY = 40_000_000;
@@ -131,7 +131,8 @@ export function readWithCli(call: ReaderCallIn, signal: AbortSignal, env: NodeJS
 }
 
 /** One call to the Messages API with the images. The key comes from `env` only and appears in no message, log or response. */
-export async function readWithApi(call: ReaderCallIn, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, fetchImpl: typeof fetch = fetch, timeoutMs = READER_API_TIMEOUT_MS): Promise<{ text: string; ms: number }> {
+export async function readWithApi(call: ReaderCallIn, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, fetchImpl: typeof fetch = fetch, timeoutMs = READER_API_TIMEOUT_MS): Promise<{ text: string; ms: number; usage?: { input: number; output: number } }> {
+  const model = readerModel(env, call.role, call.pin) || 'claude-sonnet-5-5';
   const key = env.ANTHROPIC_API_KEY;
   if (!key) throw new WriterFailure(503, 'unavailable', 'No API key is set on the server, so the API reader is off.');
   const t0 = Date.now();
@@ -148,7 +149,7 @@ export async function readWithApi(call: ReaderCallIn, signal: AbortSignal, env: 
     r = await fetchImpl('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: readerModel(env, call.role, call.pin) || 'claude-sonnet-5-5', max_tokens: call.role === 'draw' ? 16000 : 8192, system: call.role === 'draw' ? DRAW_SYSTEM : READER_SYSTEM, messages: [{ role: 'user', content }] }),
+      body: JSON.stringify({ model, max_tokens: call.role === 'draw' ? 16000 : 8192, temperature: 0, system: call.role === 'draw' ? DRAW_SYSTEM : READER_SYSTEM, messages: [{ role: 'user', content }] }),
       signal: both,
     });
   } catch {
@@ -165,10 +166,12 @@ export async function readWithApi(call: ReaderCallIn, signal: AbortSignal, env: 
     }
     throw new WriterFailure(502, 'failed', `The API refused the request (${r.status})${msg ? `: ${msg.replace(/sk-[A-Za-z0-9_-]+/g, '[key]').slice(0, 200)}` : '.'}`);
   }
-  const j = (await r.json()) as { content?: { type: string; text?: string }[] };
+  const j = (await r.json()) as { content?: { type: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } };
   const text = (j.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join('');
   if (!text) throw new WriterFailure(502, 'failed', 'The API answered with no text.');
-  return { text, ms: Date.now() - t0 };
+  const usage = j.usage ? { input: j.usage.input_tokens ?? 0, output: j.usage.output_tokens ?? 0 } : undefined;
+  logUsage(env, { route: 'reader', provider: 'api', model, kind: call.role ?? 'read', input: usage?.input ?? 0, output: usage?.output ?? 0, ...(j.usage?.cache_creation_input_tokens ? { cacheWrite: j.usage.cache_creation_input_tokens } : {}), ...(j.usage?.cache_read_input_tokens ? { cacheRead: j.usage.cache_read_input_tokens } : {}), ms: Date.now() - t0 });
+  return { text, ms: Date.now() - t0, ...(usage ? { usage } : {}) };
 }
 
 const send = (res: ServerResponse, status: number, body: unknown) => {
@@ -210,6 +213,14 @@ export function referenceHandler(provider: 'dev-cli' | 'api', opts: { env?: Node
       res.on('close', () => !res.writableEnded && ctl.abort());
       try {
         const call = readCall(JSON.parse(await readBody(req)));
+        // READER_LOG=<file>: one line per read request, so a count made in a browser can be checked against what the server really received
+        if (env.READER_LOG) {
+          try {
+            fs.appendFileSync(env.READER_LOG, JSON.stringify({ t: new Date().toISOString(), provider, role: call.role, images: call.images.length, imageBytes: call.images.reduce((a, i) => a + Math.floor((i.base64.length * 3) / 4), 0), promptChars: call.prompt.length, promptHead: call.prompt.slice(0, 40) }) + '\n');
+          } catch {
+            /* a log that cannot be written is not an error */
+          }
+        }
         const r = provider === 'dev-cli' ? await readWithCli(call, ctl.signal, env) : await readWithApi(call, ctl.signal, env, opts.fetchImpl);
         return send(res, 200, r);
       } catch (e) {

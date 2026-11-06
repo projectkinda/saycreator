@@ -48,7 +48,7 @@ function Alternatives({ slide, info, used, onPick }: { slide: StyledSlide; info:
   );
 }
 
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, picker, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -69,6 +69,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   onImageText?: (text: string) => string;
   /** Designed decks: a small model call for this slide's design; says what happened. */
   onRedesign?: (words: string) => Promise<string>;
+  /** Library decks: the layout picker and Rewrite text (replaces the SVG Redesign). */
+  picker?: React.ReactNode;
   onOpen: () => void;
   onDownload: () => void;
   deckLabel: string;
@@ -177,6 +179,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
             </ul>
           )}
         </details>
+        {picker}
         {problem && <p className="small cr-problem" role="alert">{problem}</p>}
       </div>
     </li>

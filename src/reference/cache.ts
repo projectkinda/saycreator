@@ -32,6 +32,14 @@ export async function cacheKey(o: { dataUrls: string[]; learn: string[]; target:
   return sha([READER_VERSION, o.readerId, o.target, o.baseName, ...o.learn, ...pics].join('|'));
 }
 
+/** Bump when the whole-slide read changes in a way old answers should not be reused. The prompt text itself is part of the key too. */
+export const WHOLE_VERSION = 'whole-v1';
+/** The key of a whole-slide read: the pictures' own bytes (as sent to the reader), the reader, the reader prompt and its version. */
+export async function wholeKey(o: { images: string[]; prompt: string; readerId: string }): Promise<string> {
+  const pics = await Promise.all(o.images.map(sha));
+  return sha(['whole', WHOLE_VERSION, o.readerId, await sha(o.prompt), ...pics].join('|'));
+}
+
 export async function cacheGet(key: string): Promise<ReadOutcome | null> {
   try {
     const db = await open();
@@ -44,17 +52,19 @@ export async function cacheGet(key: string): Promise<ReadOutcome | null> {
     return null;
   }
 }
-export async function cachePut(key: string, outcome: ReadOutcome): Promise<void> {
+/** Stores an answer. Returns whether it was stored (a cache that cannot be written is not an error). */
+export async function cachePut(key: string, outcome: ReadOutcome): Promise<boolean> {
   try {
     const db = await open();
-    await new Promise<void>((res) => {
+    return await new Promise<boolean>((res) => {
       const tx = db.transaction('reads', 'readwrite');
       tx.objectStore('reads').put({ key, at: Date.now(), outcome });
-      tx.oncomplete = () => res();
-      tx.onerror = () => res();
+      tx.oncomplete = () => res(true);
+      tx.onerror = () => res(false);
+      tx.onabort = () => res(false);
     });
   } catch {
-    /* no cache is not an error */
+    return false;
   }
 }
 export async function cacheCount(): Promise<number> {

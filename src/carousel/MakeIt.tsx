@@ -5,7 +5,9 @@ import { WriterError, detectProviders, generateScript, type GenerateResult, type
 import { MAX_CHARS, TONES, textProblem, type WriteRequest } from './writerPrompt';
 import { FORMATS, SLIDE_RANGE, type Format, type Issue } from './script';
 import { getStyles } from './render';
-import { designDeck, type Designed } from './designed';
+import { designDeck, designEstimate, type Designed } from './designed';
+import { designLibraryDeck, legacySvgRoute } from './designLibrary';
+import { ACTIVE_STYLE, activeReference } from '../reference/active';
 import { slideBlocks } from './pasted';
 import { PLATFORMS, isPlatform, platformOf, platformWarning, type Platform } from './platform';
 
@@ -32,6 +34,8 @@ export interface GenState {
   styleWhy?: string;
   /** Extra words for the summary line (Designed mode). */
   extra?: string;
+  /** Designed mode failed with this reason: the notice offers Retry and "Use quick templates instead". */
+  designFailed?: string;
 }
 
 export function useWriters() {
@@ -63,7 +67,8 @@ export async function runGenerate(req: WriteRequest, provider: WriteProvider, si
 /** Designed mode: one call for the story and every slide's design (see designed.ts). Same result shape as runGenerate, plus the designs. */
 export async function runDesign(req: WriteRequest, look: { pack?: import('../reference/pack').StylePack | null; brief?: string; hasPhoto?: boolean }, handle: string, provider: WriteProvider, signal: AbortSignal, onPhase: (p: 'writing' | 'retrying') => void): Promise<{ ok: true; result: GenerateResult; designed: Designed } | { ok: false; state: GenState }> {
   try {
-    const { designed, ...result } = await designDeck(req, look, handle, provider, signal, onPhase);
+    const { designed, ...result } = // The layout library route is the default: the model only chooses. The old model-drawn SVG route stays behind a flag (and quote cards, which are square, use it).
+    await (legacySvgRoute() || req.format === 'quote' ? designDeck : designLibraryDeck)(req, look, handle, provider, signal, onPhase);
     return { ok: true, result, designed };
   } catch (e) {
     if (e instanceof WriterError) {
@@ -75,7 +80,7 @@ export async function runDesign(req: WriteRequest, look: { pack?: import('../ref
   }
 }
 
-export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onCancel, provider, providers, styles, referenceBox, styleReady = true, part = 'main' }: {
+export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onUseQuick, onCancel, provider, providers, styles, referenceBox, styleExtra, styleReady = true, part = 'main' }: {
   doc: Doc;
   options: GenerateOptions;
   setTopic: (t: string) => void;
@@ -85,12 +90,16 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
   busy: boolean;
   gen: GenState;
   onGenerate: () => void;
+  /** After a failed Designed run: make the slides from the style templates instead (one time). */
+  onUseQuick?: () => void;
   onCancel: () => void;
   provider: WriteProvider | null;
   providers: WriteProvider[] | null;
   styles: React.ReactNode;
   /** Under the style list: the link that opens the reference box. */
   referenceBox?: React.ReactNode;
+  /** Under the reference box: the detected style devices as toggles. */
+  styleExtra?: React.ReactNode;
   /** A style is chosen (or "Pick for me" is on): the button needs one. */
   styleReady?: boolean;
   /** "main": the text, the styles and the one button. "options": format, count, platform, handle and tone (they live under Advanced). */
@@ -102,7 +111,9 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
   const counts = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
   // Ready-made slide text (one block per slide) needs no writer at all.
   const ready = !!slideBlocks(doc.topic);
-  const cost = ready ? '0 design calls, 0 writing calls: your slide text is used as it is.' : '0 design calls, 1 small writing call.';
+  // With a reference style active, Designed is the default route (one design call); Quick fills the style's templates.
+  const viaDesigned = !ready && doc.style === ACTIVE_STYLE && !!activeReference()?.pack && options.mode !== 'quick';
+  const cost = ready ? '0 design calls, 0 writing calls: your slide text is used as it is.' : viaDesigned ? designEstimate(Math.min(hi, Math.max(lo, options.slides))).text : '0 design calls, 1 small writing call.';
   const why = !provider && !ready ? (providers === null ? 'Looking for a writer…' : 'No writer is available on this server yet. Use Advanced below to copy a prompt for Claude and paste the answer.') : null;
   const disabled = busy || !!why || !!problem || !styleReady;
   const label = (doc.format === 'quote' ? 'Cards' : 'Slides');
@@ -160,6 +171,15 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
             <span className="field-label">Your handle (optional)</span>
             <input type="text" className="cr-input cr-handle" value={options.handle} placeholder="@yourname" maxLength={40} onChange={(e) => onHandle(e.target.value)} />
           </label>
+          {doc.style === ACTIVE_STYLE && !!activeReference()?.pack && (
+            <div className="cr-inline">
+              <span className="field-label" id="cr-route-l">Slides</span>
+              <div role="group" aria-labelledby="cr-route-l" className="chip-group">
+                <button type="button" className="chip-btn" aria-pressed={options.mode !== 'quick'} disabled={busy} title="One design call: the model designs every slide in your reference's style (default)." onClick={() => setOptions({ mode: 'designed' })}>Designed</button>
+                <button type="button" className="chip-btn" aria-pressed={options.mode === 'quick'} disabled={busy} title="The style's templates fill the slides: no design call." onClick={() => setOptions({ mode: 'quick' })}>Quick (templates)</button>
+              </div>
+            </div>
+          )}
           <div className="cr-inline">
             <span className="field-label" id="cr-tone-l">Tone</span>
             <div role="group" aria-labelledby="cr-tone-l" className="chip-group">
@@ -206,7 +226,7 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
           <h3 className="h4">Pick a style</h3>
           <p className="small muted cr-hint">Built-in styles and your own saved ones. Pick how the slides look.</p>
           {styles}
-          {referenceBox}
+          {referenceBox}{styleExtra}
         </li>
         <li aria-label="Step 3: generate">
         <h3 className="h4">Generate</h3>
@@ -238,6 +258,12 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
               <ul className="cr-issues">
                 {gen.problems.slice(0, 8).map((p, i) => <li key={i}>{p}</li>)}
               </ul>
+            )}
+            {gen.designFailed && (
+              <div className="row-actions" data-testid="design-failed-actions">
+                <button type="button" className="btn btn-dark btn-sm" disabled={busy} onClick={onGenerate}>Retry</button>
+                {onUseQuick && <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={onUseQuick}>Use quick templates instead</button>}
+              </div>
             )}
           </div>
         )}
