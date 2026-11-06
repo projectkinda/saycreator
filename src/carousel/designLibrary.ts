@@ -543,6 +543,68 @@ export interface Drawn {
   problems: string[];
 }
 /** Draws one slide. A density or cut that does not fit is dropped by the code (no model call); only a plain failure is a problem. */
+/**
+ * After a deck is drawn: a run of 3 or more plain slides is broken by giving a slide in it (the middle one first) another cut its layout carries. A layout that cannot carry any
+ * plane (the numeral layouts) stays plain, so the slides beside it have to take the plane. `redraw(i, cut)` draws slide i with that cut; `pinned(i)` slides are never changed.
+ */
+export async function breakPlainRuns(drawn: (Drawn | undefined)[], layoutOf: (i: number) => string, pinned: (i: number) => boolean, redraw: (i: number, cut: Cut) => Promise<Drawn>): Promise<void> {
+  const isPlain = (i: number) => !!drawn[i]?.built && drawn[i]!.cut === 'plain';
+  for (let guard = 0; guard < drawn.length; guard++) {
+    let a = -1, b = -1;
+    for (let i = 0; i < drawn.length && a < 0; i++) {
+      if (!isPlain(i)) continue;
+      let j = i;
+      while (j + 1 < drawn.length && isPlain(j + 1)) j++;
+      if (j - i >= 2) [a, b] = [i, j];
+      i = j;
+    }
+    if (a < 0) return;
+    const mid = (a + b) / 2;
+    const order = Array.from({ length: b - a + 1 }, (_, k) => a + k).sort((x, y) => Math.abs(x - mid) - Math.abs(y - mid));
+    let fixed = false;
+    for (const i of order) {
+      if (pinned(i)) continue;
+      for (const c of cutsOf(layoutOf(i))) {
+        if (c === 'plain' || c === 'edge-v' || drawn[i - 1]?.cut === c || drawn[i + 1]?.cut === c) continue;
+        const alt = await redraw(i, c);
+        if (alt.built && alt.cut !== 'plain') {
+          alt.adjustments = [...alt.adjustments, `slide ${i + 1}: the cut "${c}" was used so the deck does not have three plain slides in a row.`];
+          drawn[i] = alt;
+          fixed = true;
+          break;
+        }
+      }
+      if (fixed) break;
+    }
+    // Second try: the only cut that works for a slide of the run is the one a neighbour has. The neighbour then takes another cut (never plain, never edge-v, never the same as its own neighbours).
+    if (!fixed) {
+      outer: for (const i of order) {
+        if (pinned(i)) continue;
+        for (const c of cutsOf(layoutOf(i))) {
+          if (c === 'plain' || c === 'edge-v') continue;
+          const k = drawn[i - 1]?.cut === c ? i - 1 : drawn[i + 1]?.cut === c ? i + 1 : -1;
+          if (k < 0 || pinned(k)) continue;
+          const alt = await redraw(i, c);
+          if (!alt.built || alt.cut === 'plain') continue;
+          const far = k < i ? k - 1 : k + 1;
+          for (const c2 of cutsOf(layoutOf(k))) {
+            if (c2 === 'plain' || c2 === 'edge-v' || c2 === c || drawn[far]?.cut === c2) continue;
+            const alt2 = await redraw(k, c2);
+            if (alt2.built && alt2.cut !== 'plain') {
+              alt.adjustments = [...alt.adjustments, `slide ${i + 1}: the cut "${c}" was used so the deck does not have three plain slides in a row.`];
+              alt2.adjustments = [...alt2.adjustments, `slide ${k + 1}: the cut "${c2}" was used so that slide ${i + 1} could take "${c}".`];
+              drawn[i] = alt;
+              drawn[k] = alt2;
+              fixed = true;
+              break outer;
+            }
+          }
+        }
+      }
+    }
+    if (!fixed) return;
+  }
+}
 export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyle, o: { handle: string; index: number; total: number; cut: Cut; invert: false | 'full' | 'tint'; density: 'normal' | 'statement'; ground?: number }): Promise<Drawn> {
   const f = fieldsOf(spec);
   const adjustments: string[] = [];
@@ -644,10 +706,13 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
         out.set(i, { built: null, cut: 'plain', invert: false, density: 'normal', adjustments: [], problems: pr });
         continue;
       }
-      const d = await drawOne(specs[i], specs[i].variant !== undefined && !rot.repeats.has(i) ? rot.variants[i] : rot.variants[i], style, { handle, index: i, total: specs.length, cut: rot.cuts[i].cut, invert: rot.cuts[i].invert, density: specs[i].density ?? 'normal', ground: rot.cuts[i].ground });
+      const d = await drawOne(specs[i], rot.variants[i], style, { handle, index: i, total: specs.length, cut: rot.cuts[i].cut, invert: rot.cuts[i].invert, density: specs[i].density ?? 'normal', ground: rot.cuts[i].ground });
       if (rot.repeats.has(i)) d.problems = [...d.problems, 'layout: ' + rot.repeats.get(i)!];
       out.set(i, d);
     }
+    const arr: (Drawn | undefined)[] = specs.map((_, i) => out.get(i));
+    if (style.devices.planes) await breakPlainRuns(arr, (i) => specs[i].layout, () => false, (i, cut) => drawOne(specs[i], rot.variants[i], style, { handle, index: i, total: specs.length, cut, invert: rot.cuts[i].invert, density: specs[i].density ?? 'normal', ground: rot.cuts[i].ground }));
+    arr.forEach((d, i) => d && out.set(i, d));
     return { out, rot };
   };
   let { out: drawn, rot } = await drawAll();
@@ -800,13 +865,16 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
       specs = specs.map((s, k) => (k === i ? f.spec : s));
       adjustments.push(`slide ${i + 1}: drawn plain (same layout) after the style changed.`);
     }
-    adjustments.push(...d.adjustments);
     drawn.push(d);
+  }
+  if (style.devices.planes) await breakPlainRuns(drawn, (i) => specs[i].layout, (i) => specs[i].pin?.cut !== undefined, (i, cut) => drawOne(specs[i], variants[i], style, { handle, index: i, total: specs.length, cut, invert: rc[i].invert, density: specs[i].density ?? 'normal', ground: rc[i].ground }));
+  drawn.forEach((d, i) => {
+    adjustments.push(...d.adjustments);
     if (d.built) {
       slides[String(i)] = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg } };
       layouts[String(i)] = specs[i].layout;
     }
-  }
+  });
   const library: LibraryReport = {
     ...lib,
     layouts: specs.map((s) => s.layout),

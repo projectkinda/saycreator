@@ -53,7 +53,7 @@ export interface Built {
   partitioned?: boolean;
 }
 
-const TOKENS = /\$(accentText|onAccent|bg|text|muted|accent|surface)\b/g;
+const TOKENS = /\$(accentText|accentDisplay|onAccent|bg|text|muted|accent|surface)\b/g;
 /** Points the role tokens of a markup at the roles of a surface ('f' field, 'p' plane): $text -> $fText ... */
 const toward = (markup: string, surf: 'f' | 'p'): string => markup.replace(TOKENS, (_m, k: string) => '$' + surf + k[0].toUpperCase() + k.slice(1));
 
@@ -86,7 +86,7 @@ export const paletteOf = (st: LayoutStyle): Record<string, string> => {
   const base = { bg: up(p.bg), text: up(p.text), muted: up(p.muted), accent: up(p.accent), surface: up(p.surface) };
   return { ...base, onAccent: up(p.onAccent ?? markerInk(base, base.accent)) };
 };
-const rolesOf = (r: Roles, p: 'f' | 'p'): Record<string, string> => ({ [p + 'Bg']: r.bg, [p + 'Text']: r.text, [p + 'Muted']: r.muted, [p + 'Accent']: r.accent, [p + 'Surface']: r.surface, [p + 'OnAccent']: r.onAccent, [p + 'AccentText']: r.accentText });
+const rolesOf = (r: Roles, p: 'f' | 'p'): Record<string, string> => ({ [p + 'Bg']: r.bg, [p + 'Text']: r.text, [p + 'Muted']: r.muted, [p + 'Accent']: r.accent, [p + 'Surface']: r.surface, [p + 'OnAccent']: r.onAccent, [p + 'AccentText']: r.accentText, [p + 'AccentDisplay']: r.accentDisplay });
 
 /** Builds one slide: layout id + variant + fields + style (+ cut, invert, density) -> finished SVG and layers. No model call. */
 /** The style of slide i: with a palette rhythm, ground i mod n replaces the palette (and a gradient over it). */
@@ -252,6 +252,16 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   notes.push(...col.notes);
   problems.push(...finalGuards(col.pack, key, slide, o.handle));
   pack = col.pack;
+  // The accent phrase of a big headline (96 px and up) is set in the display accent, a smaller one in the small-text accent.
+  {
+    const tl = (pack.designs[key] ?? []).find((l) => l.kind === 'text' && l.name === 'title') as { style?: { size: number } } | undefined;
+    const roles = S === 'p' ? P : F;
+    const ink = tl?.style && tl.style.size >= 96 ? roles.accentDisplay : roles.accentInk;
+    const pal = { ...pack.palette };
+    if (ink && ink.toUpperCase() !== roles.accent.toUpperCase()) pal.accentInk = ink;
+    else delete pal.accentInk;
+    pack = { ...pack, palette: pal };
+  }
   const r = packSlide(pack, plan.type, slide, o.handle);
   if (!r.faithful) return fail(['the drawing could not be made: ' + r.notes.join(' ')]);
   notes.push(...r.notes);

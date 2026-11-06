@@ -166,7 +166,10 @@ export class Draw {
       m = measureRaw(text, font, weight, size, w, lh);
     }
     const y = o.at ?? this.y;
-    const slot: Slot = { role, text, x, y, w, h: o.boxH ?? Math.ceil(m.h) + 2, size, weight, font, fill: o.fill ?? '$text', align: o.align ?? 'left', lines: Math.max(maxLines, m.n), min, lh, plane: this.onPlane, ...(o.boxH ? { valign: 'middle' as const } : {}) };
+    // Display text (96 px and up) takes the display accent, smaller text the small-text accent
+    const fill0 = o.fill ?? '$text';
+    const fill = fill0 === '$accentText' && size >= 96 ? '$accentDisplay' : fill0;
+    const slot: Slot = { role, text, x, y, w, h: o.boxH ?? Math.ceil(m.h) + 2, size, weight, font, fill, align: o.align ?? 'left', lines: Math.max(maxLines, m.n), min, lh, plane: this.onPlane, ...(o.boxH ? { valign: 'middle' as const } : {}) };
     this.slots.push(slot);
     this.track(y, y + slot.h);
     if (o.at === undefined) {

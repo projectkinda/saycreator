@@ -106,6 +106,26 @@ export function accentTextOf(accent: string, surface: string, text: string, refs
   return { accentText: text };
 }
 
+/**
+ * The DISPLAY accent: for big display text (stat numerals, figures, headlines of 96 px and more). It stays as close to the brand colour as it can: the accent itself when it reads
+ * 3:1 on the hardest dark ground of the deck, else lightened (same hue) just to 3:1. On a light ground it is the accent when that reads 3:1, else the small-text role.
+ */
+export function accentDisplayOf(accent: string, surface: string, refs: string[], small: string): string {
+  const isDark = (s: string) => contrast('#FFFFFF', s) > contrast('#000000', s);
+  const worst = isDark(surface) ? [surface, ...refs.filter(isDark)].reduce((w, s) => (contrast(accent, s) < contrast(accent, w) ? s : w), surface) : surface;
+  if (contrast(accent, worst) >= 3) return accent;
+  if (isDark(surface)) {
+    const lk = lightenForText(accent, worst, 3);
+    if (lk.changed) return lk.color;
+  }
+  return small;
+}
+/** Both accent roles of a surface: the small-text accent (4.5:1) and the display accent (3:1), with the deck's other grounds as `refs`. */
+export function accentRolesOf(accent: string, surface: string, text: string, refs: string[] = []): { accentText: string; accentInk?: string; accentDisplay: string } {
+  const t = accentTextOf(accent, surface, text, refs);
+  return { ...t, accentDisplay: accentDisplayOf(accent, surface, refs, t.accentText) };
+}
+
 export interface Roles {
   bg: string;
   text: string;
@@ -117,6 +137,8 @@ export interface Roles {
   accentText: string;
   /** Set only when the accent had to be lightened to read as text on this surface: that lighter colour (same hue). The accent itself is unchanged. */
   accentInk?: string;
+  /** The accent for big display text (96 px and up): the brand colour kept as close as possible, 3:1 on the hardest ground of the deck. */
+  accentDisplay: string;
 }
 type Pal = Record<string, string>;
 const mix = (a: string, b: string, t: number): string => {
@@ -154,7 +176,7 @@ export function rolesFor(surface: string, base: Pal): Roles {
   const other = [base.text, base.bg].find((c) => c !== text);
   const accent = other && contrast(other, surface) >= 4.5 ? other : text;
   const card = mix(surface, text, 0.08);
-  return { bg: surface, text, muted: quietOn(text, [surface, card], mix(text, surface, 0.35), 4.5), accent, surface: card, onAccent: readableInk(accent, [text, surface, base.bg, base.text]), ...accentTextOf(accent, surface, text) };
+  return { bg: surface, text, muted: quietOn(text, [surface, card], mix(text, surface, 0.35), 4.5), accent, surface: card, onAccent: readableInk(accent, [text, surface, base.bg, base.text]), ...accentRolesOf(accent, surface, text) };
 }
 
 export interface Colours {
@@ -172,7 +194,7 @@ export interface Colours {
 export function coloursFor(base: Pal, opts: { tone?: PlaneTone; invert?: false | 'full' | 'tint'; /** The deck uses tinted slides (the card colour as a ground). A palette rhythm does not: then the card colour does not decide how light the accent text must be. Default true. */ tints?: boolean }): Colours {
   const tone = opts.tone ?? 'accent';
   const plane0 = tone === 'ink' ? base.text : tone === 'surface' ? base.surface : base.accent;
-  const baseRoles: Roles = { bg: base.bg, text: base.text, muted: base.muted, accent: base.accent, surface: base.surface, onAccent: base.onAccent, ...accentTextOf(base.accent, base.bg, base.text, opts.tints === false ? [] : [base.surface]) };
+  const baseRoles: Roles = { bg: base.bg, text: base.text, muted: base.muted, accent: base.accent, surface: base.surface, onAccent: base.onAccent, ...accentRolesOf(base.accent, base.bg, base.text, opts.tints === false ? [] : [base.surface]) };
   let F = baseRoles;
   let planeFill = plane0;
   let inverted = false;
@@ -182,8 +204,8 @@ export function coloursFor(base: Pal, opts: { tone?: PlaneTone; invert?: false |
     planeFill = base.bg;
   } else if (opts.invert === 'tint' && base.surface !== base.bg) {
     inverted = true;
-    F = { ...baseRoles, bg: base.surface, surface: base.bg, muted: quietOn(base.text, [base.surface, base.bg], base.muted, 4.5), ...accentTextOf(base.accent, base.surface, base.text, [base.bg]) };
+    F = { ...baseRoles, bg: base.surface, surface: base.bg, muted: quietOn(base.text, [base.surface, base.bg], base.muted, 4.5), ...accentRolesOf(base.accent, base.surface, base.text, [base.bg]) };
   }
   const P = opts.invert === 'full' ? baseRoles : rolesFor(planeFill, base);
-  return { F, P: { ...P, bg: planeFill, ...accentTextOf(P.accent, planeFill, P.text) }, edge: contrast(planeFill, F.bg) < 1.5, inverted };
+  return { F, P: { ...P, bg: planeFill, ...accentRolesOf(P.accent, planeFill, P.text) }, edge: contrast(planeFill, F.bg) < 1.5, inverted };
 }
