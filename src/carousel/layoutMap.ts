@@ -118,6 +118,51 @@ export function layoutOptionsFor(spec: SlideSpec, look: Look, o: { joinStat?: bo
   }
   return out;
 }
+const CANON_WORDS: Record<string, string> = { head: 'a headline', kicker: 'a lead-in line', sub: 'a second line', body: 'a paragraph', number: 'a number', label: 'a label', bar: 'a bar value', quote: 'a quote', author: 'an author', button: 'a button text', items: 'a list of items', lines: 'card lines', numbers: 'numbers', labels: 'labels' };
+const clipText = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t);
+/**
+ * Why each layout that layoutOptions() does NOT offer cannot take this slide, in one plain line (a layout id to a reason). Driven by the registry: the layouts come
+ * from LAYOUT_IDS and the reason from asking fromCanon / validateSlideContent, so a layout added later gets its reason with no per-layout code.
+ */
+export function layoutRefusals(spec: SlideSpec, look: Look): Record<string, string> {
+  const offered = new Set(layoutOptionsFor(spec, look).map((o) => o.layout as string));
+  const own = Object.fromEntries(Object.entries(spec.fields).filter(([k]) => k !== 'accent')) as Fields;
+  const c = toCanon(spec.layout, own);
+  const out: Record<string, string> = {};
+  for (const id of LAYOUT_IDS) {
+    if (offered.has(id)) continue;
+    const f = fromCanon(id, c, !!look.hasPhoto);
+    if (!f) {
+      if (!look.hasPhoto && fromCanon(id, c, true)) {
+        out[id] = 'Needs a picture, and this deck has none.';
+        continue;
+      }
+      // what is missing: add the kinds of text one by one until the layout can take them
+      const base = c as unknown as Record<string, string | string[]>;
+      const withKeys = (ks: string[]) => ({ ...base, ...Object.fromEntries(ks.map((k) => [k, Array.isArray(base[k]) ? ['x'] : 'x'])) }) as unknown as Canon;
+      const empties = Object.keys(CANON_WORDS).filter((k) => !(Array.isArray(base[k]) ? base[k].length : base[k]));
+      let need = empties.filter((k) => fromCanon(id, withKeys([k]), true)).slice(0, 1);
+      if (!need.length) {
+        need = [...empties];
+        if (fromCanon(id, withKeys(need), true)) need = need.filter((k) => { const rest = need.filter((x) => x !== k); return !fromCanon(id, withKeys(rest), true); });
+        else need = [];
+      }
+      out[id] = need.length ? `Needs ${need.map((k) => CANON_WORDS[k]).join(' and ')}, which this slide does not have.` : 'Only its own layout can draw this text.';
+      continue;
+    }
+    const v = validateSlideContent(id, f);
+    if (!v.ok) {
+      const req = /"(\w+)" is required/.exec(v.errors[0]);
+      out[id] = req ? `Needs "${req[1]}" text, which this slide does not have.` : `The text is over this layout's limit: ${clipText(v.errors[0].replace(/^[\w-]+: /, ''), 70)}`;
+      continue;
+    }
+    const core = (layoutDef(spec.layout)?.fields ?? []).filter((x) => x.required).flatMap((x) => (Array.isArray(own[x.name]) ? (own[x.name] as string[]) : [String(own[x.name] ?? '')])).map((x) => x.trim()).filter(Boolean);
+    const shown = flat(f);
+    const lost = core.find((t) => !shown.some((u) => u === t || u.includes(t)));
+    out[id] = lost ? `Would leave out "${clipText(lost, 28)}".` : 'This slide\'s text does not fit this layout.';
+  }
+  return out;
+}
 /** The accent phrases that still stand in the new text. */
 export const accentsIn = (accents: string[], f: Fields): string[] => {
   const t = flat(f).join(' \n ').toLowerCase();

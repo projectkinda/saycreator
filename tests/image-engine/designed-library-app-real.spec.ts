@@ -190,25 +190,24 @@ for (const run of RUNS.filter((r) => !only || r.name === only)) {
     const lib = proj.library as { calls: number; tokens: unknown; layouts: string[]; cuts: string[]; inverts: string[]; retries: unknown[]; fallbacks: unknown[]; seconds: number } | null;
     // the layout picker on slide 3: thumbnails drawn by the code, a click redraws that one slide with no request; "Rewrite text" is the one small model call
     const pk = { idx: 2 };
-    const picker = page.getByTestId(`picker-${pk.idx}`);
+    const picker = page.getByTestId(`gallery-${pk.idx}`);
     await picker.scrollIntoViewIfNeeded();
-    await picker.locator('summary').click();
-    await expect(page.locator(`[data-testid^="pick-layout-"]`).first()).toBeVisible({ timeout: 180_000 });
-    await expect.poll(async () => page.locator(`[data-testid^="pick-"]`).count(), { timeout: 180_000, intervals: [1500] }).toBeGreaterThanOrEqual(4);
+    await expect(picker.locator('img').first()).toBeVisible({ timeout: 180_000 });
+    await expect.poll(async () => picker.locator('img').count(), { timeout: 180_000, intervals: [1500] }).toBeGreaterThanOrEqual(4);
     await page.waitForTimeout(3000);
-    const tileIds = await page.locator(`[data-testid^="pick-"]`).evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+    const tileIds = await picker.locator(`[data-testid^="gal-"]`).evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
     await picker.screenshot({ path: path.join(dir, 'picker.png') });
     const srcsNow = () => page.locator('.cr-pic img').evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src));
     const pk0 = { reads: reqs.length, writes: writes.length };
     const s0s = await srcsNow();
-    const layoutTile = page.locator(`[data-testid^="pick-layout-"]:not([disabled])`).first();
+    const layoutTile = picker.locator(`[data-current="false"][data-enabled="true"] button:not([disabled])`).first();
     const layoutPicked = (await layoutTile.getAttribute('data-testid')) ?? '';
     await layoutTile.click();
     await expect(picker.getByText(/^Redrew slide 3/)).toBeVisible({ timeout: 60_000 });
     await page.waitForTimeout(3500);
     const s1s = await srcsNow();
     const changedAfterLayout = s1s.map((x, i) => (x !== s0s[i] ? i : -1)).filter((i) => i >= 0);
-    const cutTile = page.locator(`[data-testid^="pick-cut-"]:not([disabled])`).first();
+    const cutTile = picker.locator(`[data-testid^="gal-cut-"]:not([disabled])`).first();
     const cutPicked = (await cutTile.count()) ? (await cutTile.getAttribute('data-testid')) ?? '' : '';
     if (cutPicked) {
       await cutTile.click();

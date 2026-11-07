@@ -48,7 +48,7 @@ function Alternatives({ slide, info, used, onPick }: { slide: StyledSlide; info:
   );
 }
 
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, picker, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, gallery, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -69,8 +69,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   onImageText?: (text: string) => string;
   /** Designed decks: a small model call for this slide's design; says what happened. */
   onRedesign?: (words: string) => Promise<string>;
-  /** Library decks: the layout picker and Rewrite text (replaces the SVG Redesign). */
-  picker?: React.ReactNode;
+  /** Library decks: the layout gallery (under the picture, replaces the old Layout dropdown) with the plane/colour controls and Rewrite text. */
+  gallery?: React.ReactNode;
   onOpen: () => void;
   onDownload: () => void;
   deckLabel: string;
@@ -97,9 +97,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
     </span>
   ) : null;
 
-  return (
-    <li className="card cr-card" aria-label={title} data-status={view?.status ?? "drawing"}>
-      <div className="cr-pic">
+  const pic = (
+    <div className="cr-pic">
         <button type="button" className="cr-pic-btn" style={{ position: "relative" }} onClick={onOpen} disabled={!view?.url} aria-label={`Open ${deckLabel} slide ${index + 1} full size`}>
           {emptyOverlay}{view?.url ? <img src={view.url} alt={`${deckLabel}, slide ${index + 1}: ${slide.type}, ${slide.layout} layout`} width={216} height={216 * (slide.plan.canvas.height / slide.plan.canvas.width)} /> : <span className="cr-pic-wait small muted" role="status">{view?.status === 'error' ? 'Could not draw this slide' : 'Drawing…'}</span>}
         </button>
@@ -131,7 +130,12 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
           </div>
         )}
         {view?.error && <p className="small cr-problem" role="alert">{view.error}</p>}
-      </div>
+    </div>
+  );
+
+  return (
+    <li className={`card cr-card${gallery ? ' cr-card-gallery' : ''}`} aria-label={title} data-status={view?.status ?? "drawing"}>
+      {gallery ? <div className="cr-left">{pic}{gallery}</div> : pic}
       <div className="cr-edit">
         <h3 className="h4 cr-title">
           <span className="chip">{index + 1}</span> {TYPE_LABEL[script.type]}
@@ -142,14 +146,16 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
         <TagEditor index={index} tags={script.element_tags ?? []} apply={apply} />
         <PhotoControls index={index} slide={slide} script={script} choice={photo} object={object} pictures={pictures} palette={palette} hasPhotoStyle={hasPhotoStyle} apply={apply} addFiles={addFiles} />
         <div className="cr-actions">
-          <label className="cr-inline">
-            <span className="field-label">Layout</span>
-            <select className="plain-select cr-select" value={slide.layout} onChange={(e) => run(apply(patches.layout(index, e.target.value)))}>
-              {slide.layoutChoices.map((l) => (
-                <option key={l} value={l}>{l}</option>
-              ))}
-            </select>
-          </label>
+          {!gallery && (
+            <label className="cr-inline">
+              <span className="field-label">Layout</span>
+              <select className="plain-select cr-select" value={slide.layout} onChange={(e) => run(apply(patches.layout(index, e.target.value)))}>
+                {slide.layoutChoices.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <button type="button" className="btn btn-outline btn-sm" onClick={() => setProblem(onShuffle() ? '' : 'No other pictures fit this slide.')}>Shuffle elements</button>
           <button type="button" className="btn btn-outline btn-sm" onClick={() => run(apply(patches.regenerate(index)))}>Regenerate from the plan</button>
           {faithfulOf(slide) && <button type="button" className="btn btn-outline btn-sm" onClick={() => run(apply(patches.makeEditable(index)))} title="This slide is drawn exactly as the pack's design was written. Making it editable turns it into layers; fine details may change.">Make editable</button>}
@@ -179,7 +185,6 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
             </ul>
           )}
         </details>
-        {picker}
         {problem && <p className="small cr-problem" role="alert">{problem}</p>}
       </div>
     </li>

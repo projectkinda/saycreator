@@ -114,14 +114,14 @@ test('hot-flat through the library: 1 writer call, the flavour line in the promp
   await expect.poll(async () => (await project(page))?.lib?.devices.underline, { timeout: 30_000 }).toBe(false);
   expect(f.calls.length).toBe(1);
   // the layout picker on slide 3: a pick redraws that one slide with no call
-  const picker = page.getByTestId('picker-2');
+  const picker = page.getByTestId('gallery-2');
   await picker.scrollIntoViewIfNeeded();
-  await picker.locator('summary').click();
-  const tile = page.locator('[data-testid^="pick-layout-"]:not([disabled])').first();
+  const tile = picker.locator('[data-current="false"][data-enabled="true"] button:not([disabled])').first();
   await expect(tile).toBeVisible({ timeout: 120_000 });
   const layoutsBefore = (await project(page))!.lib!.layouts;
   await tile.click();
   await expect(picker.getByText(/^Redrew slide 3/)).toBeVisible({ timeout: 60_000 });
+  await expect.poll(async () => (await project(page))!.lib!.layouts[2], { timeout: 30_000 }).not.toBe(layoutsBefore[2]);
   const layoutsAfter = (await project(page))!.lib!.layouts;
   expect(layoutsAfter[2]).not.toBe(layoutsBefore[2]);
   expect(layoutsAfter.filter((l: string, i: number) => l !== layoutsBefore[i]).length).toBe(1);

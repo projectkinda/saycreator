@@ -5,15 +5,15 @@
 //  - rewriteSlideText(): the only model call here: one small call for one slide, new text for the SAME layout.
 import type { Layer } from '../image-engine/types';
 import type { DesignedSlide, Look } from './designed';
-import { cutsOf, layoutDef, validateSlideContent, type Cut, type Fields, type LayoutId } from './layouts';
+import { cutsOf, layoutDef, LAYOUT_IDS, validateSlideContent, type Cut, type Fields, type LayoutId } from './layouts';
 import { clip, drawOne, scriptSlideOf, slideProblems, stubPack, isObj, type Drawn, type LibraryReport, type SlideSpec } from './designLibrary';
 import { cleanPaste, validateScriptText } from './script';
 import type { CarouselScript } from '../image-engine/carousel/types';
 import type { WriteProvider } from './writer';
 
 // ----- moving the text between layouts: see layoutMap.ts -----
-import { accentsIn, flat, layoutOptions } from './layoutMap';
-export { accentsIn, fromCanon, layoutOptions, toCanon, type LayoutOption } from './layoutMap';
+import { accentsIn, flat, layoutOptions, layoutRefusals } from './layoutMap';
+export { accentsIn, fromCanon, layoutOptions, layoutRefusals, toCanon, type LayoutOption } from './layoutMap';
 
 // ----- the picture of each option -----
 export interface PickChoice {
@@ -80,6 +80,63 @@ export async function previewOptions(lib: LibraryReport, look: Look, handle: str
     if (d.built && d.invert === !!to) emit({ kind: 'invert', id: 'invert', label: cur.invert ? 'Normal colours' : 'Inverted colours', current: false, choice: { invert: to }, svg: d.built.svg });
   }
   return tiles;
+}
+
+// ----- the gallery: every layout of the registry, each in both variants, drawn with THIS slide's text -----
+export interface GalleryEntry {
+  layout: LayoutId;
+  label: string;
+  variants: [string, string];
+  /** This slide's own layout. */
+  current: boolean;
+  enabled: boolean;
+  /** One line: why a greyed-out layout cannot be used (and, for an enabled one, what it would leave out). */
+  reason?: string;
+}
+export interface GalleryModel {
+  entries: GalleryEntry[];
+  /** The slide's own variant (0 or 1). */
+  variant: 0 | 1;
+  cuts: { id: Cut; label: string; current: boolean }[];
+  invert: false | 'full' | 'tint';
+  /** Changes whenever a thumbnail would look different (the slide's text, the style, the look of the slide): the cache key. */
+  signature: string;
+}
+const hash = (s: string): string => {
+  let h = 5381;
+  for (let k = 0; k < s.length; k++) h = ((h << 5) + h + s.charCodeAt(k)) | 0;
+  return (h >>> 0).toString(36);
+};
+/** The gallery of slide `i`: ALL layouts of the registry (LAYOUT_IDS), the ones that can take the slide's text enabled, the others greyed with their reason. Nothing is drawn here. */
+export function galleryModel(lib: LibraryReport, look: Look, handle: string, i: number): GalleryModel | null {
+  const spec = lib.plan?.specs[i];
+  if (!lib.plan || !spec) return null;
+  const cur = currentOf(lib, i);
+  const options = new Map(layoutOptions(spec, look).map((o) => [o.layout as string, o]));
+  const why = layoutRefusals(spec, look);
+  const entries: GalleryEntry[] = LAYOUT_IDS.map((id) => {
+    const def = layoutDef(id)!;
+    const o = options.get(id);
+    return { layout: id, label: def.label, variants: def.variants, current: id === spec.layout, enabled: !!o, reason: o ? (o.dropped.length ? `Leaves out: ${o.dropped.map((t) => '"' + clip(t, 24) + '"').join(', ')}` : undefined) : why[id] ?? 'This slide\'s text does not fit this layout.' };
+  });
+  entries.sort((a, b) => Number(b.current) - Number(a.current) || Number(b.enabled) - Number(a.enabled));
+  const CUT_LABELS = CUT_LABEL;
+  const signature = hash(JSON.stringify([spec.layout, spec.fields, spec.accents, cur, handle, i, lib.plan.specs.length, lib.grounds?.[i] ?? null, !!look.hasPhoto, lib.style]));
+  return { entries, variant: cur.variant, cuts: cutsOf(spec.layout).map((c) => ({ id: c, label: CUT_LABELS[c] ?? c, current: c === cur.cut })), invert: cur.invert, signature };
+}
+/** The picture of one gallery tile: the layout in the given variant with this slide's text, the slide's current plane and colours. null when the code cannot draw it. */
+export async function drawGalleryTile(lib: LibraryReport, look: Look, handle: string, i: number, layout: LayoutId, variant: 0 | 1): Promise<string | null> {
+  const spec = lib.plan?.specs[i];
+  if (!lib.plan || !spec) return null;
+  const cur = currentOf(lib, i);
+  const same = layout === spec.layout;
+  const o = same ? null : layoutOptions(spec, look).find((x) => x.layout === layout);
+  if (!same && !o) return null;
+  const fields = same ? (Object.fromEntries(Object.entries(spec.fields).filter(([k]) => k !== 'accent')) as Fields) : o!.fields;
+  const accents = same ? spec.accents : accentsIn(spec.accents, fields);
+  const density = same ? cur.density : 'normal';
+  const d = await drawOne({ layout, fields, accents, ...(density === 'statement' ? { density } : {}) }, variant, lib.style, { handle, index: i, total: lib.plan.specs.length, cut: cutsOf(layout).includes(cur.cut) ? cur.cut : 'plain', invert: cur.invert, density, ...(lib.grounds?.[i] != null ? { ground: lib.grounds[i]! } : {}) });
+  return d.built ? d.built.svg : null;
 }
 
 // ----- drawing one slide again -----

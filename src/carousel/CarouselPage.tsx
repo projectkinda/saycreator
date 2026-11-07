@@ -15,8 +15,8 @@ import { clearPageState } from './resetState';
 import { DetectedStyleBox } from './DetectedStyle';
 import { legacySvgRoute, redrawLibraryDeck, templateRoute } from './designLibrary';
 import { presetKey, presetPackFor } from './presets';
-import { previewOptions, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice, type PickTile } from './designLibraryPick';
-import { LayoutPicker } from './LayoutPicker';
+import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
+import { LayoutGallery } from './LayoutGallery';
 import { setActiveReference as setActiveRef } from '../reference/active';
 import { saveOverrides } from '../reference/overrides';
 import { templates as savedTemplates, updateTemplatePack } from '../reference/templates';
@@ -587,9 +587,13 @@ export default function CarouselPage() {
   // ----- the layout picker and Rewrite text (library decks): the code draws; only Rewrite text calls the model -----
   const pickLook = { hasPhoto: pictures.length > 0 };
   const pickHandle = () => options.handle.trim() || doc.script?.brand.handle || '';
-  const pickLoad = (i: number, onTile: (t: PickTile) => void) => {
+  const pickModel = (i: number) => {
     const lib = doc.designed?.library;
-    return lib?.plan ? previewOptions(lib, pickLook, pickHandle(), i, onTile).then(() => undefined) : Promise.resolve();
+    return lib?.plan ? galleryModel(lib, pickLook, pickHandle(), i) : null;
+  };
+  const pickDraw = (i: number) => (layout: Parameters<typeof drawGalleryTile>[4], variant: 0 | 1) => {
+    const lib = doc.designed?.library;
+    return lib?.plan ? drawGalleryTile(lib, pickLook, pickHandle(), i, layout, variant) : Promise.resolve(null);
   };
   /** Puts a redrawn slide into the deck as ONE undo step (the script form of the slide too when its layout or text changed). */
   const putSlide = (i: number, r: Extract<Awaited<ReturnType<typeof redrawLibrarySlide>>, { ok: true }>, label: string, extraCalls = 0, usage?: { input: number; output: number }): string | null => {
@@ -960,7 +964,7 @@ export default function CarouselPage() {
                     return `Could not redesign slide ${i + 1}: ${(e as Error).message}`;
                   }
                 } : undefined}
-                picker={doc.designed?.library?.plan ? <LayoutPicker index={i} load={(onTile) => pickLoad(i, onTile)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
+                gallery={doc.designed?.library?.plan ? <LayoutGallery index={i} model={pickModel(i)} draw={pickDraw(i)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
                 onImageText={(text) => {
                   const r = requestFromText(text, i, packFor(doc.style)?.palette ?? {});
                   if (!r) return 'Say what the picture should show.';

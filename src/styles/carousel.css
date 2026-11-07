@@ -214,8 +214,22 @@
   gap: 20px;
   padding: 16px;
 }
+/* A library slide has the layout gallery under its picture: a wider picture column, and the column scrolls with the page (it is taller than the screen). */
+.cr-card-gallery {
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+.cr-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.cr-left .cr-pic {
+  position: static;
+}
 @media (max-width: 760px) {
-  .cr-card {
+  .cr-card,
+  .cr-card-gallery {
     grid-template-columns: 1fr;
   }
 }
