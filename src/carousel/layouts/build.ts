@@ -9,6 +9,7 @@ import { markerInk, type RLayer } from '../../reference/recreate';
 import { resolveSvgTokens } from '../../reference/faithful';
 import { balanceVertical, clampSlots, finalGuards, fitSlots, recurringLayers, recurringMarkup, resolveCollisions, stepperSvg } from '../designed';
 import { avatarMarkup, chromeFor } from './chrome';
+import { accentDevices, behindDevices, hit, insetGround, overDevices, shapeBoxesOf, type Box, type DeviceCtx, type PlacedDevice } from './devices';
 import { CUT_RATIO, RAKE, coloursFor, geometry, type Geometry, type Roles } from './cuts';
 import { contrast, esc, setWeights } from './draw';
 import { cutsOf, layoutDef } from './library';
@@ -51,6 +52,8 @@ export interface Built {
   edgeDrawn?: boolean;
   /** The layout split into a field part and a plane part. */
   partitioned?: boolean;
+  /** The generic devices drawn on this slide (see reference/deco.ts), with their boxes. */
+  devices?: PlacedDevice[];
 }
 
 const TOKENS = /\$(accentText|accentDisplay|onAccent|bg|text|muted|accent|surface)\b/g;
@@ -163,7 +166,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   const colours = coloursFor(paletteOf(st0), { tone: o.tone ?? (st0.planeStrength === 'subtle' ? 'surface' : undefined), invert: o.invert, tints: !((st0.rhythm?.length ?? 0) > 1) });
   const { F, P } = colours;
   // layouts see the style as drawn on the field (an inverted slide has other roles)
-  const st: LayoutStyle = { ...st0, background: o.invert && st0.background === 'gradient' ? 'flat' : st0.background, accentStyle: F.accent === F.text || contrast(F.accentInk ?? F.accent, F.bg) < 4.5 ? 'marker' : st0.accentStyle, palette: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface, onAccent: F.onAccent } };
+  const st: LayoutStyle = { ...st0, background: o.invert && st0.background === 'gradient' ? 'flat' : st0.background, accentStyle: st0.deco?.penCircle && !st0.devices.marker ? 'text' : F.accent === F.text || contrast(F.accentInk ?? F.accent, F.bg) < 4.5 ? 'marker' : st0.accentStyle, palette: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface, onAccent: F.onAccent } };
   const fail = (errors: string[]): Built => ({ ok: false, errors, svg: '', layers: [], notes: [], palette: { ...F }, cut });
   const v = validateSlideContent(layoutId, fields);
   if (!v.ok) return fail(v.errors);
@@ -186,9 +189,16 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       plan = planWith(variant, st, mkCx(g.field, { noPart }));
     }
   };
+  let ruleY = st.deco?.rule === 'lower-two-thirds' ? 420 : 140;
   if (cut === 'plain') {
     g = geometry('plain');
     plan = planWith(variant, st, mkCx(g.field));
+    // a thin rule across the page with the content in the lower two thirds: when the content does not fit there, the field stays whole and the rule goes under the header
+    if (st.deco?.rule === 'lower-two-thirds' && o.index > 0) {
+      const low = planWith(variant, st, mkCx({ ...g.field, y0: 470 }));
+      if (low.span <= g.field.y1 - 470 - 4) plan = low;
+      else ruleY = 140;
+    } else ruleY = 140;
   } else if (cut === 'edge-v') thin(true);
   else {
     // Part B (the second half of the layout) goes on the plane: measure both halves, then set the plane so B starts just inside it.
@@ -206,6 +216,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     }
     if (!partitioned) thin(true);
   }
+  if (cut !== 'plain') ruleY = 140;
   const key = designKey(plan.type);
   const slots = [...plan.slots].sort((a, b) => a.y - b.y || a.x - b.x);
   // Rows (several body slots) take the slide's items in reading order.
@@ -246,7 +257,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     pack = { ...pack, designs: { ...pack.designs, [key]: ls }, slotMeta: { ...pack.slotMeta, [key]: slotMetaOf(ls) } };
     notes.push(`statement density: the headline is set at ${big.size} px.`);
   }
-  const balanced = plan.noBalance || cut !== 'plain' ? pack : balanceVertical(pack, key, slide, o.handle, plan.fitAs);
+  const balanced = plan.noBalance || cut !== 'plain' || ruleY === 420 ? pack : balanceVertical(pack, key, slide, o.handle, plan.fitAs);
   const col = resolveCollisions(balanced, key, slide, o.handle, plan.fitAs);
   problems.push(...col.problems);
   notes.push(...col.notes);
@@ -266,7 +277,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   if (!r.faithful) return fail(['the drawing could not be made: ' + r.notes.join(' ')]);
   notes.push(...r.notes);
   // The chrome (profile header, counter, swipe cue) uses the field's roles; an item on the plane takes the plane's ink, one that straddles the plane edge an ink that reads on both.
-  const rec = chromeFor({ handle: o.handle, name: o.name, index: o.index, total: o.total, profile: !!st.devices.profileHeader, font: st.fonts.body }).map((c) => {
+  const rec = chromeFor({ handle: o.handle, name: o.name, index: o.index, total: o.total, profile: !!st.devices.profileHeader, font: st.fonts.body, deco: st.deco }).map((c) => {
     if (c.shape) return c;
     const w = c.text.length * c.size * 0.58;
     const x0 = c.anchor === 'end' ? c.x - w : c.anchor === 'middle' ? c.x - w / 2 : c.x;
@@ -285,6 +296,33 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     });
     done = new XMLSerializer().serializeToString(doc.documentElement);
   }
+  // The generic devices of the style (see reference/deco.ts): behind the content, on the headline's runs, and over the slide where no text is.
+  let placed: PlacedDevice[] | undefined;
+  if (st.deco) {
+    const tl = r.layers.find((l) => l.kind === 'text' && l.name === 'title');
+    const roles = S === 'p' ? P : F;
+    const boxOf = (l: { x: number; y: number; width: number; height: number }): Box => ({ x: l.x, y: l.y, w: l.width, h: l.height });
+    const recLayers = recurringLayers(rec, pack, 'c' + o.index).filter((l) => l.kind === 'text');
+    const contentBoxes = r.layers.filter((l) => l.kind === 'text').map(boxOf);
+    const shapeBoxes = shapeBoxesOf(done);
+    // the thin rule keeps to the lower two thirds only when nothing of the slide is across it; otherwise it sits under the header
+    let ruleMode = st.deco.rule;
+    if (ruleMode === 'lower-two-thirds' && (ruleY !== 420 || [...contentBoxes, ...shapeBoxes].some((b) => hit(b, { x: 48, y: 418, w: 984, h: 7 }, 6)))) ruleMode = 'across';
+    const deco = { ...st.deco, ...(ruleMode ? { rule: ruleMode } : {}) };
+    const cx: DeviceCtx = { deco, index: o.index, total: o.total, handle: o.handle || '@yourname', c: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface }, textBoxes: [...contentBoxes, ...recLayers.map(boxOf)], ...(tl ? { title: boxOf(tl) } : {}), marker: !!st.devices.marker, fonts: st.fonts, ruleY: ruleMode === 'lower-two-thirds' ? 420 : 140 };
+    const bd = behindDevices(cx);
+    done = done.replace(/(<rect id="bg"[^>]*\/>)/, (m) => m + bd.svg);
+    const ig = insetGround(done, deco, F.bg);
+    done = ig.svg;
+    const ad = accentDevices(done, { ...cx, c: { ...cx.c, bg: roles.bg, text: roles.text, accent: roles.accent } });
+    done = ad.svg;
+    const od = overDevices(cx, [...bd.placed, ...ad.placed], shapeBoxes, plan.photo ? { x: plan.photo.x, y: plan.photo.y, w: plan.photo.w, h: plan.photo.h } : undefined);
+    done = done.replace(/<\/svg>\s*$/i, () => ad.over + od.svg + '</svg>');
+    if (st.fonts.headline === 'Playfair Display' || st.fonts.body === 'Playfair Display') done = done.replace(/font-family="Playfair Display"/g, 'font-family="Playfair Display" style="font-variant-numeric:lining-nums"');
+    placed = [...bd.placed, ...ad.placed, ...od.placed];
+    notes.push(...bd.notes, ...ad.notes, ...od.notes);
+    if (ig.applied) placed.push({ id: 'inset-card', kind: 'decor', box: { x: deco.insetCard!.margin, y: deco.insetCard!.margin, w: 1080 - 2 * deco.insetCard!.margin, h: 1350 - 2 * deco.insetCard!.margin } });
+  }
   // A plane that holds no text and no shape (this layout does not carry content on a plane, or the content did not reach it) is an empty coloured band: the slide is drawn plain instead.
   if (cut !== 'plain') {
     const items = [...r.layers].filter((l) => l.kind !== 'image' && !/background/.test(String(l.name)) && l.height < 700 && (l.kind !== 'text' || (l as unknown as { text?: string }).text));
@@ -298,5 +336,5 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       return plain;
     }
   }
-  return { ok: problems.length === 0, errors: problems, svg: done, layers: [...r.layers, ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
+  return { ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: done, layers: [...r.layers, ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
 }

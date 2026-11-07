@@ -62,6 +62,8 @@ export interface LayoutStyle {
   accentStyle: 'text' | 'marker';
   /** How loud the planes are (the Shapes toggle): subtle = a surface-toned, thinner plane; bold = an accent plane, thicker. */
   planeStrength?: 'subtle' | 'bold';
+  /** The generic devices this style turns on (see reference/deco.ts). */
+  deco?: import('../../reference/deco').Deco;
 }
 
 export type Fields = Record<string, string | string[]>;

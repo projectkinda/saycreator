@@ -13,6 +13,14 @@ import sm700 from './fonts/space-mono/space-mono-latin-700-normal.woff2?url';
 import isi400 from './fonts/instrument-serif/instrument-serif-latin-400-italic.woff2?url';
 import bn400 from './fonts/bebas-neue/bebas-neue-latin-400-normal.woff2?url';
 import cb400 from './fonts/caveat-brush/caveat-brush-latin-400-normal.woff2?url';
+import eg400 from './fonts/eb-garamond/eb-garamond-latin-400-normal.woff2?url';
+import eg500 from './fonts/eb-garamond/eb-garamond-latin-500-normal.woff2?url';
+import bc600 from './fonts/barlow-condensed/barlow-condensed-latin-600-normal.woff2?url';
+import bc700 from './fonts/barlow-condensed/barlow-condensed-latin-700-normal.woff2?url';
+import lo400 from './fonts/lilita-one/lilita-one-latin-400-normal.woff2?url';
+import pd700 from './fonts/playfair-display/playfair-display-latin-700-normal.woff2?url';
+import pd800 from './fonts/playfair-display/playfair-display-latin-800-normal.woff2?url';
+import ne400 from './fonts/noto-emoji/noto-emoji-sticker-400-normal.woff2?url';
 import type { FontFamily } from './types';
 
 /** Weights that are actually bundled. Any other weight would be faked by the browser. */
@@ -24,6 +32,11 @@ export const FONT_WEIGHTS: Record<FontFamily, readonly number[]> = {
   'Instrument Serif Italic': [400],
   'Bebas Neue': [400],
   'Caveat Brush': [400],
+  'EB Garamond': [400, 500],
+  'Barlow Condensed': [600, 700],
+  'Lilita One': [400],
+  'Playfair Display': [700, 800],
+  'Noto Emoji': [400],
 };
 
 const FACES: { family: FontFamily; weight: number; url: string }[] = [
@@ -41,6 +54,15 @@ const FACES: { family: FontFamily; weight: number; url: string }[] = [
   { family: 'Instrument Serif Italic', weight: 400, url: isi400 },
   { family: 'Bebas Neue', weight: 400, url: bn400 },
   { family: 'Caveat Brush', weight: 400, url: cb400 },
+  { family: 'EB Garamond', weight: 400, url: eg400 },
+  { family: 'EB Garamond', weight: 500, url: eg500 },
+  { family: 'Barlow Condensed', weight: 600, url: bc600 },
+  { family: 'Barlow Condensed', weight: 700, url: bc700 },
+  { family: 'Lilita One', weight: 400, url: lo400 },
+  { family: 'Playfair Display', weight: 700, url: pd700 },
+  { family: 'Playfair Display', weight: 800, url: pd800 },
+  // only the sticker glyphs (16), used for emoji stickers: one weight, drawn in a flat colour
+  { family: 'Noto Emoji', weight: 400, url: ne400 },
 ];
 
 let loading: Promise<void> | null = null;

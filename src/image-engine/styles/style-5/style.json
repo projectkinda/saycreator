@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "style-5",
   "title": "Green elegant serif",
-  "description": "White pages and one deep green card, an italic serif voice and a quiet arrow, for thoughtful, personal teaching.",
+  "description": "White pages and a deep green rounded card, an upright serif with italic accent words, for thoughtful, personal teaching.",
   "suits": {
     "tones": [
       "calm",
@@ -41,13 +41,13 @@
       "bg": "#FFFFFF",
       "text": "#00225B",
       "muted": "#4A5C80",
-      "accent": "#1E8563",
+      "accent": "#16694B",
       "onAccent": "#FFFFFF",
-      "marker": "#1E8563",
+      "marker": "#16694B",
       "onMarker": "#FFFFFF",
-      "surface": "#E9F3EE",
+      "surface": "#E3F0EA",
       "onSurface": "#00225B",
-      "line": "#1E8563"
+      "line": "#16694B"
     },
     "green": {
       "bg": "#1E8563",
@@ -74,16 +74,16 @@
     "closing": "white"
   },
   "fonts": {
-    "headline": "Instrument Serif Italic",
-    "headlineWeight": 400,
-    "body": "Instrument Sans",
+    "headline": "EB Garamond",
+    "headlineWeight": 500,
+    "body": "EB Garamond",
     "bodyWeight": 400,
-    "strong": 600
+    "strong": 500
   },
   "type": {
-    "cover": 120,
-    "headline": 88,
-    "body": 38,
+    "cover": 128,
+    "headline": 92,
+    "body": 44,
     "small": 32,
     "stat": 300,
     "quote": 78,
@@ -233,6 +233,14 @@
         "statement": 1,
         "quote": 0
       }
+    },
+    "devices": {
+      "insetCard": {
+        "page": "#FFFFFF",
+        "margin": 28,
+        "radius": 40
+      },
+      "italicAccent": true
     }
   }
 }

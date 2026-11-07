@@ -16,7 +16,7 @@ export function presetPackFor(name: string, withSaved = true): StylePack | null 
   if (!st) return null;
   const base = packFromStyle(st.spec);
   const marker = st.spec.shape.marker;
-  const pack: StylePack = { ...base, devices: { marker: marker === 'box', underline: marker === 'underline', profileHeader: false, slides: 1, counts: { marker: 0, profileHeader: 0, underline: 0 } } };
+  const pack: StylePack = { ...base, devices: { marker: marker === 'box', underline: marker === 'underline', profileHeader: !!st.spec.library?.devices?.profileHeader, slides: 1, counts: { marker: 0, profileHeader: 0, underline: 0 } } };
   return withSaved ? withOverrides(pack, presetKey(name)) : { ...pack, readKey: presetKey(name) };
 }
 

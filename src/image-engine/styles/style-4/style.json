@@ -73,8 +73,8 @@
     "closing": "blue"
   },
   "fonts": {
-    "headline": "Schibsted Grotesk",
-    "headlineWeight": 800,
+    "headline": "Lilita One",
+    "headlineWeight": 400,
     "body": "Instrument Sans",
     "bodyWeight": 500,
     "strong": 600
@@ -232,6 +232,11 @@
         "big-stat": 0,
         "cta-button": 1
       }
+    },
+    "devices": {
+      "scallop": true,
+      "footerRow": true,
+      "contactClosing": true
     }
   }
 }

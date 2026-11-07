@@ -41,9 +41,9 @@
       "bg": "#CC2B6E",
       "text": "#FFFFFF",
       "muted": "#FFF0F6",
-      "accent": "#FFFFFF",
+      "accent": "#FFE9A8",
       "onAccent": "#CC2B6E",
-      "marker": "#FFFFFF",
+      "marker": "#FFE9A8",
       "onMarker": "#CC2B6E",
       "surface": "#FFFFFF",
       "onSurface": "#2A2A2A",
@@ -74,7 +74,7 @@
     "closing": "white"
   },
   "fonts": {
-    "headline": "Schibsted Grotesk",
+    "headline": "Playfair Display",
     "headlineWeight": 800,
     "body": "Instrument Sans",
     "bodyWeight": 500,
@@ -232,6 +232,12 @@
         "checklist": 1,
         "cta-button": 1
       }
+    },
+    "devices": {
+      "hardShadow": 10,
+      "shadow": "accent",
+      "penCircle": true,
+      "stickers": true
     }
   }
 }

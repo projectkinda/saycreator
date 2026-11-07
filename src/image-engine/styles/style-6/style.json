@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "style-6",
   "title": "Cream social profile",
-  "description": "Warm cream pages with a profile header, bold numbered titles and tick-or-cross pairs, for do and do-not lists.",
+  "description": "Warm cream pages with a profile header and bold numbered titles, for do and do-not lists.",
   "suits": {
     "tones": [
       "friendly",
@@ -78,7 +78,7 @@
     "outline": 3,
     "stroke": 5,
     "badge": "circle",
-    "marker": "box",
+    "marker": "underline",
     "sticker": "pill",
     "hardShadow": 0,
     "decor": "orbs"
@@ -211,6 +211,9 @@
         "statement": 0,
         "checklist": 0
       }
+    },
+    "devices": {
+      "profileHeader": true
     }
   }
 }

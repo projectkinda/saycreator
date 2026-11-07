@@ -183,7 +183,15 @@ export class Draw {
     (this.onPlane ? this.planeShapes : this.shapes).push(markup);
     if (box) this.track(box.y0, box.y1);
   }
-  rect(x: number, y: number, w: number, h: number, fill: string, o: { rx?: number; stroke?: string; sw?: number; opacity?: number } = {}) {
+  rect(x: number, y: number, w: number, h: number, fill: string, o: { rx?: number; stroke?: string; sw?: number; opacity?: number; noShadow?: boolean } = {}) {
+    // device: cards and pills get a solid offset shadow and a thin outline (reference/deco.ts hardShadow)
+    const hs = this.st.deco?.hardShadow;
+    if (hs && !o.noShadow && o.rx && o.rx >= 20 && h >= 72 && w >= 200 && (fill === '$surface' || fill === '$accent')) {
+      const p = this.st.palette;
+      const sh = this.st.deco?.shadow === 'text' || fill === '$accent' || contrast(p.accent, p.bg) < 2.2 || contrast(p.accent, p.surface) < 1.5 ? '$text' : '$accent';
+      this.shape(`<rect x="${r(x + hs)}" y="${r(y + hs)}" width="${r(w)}" height="${r(h)}" rx="${o.rx}" fill="${sh}"/>`);
+      o = { ...o, stroke: o.stroke ?? '$text', sw: o.sw ?? 3 };
+    }
     this.shape(`<rect x="${r(x)}" y="${r(y)}" width="${r(w)}" height="${r(h)}"${o.rx ? ` rx="${o.rx}"` : ''} fill="${fill}"${o.opacity !== undefined ? ` fill-opacity="${o.opacity}"` : ''}${o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw ?? 4}"` : ''}/>`, { y0: y, y1: y + h });
   }
   circle(cx: number, cy: number, rad: number, fill: string, o: { stroke?: string; sw?: number } = {}) {
@@ -240,8 +248,8 @@ export function toggleGraphic(d: Draw, x: number, y: number, w = 320, h = 160) {
   return h;
 }
 /** The arrow inside a pill button. */
-export function arrow(d: Draw, x1: number, cy: number, len = 56) {
-  d.path(`M ${r(x1)} ${r(cy)} L ${r(x1 + len)} ${r(cy)} M ${r(x1 + len - 22)} ${r(cy - 22)} L ${r(x1 + len)} ${r(cy)} L ${r(x1 + len - 22)} ${r(cy + 22)}`, { stroke: '$onAccent', sw: 8, cap: true, y0: cy - 22, y1: cy + 22 });
+export function arrow(d: Draw, x1: number, cy: number, len = 56, ink = '$onAccent') {
+  d.path(`M ${r(x1)} ${r(cy)} L ${r(x1 + len)} ${r(cy)} M ${r(x1 + len - 22)} ${r(cy - 22)} L ${r(x1 + len)} ${r(cy)} L ${r(x1 + len - 22)} ${r(cy + 22)}`, { stroke: ink, sw: 8, cap: true, y0: cy - 22, y1: cy + 22 });
 }
 /** A quote mark drawn as two filled shapes (height 86 k). */
 export function quoteMark(d: Draw, x: number, y: number, k = 1) {

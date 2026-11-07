@@ -595,7 +595,7 @@ export default function CarouselPage() {
       const out = await redrawLibraryDeck(lib, { pack, hasPhoto: pictures.length > 0 }, options.handle.trim());
       apply(patches.setDesigned({ ...doc.designed, slides: out.slides, layouts: out.layouts, library: out.library }, 'Change the style devices'));
       setNotice('Style devices changed: the slides were drawn again from the same plan, no model call.');
-    }
+    } else setNotice('Saved with this style: it applies the next time you make a carousel.');
   };
   // ----- the layout picker and Rewrite text (library decks): the code draws; only Rewrite text calls the model -----
   const pickLook = { hasPhoto: pictures.length > 0 };

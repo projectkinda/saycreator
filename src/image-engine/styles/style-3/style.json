@@ -62,7 +62,10 @@
     }
   },
   "rhythm": [
-    "cream"
+    "cream",
+    "cream",
+    "cream",
+    "ink"
   ],
   "byType": {
     "closing": "cream"
@@ -225,6 +228,9 @@
         "checklist": 1,
         "cta-button": 0
       }
+    },
+    "devices": {
+      "headerRow": true
     }
   }
 }

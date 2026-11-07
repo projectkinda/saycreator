@@ -11,6 +11,7 @@ import type { Designed, DesignedSlide, Look } from './designed';
 import { LAYOUT_IDS, buildSlide, cutsOf, layoutDef, rotateCuts, rotateVariants, validateSlideContent, type Built, type Cut, type Fields, type LayoutId, type LayoutStyle } from './layouts';
 import { coloursFor, fromHsl, inkOn, lightenForText, quietOn, readableInk, toHsl } from './layouts/cuts';
 import { contrast } from './layouts/draw';
+import { withoutSwitches } from '../reference/deco';
 import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
@@ -134,7 +135,12 @@ export function applyOverrides(style: LayoutStyle, ov?: StyleOverrides | null): 
     planeStrength = ov.shapes === 'off' ? undefined : ov.shapes;
     notes.push('Override: shapes ' + ov.shapes + '.');
   }
-  return { style: { ...style, devices, accentStyle, ...(planeStrength ? { planeStrength } : { planeStrength: undefined }) }, notes };
+  if (ov.deco) {
+    const off = Object.entries(ov.deco).filter(([, v]) => v === false).map(([k]) => k);
+    if (off.length) notes.push('Override: ' + off.join(', ') + ' off.');
+  }
+  const deco = withoutSwitches(style.deco, ov.deco);
+  return { style: { ...style, ...(deco ? { deco } : {}), devices, accentStyle, ...(planeStrength ? { planeStrength } : { planeStrength: undefined }) }, notes };
 }
 /** Maps a reference style (the pack the whole-slide read made, with its style brief and signature devices) to the tokens the layouts use. */
 const HEX6 = /^#[0-9a-f]{6}$/i;
@@ -228,6 +234,7 @@ export function styleFromPack(pack: StylePack | null | undefined): { style: Layo
     }
     if (L.closing) base.closing = fixGround(L.closing, notes);
     if (L.flavour) base.flavour = L.flavour as LayoutStyle['flavour'];
+    if (L.deco) base.deco = L.deco;
     if (L.caseStyle && L.caseStyle !== 'none') base.caseStyle = L.caseStyle;
     if (L.caseExceptions?.length) base.caseExceptions = L.caseExceptions;
     if (L.weights) base.weights = { headline: L.weights.headline, body: L.weights.body };
@@ -779,7 +786,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   specs.forEach((s, i) => {
     const d = drawn.get(i);
     if (!d?.built) return;
-    const ds: DesignedSlide = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg } };
+    const ds: DesignedSlide = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}) } };
     designed.slides[String(i)] = ds;
     designed.layouts![String(i)] = s.layout;
   });
@@ -871,7 +878,7 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
   drawn.forEach((d, i) => {
     adjustments.push(...d.adjustments);
     if (d.built) {
-      slides[String(i)] = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg } };
+      slides[String(i)] = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}) } };
       layouts[String(i)] = specs[i].layout;
     }
   });

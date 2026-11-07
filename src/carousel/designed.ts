@@ -30,7 +30,7 @@ export interface DesignedSlide {
   pack: StylePack;
   recurring?: Recurring[];
   /** A slide drawn by the layout library (the default route): the finished drawing and its layers. The slide is drawn from this, not from the pack. */
-  built?: { svg: string; layers: Layer[]; bg: string };
+  built?: { svg: string; layers: Layer[]; bg: string; /** The generic devices drawn on a library slide, with their boxes (checks and tests read them). */ devices?: { id: string; kind: string; box: { x: number; y: number; w: number; h: number }; ink?: string }[] };
 }
 export interface Designed {
   /** By slide number ("0" is the first). A slide that has none uses the pack or template design. */

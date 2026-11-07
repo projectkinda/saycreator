@@ -215,6 +215,17 @@
         "big-stat": 1,
         "quote": 0
       }
+    },
+    "devices": {
+      "gradientText": [
+        "#D63DF2",
+        "#F58FD6",
+        "#6FA8F5",
+        "#7FE8D2"
+      ],
+      "rule": "lower-two-thirds",
+      "footerRow": true,
+      "contactClosing": true
     }
   }
 }

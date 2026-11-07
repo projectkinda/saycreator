@@ -60,7 +60,11 @@ export function mapFont(family: string): FontFamily {
   const f = family.split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
   const exact = FONT_NAMES.find((n) => n.toLowerCase() === f);
   if (exact) return exact;
-  if (/bebas|impact|oswald|anton|condensed|league gothic/.test(f)) return 'Bebas Neue';
+  if (/bebas|impact|anton|league gothic/.test(f)) return 'Bebas Neue';
+  if (/oswald|barlow|condensed|narrow/.test(f)) return 'Barlow Condensed';
+  if (/lilita|chango|chunky|rounded|bubble|fredoka/.test(f)) return 'Lilita One';
+  if (/playfair|didot|bodoni|high.?contrast/.test(f)) return 'Playfair Display';
+  if (/garamond|georgia|times|charter|newsreader|source serif|body serif/.test(f) && !/sans/.test(f)) return 'EB Garamond';
   if (/caveat|brush|script|hand|marker/.test(f)) return 'Caveat Brush';
   if (/mono|courier|menlo|consolas|code/.test(f)) return 'Space Mono';
   if (/serif|georgia|times|newsreader|charter|garamond|playfair|instrument serif/.test(f) && !/sans/.test(f)) return 'Instrument Serif Italic';

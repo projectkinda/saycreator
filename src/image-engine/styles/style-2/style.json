@@ -48,6 +48,18 @@
       "onSurface": "#FFFFFF",
       "line": "#FFFFFF"
     },
+    "deep": {
+      "bg": "#C2410C",
+      "text": "#FFFFFF",
+      "muted": "#FFFFFF",
+      "accent": "#FFFFFF",
+      "onAccent": "#C2410C",
+      "marker": "#FFFFFF",
+      "onMarker": "#C2410C",
+      "surface": "#D6571E",
+      "onSurface": "#FFFFFF",
+      "line": "#FFFFFF"
+    },
     "ink": {
       "bg": "#2B1308",
       "text": "#FFFFFF",
@@ -62,21 +74,26 @@
     }
   },
   "rhythm": [
+    "orange",
+    "deep",
+    "deep",
+    "ink",
+    "deep",
     "orange"
   ],
   "byType": {
-    "closing": "orange"
+    "closing": "deep"
   },
   "fonts": {
-    "headline": "Schibsted Grotesk",
-    "headlineWeight": 800,
+    "headline": "Barlow Condensed",
+    "headlineWeight": 700,
     "body": "Instrument Sans",
     "bodyWeight": 500,
     "strong": 600
   },
   "type": {
-    "cover": 136,
-    "headline": 100,
+    "cover": 170,
+    "headline": 120,
     "body": 44,
     "small": 34,
     "stat": 320,
@@ -228,6 +245,10 @@
         "checklist": 0,
         "cta-button": 0
       }
+    },
+    "devices": {
+      "arrowHeader": true,
+      "outlinedButton": true
     }
   }
 }

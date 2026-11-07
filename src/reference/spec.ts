@@ -27,6 +27,11 @@ export function vocabularyText(): string {
     'Instrument Serif Italic': 'high-contrast italic serif, one weight, for an accent word or line',
     'Bebas Neue': 'tall condensed all-caps display face, one weight',
     'Caveat Brush': 'hand-drawn brush script, one weight',
+    'EB Garamond': 'upright old-style serif for body text',
+    'Barlow Condensed': 'bold condensed sans for tall headlines',
+    'Lilita One': 'chunky rounded display face, one weight',
+    'Playfair Display': 'bold high-contrast serif for headlines',
+    'Noto Emoji': 'a few emoji glyphs only (stickers); never for text',
   };
   const fonts = FONT_FAMILIES.map((f) => `${f} (${LOOK[f] ?? 'a bundled font'}; weights ${FONT_WEIGHTS[f].join(', ')})`).join('; ');
   return [

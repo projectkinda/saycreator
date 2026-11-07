@@ -575,9 +575,11 @@ const LAYOUT_LIST: LayoutDef[] = [
         const bh = 168;
         const bw = v === 0 ? d.w : 640;
         const bx = v === 0 ? d.x0 : d.cx - bw / 2;
-        d.rect(bx, d.y, bw, bh, '$accent', { rx: bh / 2 });
-        d.text('kicker', label, { x: bx + 56, w: bw - 56 - 56 - 80, size: 52, max: 52, weight: 700, fill: '$onAccent', lines: 1, min: 40, at: d.y + (bh - 66) / 2, boxH: 66, align: 'left' });
-        arrow(d, bx + bw - 56 - 56, d.y + bh / 2);
+        const outline = !!st.deco?.outlinedButton;
+        if (outline) d.rect(bx, d.y, bw, bh, 'none', { rx: bh / 2, stroke: '$text', sw: 5, noShadow: true });
+        else d.rect(bx, d.y, bw, bh, '$accent', { rx: bh / 2 });
+        d.text('kicker', label, { x: bx + 56, w: bw - 56 - 56 - 80, size: 52, max: 52, weight: 700, fill: outline ? '$text' : '$onAccent', lines: 1, min: 40, at: d.y + (bh - 66) / 2, boxH: 66, align: 'left' });
+        arrow(d, bx + bw - 56 - 56, d.y + bh / 2, 56, outline ? '$text' : '$onAccent');
         d.y += bh;
         if (v === 1 && sub) {
           d.y += 56;

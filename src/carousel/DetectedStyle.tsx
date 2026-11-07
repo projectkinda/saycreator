@@ -1,8 +1,9 @@
-// The detected style devices as toggles: Highlight marker, Underline, Profile header, Shapes (Off / Subtle / Bold). A change draws the deck again from its stored plan (no model
+// The detected style devices as toggles: Highlight marker, Underline, Profile header, a switch for each generic device of a preset (reference/deco.ts), Shapes (Off / Subtle / Bold). A change draws the deck again from its stored plan (no model
 // call) and is stored with the style (not in the read cache), so reading the same pictures again keeps it.
 import { useActiveReference } from '../reference/active';
 import type { StyleOverrides, StylePack } from '../reference/pack';
 import { applyOverrides, styleFromPack } from './designLibrary';
+import { DECO_LABELS, decoOn, type DecoSwitch } from '../reference/deco';
 
 export function DetectedStyleBox({ onChange, hasDeck, pack: given }: { onChange: (ov: StyleOverrides | null) => void; hasDeck: boolean; /** A built-in preset's pack: it wins over the active reference (the style chosen last is the one in use). */ pack?: StylePack | null }) {
   const { active } = useActiveReference();
@@ -28,6 +29,13 @@ export function DetectedStyleBox({ onChange, hasDeck, pack: given }: { onChange:
       {toggle('Highlight marker', 'marker', now.devices.marker, detected.devices.marker)}
       {toggle('Underline', 'underline', now.devices.underline, detected.devices.underline)}
       {toggle('Profile header', 'profileHeader', now.devices.profileHeader, detected.devices.profileHeader)}
+      {decoOn(detected.deco).map((k: DecoSwitch) => (
+        <label key={k} className="small" style={{ display: 'flex', gap: 8, alignItems: 'center' }} data-testid={'deco-' + k}>
+          <input type="checkbox" aria-label={DECO_LABELS[k]} checked={ov.deco?.[k] !== false} onChange={(e) => set({ deco: { ...ov.deco, [k]: e.target.checked } })} />
+          <span>{DECO_LABELS[k]}</span>
+          <span className="muted">(this style: yes{ov.deco?.[k] === false ? ', switched off by you' : ''})</span>
+        </label>
+      ))}
       <div role="radiogroup" aria-label="Shapes" className="chip-group" style={{ marginTop: 6 }}>
         <span className="small">Shapes</span>
         {(['off', 'subtle', 'bold'] as const).map((s) => (

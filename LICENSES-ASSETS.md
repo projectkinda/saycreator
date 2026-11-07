@@ -56,5 +56,10 @@ Rule: SIL Open Font License 1.1 only, read at the **upstream source** (the `goog
 | Instrument Serif Italic | 400 | high-contrast italic serif (the italic of Instrument Serif, registered as its own family) | Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif) |
 | Bebas Neue | 400 | tall condensed all-caps display | Copyright © 2010 by Dharma Type. |
 | Caveat Brush | 400 | hand-drawn brush script | Copyright 2015 Google Inc. All Rights Reserved. |
+| EB Garamond | 400, 500 | upright old-style serif for body text | Copyright 2017 The EB Garamond Project Authors (https://github.com/octaviopardo/EBGaramond12) |
+| Barlow Condensed | 600, 700 | bold condensed sans | Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow) |
+| Lilita One | 400 | chunky rounded display | Copyright (c) 2011 Juan Montoreano (juan@remolacha.biz), with Reserved Font Names "Lilita One" |
+| Playfair Display | 700, 800 | bold high-contrast serif | Copyright 2017 The Playfair Project Authors (https://github.com/clauseggers/Playfair-Display) |
+| Noto Emoji | 400 | monochrome emoji glyphs; ONLY 16 sticker glyphs are bundled (subset made with harfbuzz) | Copyright 2013 Google LLC (OFL 1.1) |
 
 Not used: Inter (excluded on purpose). Permanent Marker is Apache-2.0 (permissive) but Caveat Brush already covers the brush look under OFL.

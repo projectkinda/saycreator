@@ -77,14 +77,14 @@
   "fonts": {
     "headline": "Instrument Sans",
     "headlineWeight": 600,
-    "body": "Instrument Sans",
+    "body": "EB Garamond",
     "bodyWeight": 400,
-    "strong": 600
+    "strong": 500
   },
   "type": {
     "cover": 112,
     "headline": 84,
-    "body": 38,
+    "body": 42,
     "small": 32,
     "stat": 300,
     "quote": 72,
@@ -214,42 +214,6 @@
   "assets": {},
   "library": {
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
-    "gradients": {
-      "dark": {
-        "angle": 180,
-        "stops": [
-          {
-            "at": 0,
-            "color": "#000000"
-          },
-          {
-            "at": 0.62,
-            "color": "#000000"
-          },
-          {
-            "at": 1,
-            "color": "#4F4523"
-          }
-        ]
-      },
-      "light": {
-        "angle": 180,
-        "stops": [
-          {
-            "at": 0,
-            "color": "#FAFAFA"
-          },
-          {
-            "at": 0.62,
-            "color": "#FAFAFA"
-          },
-          {
-            "at": 1,
-            "color": "#FBEDBA"
-          }
-        ]
-      }
-    },
     "flavour": {
       "cover": "statement",
       "coverVariant": 1,
@@ -272,6 +236,15 @@
         "quote": 1,
         "split-text": 0
       }
+    },
+    "devices": {
+      "glow": {
+        "corner": "br",
+        "color": "#FAECA8"
+      },
+      "sideLabel": true,
+      "pageIndex": true,
+      "footerRow": true
     }
   }
 }
