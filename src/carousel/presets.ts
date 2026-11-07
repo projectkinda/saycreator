@@ -4,7 +4,7 @@
 import { isUserStyle } from '../reference/templates';
 import { withOverrides } from '../reference/overrides';
 import { packFromStyle, type StylePack } from '../reference/pack';
-import { templateRoute } from './designLibrary';
+import { drawOne, styleFromPack, templateRoute } from './designLibrary';
 import { styleByName } from './render';
 
 export const presetKey = (name: string) => 'preset:' + name;
@@ -18,4 +18,13 @@ export function presetPackFor(name: string, withSaved = true): StylePack | null 
   const marker = st.spec.shape.marker;
   const pack: StylePack = { ...base, devices: { marker: marker === 'box', underline: marker === 'underline', profileHeader: false, slides: 1, counts: { marker: 0, profileHeader: 0, underline: 0 } } };
   return withSaved ? withOverrides(pack, presetKey(name)) : { ...pack, readKey: presetKey(name) };
+}
+
+/** The cover of a built-in preset drawn by the layout library (the route the deck itself uses), as an SVG; null for a style that is not a built-in preset. No model call. */
+export async function presetThumbSvg(name: string): Promise<string | null> {
+  const pack = presetPackFor(name, false);
+  if (!pack) return null;
+  const { style } = styleFromPack(pack);
+  const d = await drawOne({ layout: 'statement', fields: { kicker: 'Example', headline: 'A headline that makes people stop', caption: 'And a line that makes them swipe.' }, accents: ['stop'] }, style.flavour?.coverVariant === 1 ? 1 : 0, style, { handle: '@yourname', index: 0, total: 6, cut: 'plain', invert: false, density: 'normal' });
+  return d.built ? d.built.svg : null;
 }

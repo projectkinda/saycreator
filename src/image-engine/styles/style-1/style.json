@@ -1,0 +1,277 @@
+{
+  "schema": 1,
+  "name": "style-1",
+  "title": "Mono editorial glow",
+  "description": "Black and white pages with a soft yellow glow, a clean sans headline and calm body copy, for essays and expert takes.",
+  "suits": {
+    "tones": [
+      "expert",
+      "calm",
+      "clear"
+    ],
+    "keywords": [
+      "essay",
+      "thoughts",
+      "insight",
+      "lesson",
+      "story",
+      "opinion",
+      "founder",
+      "writing",
+      "learn",
+      "think",
+      "idea",
+      "mindset",
+      "quote",
+      "book",
+      "why"
+    ],
+    "slideTypes": [
+      "content",
+      "quote",
+      "cover"
+    ]
+  },
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "none",
+    "note": "Style 1 of the source packs (REFS/Styles): colours, type mood, case and rhythm read by eye and by sampling the rendered slides. No picture, illustration or layout is copied."
+  },
+  "palettes": {
+    "dark": {
+      "bg": "#000000",
+      "text": "#FAFAFA",
+      "muted": "#B5B2A6",
+      "accent": "#FAECA8",
+      "onAccent": "#000000",
+      "marker": "#FAECA8",
+      "onMarker": "#000000",
+      "surface": "#16140D",
+      "onSurface": "#FAFAFA",
+      "line": "#FAFAFA"
+    },
+    "light": {
+      "bg": "#FAFAFA",
+      "text": "#0A0A0A",
+      "muted": "#55534A",
+      "accent": "#0A0A0A",
+      "onAccent": "#FAECA8",
+      "marker": "#FAECA8",
+      "onMarker": "#0A0A0A",
+      "surface": "#F1EEE3",
+      "onSurface": "#0A0A0A",
+      "line": "#0A0A0A"
+    }
+  },
+  "rhythm": [
+    "dark",
+    "light",
+    "light",
+    "dark",
+    "light",
+    "dark"
+  ],
+  "byType": {
+    "closing": "dark"
+  },
+  "fonts": {
+    "headline": "Instrument Sans",
+    "headlineWeight": 600,
+    "body": "Instrument Sans",
+    "bodyWeight": 400,
+    "strong": 600
+  },
+  "type": {
+    "cover": 112,
+    "headline": 84,
+    "body": 38,
+    "small": 32,
+    "stat": 300,
+    "quote": 72,
+    "label": 32,
+    "note": 34,
+    "byline": 32
+  },
+  "caseStyle": "sentence",
+  "headlineLineHeight": 1,
+  "shape": {
+    "radius": 8,
+    "outline": 2,
+    "stroke": 4,
+    "badge": "circle",
+    "marker": "box",
+    "sticker": "pill",
+    "hardShadow": 0,
+    "decor": "orbs"
+  },
+  "spacing": {
+    "margin": 80,
+    "gap": 24,
+    "section": 52
+  },
+  "chrome": "page-number",
+  "layouts": {
+    "cover": [
+      {
+        "use": "cover-stack",
+        "when": {
+          "headlineWordsMax": 7
+        },
+        "params": {}
+      },
+      {
+        "use": "cover-top",
+        "params": {
+          "visual": "none",
+          "kicker": "label"
+        }
+      }
+    ],
+    "content": [
+      {
+        "use": "content-bar",
+        "when": {
+          "bodyWordsMax": 17
+        }
+      },
+      {
+        "use": "content-stack",
+        "params": {
+          "ruleWidth": 120
+        }
+      }
+    ],
+    "step": [
+      {
+        "use": "step-pill",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "step-badge",
+        "params": {
+          "badgeSize": 160
+        }
+      }
+    ],
+    "stat": [
+      {
+        "use": "stat-giant",
+        "when": {
+          "valueCharsMax": 3
+        }
+      },
+      {
+        "use": "stat-card"
+      }
+    ],
+    "checklist": [
+      {
+        "use": "checklist-lines",
+        "when": {
+          "itemsMin": 4
+        }
+      },
+      {
+        "use": "checklist-icons"
+      }
+    ],
+    "beforeafter": [
+      {
+        "use": "ba-split",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "ba-cards"
+      }
+    ],
+    "quote": [
+      {
+        "use": "quote-centre",
+        "when": {
+          "quoteCharsMin": 48
+        }
+      },
+      {
+        "use": "quote-marks"
+      }
+    ],
+    "closing": [
+      {
+        "use": "closing-button",
+        "when": {
+          "headlineWordsMax": 4
+        }
+      },
+      {
+        "use": "closing-bar"
+      }
+    ]
+  },
+  "assets": {},
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "gradients": {
+      "dark": {
+        "angle": 180,
+        "stops": [
+          {
+            "at": 0,
+            "color": "#000000"
+          },
+          {
+            "at": 0.62,
+            "color": "#000000"
+          },
+          {
+            "at": 1,
+            "color": "#4F4523"
+          }
+        ]
+      },
+      "light": {
+        "angle": 180,
+        "stops": [
+          {
+            "at": 0,
+            "color": "#FAFAFA"
+          },
+          {
+            "at": 0.62,
+            "color": "#FAFAFA"
+          },
+          {
+            "at": 1,
+            "color": "#FBEDBA"
+          }
+        ]
+      }
+    },
+    "flavour": {
+      "cover": "statement",
+      "coverVariant": 1,
+      "prefer": [
+        "statement",
+        "lead-statement",
+        "split-text",
+        "quote",
+        "big-question",
+        "numbered-list"
+      ],
+      "avoid": [
+        "stat-grid",
+        "card-grid",
+        "feature-slider",
+        "timeline"
+      ],
+      "variants": {
+        "statement": 1,
+        "quote": 1,
+        "split-text": 0
+      }
+    }
+  }
+}

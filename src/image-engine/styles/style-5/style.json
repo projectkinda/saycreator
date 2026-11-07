@@ -1,0 +1,238 @@
+{
+  "schema": 1,
+  "name": "style-5",
+  "title": "Green elegant serif",
+  "description": "White pages and one deep green card, an italic serif voice and a quiet arrow, for thoughtful, personal teaching.",
+  "suits": {
+    "tones": [
+      "calm",
+      "expert",
+      "warm"
+    ],
+    "keywords": [
+      "reflect",
+      "story",
+      "wellbeing",
+      "coach",
+      "leadership",
+      "think",
+      "learn",
+      "life",
+      "growth",
+      "habit",
+      "mindset",
+      "journal",
+      "sustainable",
+      "finance"
+    ],
+    "slideTypes": [
+      "quote",
+      "content",
+      "cover"
+    ]
+  },
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "none",
+    "note": "Style 5 of the source packs (REFS/Styles): colours, type mood, case and rhythm read by eye and by sampling the rendered slides. No picture, illustration or layout is copied."
+  },
+  "palettes": {
+    "white": {
+      "bg": "#FFFFFF",
+      "text": "#00225B",
+      "muted": "#4A5C80",
+      "accent": "#1E8563",
+      "onAccent": "#FFFFFF",
+      "marker": "#1E8563",
+      "onMarker": "#FFFFFF",
+      "surface": "#E9F3EE",
+      "onSurface": "#00225B",
+      "line": "#1E8563"
+    },
+    "green": {
+      "bg": "#1E8563",
+      "text": "#FFFFFF",
+      "muted": "#FFFFFF",
+      "accent": "#FFFFFF",
+      "onAccent": "#1E8563",
+      "marker": "#FFFFFF",
+      "onMarker": "#1E8563",
+      "surface": "#2B9473",
+      "onSurface": "#FFFFFF",
+      "line": "#FFFFFF"
+    }
+  },
+  "rhythm": [
+    "green",
+    "white",
+    "white",
+    "green",
+    "white",
+    "white"
+  ],
+  "byType": {
+    "closing": "white"
+  },
+  "fonts": {
+    "headline": "Instrument Serif Italic",
+    "headlineWeight": 400,
+    "body": "Instrument Sans",
+    "bodyWeight": 400,
+    "strong": 600
+  },
+  "type": {
+    "cover": 120,
+    "headline": 88,
+    "body": 38,
+    "small": 32,
+    "stat": 300,
+    "quote": 78,
+    "label": 32,
+    "note": 34,
+    "byline": 32
+  },
+  "caseStyle": "sentence",
+  "headlineLineHeight": 1,
+  "shape": {
+    "radius": 44,
+    "outline": 2,
+    "stroke": 4,
+    "badge": "circle",
+    "marker": "underline",
+    "sticker": "pill",
+    "hardShadow": 0,
+    "decor": "orbs"
+  },
+  "spacing": {
+    "margin": 80,
+    "gap": 24,
+    "section": 52
+  },
+  "chrome": "none",
+  "layouts": {
+    "cover": [
+      {
+        "use": "cover-stack",
+        "when": {
+          "headlineWordsMax": 7
+        },
+        "params": {}
+      },
+      {
+        "use": "cover-top",
+        "params": {
+          "visual": "none",
+          "kicker": "label"
+        }
+      }
+    ],
+    "content": [
+      {
+        "use": "content-bar",
+        "when": {
+          "bodyWordsMax": 17
+        }
+      },
+      {
+        "use": "content-stack",
+        "params": {
+          "ruleWidth": 120
+        }
+      }
+    ],
+    "step": [
+      {
+        "use": "step-pill",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "step-badge",
+        "params": {
+          "badgeSize": 160
+        }
+      }
+    ],
+    "stat": [
+      {
+        "use": "stat-giant",
+        "when": {
+          "valueCharsMax": 3
+        }
+      },
+      {
+        "use": "stat-card"
+      }
+    ],
+    "checklist": [
+      {
+        "use": "checklist-lines",
+        "when": {
+          "itemsMin": 4
+        }
+      },
+      {
+        "use": "checklist-icons"
+      }
+    ],
+    "beforeafter": [
+      {
+        "use": "ba-split",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "ba-cards"
+      }
+    ],
+    "quote": [
+      {
+        "use": "quote-centre",
+        "when": {
+          "quoteCharsMin": 48
+        }
+      },
+      {
+        "use": "quote-marks"
+      }
+    ],
+    "closing": [
+      {
+        "use": "closing-button",
+        "when": {
+          "headlineWordsMax": 4
+        }
+      },
+      {
+        "use": "closing-bar"
+      }
+    ]
+  },
+  "assets": {},
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "flavour": {
+      "cover": "lead-statement",
+      "coverVariant": 0,
+      "prefer": [
+        "lead-statement",
+        "quote",
+        "statement",
+        "split-text",
+        "big-question"
+      ],
+      "avoid": [
+        "stat-grid",
+        "card-grid",
+        "feature-slider",
+        "step-numeral"
+      ],
+      "variants": {
+        "statement": 1,
+        "quote": 0
+      }
+    }
+  }
+}

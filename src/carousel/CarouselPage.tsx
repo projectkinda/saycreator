@@ -14,7 +14,8 @@ import { scriptFromBlocks, slideBlocks } from './pasted';
 import { clearPageState } from './resetState';
 import { DetectedStyleBox } from './DetectedStyle';
 import { legacySvgRoute, redrawLibraryDeck, templateRoute } from './designLibrary';
-import { presetKey, presetPackFor } from './presets';
+import { presetKey, presetPackFor, presetThumbSvg } from './presets';
+import { svgToPng } from '../reference/faithful';
 import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
 import { LayoutGallery } from './LayoutGallery';
 import { setActiveReference as setActiveRef } from '../reference/active';
@@ -95,6 +96,18 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
           if (!live) return;
           setPreviews((p) => ({ ...p, [key]: URL.createObjectURL(blob) }));
           continue;
+        }
+        // A built-in preset is previewed by the layout library (the route the deck is drawn with), not by the old templates.
+        if (format !== 'quote') {
+          try {
+            const svg = await presetThumbSvg(st.spec.name);
+            if (svg) {
+              const blob = await svgToPng(svg, 216);
+              if (!live) return;
+              setPreviews((p) => ({ ...p, [key]: URL.createObjectURL(blob) }));
+              continue;
+            }
+          } catch { /* fall back to the old preview */ }
         }
         const sample =
           format === 'quote'

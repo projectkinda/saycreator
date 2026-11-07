@@ -1,0 +1,237 @@
+{
+  "schema": 1,
+  "name": "style-4",
+  "title": "Electric blue play",
+  "description": "Saturated blue and white, chunky friendly capitals and a brand footer, for playful launches, promos and announcements.",
+  "suits": {
+    "tones": [
+      "bold",
+      "friendly"
+    ],
+    "keywords": [
+      "launch",
+      "new",
+      "sale",
+      "event",
+      "app",
+      "brand",
+      "announce",
+      "promo",
+      "free",
+      "win",
+      "fun",
+      "product",
+      "offer",
+      "drop"
+    ],
+    "slideTypes": [
+      "cover",
+      "content",
+      "closing"
+    ]
+  },
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "none",
+    "note": "Style 4 of the source packs (REFS/Styles): colours, type mood, case and rhythm read by eye and by sampling the rendered slides. No picture, illustration or layout is copied."
+  },
+  "palettes": {
+    "blue": {
+      "bg": "#2A06E0",
+      "text": "#FFFFFF",
+      "muted": "#D6D0F8",
+      "accent": "#FFFFFF",
+      "onAccent": "#2A06E0",
+      "marker": "#FFFFFF",
+      "onMarker": "#2A06E0",
+      "surface": "#4626E4",
+      "onSurface": "#FFFFFF",
+      "line": "#FFFFFF"
+    },
+    "white": {
+      "bg": "#FFFFFF",
+      "text": "#2A06E0",
+      "muted": "#5436E6",
+      "accent": "#2A06E0",
+      "onAccent": "#FFFFFF",
+      "marker": "#2A06E0",
+      "onMarker": "#FFFFFF",
+      "surface": "#ECE8FC",
+      "onSurface": "#2A06E0",
+      "line": "#2A06E0"
+    }
+  },
+  "rhythm": [
+    "blue",
+    "blue",
+    "white",
+    "blue",
+    "white",
+    "blue"
+  ],
+  "byType": {
+    "closing": "blue"
+  },
+  "fonts": {
+    "headline": "Schibsted Grotesk",
+    "headlineWeight": 800,
+    "body": "Instrument Sans",
+    "bodyWeight": 500,
+    "strong": 600
+  },
+  "type": {
+    "cover": 150,
+    "headline": 104,
+    "body": 44,
+    "small": 34,
+    "stat": 330,
+    "quote": 80,
+    "label": 32
+  },
+  "caseStyle": "upper",
+  "headlineLineHeight": 1,
+  "shape": {
+    "radius": 44,
+    "outline": 4,
+    "stroke": 6,
+    "badge": "circle",
+    "marker": "box",
+    "sticker": "pill",
+    "hardShadow": 0,
+    "decor": "orbs"
+  },
+  "spacing": {
+    "margin": 80,
+    "gap": 24,
+    "section": 52
+  },
+  "chrome": "strip",
+  "layouts": {
+    "cover": [
+      {
+        "use": "cover-stack",
+        "when": {
+          "headlineWordsMax": 7
+        },
+        "params": {
+          "bar": "last"
+        }
+      },
+      {
+        "use": "cover-top",
+        "params": {
+          "visual": "none",
+          "kicker": "label"
+        }
+      }
+    ],
+    "content": [
+      {
+        "use": "content-bar",
+        "when": {
+          "bodyWordsMax": 17
+        }
+      },
+      {
+        "use": "content-stack",
+        "params": {
+          "ruleWidth": 120
+        }
+      }
+    ],
+    "step": [
+      {
+        "use": "step-badge",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "step-pill",
+        "params": {}
+      }
+    ],
+    "stat": [
+      {
+        "use": "stat-giant",
+        "when": {
+          "valueCharsMax": 3
+        }
+      },
+      {
+        "use": "stat-card"
+      }
+    ],
+    "checklist": [
+      {
+        "use": "checklist-lines",
+        "when": {
+          "itemsMin": 4
+        }
+      },
+      {
+        "use": "checklist-icons"
+      }
+    ],
+    "beforeafter": [
+      {
+        "use": "ba-split",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "ba-cards"
+      }
+    ],
+    "quote": [
+      {
+        "use": "quote-centre",
+        "when": {
+          "quoteCharsMin": 48
+        }
+      },
+      {
+        "use": "quote-marks"
+      }
+    ],
+    "closing": [
+      {
+        "use": "closing-button",
+        "when": {
+          "headlineWordsMax": 4
+        }
+      },
+      {
+        "use": "closing-bar"
+      }
+    ]
+  },
+  "assets": {},
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "flavour": {
+      "cover": "statement",
+      "coverVariant": 0,
+      "prefer": [
+        "statement",
+        "big-stat",
+        "cta-button",
+        "lead-statement",
+        "step-numeral",
+        "checklist"
+      ],
+      "avoid": [
+        "timeline",
+        "card-grid",
+        "quote",
+        "comparison"
+      ],
+      "variants": {
+        "statement": 0,
+        "big-stat": 0,
+        "cta-button": 1
+      }
+    }
+  }
+}

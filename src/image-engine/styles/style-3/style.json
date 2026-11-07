@@ -1,0 +1,230 @@
+{
+  "schema": 1,
+  "name": "style-3",
+  "title": "Cream ink",
+  "description": "Warm cream pages, heavy black type in a three-part header row and a plain black button, for punchy opinions and lists.",
+  "suits": {
+    "tones": [
+      "bold",
+      "expert",
+      "clear"
+    ],
+    "keywords": [
+      "truth",
+      "rules",
+      "opinion",
+      "mistakes",
+      "habits",
+      "lessons",
+      "founder",
+      "career",
+      "advice",
+      "follow",
+      "stop",
+      "never",
+      "principles"
+    ],
+    "slideTypes": [
+      "content",
+      "checklist",
+      "closing"
+    ]
+  },
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "none",
+    "note": "Style 3 of the source packs (REFS/Styles): colours, type mood, case and rhythm read by eye and by sampling the rendered slides. No picture, illustration or layout is copied."
+  },
+  "palettes": {
+    "cream": {
+      "bg": "#FFF9F1",
+      "text": "#0A0A0A",
+      "muted": "#5E5A53",
+      "accent": "#0A0A0A",
+      "onAccent": "#FFF9F1",
+      "marker": "#0A0A0A",
+      "onMarker": "#FFF9F1",
+      "surface": "#F2E9DB",
+      "onSurface": "#0A0A0A",
+      "line": "#0A0A0A"
+    },
+    "ink": {
+      "bg": "#0A0A0A",
+      "text": "#FFF9F1",
+      "muted": "#BDB8AE",
+      "accent": "#FFF9F1",
+      "onAccent": "#0A0A0A",
+      "marker": "#FFF9F1",
+      "onMarker": "#0A0A0A",
+      "surface": "#1D1B19",
+      "onSurface": "#FFF9F1",
+      "line": "#FFF9F1"
+    }
+  },
+  "rhythm": [
+    "cream"
+  ],
+  "byType": {
+    "closing": "cream"
+  },
+  "fonts": {
+    "headline": "Schibsted Grotesk",
+    "headlineWeight": 800,
+    "body": "Instrument Sans",
+    "bodyWeight": 500,
+    "strong": 600
+  },
+  "type": {
+    "cover": 120,
+    "headline": 88,
+    "body": 42,
+    "small": 34,
+    "stat": 300,
+    "quote": 72,
+    "label": 32
+  },
+  "caseStyle": "sentence",
+  "headlineLineHeight": 1,
+  "shape": {
+    "radius": 6,
+    "outline": 3,
+    "stroke": 4,
+    "badge": "square",
+    "marker": "box",
+    "sticker": "pill",
+    "hardShadow": 0,
+    "decor": "blocks"
+  },
+  "spacing": {
+    "margin": 80,
+    "gap": 24,
+    "section": 52
+  },
+  "chrome": "page-number",
+  "layouts": {
+    "cover": [
+      {
+        "use": "cover-stack",
+        "when": {
+          "headlineWordsMax": 7
+        },
+        "params": {}
+      },
+      {
+        "use": "cover-top",
+        "params": {
+          "visual": "none",
+          "kicker": "label"
+        }
+      }
+    ],
+    "content": [
+      {
+        "use": "content-bar",
+        "when": {
+          "bodyWordsMax": 17
+        }
+      },
+      {
+        "use": "content-stack",
+        "params": {
+          "ruleWidth": 120
+        }
+      }
+    ],
+    "step": [
+      {
+        "use": "step-badge",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "step-pill",
+        "params": {}
+      }
+    ],
+    "stat": [
+      {
+        "use": "stat-giant",
+        "when": {
+          "valueCharsMax": 3
+        }
+      },
+      {
+        "use": "stat-card"
+      }
+    ],
+    "checklist": [
+      {
+        "use": "checklist-lines",
+        "when": {
+          "itemsMin": 4
+        }
+      },
+      {
+        "use": "checklist-icons"
+      }
+    ],
+    "beforeafter": [
+      {
+        "use": "ba-split",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "ba-cards"
+      }
+    ],
+    "quote": [
+      {
+        "use": "quote-centre",
+        "when": {
+          "quoteCharsMin": 48
+        }
+      },
+      {
+        "use": "quote-marks"
+      }
+    ],
+    "closing": [
+      {
+        "use": "closing-button",
+        "when": {
+          "headlineWordsMax": 4
+        }
+      },
+      {
+        "use": "closing-bar"
+      }
+    ]
+  },
+  "assets": {},
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "flavour": {
+      "cover": "statement",
+      "coverVariant": 0,
+      "prefer": [
+        "statement",
+        "lead-statement",
+        "numbered-list",
+        "checklist",
+        "split-text",
+        "cta-button"
+      ],
+      "avoid": [
+        "stat-grid",
+        "feature-slider",
+        "timeline",
+        "card-grid"
+      ],
+      "variants": {
+        "statement": 0,
+        "checklist": 1,
+        "cta-button": 0
+      }
+    }
+  }
+}

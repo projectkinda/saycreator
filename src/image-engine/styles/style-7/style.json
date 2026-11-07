@@ -1,0 +1,237 @@
+{
+  "schema": 1,
+  "name": "style-7",
+  "title": "Pink serif stickers",
+  "description": "Hot pink and white with a heavy headline, offset-shadow pills and playful stickers, for fun, social, lifestyle posts.",
+  "suits": {
+    "tones": [
+      "friendly",
+      "bold",
+      "warm"
+    ],
+    "keywords": [
+      "fun",
+      "food",
+      "lifestyle",
+      "travel",
+      "beauty",
+      "party",
+      "favourites",
+      "recipe",
+      "love",
+      "trend",
+      "style",
+      "weekend",
+      "gift",
+      "cute"
+    ],
+    "slideTypes": [
+      "cover",
+      "checklist",
+      "content"
+    ]
+  },
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "none",
+    "note": "Style 7 of the source packs (REFS/Styles): colours, type mood, case and rhythm read by eye and by sampling the rendered slides. No picture, illustration or layout is copied."
+  },
+  "palettes": {
+    "pink": {
+      "bg": "#CC2B6E",
+      "text": "#FFFFFF",
+      "muted": "#FFF0F6",
+      "accent": "#FFFFFF",
+      "onAccent": "#CC2B6E",
+      "marker": "#FFFFFF",
+      "onMarker": "#CC2B6E",
+      "surface": "#FFFFFF",
+      "onSurface": "#2A2A2A",
+      "line": "#2A2A2A"
+    },
+    "white": {
+      "bg": "#FFFFFF",
+      "text": "#2A2A2A",
+      "muted": "#5B5B5B",
+      "accent": "#CC2B6E",
+      "onAccent": "#FFFFFF",
+      "marker": "#CC2B6E",
+      "onMarker": "#FFFFFF",
+      "surface": "#FBE9F1",
+      "onSurface": "#2A2A2A",
+      "line": "#2A2A2A"
+    }
+  },
+  "rhythm": [
+    "pink",
+    "white",
+    "white",
+    "white",
+    "white",
+    "pink"
+  ],
+  "byType": {
+    "closing": "white"
+  },
+  "fonts": {
+    "headline": "Schibsted Grotesk",
+    "headlineWeight": 800,
+    "body": "Instrument Sans",
+    "bodyWeight": 500,
+    "strong": 600
+  },
+  "type": {
+    "cover": 130,
+    "headline": 92,
+    "body": 42,
+    "small": 34,
+    "stat": 300,
+    "quote": 76,
+    "label": 32
+  },
+  "caseStyle": "sentence",
+  "headlineLineHeight": 1,
+  "shape": {
+    "radius": 60,
+    "outline": 3,
+    "stroke": 5,
+    "badge": "circle",
+    "marker": "underline",
+    "sticker": "pill",
+    "hardShadow": 10,
+    "decor": "orbs"
+  },
+  "spacing": {
+    "margin": 80,
+    "gap": 24,
+    "section": 52
+  },
+  "chrome": "none",
+  "layouts": {
+    "cover": [
+      {
+        "use": "cover-stack",
+        "when": {
+          "headlineWordsMax": 7
+        },
+        "params": {}
+      },
+      {
+        "use": "cover-top",
+        "params": {
+          "visual": "none",
+          "kicker": "label"
+        }
+      }
+    ],
+    "content": [
+      {
+        "use": "content-bar",
+        "when": {
+          "bodyWordsMax": 17
+        }
+      },
+      {
+        "use": "content-stack",
+        "params": {
+          "ruleWidth": 120
+        }
+      }
+    ],
+    "step": [
+      {
+        "use": "step-pill",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "step-badge",
+        "params": {
+          "badgeSize": 160
+        }
+      }
+    ],
+    "stat": [
+      {
+        "use": "stat-giant",
+        "when": {
+          "valueCharsMax": 3
+        }
+      },
+      {
+        "use": "stat-card"
+      }
+    ],
+    "checklist": [
+      {
+        "use": "checklist-lines",
+        "when": {
+          "itemsMin": 4
+        }
+      },
+      {
+        "use": "checklist-icons"
+      }
+    ],
+    "beforeafter": [
+      {
+        "use": "ba-split",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "ba-cards"
+      }
+    ],
+    "quote": [
+      {
+        "use": "quote-centre",
+        "when": {
+          "quoteCharsMin": 48
+        }
+      },
+      {
+        "use": "quote-marks"
+      }
+    ],
+    "closing": [
+      {
+        "use": "closing-button",
+        "when": {
+          "headlineWordsMax": 4
+        }
+      },
+      {
+        "use": "closing-bar"
+      }
+    ]
+  },
+  "assets": {},
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "flavour": {
+      "cover": "statement",
+      "coverVariant": 1,
+      "prefer": [
+        "statement",
+        "checklist",
+        "card-grid",
+        "split-text",
+        "cta-button",
+        "numbered-list"
+      ],
+      "avoid": [
+        "stat-bar",
+        "stat-grid",
+        "timeline"
+      ],
+      "variants": {
+        "statement": 1,
+        "checklist": 1,
+        "cta-button": 1
+      }
+    }
+  }
+}

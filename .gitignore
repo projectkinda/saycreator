@@ -34,3 +34,6 @@ test-data/*
 .env
 .env.*
 !.env.example
+
+# Style source packs (SVG exports, ~190 MB)
+REFS/

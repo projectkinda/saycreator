@@ -155,7 +155,7 @@ test('"Pick for me" now lands on the library (the preset is chosen before the ca
   await make(page, 8);
   const p = await project(page);
   expect(p!.route).toBe('designed');
-  expect(['dark-quiet', 'editorial-collage', 'film-paper', 'glass-gradient', 'hot-flat', 'mono-poster', 'object-neon']).toContain(p!.style);
+  expect(['dark-quiet', 'editorial-collage', 'film-paper', 'glass-gradient', 'hot-flat', 'mono-poster', 'object-neon', 'style-1', 'style-2', 'style-3', 'style-4', 'style-5', 'style-6', 'style-7', 'style-8']).toContain(p!.style);
   expect(p!.lib!.source).toBe(p!.style);
   expect(f.calls.length).toBe(1);
   expect(f.refRequests).toEqual([]);

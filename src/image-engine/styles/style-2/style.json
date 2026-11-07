@@ -1,0 +1,233 @@
+{
+  "schema": 1,
+  "name": "style-2",
+  "title": "Bold orange",
+  "description": "A full orange ground with a heavy white headline, numbered points and outlined buttons, for lists and how-to tips.",
+  "suits": {
+    "tones": [
+      "bold",
+      "friendly"
+    ],
+    "keywords": [
+      "tips",
+      "steps",
+      "how",
+      "ways",
+      "list",
+      "hacks",
+      "mistakes",
+      "checklist",
+      "start",
+      "launch",
+      "grow",
+      "guide",
+      "learn",
+      "fast"
+    ],
+    "slideTypes": [
+      "step",
+      "checklist",
+      "cover"
+    ]
+  },
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "none",
+    "note": "Style 2 of the source packs (REFS/Styles): colours, type mood, case and rhythm read by eye and by sampling the rendered slides. No picture, illustration or layout is copied."
+  },
+  "palettes": {
+    "orange": {
+      "bg": "#F76718",
+      "text": "#FFFFFF",
+      "muted": "#FFFFFF",
+      "accent": "#FFFFFF",
+      "onAccent": "#F76718",
+      "marker": "#FFFFFF",
+      "onMarker": "#F76718",
+      "surface": "#FF8238",
+      "onSurface": "#FFFFFF",
+      "line": "#FFFFFF"
+    },
+    "ink": {
+      "bg": "#2B1308",
+      "text": "#FFFFFF",
+      "muted": "#F2CDB8",
+      "accent": "#F76718",
+      "onAccent": "#FFFFFF",
+      "marker": "#F76718",
+      "onMarker": "#2B1308",
+      "surface": "#3F2111",
+      "onSurface": "#FFFFFF",
+      "line": "#F76718"
+    }
+  },
+  "rhythm": [
+    "orange"
+  ],
+  "byType": {
+    "closing": "orange"
+  },
+  "fonts": {
+    "headline": "Schibsted Grotesk",
+    "headlineWeight": 800,
+    "body": "Instrument Sans",
+    "bodyWeight": 500,
+    "strong": 600
+  },
+  "type": {
+    "cover": 136,
+    "headline": 100,
+    "body": 44,
+    "small": 34,
+    "stat": 320,
+    "quote": 78,
+    "label": 32
+  },
+  "caseStyle": "sentence",
+  "headlineLineHeight": 1,
+  "shape": {
+    "radius": 10,
+    "outline": 4,
+    "stroke": 6,
+    "badge": "rounded",
+    "marker": "underline",
+    "sticker": "tag",
+    "hardShadow": 0,
+    "decor": "rings"
+  },
+  "spacing": {
+    "margin": 80,
+    "gap": 24,
+    "section": 52
+  },
+  "chrome": "strip",
+  "layouts": {
+    "cover": [
+      {
+        "use": "cover-stack",
+        "when": {
+          "headlineWordsMax": 7
+        },
+        "params": {}
+      },
+      {
+        "use": "cover-top",
+        "params": {
+          "visual": "none",
+          "kicker": "label"
+        }
+      }
+    ],
+    "content": [
+      {
+        "use": "content-bar",
+        "when": {
+          "bodyWordsMax": 17
+        }
+      },
+      {
+        "use": "content-stack",
+        "params": {
+          "ruleWidth": 120
+        }
+      }
+    ],
+    "step": [
+      {
+        "use": "step-numeral",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "step-badge",
+        "params": {
+          "badgeSize": 160
+        }
+      }
+    ],
+    "stat": [
+      {
+        "use": "stat-giant",
+        "when": {
+          "valueCharsMax": 3
+        }
+      },
+      {
+        "use": "stat-card"
+      }
+    ],
+    "checklist": [
+      {
+        "use": "checklist-lines",
+        "when": {
+          "itemsMin": 4
+        }
+      },
+      {
+        "use": "checklist-icons"
+      }
+    ],
+    "beforeafter": [
+      {
+        "use": "ba-split",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "ba-cards"
+      }
+    ],
+    "quote": [
+      {
+        "use": "quote-centre",
+        "when": {
+          "quoteCharsMin": 48
+        }
+      },
+      {
+        "use": "quote-marks"
+      }
+    ],
+    "closing": [
+      {
+        "use": "closing-button",
+        "when": {
+          "headlineWordsMax": 4
+        }
+      },
+      {
+        "use": "closing-bar"
+      }
+    ]
+  },
+  "assets": {},
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "flavour": {
+      "cover": "statement",
+      "coverVariant": 0,
+      "prefer": [
+        "numbered-list",
+        "listicle-numeral",
+        "step-numeral",
+        "checklist",
+        "cta-button",
+        "stepper",
+        "statement"
+      ],
+      "avoid": [
+        "stat-grid",
+        "card-grid",
+        "quote",
+        "timeline"
+      ],
+      "variants": {
+        "statement": 0,
+        "checklist": 0,
+        "cta-button": 0
+      }
+    }
+  }
+}

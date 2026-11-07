@@ -1,0 +1,216 @@
+{
+  "schema": 1,
+  "name": "style-6",
+  "title": "Cream social profile",
+  "description": "Warm cream pages with a profile header, bold numbered titles and tick-or-cross pairs, for do and do-not lists.",
+  "suits": {
+    "tones": [
+      "friendly",
+      "clear"
+    ],
+    "keywords": [
+      "dos",
+      "donts",
+      "myths",
+      "mistakes",
+      "vs",
+      "better",
+      "habits",
+      "before",
+      "after",
+      "tips",
+      "creator",
+      "personal",
+      "follow",
+      "routine"
+    ],
+    "slideTypes": [
+      "beforeafter",
+      "step",
+      "content"
+    ]
+  },
+  "version": "1.0.0",
+  "basedOn": {
+    "cluster": "none",
+    "note": "Style 6 of the source packs (REFS/Styles): colours, type mood, case and rhythm read by eye and by sampling the rendered slides. No picture, illustration or layout is copied."
+  },
+  "palettes": {
+    "cream": {
+      "bg": "#F9FCEC",
+      "text": "#0A0A0A",
+      "muted": "#585A4F",
+      "accent": "#C2410C",
+      "onAccent": "#FFFFFF",
+      "marker": "#F2C9A8",
+      "onMarker": "#0A0A0A",
+      "surface": "#E6E8DA",
+      "onSurface": "#0A0A0A",
+      "line": "#0A0A0A"
+    }
+  },
+  "rhythm": [
+    "cream"
+  ],
+  "byType": {
+    "closing": "cream"
+  },
+  "fonts": {
+    "headline": "Hanken Grotesk",
+    "headlineWeight": 700,
+    "body": "Instrument Sans",
+    "bodyWeight": 400,
+    "strong": 600
+  },
+  "type": {
+    "cover": 112,
+    "headline": 84,
+    "body": 42,
+    "small": 34,
+    "stat": 300,
+    "quote": 70,
+    "label": 32
+  },
+  "caseStyle": "sentence",
+  "headlineLineHeight": 1,
+  "shape": {
+    "radius": 20,
+    "outline": 3,
+    "stroke": 5,
+    "badge": "circle",
+    "marker": "box",
+    "sticker": "pill",
+    "hardShadow": 0,
+    "decor": "orbs"
+  },
+  "spacing": {
+    "margin": 80,
+    "gap": 24,
+    "section": 52
+  },
+  "chrome": "page-number",
+  "layouts": {
+    "cover": [
+      {
+        "use": "cover-stack",
+        "when": {
+          "headlineWordsMax": 7
+        },
+        "params": {}
+      },
+      {
+        "use": "cover-top",
+        "params": {
+          "visual": "none",
+          "kicker": "label"
+        }
+      }
+    ],
+    "content": [
+      {
+        "use": "content-bar",
+        "when": {
+          "bodyWordsMax": 17
+        }
+      },
+      {
+        "use": "content-stack",
+        "params": {
+          "ruleWidth": 120
+        }
+      }
+    ],
+    "step": [
+      {
+        "use": "step-badge",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "step-pill",
+        "params": {}
+      }
+    ],
+    "stat": [
+      {
+        "use": "stat-giant",
+        "when": {
+          "valueCharsMax": 3
+        }
+      },
+      {
+        "use": "stat-card"
+      }
+    ],
+    "checklist": [
+      {
+        "use": "checklist-lines",
+        "when": {
+          "itemsMin": 4
+        }
+      },
+      {
+        "use": "checklist-icons"
+      }
+    ],
+    "beforeafter": [
+      {
+        "use": "ba-split",
+        "when": {
+          "occurrence": "odd"
+        }
+      },
+      {
+        "use": "ba-cards"
+      }
+    ],
+    "quote": [
+      {
+        "use": "quote-centre",
+        "when": {
+          "quoteCharsMin": 48
+        }
+      },
+      {
+        "use": "quote-marks"
+      }
+    ],
+    "closing": [
+      {
+        "use": "closing-button",
+        "when": {
+          "headlineWordsMax": 4
+        }
+      },
+      {
+        "use": "closing-bar"
+      }
+    ]
+  },
+  "assets": {},
+  "library": {
+    "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
+    "flavour": {
+      "cover": "statement",
+      "coverVariant": 0,
+      "prefer": [
+        "numbered-list",
+        "comparison",
+        "listicle-numeral",
+        "checklist",
+        "split-text",
+        "statement"
+      ],
+      "avoid": [
+        "stat-grid",
+        "feature-slider",
+        "timeline"
+      ],
+      "variants": {
+        "statement": 0,
+        "checklist": 0
+      }
+    }
+  }
+}
