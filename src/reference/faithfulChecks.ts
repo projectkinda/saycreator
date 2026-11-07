@@ -60,11 +60,33 @@ export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: num
     const under = layers.filter((l) => l !== t && l.visible !== false && l.kind !== 'text' && cx >= l.x && cx <= l.x + l.width && cy >= l.y && cy <= l.y + l.height && l.width * l.height < o.canvas.w * o.canvas.h * 0.98);
     const top = under[under.length - 1];
     const bg = top ? flat(top) : o.bg;
-    const fg = typeof t.style.color === 'string' && /^#/.test(t.style.color) ? t.style.color : null;
+    const hexOf = (c: unknown) => (typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c) ? c : null);
+    const fg = hexOf(t.style.color);
     if (!bg || !fg || (top && under.some((u) => u !== top && !flat(u) && u.kind === 'shape'))) continue;
     known++;
-    const c = contrastRgb(parseColor(fg).rgb, parseColor(bg).rgb);
-    if (c < L.minContrast) bad.push(`${t.name} (${c.toFixed(1)}:1)`);
+    // The slot's own colour, and every word that has a colour of its own: an accent run (set in the accent or on a marker) and a word on a marker bar. Each is measured against what is
+    // directly behind it: the bar's colour for a word on a bar, else the flat colour under the slot.
+    const read = (name: string, ink: string, back: string) => {
+      const c = contrastRgb(parseColor(ink).rgb, parseColor(back).rgb);
+      if (c < L.minContrast) bad.push(name + ' (' + c.toFixed(1) + ':1)');
+    };
+    const hl = t.highlight;
+    const hlBg = hexOf(hl?.color);
+    const words = b.lines.flatMap((ln) => ln.words);
+    const own = words.filter((w) => w.start !== undefined);
+    if (!own.length || (!t.runs?.length && !(hl && hlBg))) read(t.name ?? 'text', fg as string, bg as string);
+    else {
+      const seen = new Set<string>();
+      for (const w of own) {
+        const run = t.runs?.find((r) => r.start < w.start! + w.text.length && r.end > w.start!);
+        const ink = hexOf(run?.color) ?? (w.highlighted ? hexOf(hl?.textColor) : null) ?? fg;
+        const back = w.highlighted && hlBg ? hlBg : bg;
+        const key = ink + back;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        read((t.name ?? 'text') + (run || w.highlighted ? ' "' + w.text + '"' : ''), ink, back);
+      }
+    }
   }
   res('contrast', 'Contrast', bad.length === 0, bad.length ? `Low contrast on a flat colour: ${bad.join(', ')}.` : `${known} text slot(s) with a known flat background have enough contrast.`, { limit: L.minContrast });
   return out;

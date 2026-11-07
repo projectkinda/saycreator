@@ -139,10 +139,13 @@ const LAYOUT_LIST: LayoutDef[] = [
     plan(f, v, st, cx) {
       const head = str(f, 'headline');
       const plain = cx.cut === 'plain';
-      const d = place(st, cx, v === 0 && plain ? 'bottom' : 'center', (d) => {
+      const d = place(st, cx, 'center', (d) => {
         if (v === 0) {
-          // a small kicker line over a huge headline that sits on the bottom (a rule on top of the slide holds the top)
-          if (d.real && plain) d.shape('<rect x="' + d.x0 + '" y="' + (d.fy0 + 10) + '" width="' + d.w + '" height="12" rx="6" fill="$accent"/>');
+          // a short accent rule, then a small kicker line over a huge headline: one block, centred in the free area (the rule sits right above the kicker, not at the top of the slide)
+          if (plain) {
+            d.rect(d.x0, d.y, 160, 12, '$accent', { rx: 6 });
+            d.gap(44);
+          }
           d.text('kicker', str(f, 'lead'), { size: 48, weight: 600, fill: '$muted', lines: 2, gap: 20 });
         } else d.text('kicker', str(f, 'lead'), { size: 84, weight: 300, fill: '$muted', lines: 2, min: 48, gap: 48 });
         d.part();
@@ -423,16 +426,21 @@ const LAYOUT_LIST: LayoutDef[] = [
       const d = place(st, cx, 'center', (d) => {
         d.text('title', str(f, 'title'), { size: 88, weight: 800, font: 'h', lines: 2, min: 72, gap: 48 });
         d.part();
-        const nw = v === 0 ? Math.max(120, S(120)) : Math.max(120, S(112));
+        // like the checklist: the rows grow with the type scale (items up to 72 px, numerals up to 144 px) and breathe, so three short items fill the slide
+        // up to three items get the big treatment; four or five keep the compact rows so they still fit above a plane
+        const few = items.length <= 3;
+        const nw = v === 0 ? Math.max(few ? 140 : 120, S(few ? 150 : 120)) : Math.max(120, S(few ? 120 : 112));
         const tx = d.x0 + nw + 24;
         items.forEach((it, i) => {
-          const m = measure(it, st.fonts.body, nearestWeight(st.fonts.body, 500), 44, d.x0 + d.w - tx, 1.25);
-          const h = Math.max(m.h + 2, S(112));
+          const m = measure(it, st.fonts.body, nearestWeight(st.fonts.body, 500), few ? 48 : 44, d.x0 + d.w - tx, 1.25);
+          const h = Math.max(m.h + 2, S(few ? 128 : 112));
           const cy = d.y + h / 2;
           if (v === 1) d.circle(d.x0 + 56, cy, Math.min(56, h / 2), '$accent');
-          d.text('body', String(i + 1), { x: d.x0, w: nw, size: 88, weight: 800, font: 'h', fill: v === 1 ? '$onAccent' : accentInk(st), align: v === 1 ? 'center' : 'left', lines: 1, min: 44, at: d.y, boxH: h });
-          d.text('body', it, { x: tx, w: d.x0 + d.w - tx, size: 44, lines: 2, min: 44, boxH: h });
-          d.y += 24;
+          d.text('body', String(i + 1), { x: d.x0, w: nw, size: v === 1 ? 56 : few ? 96 : 88, max: v === 1 ? 72 : 144, weight: 800, font: 'h', fill: v === 1 ? '$onAccent' : accentInk(st), align: v === 1 ? 'center' : 'left', lines: 1, min: 44, at: d.y, boxH: h });
+          // the last two words stay together, so a wrapped item never leaves one word alone on its second line
+          const glued = it.replace(/ (\S+)$/, ' $1');
+          d.text('body', glued, { x: tx, w: d.x0 + d.w - tx, size: few ? 48 : 44, max: 72, lines: 2, min: 44, boxH: h });
+          d.gap(few ? 40 : 24);
         });
       });
       return mk(d, { type: 'checklist', fitAs: 'numbered-list', slide: { type: 'checklist', headline: str(f, 'title') } });

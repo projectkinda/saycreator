@@ -879,7 +879,7 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
           const ink = markerInk(rec.palette, accentColour);
           const pad = Math.round(filled.style.size * 0.16);
           filled.runs = hits.map((h) => ({ start: h.start, end: h.end, color: ink }));
-          filled.highlight = { words: hits.flatMap((h) => text.slice(h.start, h.end).split(/\s+/).filter(Boolean)), color: accentColour, textColor: ink, paddingX: pad, paddingY: 0, radius: pad, hugLine: true, onlyFirst: hits.length === 1 };
+          filled.highlight = { words: hits.flatMap((h) => text.slice(h.start, h.end).split(/\s+/).filter(Boolean)), color: accentColour, textColor: ink, paddingX: pad, paddingY: 0, radius: pad, hugLine: true, onlyFirst: hits.length === 1, ranges: hits.map((h) => ({ start: h.start, end: h.end })) };
         } else filled.runs = hits.map((h) => ({ start: h.start, end: h.end, color: runColour }));
       }
     }

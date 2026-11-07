@@ -185,8 +185,13 @@ const TRAIL = /[.,;:!?…]+$/;
 /** Whether a token is a marked word run (every word of it is marked); a pill is only drawn when the highlight has padding. */
 function markedTok(layer: TextLayer, marked: Set<string>, t: Tok): boolean {
   if (!layer.highlight || !(layer.highlight.paddingX > 0)) return false;
+  if (layer.highlight.ranges) return inRanges(layer, t);
   const keys = t.text.split(' ').map(wordKey).filter(Boolean);
   return keys.length > 0 && keys.every((q) => marked.has(q));
+}
+/** A token is on the bar when it overlaps one of the highlight's character ranges (position, not word identity). */
+function inRanges(layer: TextLayer, t: Tok): boolean {
+  return !!layer.highlight?.ranges?.some((r) => r.start < t.start + t.text.length && r.end > t.start);
 }
 /** Extra space between two neighbouring tokens when exactly one of them sits on a pill: space + extra - padding is at least MARKER_GAP. */
 function pillGap(layer: TextLayer, marked: Set<string>, a: Tok, b: Tok, spaceW: number): number {
@@ -309,7 +314,7 @@ function layoutStyled(layer0: TextLayer): TextBlock {
       if (k > 0) cx += gapAt(k) - spaceW; // the extra clear space beside a marker pill (the plain space is added after each word)
       // A phrase glued with no-break spaces (so it never breaks across lines) is ONE token here: it is marked when every word of it is marked.
       const keys = t.text.split('\u00A0').map(wordKey).filter(Boolean);
-      const hit = keys.length > 0 && keys.every((q) => marked.has(q)) && (!firstOnly || keys.every((q) => !used.has(q)));
+      const hit = layer.highlight?.ranges ? keys.length > 0 && inRanges(layer, t) : keys.length > 0 && keys.every((q) => marked.has(q)) && (!firstOnly || keys.every((q) => !used.has(q)));
       if (hit) keys.forEach((q) => used.add(q));
       words.push({ text: t.text, start: t.start, x: cx, width: tw[k], highlighted: wholeLines.has(i) || hit });
       let px = cx;

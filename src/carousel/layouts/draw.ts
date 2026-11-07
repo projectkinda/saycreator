@@ -61,7 +61,7 @@ export function lineTexts(text: string, font: FontFamily, weight: number, size: 
     }
     (l as unknown as { balance: boolean }).balance = true;
     if (runs.length) (l as unknown as { runs: unknown }).runs = runs.sort((a, b) => a.start - b.start);
-    if (runs.length && accents.marker) (l as unknown as { highlight: unknown }).highlight = { words: runs.flatMap((r) => text.slice(r.start, r.end).split(/\s+/).filter(Boolean)), color: '#000000', textColor: '#000000', paddingX: Math.round(size * 0.16), paddingY: 0, radius: 4, hugLine: true };
+    if (runs.length && accents.marker) (l as unknown as { highlight: unknown }).highlight = { words: runs.flatMap((r) => text.slice(r.start, r.end).split(/\s+/).filter(Boolean)), color: '#000000', textColor: '#000000', paddingX: Math.round(size * 0.16), paddingY: 0, radius: 4, hugLine: true, ranges: runs.map((r) => ({ start: r.start, end: r.end })) };
   }
   return layoutText(l).lines.map((q) => q.text);
 }

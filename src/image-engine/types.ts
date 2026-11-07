@@ -158,6 +158,11 @@ export interface Highlight {
   lines?: number[];
   /** Mark only the first time each word appears, so "the small thing ... the big thing" marks one "thing". */
   onlyFirst?: boolean;
+  /**
+   * Mark by POSITION: the character ranges of the layer text that sit on the bar. When present they decide which words are marked, instead of the words themselves (so "your head"
+   * never marks an earlier "your"). `words` is still kept for the plan validator and the plain path.
+   */
+  ranges?: { start: number; end: number }[];
 }
 
 export interface TextLayer extends LayerBase {
