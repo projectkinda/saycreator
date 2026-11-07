@@ -1,0 +1,179 @@
+{
+ "library": {
+  "plan": {
+   "title": "Three fixes for an overloaded brain",
+   "specs": [
+    {
+     "layout": "statement",
+     "variant": 0,
+     "fields": {
+      "kicker": "Three fixes",
+      "headline": "Stop storing your life in your head",
+      "caption": "The third one is the one almost nobody does."
+     },
+     "accents": [
+      "your head"
+     ]
+    },
+    {
+     "layout": "split-text",
+     "variant": 1,
+     "fields": {
+      "headline": "Your brain doesn't just hold things",
+      "paragraph": "It keeps things running, and every open loop drains you all day."
+     },
+     "accents": [
+      "hold things"
+     ]
+    },
+    {
+     "layout": "numbered-list",
+     "fields": {
+      "title": "Three things I did",
+      "items": [
+       "Moved my life into a second brain",
+       "Gave it as much context as I could",
+       "Let it work for me"
+      ]
+     },
+     "accents": []
+    },
+    {
+     "layout": "split-text",
+     "variant": 1,
+     "fields": {
+      "headline": "Give it structure, not a graveyard",
+      "paragraph": "Set it up as a wiki so it resurfaces at the right moment."
+     },
+     "accents": [
+      "structure"
+     ]
+    },
+    {
+     "layout": "lead-statement",
+     "variant": 0,
+     "fields": {
+      "lead": "The one almost nobody does",
+      "headline": "Let it work for me"
+     },
+     "accents": [
+      "work for me"
+     ]
+    },
+    {
+     "layout": "checklist",
+     "variant": 1,
+     "fields": {
+      "title": "What it does for me",
+      "items": [
+       "Nudges me when a loop needs me",
+       "Reminds me before every meeting",
+       "Tracks what's waiting on who"
+      ]
+     },
+     "accents": []
+    },
+    {
+     "layout": "cta-button",
+     "variant": 0,
+     "fields": {
+      "headline": "Want to build your own second brain?",
+      "button": "Comment brain",
+      "sub": "I'll send you a document to get started."
+     },
+     "accents": [
+      "build your own"
+     ]
+    }
+   ]
+  },
+  "style": {
+   "palette": {
+    "bg": "#DCF922",
+    "text": "#141311",
+    "muted": "#313310",
+    "accent": "#141311",
+    "surface": "#B0C71B",
+    "onAccent": "#FFFFFF"
+   },
+   "fonts": {
+    "headline": "Schibsted Grotesk",
+    "body": "Instrument Sans"
+   },
+   "background": "flat",
+   "devices": {
+    "marker": true,
+    "profileHeader": false,
+    "underline": false,
+    "planes": false
+   },
+   "accentStyle": "marker",
+   "rhythm": [
+    {
+     "bg": "#DCF922",
+     "text": "#141311",
+     "muted": "#313310",
+     "accent": "#141311",
+     "surface": "#B0C71B",
+     "onAccent": "#FFFFFF"
+    },
+    {
+     "bg": "#141311",
+     "text": "#FDFDF7",
+     "muted": "#B9B8AE",
+     "accent": "#DCF922",
+     "surface": "#353432",
+     "onAccent": "#000000"
+    },
+    {
+     "bg": "#FDFDF7",
+     "text": "#141311",
+     "muted": "#45433C",
+     "accent": "#141311",
+     "surface": "#CACAC6",
+     "onAccent": "#FFFFFF"
+    }
+   ],
+   "closing": {
+    "bg": "#141311",
+    "text": "#FDFDF7",
+    "muted": "#B9B8AE",
+    "accent": "#DCF922",
+    "surface": "#353432",
+    "onAccent": "#000000"
+   },
+   "flavour": {
+    "cover": "statement",
+    "coverVariant": 0,
+    "prefer": [
+     "statement",
+     "big-stat",
+     "stat-bar",
+     "checklist",
+     "numbered-list",
+     "cta-button",
+     "step-numeral",
+     "lead-statement"
+    ],
+    "avoid": [
+     "quote",
+     "comparison",
+     "card-grid",
+     "spotlight",
+     "timeline"
+    ],
+    "variants": {
+     "statement": 0,
+     "big-stat": 0,
+     "checklist": 0,
+     "cta-button": 0
+    }
+   },
+   "caseStyle": "upper",
+   "weights": {
+    "headline": 800,
+    "body": 500
+   }
+  }
+ }
+}

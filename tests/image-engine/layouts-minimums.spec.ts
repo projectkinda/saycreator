@@ -41,6 +41,17 @@ test('every layout: text at or above its role minimum and a block that fills the
           const bot = Math.max(...boxes.map((q: any) => q.y + q.height));
           const fill = (bot - top) / 1000;
           if (fill < 0.55) (thin[id] ??= []).push(`${sname}/v${v + 1}/${len}: fills ${Math.round(fill * 100)}%`);
+          // a real run showed numbered-list leaving 40% empty and lead-statement a big gap above its headline: these two are held to the checklist's fill and to a centred block
+          if (id === 'numbered-list' && fill < 0.65) (thin[id] ??= []).push(`${sname}/v${v + 1}/${len}: fills ${Math.round(fill * 100)}% (needs 65%)`);
+          if (id === 'lead-statement') {
+            // no big empty gap inside the block (the old layout held a rule at the top of the slide and the headline 350 px lower)
+            const ys = [...boxes].sort((m: any, n: any) => m.y - n.y);
+            let big = 0;
+            let reach = ys[0].y + ys[0].height;
+            for (const q of ys.slice(1)) { big = Math.max(big, q.y - reach); reach = Math.max(reach, q.y + q.height); }
+            if (big > 160) (thin[id] ??= []).push(`${sname}/v${v + 1}/${len}: a ${Math.round(big)} px gap inside the block`);
+          }
+          if ((id === 'numbered-list' || id === 'lead-statement') && Math.abs(top - 120 - (1230 - bot)) > 180) (thin[id] ??= []).push(`${sname}/v${v + 1}/${len}: not centred (${Math.round(top - 120)} px above, ${Math.round(1230 - bot)} px below)`);
         }
       }
     }
