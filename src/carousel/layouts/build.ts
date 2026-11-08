@@ -7,7 +7,7 @@ import type { Layer } from '../../image-engine/types';
 import { designKey, packSlide, parsePack, slotMetaOf, type SignatureDevices, type StylePack } from '../../reference/pack';
 import { markerInk, type RLayer } from '../../reference/recreate';
 import { resolveSvgTokens } from '../../reference/faithful';
-import { balanceVertical, clampSlots, finalGuards, fitSlots, recurringLayers, recurringMarkup, resolveCollisions, stepperSvg } from '../designed';
+import { balanceVertical, clampSlots, finalGuards, fitSlots, readingOrder, recurringLayers, recurringMarkup, resolveCollisions, stepperSvg } from '../designed';
 import { avatarMarkup, chromeFor } from './chrome';
 import { cropRect, parseRef } from './images';
 import { artDevices } from './artDevices';
@@ -214,7 +214,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     if (!partitioned) thin(true);
   }
   const key = designKey(plan.type);
-  const slots = [...plan.slots].sort((a, b) => a.y - b.y || a.x - b.x);
+  const slots = [...plan.slots].sort(readingOrder);
   // Rows (several body slots) take the slide's items in reading order.
   const bodySlots = slots.filter((s) => s.role === 'body');
   const slide: Record<string, unknown> = { ...plan.slide };
@@ -230,10 +230,12 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   if (!parsed.ok) return fail(parsed.reasons);
   // The layout's own measured boxes replace the boxes the parser guessed from the sample words.
   let k = 0;
+  const idText = new Map<string, string>(); // which text each text layer was planned for (the layer keeps its box and its size)
   const layers = (parsed.pack.designs[key] ?? []).map((l): RLayer => {
     if (l.kind !== 'text') return l;
     const s = slots[k++];
     if (!s) return l;
+    idText.set(l.id, s.text);
     return { ...l, x: s.x, y: s.y, width: s.w, height: s.h, text: s.text, style: { ...l.style, size: s.size, weight: s.weight, align: s.align, valign: s.valign ?? 'top', lineHeight: s.lh }, slot: { minSize: s.min, maxLines: s.lines, maxSize: Math.max(s.size, s.min) }, autoFit: { minSize: Math.min(s.min, s.size) } } as RLayer;
   });
   const devices = { ...st.devices, slides: 1, counts: { marker: 0, profileHeader: 0, underline: 0 } } as SignatureDevices;
@@ -268,6 +270,13 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     if (ink && ink.toUpperCase() !== roles.accent.toUpperCase()) pal.accentInk = ink;
     else delete pal.accentInk;
     pack = { ...pack, palette: pal };
+  }
+  // Rows take a slide's items in reading order of THEIR FINAL boxes (the fit steps may have moved a box by a few px): each layer is given the text it was planned for, so side-by-side cells
+  // (a figure and its label) never trade texts.
+  if (bodySlots.length >= 2) {
+    const rowsNow = (pack.designs[key] ?? []).filter((l) => l.kind === 'text' && l.name === 'body').sort(readingOrder);
+    const items = rowsNow.map((l) => idText.get(l.id));
+    if (rowsNow.length === bodySlots.length && items.every((t): t is string => !!t)) slide.items = items;
   }
   const r = packSlide(pack, plan.type, slide, o.handle);
   if (!r.faithful) return fail(['the drawing could not be made: ' + r.notes.join(' ')]);
@@ -324,7 +333,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     const top = Math.min(1350, ...[...contentBoxes, ...shapeBoxes].map((b) => b.y));
     const ruleY = st.deco.rule === 'lower-two-thirds' && cut === 'plain' ? Math.max(140, Math.min(420, Math.round(top - 44))) : 140;
     const deco = { ...st.deco };
-    const cx: DeviceCtx = { deco, index: o.index, total: o.total, handle: o.handle || '@yourname', c: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface }, textBoxes: [...contentBoxes, ...recLayers.map(boxOf)], ...(tl ? { title: boxOf(tl) } : {}), marker: !!st.devices.marker, fonts: st.fonts, ruleY };
+    const cx: DeviceCtx = { deco, index: o.index, total: o.total, handle: o.handle || '@yourname', c: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface }, textBoxes: [...contentBoxes, ...recLayers.map(boxOf)], hasAccent: (Array.isArray(fields0.accent) ? fields0.accent.length : fields0.accent ? 1 : 0) > 0, pictureBoxes: (plan.images ?? []).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })), ...(tl ? { title: boxOf(tl) } : {}), marker: !!st.devices.marker, fonts: st.fonts, ruleY };
     const bd = behindDevices(cx);
     done = done.replace(/(<rect id="bg"[^>]*\/>)/, (m) => m + bd.svg);
     const ig = insetGround(done, deco, F.bg);
@@ -334,7 +343,9 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     const od = overDevices(cx, [...bd.placed, ...ad.placed], shapeBoxes, plan.photo ? { x: plan.photo.x, y: plan.photo.y, w: plan.photo.w, h: plan.photo.h } : undefined);
     // vector art from the preset's pack (deco.art): only where no text, shape or picture is
     const art = artDevices(cx, [...bd.placed, ...ad.placed, ...od.placed], shapeBoxes, pics.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })));
-    done = done.replace(/<\/svg>\s*$/i, () => ad.over + od.svg + art.behind + art.over + '</svg>');
+    done = done.replace(/<\/svg>\s*$/i, () => ad.over + od.svg + art.over + '</svg>');
+    // a glow sits behind ALL content: right after the ground (and the inset card, when the style has one)
+    if (art.behind) done = done.replace(ig.applied ? /(<rect id="bg"[^>]*\/><rect [^>]*rx="[\d.]+"[^>]*\/>)/ : /(<rect id="bg"[^>]*\/>)/, (m) => m + art.behind);
     if (st.fonts.headline === 'Playfair Display' || st.fonts.body === 'Playfair Display') done = done.replace(/font-family="Playfair Display"/g, 'font-family="Playfair Display" style="font-variant-numeric:lining-nums"');
     placed = [...bd.placed, ...ad.placed, ...od.placed, ...art.placed];
     notes.push(...bd.notes, ...ad.notes, ...od.notes, ...art.notes);

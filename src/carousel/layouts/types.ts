@@ -37,6 +37,8 @@ export interface Ground {
 export interface Flavour {
   cover?: LayoutId;
   coverVariant?: 0 | 1;
+  /** The layout slide 1 takes when its headline is a question (a preset that has a question form, like statement-question). */
+  coverQuestion?: LayoutId;
   prefer?: LayoutId[];
   avoid?: LayoutId[];
   variants?: Partial<Record<LayoutId, 0 | 1>>;
@@ -118,7 +120,7 @@ export interface Slot {
   lines: number;
   min: number;
   lh: number;
-  valign?: 'top' | 'middle';
+  valign?: 'top' | 'middle' | 'bottom';
   /** Drawn after part(): it sits on the plane (the engine gives it the plane's colours). */
   plane?: boolean;
 }

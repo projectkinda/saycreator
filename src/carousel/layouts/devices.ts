@@ -3,11 +3,12 @@
 // Accent devices change the headline's runs: an italic serif for the accent words, a gradient fill, a pen circle. Every placed device reports its box so the checks can see it.
 import { measureWidth } from '../../image-engine/draw/text';
 import type { Deco } from '../../reference/deco';
+import { artItem, artMarkup } from '../../image-engine/art/art';
 import { contrast } from './draw';
 import type { FontFamily } from '../../image-engine/types';
 
 export interface Box { x: number; y: number; w: number; h: number; /** For a text box: the clear gap a device keeps from it (one line height of that text). */ gap?: number }
-export interface PlacedDevice { id: string; kind: 'chrome' | 'decor' | 'accent' | 'sticker'; box: Box; /** What it is drawn in, to be checked against the ground. */ ink?: string }
+export interface PlacedDevice { id: string; kind: 'chrome' | 'decor' | 'accent' | 'sticker'; box: Box; /** What it is drawn in, to be checked against the ground. */ ink?: string; /** How opaque it is drawn (a soft glow). */ opacity?: number }
 export interface DevicePlan { svg: string; placed: PlacedDevice[]; notes: string[] }
 
 export interface DeviceCtx {
@@ -25,6 +26,10 @@ export interface DeviceCtx {
   marker: boolean;
   /** Fonts of the style. */
   fonts: { headline: FontFamily; body: FontFamily };
+  /** Whether the slide has an accent word (a hand-drawn ring is only drawn on a slide that does). */
+  hasAccent?: boolean;
+  /** The boxes of the slide's pictures (nothing is ever drawn over or within 24 px of one). */
+  pictureBoxes?: Box[];
   /** Where the thin rule sits (px). */
   ruleY?: number;
 }
@@ -56,6 +61,8 @@ export function penLoop(b: Box, seed: number): string {
   return 'M ' + pts.join(' L ');
 }
 
+/** A sticker goes on every third slide at most (the 2nd, 5th, 8th ...). */
+export const STICKER_EVERY = 3;
 const STICKERS = ['\u{1F525}', '✨', '\u{1F4A1}', '\u{1F3AF}', '\u{1F680}', '\u{1F4AC}', '\u{1F440}', '⭐', '\u{1F389}', '❤', '\u{1F449}', '✅', '\u{1F353}', '\u{1F422}', '☂', '\u{1F4A5}'];
 
 /** Device markup that sits behind the content (right after the ground). */
@@ -155,8 +162,18 @@ export function accentDevices(svg: string, x: DeviceCtx): { svg: string; over: s
       const w = isItal ? measureWidth(s.text, ital.fam, ital.w, Math.round(size * ital.k)) : measureWidth(s.text, fam, weight, size);
       const b: Box = { x: s.x, y: s.y - size * 0.8, w, h: size * 0.98 };
       const ink = readable([x.c.accent, x.c.text], x.c.bg, 3);
-      over += `<path d="${penLoop(b, hash(s.text + x.index))}" fill="none" stroke="${ink}" stroke-width="${Math.max(5, Math.round(size / 18))}" stroke-linecap="round" stroke-linejoin="round"/>`;
-      placed.push({ id: 'pen-circle', kind: 'accent', box: { x: b.x - 16, y: b.y - 10, w: b.w + 32, h: b.h + 20 }, ink });
+      // the ring is drawn tight round the accent word (its measured box and a small margin): the pack's own ring art when the preset lists one, else a generated hand-drawn loop
+      const rings = (x.deco.art ?? []).map((p) => artItem(p.item)).filter((it): it is NonNullable<typeof it> => !!it?.ring);
+      let box = { x: b.x - 16, y: b.y - 10, w: b.w + 32, h: b.h + 20 };
+      let drawn = false;
+      if (rings.length) {
+        const it = rings[hash(s.text + x.index) % rings.length];
+        box = { x: b.x - 14, y: b.y - 8, w: b.w + 28, h: b.h + 16 };
+        const mk = artMarkup(it, box.x, box.y, box.w, { primary: ink, accent: ink, ink, surface: x.c.surface, bg: x.c.bg }, `ring${x.index}`, undefined, box.h);
+        if (mk) { over += mk; drawn = true; }
+      }
+      if (!drawn) over += `<path d="${penLoop(b, hash(s.text + x.index))}" fill="none" stroke="${ink}" stroke-width="${Math.max(5, Math.round(size / 18))}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      placed.push({ id: 'pen-circle', kind: 'accent', box, ink });
     }
   }
   return { svg, over, placed, notes };
@@ -198,11 +215,12 @@ export function overDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box
     placed.push({ id: 'contact-icons', kind: 'chrome', box: { x: 50, y: 1208, w: 36, h: 82 }, ink: c });
   }
   // stickers: one emoji glyph in an empty corner. It keeps a clear gap from every text (at least one line height of that text, and from the headline's whole box), 24 px from shapes and pictures
-  if (d.stickers) {
+  // Stickers are rare: at most one on every third slide (never two in a row), never on a slide whose accent word is ringed (ring > sticker > art), and never within 24 px of a picture, card, pill or button.
+  if (d.stickers && x.index % STICKER_EVERY === 1 && !taken.some((p) => p.id === 'pen-circle')) {
     const seed = hash(x.handle + x.index);
     const glyph = STICKERS[(seed + x.index * 5) % STICKERS.length];
     const S = 118;
-    const busy: Box[] = [...x.textBoxes.map((b) => ({ ...b, gap: Math.max(b.gap ?? 0, 24) })), ...shapeBoxes.map((b) => ({ ...b, gap: 24 })), ...taken.filter((p) => p.id !== 'glow' && p.id !== 'rule' && p.id !== 'scallop' && p.id !== 'inset-card').map((p) => ({ ...p.box, gap: 24 })), ...(photo ? [{ ...photo, gap: 24 }] : [])];
+    const busy: Box[] = [...x.textBoxes.map((b) => ({ ...b, gap: Math.max(b.gap ?? 0, 24) })), ...shapeBoxes.map((b) => ({ ...b, gap: 24 })), ...(x.pictureBoxes ?? []).map((b) => ({ ...b, gap: 24 })), ...taken.filter((p) => p.id !== 'glow' && p.id !== 'rule' && p.id !== 'scallop' && p.id !== 'inset-card').map((p) => ({ ...p.box, gap: 24 })), ...(photo ? [{ ...photo, gap: 24 }] : [])];
     const free = (c: Box) => !busy.some((b) => hit(c, b, b.gap ?? 24));
     const corners = [{ x: 48, y: 150 }, { x: 1032 - S, y: 150 }, { x: 1032 - S, y: 1250 - S }, { x: 48, y: 1250 - S }];
     let spot: Box | null = null;

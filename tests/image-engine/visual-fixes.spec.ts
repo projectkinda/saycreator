@@ -131,5 +131,7 @@ test('style-7: a sticker keeps a clear gap of one line height from every text an
     seen.push(`slide ${row.i + 1}: sticker at ${Math.round(st.box.x)},${Math.round(st.box.y)} (spare gap ${min})`);
   }
   console.log('S7 STICKERS ' + n + ' of 8: ' + seen.join('; '));
-  expect(n, 'stickers are still drawn where there is room').toBeGreaterThanOrEqual(2);
+  // stickers are rare now: at most one on every third slide (decor-clutter.spec.ts), still drawn where there is room
+  expect(n, 'a sticker is still drawn where there is room').toBeGreaterThanOrEqual(1);
+  expect(n, 'at most one sticker per 3 slides').toBeLessThanOrEqual(3);
 });

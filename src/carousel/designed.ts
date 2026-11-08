@@ -358,12 +358,18 @@ const HERO_LAYOUTS = new Set<string>(['statement', 'cta-button', 'split-text']);
 /** The size range of a slide's main headline: 110 to 150 px on a cover and on the hero layouts (statement, cta-button, split-text), at least 72 px on every other slide. */
 export const titleFloor = (slide: Record<string, unknown>, layout: string | null): { min: number; max: number } => (String(slide.type) === 'stat' ? { min: 40, max: 48 } : String(slide.type) === 'cover' || (!!layout && HERO_LAYOUTS.has(layout)) ? { min: 110, max: 150 } : { min: 72, max: 150 });
 
+/**
+ * Reading order of text boxes: top to bottom, and boxes whose tops are within 30 px of each other count as ONE row (left to right). The layouts, the build and the filler all sort with this
+ * one comparator, so a cell's number and its label (side by side with other cells, a few px apart) are never swapped when a fit step nudges a box by a few px.
+ */
+export const readingOrder = (a: { x: number; y: number }, b: { x: number; y: number }): number => (Math.abs(a.y - b.y) < 30 ? a.x - b.x || a.y - b.y : a.y - b.y);
+
 /** Fills the slide's own words into a design the way the renderer does (a checklist's item k goes in row k). Null for a one-row checklist, which the renderer grows itself. */
 function fillerFor(pack: StylePack, key: keyof StylePack['designs'], slide: Record<string, unknown>, handle: string): ((ls: RLayer[]) => Layer[]) | null {
   const layers = pack.designs[key] ?? [];
   const texts: Partial<Record<string, string>> = { ...(textsOf(slide as never, handle) as Record<string, string>) };
   const rowsMode = (key === 'list' || (Array.isArray(slide.steps) && slide.steps.length >= 2)) && !!texts.body;
-  const rows = rowsMode ? layers.filter((l) => l.kind === 'text' && l.name === 'body').sort((a, b) => a.y - b.y) : [];
+  const rows = rowsMode ? layers.filter((l) => l.kind === 'text' && l.name === 'body').sort(readingOrder) : [];
   if (rowsMode && rows.length < 2) return null;
   const items = (texts.body ?? '').split('\n').filter(Boolean);
   const rowName = new Map<string, string>();
