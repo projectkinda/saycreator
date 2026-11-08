@@ -30,7 +30,7 @@ export interface DesignedSlide {
   pack: StylePack;
   recurring?: Recurring[];
   /** A slide drawn by the layout library (the default route): the finished drawing and its layers. The slide is drawn from this, not from the pack. */
-  built?: { svg: string; layers: Layer[]; bg: string; /** The generic devices drawn on a library slide, with their boxes (checks and tests read them). */ devices?: { id: string; kind: string; box: { x: number; y: number; w: number; h: number }; ink?: string }[] };
+  built?: { svg: string; layers: Layer[]; bg: string; /** The pictures drawn on a library slide (an image field was set): their slots on the 1080 x 1350 slide. */ images?: { src: string; x: number; y: number; w: number; h: number }[]; /** The generic devices drawn on a library slide, with their boxes (checks and tests read them). */ devices?: { id: string; kind: string; box: { x: number; y: number; w: number; h: number }; ink?: string }[] };
 }
 export interface Designed {
   /** By slide number ("0" is the first). A slide that has none uses the pack or template design. */
@@ -105,6 +105,8 @@ export interface Look {
   brief?: string;
   /** The person has a photo of their own to put in the slides. Without one, no slide uses the photo-led layout and no empty picture frame is drawn. */
   hasPhoto?: boolean;
+  /** The project's pictures as metadata only (id, pixel size): no pixels. The layouts with picture slots are offered only when enough of them fit; the code places them. */
+  images?: { id: string; width: number; height: number }[];
 }
 
 // ----- the estimate, shown before anything runs -----

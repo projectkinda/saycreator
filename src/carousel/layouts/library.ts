@@ -3,10 +3,12 @@
 // then runs the existing fit, balance, collision and final checks and draws planes, accent, chrome and background.
 import { measureWidth } from '../../image-engine/draw/text';
 import { measure, lineTexts, nearestWeight, Draw, CARD_PAD, S, setScale, accentInk, checkIcon, segmentBar, solidBar, sliderGraphic, toggleGraphic, arrow, quoteMark, questionMark } from './draw';
+import { IMAGE_LAYOUTS } from './images';
+import { MORE_LAYOUTS } from './more';
 import type { Cut, Cx, Fields, LayoutDef, LayoutId, LayoutStyle, Plan, Slot } from './types';
 
-const str = (f: Fields, k: string) => (typeof f[k] === 'string' ? (f[k] as string).trim() : '');
-const arr = (f: Fields, k: string) => (Array.isArray(f[k]) ? (f[k] as string[]).map((x) => x.trim()).filter(Boolean) : []);
+export const str = (f: Fields, k: string) => (typeof f[k] === 'string' ? (f[k] as string).trim() : '');
+export const arr = (f: Fields, k: string) => (Array.isArray(f[k]) ? (f[k] as string[]).map((x) => x.trim()).filter(Boolean) : []);
 const lastWord = (t: string) => t.replace(/[^\p{L}\p{N}%$\s'-]/gu, '').trim().split(/\s+/).pop() ?? '';
 
 const KS = [1, 1.15, 1.3225, 1.5209, 1.749];
@@ -19,7 +21,7 @@ const AIM = FILL + 0.02;
  * height, then centred; only when every text has reached its largest size and it is still short are the gaps spread (to 65%). Part A (above part()) is centred in the
  * field, part B starts where the engine put the plane.
  */
-function place(st: LayoutStyle, cx: Cx, anchor: 'center' | 'top' | 'bottom', fn: (d: Draw) => void): Draw {
+export function place(st: LayoutStyle, cx: Cx, anchor: 'center' | 'top' | 'bottom', fn: (d: Draw) => void): Draw {
   const f = cx.field;
   const fieldH = f.y1 - f.y0;
   const plan = (k: number) => {
@@ -68,7 +70,7 @@ export const stripArticle = (p: string): string => {
   return out || t;
 };
 /** The accent phrases of a slide: the layout's own `accent` field (one phrase or up to 3), else the last word of the headline. */
-const withAccent = (slide0: Record<string, unknown>, headline: string, f: Fields, st: LayoutStyle): Record<string, unknown> => {
+export const withAccent = (slide0: Record<string, unknown>, headline: string, f: Fields, st: LayoutStyle): Record<string, unknown> => {
   let slide = slide0;
   const list = Array.isArray(f.accent) ? arr(f, 'accent').slice(0, 3) : str(f, 'accent') ? [str(f, 'accent')] : [lastWord(headline)];
   const phrases = list.map(stripArticle).filter(Boolean);
@@ -88,8 +90,8 @@ const heroTitle = (d: Draw, text: string, align: 'left' | 'center', size = 140, 
   }
   return d.text('title', text, { size: sz, max: Math.max(sz, 150), weight: 800, font: 'h', lines, min: 72, align, gap });
 };
-const kickerOf = (d: Draw, text: string, align: 'left' | 'center', gap = 24) => text && d.text('kicker', text, { size: 48, weight: 600, fill: '$muted', align, lines: 1, gap });
-const mk = (d: Draw, p: Pick<Plan, 'type' | 'fitAs' | 'slide'> & Partial<Plan>): Plan => ({
+export const kickerOf = (d: Draw, text: string, align: 'left' | 'center', gap = 24) => text && d.text('kicker', text, { size: 48, weight: 600, fill: '$muted', align, lines: 1, gap });
+export const mk = (d: Draw, p: Pick<Plan, 'type' | 'fitAs' | 'slide'> & Partial<Plan>): Plan => ({
   slots: d.slots,
   shapes: d.shapes.join(''),
   planeShapes: d.planeShapes.join(''),
@@ -97,10 +99,11 @@ const mk = (d: Draw, p: Pick<Plan, 'type' | 'fitAs' | 'slide'> & Partial<Plan>):
   parts: d.partFrom !== undefined ? { hA: Math.max(0, d.partFrom - Math.min(d.minY, d.partFrom)), hB: Math.max(0, d.maxY - (d.partStart ?? d.maxY)) } : undefined,
   stepperPlane: d.hasB,
   k: d.k,
+  ...(d.images.length ? { images: d.images } : {}),
   ...p,
 });
 
-const LAYOUT_LIST: LayoutDef[] = [
+const BASE_LIST: LayoutDef[] = [
   // 1 ------------------------------------------------------------------------------------------------------------------------------
   {
     id: 'statement', label: 'Statement', shapes: ['claim', 'hook'], variants: ['left', 'centred'],
@@ -283,7 +286,7 @@ const LAYOUT_LIST: LayoutDef[] = [
         d.text('number', str(f, 'number'), { size: 480, weight: 800, font: 'h', fill: accentInk(st), align: al, lines: 1, min: 120, gap: 28 });
         d.part();
         d.text('title', str(f, 'label'), { size: 48, max: 48, weight: 700, font: 'h', align: al, lines: 2, min: 40, gap: 28 });
-        if (str(f, 'source')) d.text('body', str(f, 'source'), { size: 44, fill: '$muted', align: al, lines: 2 });
+        if (str(f, 'source')) d.text('body', str(f, 'source'), { size: 44, max: 48, fill: '$muted', align: al, lines: 2 });
         d.underline(d.x0, al);
       });
       return mk(d, { type: 'stat', fitAs: 'big-stat', slide: { type: 'stat', value: str(f, 'number'), label: str(f, 'label'), note: str(f, 'source') } });
@@ -310,7 +313,7 @@ const LAYOUT_LIST: LayoutDef[] = [
         d.y = y + 64;
         if (str(f, 'note')) {
           d.gap(36);
-          d.text('body', str(f, 'note'), { size: 44, fill: '$muted', lines: 2 });
+          d.text('body', str(f, 'note'), { size: 44, max: 48, fill: '$muted', lines: 2 });
         }
       });
       return mk(d, { type: 'stat', fitAs: 'stat-bar', slide: { type: 'stat', value: str(f, 'number'), label: str(f, 'label'), note: str(f, 'note') } });
@@ -837,6 +840,7 @@ const LAYOUT_LIST: LayoutDef[] = [
   },
 ];
 
+const LAYOUT_LIST: LayoutDef[] = [...BASE_LIST, ...MORE_LAYOUTS, ...IMAGE_LAYOUTS];
 export const LAYOUTS_BY_ID = Object.fromEntries(LAYOUT_LIST.map((l) => [l.id, l])) as Record<LayoutId, LayoutDef>;
 export const LAYOUT_IDS = LAYOUT_LIST.map((l) => l.id) as LayoutId[];
 export const layoutDef = (id: string): LayoutDef | undefined => LAYOUTS_BY_ID[id as LayoutId];
@@ -846,6 +850,6 @@ export type { Slot };
 const ALL: Cut[] = ['plain', 'edge-h', 'edge-v', 'angle', 'curve'];
 const HERO: Cut[] = ['plain', 'edge-h', 'angle', 'curve'];
 const NOSIDE: Cut[] = ['plain', 'edge-h', 'angle', 'curve'];
-const CUTS: Partial<Record<LayoutId, Cut[]>> = { checklist: NOSIDE, statement: HERO, 'lead-statement': HERO, 'big-question': HERO, 'split-text': HERO, 'cta-button': HERO, stepper: NOSIDE, 'step-numeral': NOSIDE, comparison: NOSIDE, 'listicle-numeral': NOSIDE, 'stat-grid': NOSIDE, spotlight: NOSIDE, 'card-grid': NOSIDE, timeline: NOSIDE, 'photo-led': ['plain'] };
+const CUTS: Partial<Record<LayoutId, Cut[]>> = { checklist: NOSIDE, statement: HERO, 'lead-statement': HERO, 'big-question': HERO, 'split-text': HERO, 'cta-button': HERO, stepper: NOSIDE, 'step-numeral': NOSIDE, comparison: NOSIDE, 'listicle-numeral': NOSIDE, 'stat-grid': NOSIDE, spotlight: NOSIDE, 'card-grid': NOSIDE, timeline: NOSIDE, 'photo-led': ['plain'], prose: ['plain'], 'statement-stacked': ['plain'], 'statement-card': ['plain'], 'statement-pill': ['plain'], 'statement-question': ['plain'], 'contact-closing': ['plain'], 'cta-pair': ['plain'], 'numbered-stagger': ['plain'], 'bullet-list': ['plain'], 'pill-stagger': ['plain'], 'headline-card': ['plain'], 'headline-body-image': ['plain'], 'image-row': ['plain'], 'thumb-rows': ['plain'], 'cover-art': ['plain'], 'photo-cover': ['plain'], 'portrait-closing': ['plain'], 'art-side-text': ['plain'], 'do-dont': ['plain'] };
 LAYOUT_LIST.forEach((l) => (l.cuts = CUTS[l.id] ?? ALL));
 export const cutsOf = (id: string): Cut[] => layoutDef(id)?.cuts ?? ['plain'];

@@ -219,22 +219,27 @@
       "coverVariant": 1,
       "prefer": [
         "statement",
-        "lead-statement",
-        "split-text",
+        "prose",
+        "numbered-stagger",
         "quote",
-        "big-question",
-        "numbered-list"
+        "lead-statement",
+        "cta-button",
+        "split-text"
       ],
       "avoid": [
         "stat-grid",
         "card-grid",
         "feature-slider",
-        "timeline"
+        "timeline",
+        "pill-stagger",
+        "statement-pill",
+        "statement-stacked"
       ],
       "variants": {
         "statement": 1,
         "quote": 1,
-        "split-text": 0
+        "prose": 0,
+        "numbered-stagger": 0
       }
     },
     "devices": {
@@ -244,7 +249,27 @@
       },
       "sideLabel": true,
       "pageIndex": true,
-      "footerRow": true
+      "footerRow": true,
+      "art": [
+        {
+          "item": "style-1/background-1",
+          "zone": "corner-tr",
+          "w": 380,
+          "bleed": 0.3
+        },
+        {
+          "item": "style-1/sticker-4",
+          "zone": "corner-br",
+          "w": 110,
+          "on": "inner"
+        },
+        {
+          "item": "style-1/sticker-2",
+          "zone": "corner-bl",
+          "w": 130,
+          "on": "inner"
+        }
+      ]
     }
   }
 }

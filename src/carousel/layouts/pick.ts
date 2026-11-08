@@ -1,11 +1,14 @@
 // Deterministic picking helpers. The model gives a content shape (or a layout id) and text; the code decides the rest.
+import { IMAGE_LAYOUT_IDS, imageProblem } from './images';
 import { LAYOUT_IDS, cutsOf, layoutDef } from './library';
 import { contrast } from './draw';
 import type { ContentShape, Cut, Fields, Flavour, LayoutId, LayoutStyle } from './types';
 
+/** The layouts that draw a picture of the person's (photo-led and the layouts with an image field): a deck without a picture does not pick them. */
+export const isPhotoLayout = (id: string): boolean => id === 'photo-led' || (IMAGE_LAYOUT_IDS as readonly string[]).includes(id);
 /** The layouts that suit a content shape, in library order. photo-led is only a candidate for the 'photo' shape. */
 export function layoutFor(shape: ContentShape): LayoutId[] {
-  const out = LAYOUT_IDS.filter((id) => (id === 'photo-led' ? shape === 'photo' : layoutDef(id)!.shapes.includes(shape)));
+  const out = LAYOUT_IDS.filter((id) => (isPhotoLayout(id) ? shape === 'photo' : layoutDef(id)!.shapes.includes(shape)));
   return out.length ? out : ['statement'];
 }
 
@@ -35,9 +38,9 @@ export function rotateVariants(deck: DeckItem[], opts: { photo?: boolean; flavou
   const out: Picked[] = [];
   deck.forEach((item, i) => {
     const prev = out[i - 1]?.layout;
-    const ok = (id: LayoutId) => (!prev || neighbourFamily(id) !== neighbourFamily(prev)) && (used[id] ?? 0) < 2 && (opts.photo || id !== 'photo-led');
+    const ok = (id: LayoutId) => (!prev || neighbourFamily(id) !== neighbourFamily(prev)) && (used[id] ?? 0) < 2 && (opts.photo || !isPhotoLayout(id));
     const wanted = item.layout ? [item.layout, ...(item.shape ? layoutFor(item.shape) : [])] : item.shape ? layoutFor(item.shape) : [];
-    const pool = [...wanted, ...LAYOUT_IDS.filter((id) => id !== 'photo-led' || !!opts.photo).sort((a, b) => rank(a) - rank(b))];
+    const pool = [...wanted, ...LAYOUT_IDS.filter((id) => !isPhotoLayout(id) || !!opts.photo).sort((a, b) => rank(a) - rank(b))];
     const layout = pool.find(ok) ?? pool[0];
     const n = used[layout] ?? 0;
     used[layout] = n + 1;
@@ -66,6 +69,11 @@ export function validateSlideContent(layoutId: string, fields: Fields): Validati
     const empty = v === undefined || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && v.filter((x) => x.trim()).length === 0);
     if (empty) {
       if (spec.required) errors.push(`${layoutId}: "${spec.name}" is required.`);
+      continue;
+    }
+    if (spec.image) {
+      const p = imageProblem(v);
+      if (p) errors.push(`${layoutId}: "${spec.name}" ${p}.`);
       continue;
     }
     if (spec.list) {

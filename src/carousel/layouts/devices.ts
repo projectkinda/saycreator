@@ -6,7 +6,7 @@ import type { Deco } from '../../reference/deco';
 import { contrast } from './draw';
 import type { FontFamily } from '../../image-engine/types';
 
-export interface Box { x: number; y: number; w: number; h: number }
+export interface Box { x: number; y: number; w: number; h: number; /** For a text box: the clear gap a device keeps from it (one line height of that text). */ gap?: number }
 export interface PlacedDevice { id: string; kind: 'chrome' | 'decor' | 'accent' | 'sticker'; box: Box; /** What it is drawn in, to be checked against the ground. */ ink?: string }
 export interface DevicePlan { svg: string; placed: PlacedDevice[]; notes: string[] }
 
@@ -114,19 +114,21 @@ export function accentDevices(svg: string, x: DeviceCtx): { svg: string; over: s
   const spans: Span[] = [...inner.matchAll(/<tspan x="([\d.-]+)" y="([\d.-]+)"(?: fill="([^"]+)")?>([\s\S]*?)<\/tspan>/g)].map((s) => ({ x: Number(s[1]), y: Number(s[2]), fill: s[3], text: unesc(s[4]), raw: s[0] }));
   let over = '';
   // italic accent runs: the run is set in the italic serif; what follows it on its line moves by the difference in width; if the line would run past the margin the run stays upright
-  if (d.italicAccent && !x.marker && fam !== SERIF_ITALIC) {
+  // an italic that matches the headline face: EB Garamond Italic (medium) over EB Garamond, else the thin Instrument Serif Italic
+  const ital: { fam: FontFamily; w: number; k: number } = fam === 'EB Garamond' ? { fam: 'EB Garamond Italic', w: 500, k: 1 } : { fam: SERIF_ITALIC, w: 400, k: 1.06 };
+  if (d.italicAccent && !x.marker && fam !== SERIF_ITALIC && fam !== 'EB Garamond Italic') {
     const out = spans.map((s) => ({ ...s }));
     let any = false;
     spans.forEach((s, i) => {
       if (!s.fill) return;
       const was = measureWidth(s.text, fam, weight, size);
-      const now = measureWidth(s.text, SERIF_ITALIC, 400, Math.round(size * 1.06));
+      const now = measureWidth(s.text, ital.fam, ital.w, Math.round(size * ital.k));
       const shift = now - was;
       const line = out.filter((o, k) => k > i && Math.abs(o.y - s.y) < 2);
       const endX = Math.max(s.x + now, ...line.map((o) => o.x + shift + measureWidth(o.text, fam, weight, size)));
       if (endX > 1032) { notes.push('Italic accent kept upright on this slide: the line would run past the margin.'); return; }
       line.forEach((o) => { o.x = r1(o.x + shift); });
-      out[i] = { ...out[i], raw: s.raw.replace('<tspan ', `<tspan font-family="${SERIF_ITALIC}" font-weight="400" font-size="${Math.round(size * 1.06)}" `) };
+      out[i] = { ...out[i], raw: s.raw.replace('<tspan ', `<tspan font-family="${ital.fam}" font-weight="${ital.w}" font-size="${Math.round(size * ital.k)}" `) };
       any = true;
       placed.push({ id: 'italic-accent', kind: 'accent', box: { x: s.x, y: s.y - size * 0.86, w: now, h: size * 1.1 }, ink: s.fill });
     });
@@ -149,7 +151,8 @@ export function accentDevices(svg: string, x: DeviceCtx): { svg: string; over: s
   if (d.penCircle) {
     const s = spans.find((q) => q.fill);
     if (s) {
-      const w = measureWidth(s.text, spans.indexOf(s) >= 0 && /Instrument Serif Italic/.test(s.raw) ? SERIF_ITALIC : fam, /Instrument Serif Italic/.test(s.raw) ? 400 : weight, size);
+      const isItal = /font-family="(Instrument Serif Italic|EB Garamond Italic)"/.test(s.raw);
+      const w = isItal ? measureWidth(s.text, ital.fam, ital.w, Math.round(size * ital.k)) : measureWidth(s.text, fam, weight, size);
       const b: Box = { x: s.x, y: s.y - size * 0.8, w, h: size * 0.98 };
       const ink = readable([x.c.accent, x.c.text], x.c.bg, 3);
       over += `<path d="${penLoop(b, hash(s.text + x.index))}" fill="none" stroke="${ink}" stroke-width="${Math.max(5, Math.round(size / 18))}" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -175,15 +178,15 @@ export function overDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box
   }
   if (d.sideLabel) {
     const label = x.handle || '@yourname';
-    const wText = measureWidth(label, x.fonts.body, 500, 34);
+    const wText = measureWidth(label, x.fonts.body, 500, 36);
     const cx = 1054, cy = 690;
-    svg += `<text transform="translate(${cx} ${cy}) rotate(-90)" text-anchor="middle" font-family="${x.fonts.body}" font-size="34" font-weight="500" fill="${ink}">${label.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>`;
+    svg += `<text transform="translate(${cx} ${cy}) rotate(-90)" text-anchor="middle" font-family="${x.fonts.body}" font-size="36" font-weight="500" fill="${ink}">${label.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>`;
     placed.push({ id: 'side-label', kind: 'chrome', box: { x: cx - 27, y: cy - wText / 2, w: 34, h: wText }, ink });
   }
   if (d.footerRow || (d.contactClosing && last)) {
     const brand = brandOf(x.handle);
-    const wB = measureWidth(brand, x.fonts.body, 600, 34);
-    const sx = 1032 - Math.max(wB, brand.length * 34 * 0.58) - 24 - 32;
+    const wB = measureWidth(brand, x.fonts.body, 600, 36);
+    const sx = 1032 - Math.max(wB, brand.length * 36 * 0.58) - 24 - 32;
     svg += star(sx + 16, 1272, 16, x.c.text);
     placed.push({ id: 'footer-logo', kind: 'chrome', box: { x: sx, y: 1256, w: 32, h: 32 }, ink: x.c.text });
   }
@@ -194,22 +197,32 @@ export function overDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box
     svg += `<circle cx="68" cy="1272" r="16" fill="none" stroke="${c}" stroke-width="3"/><ellipse cx="68" cy="1272" rx="7" ry="16" fill="none" stroke="${c}" stroke-width="3"/><path d="M 52 1272 H 84" stroke="${c}" stroke-width="3"/>`;
     placed.push({ id: 'contact-icons', kind: 'chrome', box: { x: 50, y: 1208, w: 36, h: 82 }, ink: c });
   }
-  // stickers: one emoji glyph in a free corner (no text, no shape, no picture, no other device under it)
+  // stickers: one emoji glyph in an empty corner. It keeps a clear gap from every text (at least one line height of that text, and from the headline's whole box), 24 px from shapes and pictures
   if (d.stickers) {
     const seed = hash(x.handle + x.index);
     const glyph = STICKERS[(seed + x.index * 5) % STICKERS.length];
     const S = 118;
-    const corners: Box[] = [{ x: 1032 - S, y: 150, w: S, h: S }, { x: 1032 - S, y: 1070, w: S, h: S }, { x: 48, y: 1070, w: S, h: S }, { x: 48, y: 150, w: S, h: S }];
-    const order = [seed % 4, (seed + 1) % 4, (seed + 2) % 4, (seed + 3) % 4].map((k) => corners[k]);
-    const busy = [...x.textBoxes, ...shapeBoxes, ...taken.filter((p) => p.id !== 'glow' && p.id !== 'rule').map((p) => p.box), ...(photo ? [photo] : [])];
-    const spot = order.find((c) => !busy.some((b) => hit(c, b, 22)));
+    const busy: Box[] = [...x.textBoxes.map((b) => ({ ...b, gap: Math.max(b.gap ?? 0, 24) })), ...shapeBoxes.map((b) => ({ ...b, gap: 24 })), ...taken.filter((p) => p.id !== 'glow' && p.id !== 'rule' && p.id !== 'scallop' && p.id !== 'inset-card').map((p) => ({ ...p.box, gap: 24 })), ...(photo ? [{ ...photo, gap: 24 }] : [])];
+    const free = (c: Box) => !busy.some((b) => hit(c, b, b.gap ?? 24));
+    const corners = [{ x: 48, y: 150 }, { x: 1032 - S, y: 150 }, { x: 1032 - S, y: 1250 - S }, { x: 48, y: 1250 - S }];
+    let spot: Box | null = null;
+    for (let k = 0; k < 4 && !spot; k++) {
+      const c = corners[(seed + k) % 4];
+      let best: Box | null = null;
+      for (let dx = 0; dx <= 240; dx += 24) for (let dy = 0; dy <= 240; dy += 24) {
+        const cand: Box = { x: c.x + (c.x < 500 ? dx : -dx), y: c.y + (c.y < 700 ? dy : -dy), w: S, h: S };
+        if (cand.x < 48 || cand.x + S > 1032 || cand.y < 150 || cand.y + S > 1250) continue;
+        if (free(cand) && (!best || dx + dy < Math.abs(best.x - c.x) + Math.abs(best.y - c.y))) best = cand;
+      }
+      spot = best;
+    }
     if (spot) {
       const col = readable([x.c.accent, x.c.text], x.c.bg, 3);
       const rot = ((seed >> 4) % 25) - 12;
       const cx = spot.x + S / 2, cy = spot.y + S / 2;
       svg += `<text x="${cx}" y="${cy + S * 0.36}" text-anchor="middle" font-family="Noto Emoji" font-size="${S}" font-weight="400" fill="${col}" transform="rotate(${rot} ${cx} ${cy})">${glyph}</text>`;
       placed.push({ id: 'sticker', kind: 'sticker', box: spot, ink: col });
-    } else notes.push('No empty corner for a sticker on this slide.');
+    } else notes.push('No empty corner with a clear gap for a sticker on this slide.');
   }
   return { svg, placed, notes };
 }

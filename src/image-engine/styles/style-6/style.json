@@ -40,7 +40,7 @@
       "bg": "#F9FCEC",
       "text": "#0A0A0A",
       "muted": "#585A4F",
-      "accent": "#C2410C",
+      "accent": "#8F2F0E",
       "onAccent": "#FFFFFF",
       "marker": "#F2C9A8",
       "onMarker": "#0A0A0A",
@@ -195,20 +195,24 @@
       "cover": "statement",
       "coverVariant": 0,
       "prefer": [
+        "prose",
         "numbered-list",
         "comparison",
         "listicle-numeral",
         "checklist",
-        "split-text",
-        "statement"
+        "statement",
+        "numbered-stagger"
       ],
       "avoid": [
         "stat-grid",
         "feature-slider",
-        "timeline"
+        "timeline",
+        "statement-stacked",
+        "pill-stagger"
       ],
       "variants": {
         "statement": 0,
+        "prose": 0,
         "checklist": 0
       }
     },

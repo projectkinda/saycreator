@@ -75,9 +75,9 @@
   },
   "fonts": {
     "headline": "EB Garamond",
-    "headlineWeight": 500,
+    "headlineWeight": 600,
     "body": "EB Garamond",
-    "bodyWeight": 400,
+    "bodyWeight": 500,
     "strong": 500
   },
   "type": {
@@ -214,23 +214,27 @@
   "library": {
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "flavour": {
-      "cover": "lead-statement",
+      "cover": "statement-card",
       "coverVariant": 0,
       "prefer": [
+        "statement-card",
+        "prose",
         "lead-statement",
         "quote",
-        "statement",
         "split-text",
-        "big-question"
+        "statement-question"
       ],
       "avoid": [
         "stat-grid",
         "card-grid",
         "feature-slider",
-        "step-numeral"
+        "step-numeral",
+        "pill-stagger",
+        "statement-stacked"
       ],
       "variants": {
-        "statement": 1,
+        "statement-card": 0,
+        "prose": 0,
         "quote": 0
       }
     },
@@ -240,7 +244,35 @@
         "margin": 28,
         "radius": 40
       },
-      "italicAccent": true
+      "italicAccent": true,
+      "art": [
+        {
+          "item": "style-5/divider-1",
+          "zone": "divider-low",
+          "w": 150,
+          "on": "inner"
+        },
+        {
+          "item": "style-5/corner-1",
+          "zone": "corner-br",
+          "w": 60,
+          "on": "inner"
+        }
+      ]
+    },
+    "byType": {
+      "closing": {
+        "layout": "statement-card",
+        "variant": 1,
+        "avoid": [
+          "headline-card",
+          "prose",
+          "split-text",
+          "lead-statement",
+          "numbered-stagger",
+          "bullet-list"
+        ]
+      }
     }
   }
 }

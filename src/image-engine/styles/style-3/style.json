@@ -211,21 +211,24 @@
       "coverVariant": 0,
       "prefer": [
         "statement",
-        "lead-statement",
+        "prose",
+        "bullet-list",
         "numbered-list",
-        "checklist",
-        "split-text",
+        "lead-statement",
         "cta-button"
       ],
       "avoid": [
         "stat-grid",
         "feature-slider",
         "timeline",
-        "card-grid"
+        "card-grid",
+        "pill-stagger",
+        "statement-pill"
       ],
       "variants": {
         "statement": 0,
-        "checklist": 1,
+        "prose": 0,
+        "bullet-list": 0,
         "cta-button": 0
       }
     },

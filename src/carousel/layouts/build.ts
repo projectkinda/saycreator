@@ -9,12 +9,14 @@ import { markerInk, type RLayer } from '../../reference/recreate';
 import { resolveSvgTokens } from '../../reference/faithful';
 import { balanceVertical, clampSlots, finalGuards, fitSlots, recurringLayers, recurringMarkup, resolveCollisions, stepperSvg } from '../designed';
 import { avatarMarkup, chromeFor } from './chrome';
-import { accentDevices, behindDevices, hit, insetGround, overDevices, shapeBoxesOf, type Box, type DeviceCtx, type PlacedDevice } from './devices';
+import { cropRect, parseRef } from './images';
+import { artDevices } from './artDevices';
+import { accentDevices, behindDevices, insetGround, overDevices, shapeBoxesOf, type Box, type DeviceCtx, type PlacedDevice } from './devices';
 import { CUT_RATIO, RAKE, coloursFor, geometry, type Geometry, type Roles } from './cuts';
 import { contrast, esc, setWeights } from './draw';
 import { cutsOf, layoutDef } from './library';
 import { validateSlideContent } from './pick';
-import type { Cut, Cx, Fields, Gradient, LayoutStyle, Plan, PlaneTone, Slot } from './types';
+import type { Cut, Cx, Fields, Gradient, LayoutStyle, Plan, PlaneTone, PlanImage, Slot } from './types';
 
 export interface BuildOpts {
   handle: string;
@@ -52,6 +54,8 @@ export interface Built {
   edgeDrawn?: boolean;
   /** The layout split into a field part and a plane part. */
   partitioned?: boolean;
+  /** The pictures drawn on this slide (an image field was set). */
+  images?: PlanImage[];
   /** The generic devices drawn on this slide (see reference/deco.ts), with their boxes. */
   devices?: PlacedDevice[];
 }
@@ -189,16 +193,9 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       plan = planWith(variant, st, mkCx(g.field, { noPart }));
     }
   };
-  let ruleY = st.deco?.rule === 'lower-two-thirds' ? 420 : 140;
   if (cut === 'plain') {
     g = geometry('plain');
     plan = planWith(variant, st, mkCx(g.field));
-    // a thin rule across the page with the content in the lower two thirds: when the content does not fit there, the field stays whole and the rule goes under the header
-    if (st.deco?.rule === 'lower-two-thirds' && o.index > 0) {
-      const low = planWith(variant, st, mkCx({ ...g.field, y0: 470 }));
-      if (low.span <= g.field.y1 - 470 - 4) plan = low;
-      else ruleY = 140;
-    } else ruleY = 140;
   } else if (cut === 'edge-v') thin(true);
   else {
     // Part B (the second half of the layout) goes on the plane: measure both halves, then set the plane so B starts just inside it.
@@ -216,7 +213,6 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     }
     if (!partitioned) thin(true);
   }
-  if (cut !== 'plain') ruleY = 140;
   const key = designKey(plan.type);
   const slots = [...plan.slots].sort((a, b) => a.y - b.y || a.x - b.x);
   // Rows (several body slots) take the slide's items in reading order.
@@ -257,7 +253,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     pack = { ...pack, designs: { ...pack.designs, [key]: ls }, slotMeta: { ...pack.slotMeta, [key]: slotMetaOf(ls) } };
     notes.push(`statement density: the headline is set at ${big.size} px.`);
   }
-  const balanced = plan.noBalance || cut !== 'plain' || ruleY === 420 ? pack : balanceVertical(pack, key, slide, o.handle, plan.fitAs);
+  const balanced = plan.noBalance || cut !== 'plain' ? pack : balanceVertical(pack, key, slide, o.handle, plan.fitAs);
   const col = resolveCollisions(balanced, key, slide, o.handle, plan.fitAs);
   problems.push(...col.problems);
   notes.push(...col.notes);
@@ -296,20 +292,39 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     });
     done = new XMLSerializer().serializeToString(doc.documentElement);
   }
+  // The pictures (an image field): clipped to their slots and drawn behind the text, right after the ground
+  const pics = plan.images ?? [];
+  if (pics.length) {
+    const markupOf = (list: { p: PlanImage; i: number }[]) => list.map(({ p, i }) => {
+      const id = `pic${o.index}x${i}`;
+      const clip = p.circle ? `<circle cx="${p.x + p.w / 2}" cy="${p.y + p.h / 2}" r="${p.w / 2}"/>` : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}"/>`;
+      // a project picture (a reference with its natural size) is cropped here, with its focus point and zoom; any other picture is cropped by the browser (centred)
+      const cr = cropRect(p, parseRef(p.src));
+      const box = cr ? `x="${Math.round(cr.x * 10) / 10}" y="${Math.round(cr.y * 10) / 10}" width="${Math.round(cr.w * 10) / 10}" height="${Math.round(cr.h * 10) / 10}" preserveAspectRatio="none"` : `x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" preserveAspectRatio="xMidYMid slice"`;
+      return `<clipPath id="${id}">${clip}</clipPath><image href="${p.src.replace(/&/g, '&amp;')}" ${box} clip-path="url(#${id})"/>`;
+    }).join('');
+    const indexed = pics.map((p, i) => ({ p, i }));
+    // a picture goes right after the ground (the layout's badges and shapes sit over it); a `front` one goes above the plane shapes and cards, below the text
+    const back = markupOf(indexed.filter((q) => !q.p.front));
+    const front = markupOf(indexed.filter((q) => q.p.front));
+    if (back) done = done.replace(/(<rect id="bg"[^>]*\/>)/, (m) => m + back);
+    if (front) done = done.includes('<g><text data-role=') ? done.replace('<g><text data-role=', () => front + '<g><text data-role=') : done.replace(/(<rect id="bg"[^>]*\/>)/, (m) => m + front);
+  }
   // The generic devices of the style (see reference/deco.ts): behind the content, on the headline's runs, and over the slide where no text is.
   let placed: PlacedDevice[] | undefined;
   if (st.deco) {
     const tl = r.layers.find((l) => l.kind === 'text' && l.name === 'title');
     const roles = S === 'p' ? P : F;
-    const boxOf = (l: { x: number; y: number; width: number; height: number }): Box => ({ x: l.x, y: l.y, w: l.width, h: l.height });
+    const boxOf = (l: { x: number; y: number; width: number; height: number; style?: { size: number; lineHeight?: number } }): Box => ({ x: l.x, y: l.y, w: l.width, h: l.height, ...(l.style ? { gap: Math.round(l.style.size * (l.style.lineHeight ?? 1.15)) } : {}) });
     const recLayers = recurringLayers(rec, pack, 'c' + o.index).filter((l) => l.kind === 'text');
     const contentBoxes = r.layers.filter((l) => l.kind === 'text').map(boxOf);
     const shapeBoxes = shapeBoxesOf(done);
     // the thin rule keeps to the lower two thirds only when nothing of the slide is across it; otherwise it sits under the header
-    let ruleMode = st.deco.rule;
-    if (ruleMode === 'lower-two-thirds' && (ruleY !== 420 || [...contentBoxes, ...shapeBoxes].some((b) => hit(b, { x: 48, y: 418, w: 984, h: 7 }, 6)))) ruleMode = 'across';
-    const deco = { ...st.deco, ...(ruleMode ? { rule: ruleMode } : {}) };
-    const cx: DeviceCtx = { deco, index: o.index, total: o.total, handle: o.handle || '@yourname', c: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface }, textBoxes: [...contentBoxes, ...recLayers.map(boxOf)], ...(tl ? { title: boxOf(tl) } : {}), marker: !!st.devices.marker, fonts: st.fonts, ruleY: ruleMode === 'lower-two-thirds' ? 420 : 140 };
+    // the thin rule: with 'lower-two-thirds' it sits just above the content (as low as 420 px), so the content keeps the whole field and its size; a rule that would not fit above stays under the header
+    const top = Math.min(1350, ...[...contentBoxes, ...shapeBoxes].map((b) => b.y));
+    const ruleY = st.deco.rule === 'lower-two-thirds' && cut === 'plain' ? Math.max(140, Math.min(420, Math.round(top - 44))) : 140;
+    const deco = { ...st.deco };
+    const cx: DeviceCtx = { deco, index: o.index, total: o.total, handle: o.handle || '@yourname', c: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface }, textBoxes: [...contentBoxes, ...recLayers.map(boxOf)], ...(tl ? { title: boxOf(tl) } : {}), marker: !!st.devices.marker, fonts: st.fonts, ruleY };
     const bd = behindDevices(cx);
     done = done.replace(/(<rect id="bg"[^>]*\/>)/, (m) => m + bd.svg);
     const ig = insetGround(done, deco, F.bg);
@@ -317,10 +332,12 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     const ad = accentDevices(done, { ...cx, c: { ...cx.c, bg: roles.bg, text: roles.text, accent: roles.accent } });
     done = ad.svg;
     const od = overDevices(cx, [...bd.placed, ...ad.placed], shapeBoxes, plan.photo ? { x: plan.photo.x, y: plan.photo.y, w: plan.photo.w, h: plan.photo.h } : undefined);
-    done = done.replace(/<\/svg>\s*$/i, () => ad.over + od.svg + '</svg>');
+    // vector art from the preset's pack (deco.art): only where no text, shape or picture is
+    const art = artDevices(cx, [...bd.placed, ...ad.placed, ...od.placed], shapeBoxes, pics.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })));
+    done = done.replace(/<\/svg>\s*$/i, () => ad.over + od.svg + art.behind + art.over + '</svg>');
     if (st.fonts.headline === 'Playfair Display' || st.fonts.body === 'Playfair Display') done = done.replace(/font-family="Playfair Display"/g, 'font-family="Playfair Display" style="font-variant-numeric:lining-nums"');
-    placed = [...bd.placed, ...ad.placed, ...od.placed];
-    notes.push(...bd.notes, ...ad.notes, ...od.notes);
+    placed = [...bd.placed, ...ad.placed, ...od.placed, ...art.placed];
+    notes.push(...bd.notes, ...ad.notes, ...od.notes, ...art.notes);
     if (ig.applied) placed.push({ id: 'inset-card', kind: 'decor', box: { x: deco.insetCard!.margin, y: deco.insetCard!.margin, w: 1080 - 2 * deco.insetCard!.margin, h: 1350 - 2 * deco.insetCard!.margin } });
   }
   // A plane that holds no text and no shape (this layout does not carry content on a plane, or the content did not reach it) is an empty coloured band: the slide is drawn plain instead.
@@ -336,5 +353,5 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       return plain;
     }
   }
-  return { ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: done, layers: [...r.layers, ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
+  return { ...(pics.length ? { images: pics } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: done, layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
 }

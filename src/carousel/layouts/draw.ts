@@ -4,7 +4,7 @@ import { layoutText } from '../../image-engine/draw/text';
 import { FONT_WEIGHTS } from '../../image-engine/fonts';
 import { contrastRgb, parseColor } from '../../image-engine/lint/color';
 import type { FontFamily, TextLayer } from '../../image-engine/types';
-import type { Cx, LayoutStyle, Slot } from './types';
+import type { Cx, LayoutStyle, PlanImage, Slot } from './types';
 
 export const SIDE = 48;
 /** Content width: the engine never lets a text box reach past 95% of the slide (x 1026), so everything ends there. */
@@ -96,6 +96,8 @@ const r = (n: number) => Math.round(n * 10) / 10;
  */
 export class Draw {
   slots: Slot[] = [];
+  /** The pictures placed so far (see image()). */
+  images: PlanImage[] = [];
   shapes: string[] = [];
   /** Shapes drawn after part(): they sit on the plane. */
   planeShapes: string[] = [];
@@ -177,6 +179,11 @@ export class Draw {
       this.y += slot.h + (o.gap ?? 0) * this.gapScale;
     }
     return slot;
+  }
+  /** A picture in a slot (cover fit, rounded or a circle): drawn behind the text by the engine; the slot counts toward the block's extent. */
+  image(src: string, x: number, y: number, w: number, h: number, o: { rx?: number; circle?: boolean; front?: boolean } = {}) {
+    this.images.push({ src, x: r(x), y: r(y), w: r(w), h: r(h), rx: o.rx ?? 0, ...(o.circle ? { circle: true } : {}), ...(o.front ? { front: true } : {}) });
+    this.track(y, y + h);
   }
   /** A static shape (rect, circle, path ...) at an absolute place; `box` is for the extent. */
   shape(markup: string, box?: { y0: number; y1: number }) {

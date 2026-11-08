@@ -13,7 +13,7 @@ export function chromeFor(o: { handle: string; name?: string; index: number; tot
   const handle = o.handle || '@yourname';
   const d = o.deco ?? {};
   const last = o.index === o.total - 1;
-  const small = { ...base, size: 34 };
+  const small = { ...base, size: 36 };
   const row = !!d.headerRow;
   const foot = !!d.footerRow || (!!d.contactClosing && last);
   if (o.profile) {

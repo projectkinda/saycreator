@@ -226,29 +226,53 @@
       "cover": "statement",
       "coverVariant": 0,
       "prefer": [
+        "statement",
+        "prose",
         "numbered-list",
         "listicle-numeral",
         "step-numeral",
-        "checklist",
-        "cta-button",
-        "stepper",
-        "statement"
+        "cta-pair",
+        "contact-closing",
+        "checklist"
       ],
       "avoid": [
         "stat-grid",
         "card-grid",
         "quote",
-        "timeline"
+        "timeline",
+        "pill-stagger",
+        "statement-pill"
       ],
       "variants": {
         "statement": 0,
+        "prose": 0,
         "checklist": 0,
-        "cta-button": 0
+        "cta-pair": 0
       }
     },
     "devices": {
       "arrowHeader": true,
-      "outlinedButton": true
+      "outlinedButton": true,
+      "art": [
+        {
+          "item": "style-2/sticker-2",
+          "zone": "corner-tr",
+          "w": 110,
+          "on": "inner"
+        },
+        {
+          "item": "style-2/divider-1",
+          "zone": "divider-low",
+          "w": 405,
+          "on": "inner"
+        },
+        {
+          "item": "style-2/sticker-1",
+          "zone": "corner-br",
+          "w": 90,
+          "on": "last"
+        }
+      ]
     }
   }
 }

@@ -1,6 +1,7 @@
 // Moving a slide's text between layouts: the text is MAPPED (never invented). Used by the layout picker and by the preset flavour pass.
 import type { Look } from './designed';
 import { LAYOUT_IDS, layoutDef, validateSlideContent, type Fields, type LayoutId } from './layouts';
+import { IMAGE_LAYOUT_IDS, fittingPictures, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, type PicInfo } from './layouts/images';
 import type { SlideSpec } from './designLibrary';
 
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
@@ -50,6 +51,24 @@ export function toCanon(layout: string, f: Fields): Canon {
     case 'timeline': return { ...c, head: txt(f, 'title'), labels: lst(f, 'labels'), items: lst(f, 'events') };
     case 'spotlight': return { ...c, head: txt(f, 'subject'), items: lst(f, 'callouts') };
     case 'comparison': return { ...c, head: txt(f, 'title'), own: { layout, fields: f } };
+    case 'prose': return { ...c, head: txt(f, 'heading'), body: txt(f, 'p1'), own: { layout, fields: f } };
+    case 'statement-stacked': return { ...c, head: txt(f, 'headline'), sub: txt(f, 'caption') };
+    case 'statement-card': return { ...c, head: txt(f, 'headline'), kicker: txt(f, 'kicker'), sub: txt(f, 'caption') };
+    case 'statement-pill': return { ...c, head: txt(f, 'headline'), kicker: txt(f, 'kicker'), sub: txt(f, 'caption') };
+    case 'statement-question': return { ...c, head: txt(f, 'question'), sub: txt(f, 'line') };
+    case 'contact-closing': case 'cta-pair': return { ...c, head: txt(f, 'headline'), own: { layout, fields: f } };
+    case 'numbered-stagger': return { ...c, head: txt(f, 'title'), items: lst(f, 'items') };
+    case 'bullet-list': return { ...c, head: txt(f, 'title'), items: lst(f, 'items') };
+    case 'pill-stagger': return { ...c, head: txt(f, 'headline'), sub: txt(f, 'subline'), items: lst(f, 'items') };
+    case 'headline-card': return { ...c, head: txt(f, 'headline'), sub: txt(f, 'subline'), body: txt(f, 'card'), own: { layout, fields: f } };
+    case 'headline-body-image': return { ...c, head: txt(f, 'headline'), body: txt(f, 'body') };
+    case 'image-row': return { ...c, head: txt(f, 'headline'), body: txt(f, 'paragraph'), sub: txt(f, 'subline') };
+    case 'thumb-rows': return { ...c, head: txt(f, 'title'), items: lst(f, 'items') };
+    case 'cover-art': return { ...c, head: txt(f, 'headline'), sub: txt(f, 'subtitle') };
+    case 'photo-cover': return { ...c, head: txt(f, 'headline'), body: txt(f, 'intro') };
+    case 'art-side-text': return { ...c, head: txt(f, 'heading'), body: txt(f, 'paragraph') };
+    case 'portrait-closing': return { ...c, head: txt(f, 'headline'), own: { layout, fields: f } };
+    case 'do-dont': return { ...c, head: txt(f, 'title'), own: { layout, fields: f } };
     default: return c;
   }
 }
@@ -57,9 +76,11 @@ const put = (o: Fields, k: string, v: string | string[]) => {
   if (Array.isArray(v) ? v.length : v) o[k] = v;
 };
 /** The fields a layout would get from the text, or null when the text does not have what the layout needs (nothing is made up to fill it). */
-export function fromCanon(layout: string, c: Canon, hasPhoto: boolean): Fields | null {
+export function fromCanon(layout: string, c: Canon, hasPhoto: boolean, images?: PicInfo[]): Fields | null {
   const o: Fields = {};
   const head = c.head || c.quote;
+  // the layouts with a picture field are for a deck that has a picture
+  if ((IMAGE_LAYOUT_IDS as readonly string[]).includes(layout) && (images ? !hasEnoughPictures(layout, images) : !hasPhoto)) return null;
   switch (layout) {
     case 'statement': put(o, 'headline', head); put(o, 'kicker', c.kicker); put(o, 'caption', c.sub || (words(c.body) <= 10 ? c.body : '')); break;
     case 'lead-statement': put(o, 'lead', c.kicker || c.sub); put(o, 'headline', head); break;
@@ -78,7 +99,22 @@ export function fromCanon(layout: string, c: Canon, hasPhoto: boolean): Fields |
     case 'stat-grid': if (!c.numbers.length) return null; put(o, 'title', head); put(o, 'numbers', c.numbers); put(o, 'labels', c.labels); break;
     case 'timeline': if (!c.labels.length || !c.items.length) return null; put(o, 'title', head); put(o, 'labels', c.labels); put(o, 'events', c.items); break;
     case 'spotlight': put(o, 'subject', head); put(o, 'callouts', c.items); break;
-    case 'feature-slider': case 'comparison': return c.own?.layout === layout ? { ...c.own.fields } : null;
+    case 'statement-stacked': if (words(head) > 4 || words(head) < 2) return null; put(o, 'headline', head); put(o, 'caption', c.sub || (words(c.body) <= 14 ? c.body : '')); break;
+    case 'statement-card': put(o, 'headline', head); put(o, 'kicker', c.kicker); put(o, 'caption', c.sub || (words(c.body) <= 10 ? c.body : '')); break;
+    case 'statement-pill': if (!c.sub) return null; put(o, 'headline', head); put(o, 'kicker', c.kicker); put(o, 'caption', c.sub); break;
+    case 'statement-question': put(o, 'question', head); put(o, 'line', c.sub); break;
+    case 'numbered-stagger': if (c.items.length < 2 || c.items.length > 3) return null; put(o, 'title', head); put(o, 'items', c.items); break;
+    case 'bullet-list': put(o, 'title', head); put(o, 'items', c.items); break;
+    case 'pill-stagger': put(o, 'headline', head); put(o, 'subline', c.sub); put(o, 'items', c.items); break;
+    case 'headline-body-image': if (!(c.body || c.sub)) return null; put(o, 'headline', head); put(o, 'body', c.body || c.sub); break;
+    case 'image-row': if (!(c.body || c.sub)) return null; put(o, 'headline', head); put(o, 'paragraph', c.body || c.sub); if (c.body && c.sub) put(o, 'subline', c.sub); break;
+    case 'thumb-rows': if (c.items.length < 3 || c.items.length > 4) return null; put(o, 'title', head); put(o, 'items', c.items); break;
+    case 'cover-art': put(o, 'headline', head); put(o, 'subtitle', c.sub); break;
+    case 'photo-cover': if (!(c.body || c.sub)) return null; put(o, 'headline', head); put(o, 'intro', c.body || c.sub); break;
+    case 'art-side-text': if (!(c.body || c.sub)) return null; put(o, 'heading', head); put(o, 'paragraph', c.body || c.sub); break;
+    case 'portrait-closing': case 'do-dont': return c.own?.layout === layout ? { ...c.own.fields } : null;
+    case 'prose': if (c.own?.layout === layout) return { ...c.own.fields }; if (!c.body) return null; put(o, 'p1', c.body); put(o, 'heading', head); break;
+    case 'feature-slider': case 'comparison': case 'contact-closing': case 'cta-pair': case 'headline-card': return c.own?.layout === layout ? { ...c.own.fields } : null;
     default: return null;
   }
   return o;
@@ -94,7 +130,7 @@ export interface LayoutOption {
   dropped: string[];
   current: boolean;
 }
-export const flat = (f: Fields): string[] => Object.entries(f).filter(([k]) => k !== 'accent').flatMap(([, v]) => (Array.isArray(v) ? v : [v])).map((x) => String(x).trim()).filter(Boolean);
+export const flat = (f: Fields): string[] => Object.entries(f).filter(([k]) => k !== 'accent' && !isImageKey(k)).flatMap(([, v]) => (Array.isArray(v) ? v : [v])).map((x) => String(x).trim()).filter(Boolean);
 
 /** Every layout that can take this slide's text, the slide's own layout first. */
 export const layoutOptions = (spec: SlideSpec, look: Look): LayoutOption[] => layoutOptionsFor(spec, look);
@@ -108,7 +144,7 @@ export function layoutOptionsFor(spec: SlideSpec, look: Look, o: { joinStat?: bo
   const out: LayoutOption[] = [{ layout: spec.layout as LayoutId, fields: own, dropped: [], droppedCore: [], current: true }];
   for (const id of LAYOUT_IDS) {
     if (id === spec.layout) continue;
-    const f = fromCanon(id, c, !!look.hasPhoto);
+    const f = fromCanon(id, c, !!look.hasPhoto, look.images);
     if (!f || !validateSlideContent(id, f).ok) continue;
     const shown = flat(f);
     const lost = (t: string) => !shown.some((u) => u === t || u.includes(t));
@@ -131,8 +167,16 @@ export function layoutRefusals(spec: SlideSpec, look: Look): Record<string, stri
   const out: Record<string, string> = {};
   for (const id of LAYOUT_IDS) {
     if (offered.has(id)) continue;
-    const f = fromCanon(id, c, !!look.hasPhoto);
+    const f = fromCanon(id, c, !!look.hasPhoto, look.images);
     if (!f) {
+      // a layout with picture slots: the text maps, the pictures are what is missing (how many it needs, how many of the project's fit)
+      if ((IMAGE_LAYOUT_IDS as readonly string[]).includes(id) && fromCanon(id, c, true)) {
+        const need = imagesNeeded(id);
+        const have = look.images ? fittingPictures(id, look.images) : 0;
+        const shape = [...new Set(imageSlotsOf(id).flatMap((s) => s.accepts))].join(' or ');
+        out[id] = look.images ? `Needs ${need} ${need === 1 ? 'picture' : 'pictures'} (${shape}); this deck has ${have} that ${have === 1 ? 'fits' : 'fit'}.` : 'Needs a picture, and this deck has none.';
+        continue;
+      }
       if (!look.hasPhoto && fromCanon(id, c, true)) {
         out[id] = 'Needs a picture, and this deck has none.';
         continue;

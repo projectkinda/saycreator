@@ -7,9 +7,10 @@
 //  - a swap budget (half the slides) keeps the writer's plan recognisable. Every swap is logged.
 import type { Look } from './designed';
 import type { LayoutId, LayoutStyle } from './layouts';
-import { layoutDef } from './layouts';
+import { layoutDef, validateSlideContent } from './layouts';
 import type { SlideSpec } from './designLibrary';
-import { accentsIn, layoutOptionsFor } from './layoutMap';
+import { accentsIn, flat, layoutOptionsFor, toCanon } from './layoutMap';
+import { IMAGE_LAYOUT_IDS, hasEnoughPictures } from './layouts/images';
 
 /** Layouts that look alike in a row (a deck should not put two of one family side by side). */
 export const FAMILY: Partial<Record<LayoutId, string>> = {
@@ -18,6 +19,9 @@ export const FAMILY: Partial<Record<LayoutId, string>> = {
   stepper: 'list', checklist: 'list', 'numbered-list': 'list', timeline: 'list', 'card-grid': 'list', spotlight: 'list',
   'split-text': 'text', 'feature-slider': 'text', quote: 'text', comparison: 'text',
   'step-numeral': 'numeral', 'listicle-numeral': 'numeral',
+  'statement-stacked': 'hero', 'statement-card': 'hero', 'statement-pill': 'hero', 'statement-question': 'hero', 'contact-closing': 'hero', 'cta-pair': 'hero',
+  'headline-body-image': 'photo', 'image-row': 'photo', 'thumb-rows': 'photo', 'cover-art': 'photo', 'photo-cover': 'photo', 'portrait-closing': 'photo', 'art-side-text': 'photo', 'do-dont': 'photo',
+  prose: 'text', 'headline-card': 'text', 'numbered-stagger': 'list', 'bullet-list': 'list', 'pill-stagger': 'list',
 };
 export const familyOf = (l: string): string => FAMILY[l as LayoutId] ?? l;
 
@@ -30,6 +34,8 @@ export const MEANING: Partial<Record<LayoutId, { kind: string; what: string }>> 
   'big-stat': { kind: 'figure', what: 'a figure' }, 'stat-bar': { kind: 'figure', what: 'a figure with its bar' }, 'stat-grid': { kind: 'figure', what: 'a set of figures' },
   'step-numeral': { kind: 'numeral', what: 'a numbered step' }, 'listicle-numeral': { kind: 'numeral', what: 'a numbered entry' },
   quote: { kind: 'quote', what: 'words with a speaker' }, comparison: { kind: 'compare', what: 'two sides' }, spotlight: { kind: 'callouts', what: 'three numbered callouts' },
+  'do-dont': { kind: 'compare', what: 'two sides' }, 'portrait-closing': { kind: 'contact', what: 'a closing with a person' },
+  prose: { kind: 'prose', what: 'whole paragraphs' }, 'numbered-stagger': { kind: 'order', what: 'an order' }, 'contact-closing': { kind: 'contact', what: 'contact details' },
 };
 const meaningOf = (l: string) => MEANING[l as LayoutId]?.kind ?? 'open';
 
@@ -50,6 +56,34 @@ export interface FlavourResult {
   specs: SlideSpec[];
   swaps: FlavourSwap[];
   kept: FlavourKept[];
+}
+
+/**
+ * A closing the plain text mapping cannot move to a card (a "how it works" card: a headline over one paragraph): the paragraph becomes the card's headline (when it is short enough for a
+ * card), the old headline its lead-in and the subline its caption. Only when every required text is still shown; the lines that do not fit are left out (optional ones only).
+ */
+function closingCard(spec: SlideSpec, layout: string): { layout: LayoutId; fields: SlideSpec['fields']; dropped: string[]; droppedCore: string[]; current: false } | null {
+  if (layout !== 'statement-card') return null;
+  const own = Object.fromEntries(Object.entries(spec.fields).filter(([k]) => k !== 'accent')) as SlideSpec['fields'];
+  const c = toCanon(spec.layout, own);
+  const fields: SlideSpec['fields'] = {};
+  const body = c.body.trim();
+  if (body && body.length <= 70) {
+    fields.headline = body;
+    if (c.head && c.head.length <= 24) fields.kicker = c.head;
+    if (c.sub && c.sub.length <= 60) fields.caption = c.sub;
+  } else if (c.head && c.head.length <= 70) {
+    fields.headline = c.head;
+    if (c.sub && c.sub.length <= 60) fields.caption = c.sub;
+  } else return null;
+  // a call to action's button text becomes the card's caption (the card says the action; it is not a button)
+  if (c.button && !fields.caption && c.button.length <= 60) fields.caption = c.button;
+  if (!validateSlideContent('statement-card', fields).ok) return null;
+  const shown = flat(fields);
+  const lost = (t: string) => !shown.some((u) => u === t || u.includes(t));
+  const core = (layoutDef(spec.layout)?.fields ?? []).filter((q) => q.required).flatMap((q) => (Array.isArray(own[q.name]) ? (own[q.name] as string[]) : [String(own[q.name] ?? '')])).map((x) => x.trim()).filter(Boolean);
+  const droppedCore = core.filter(lost);
+  return { layout: 'statement-card', fields, dropped: flat(own).filter(lost), droppedCore, current: false };
 }
 
 export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look, name = 'this style'): FlavourResult {
@@ -90,16 +124,35 @@ export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look,
   };
 
   // the cover
-  if (fl.cover && specs[0].layout !== fl.cover && swaps.length < cap) {
+  const picturedLayout = (l: string) => (IMAGE_LAYOUT_IDS as readonly string[]).includes(l) && !!look.images && hasEnoughPictures(l, look.images);
+  if (fl.cover && specs[0].layout !== fl.cover && swaps.length < cap && !picturedLayout(specs[0].layout)) {
     const r = tryLayout(0, fl.cover);
     if (r.ok) apply(0, fl.cover, r.fields, r.dropped, `the cover of ${name} is "${fl.cover}"`);
     else kept.push({ slide: 1, layout: specs[0].layout, why: `cover stays: ${r.why}` });
+  }
+  // the closing slide (library.byType.closing): a preset can say which layout its closing is (and the variant) and which layouts a closing avoids. A closing that carries contact details
+  // or a person keeps its layout; any other closing moves to the preset's closing layout when that layout takes ALL of its core text. The variant is pinned (so the rotation keeps it).
+  const cl = style.closingLayout;
+  if (cl && n >= 2 && specs[n - 1].layout !== cl.layout) {
+    const i = n - 1;
+    const cur = specs[i].layout;
+    if (cur === 'contact-closing' || picturedLayout(cur)) kept.push({ slide: n, layout: cur, why: 'the closing keeps its layout: it carries contact details or a picture' });
+    else if (specs[i - 1].layout === cl.layout) kept.push({ slide: n, layout: cur, why: `closing stays: ${cl.layout} would sit next to the same layout` });
+    else {
+      const opt = layoutOptionsFor(specs[i], look, { joinStat: true }).find((o) => o.layout === cl.layout) ?? closingCard(specs[i], cl.layout);
+      if (opt && !opt.droppedCore.length) {
+        apply(i, cl.layout, opt.fields, opt.dropped, `the closing of ${name} is ${cl.layout}${(cl.avoid ?? []).includes(cur as LayoutId) ? ` (it avoids ${cur} for a closing)` : ''}`);
+        if (cl.variant !== undefined) specs[i] = { ...specs[i], pin: { ...specs[i].pin, variant: cl.variant } };
+      } else kept.push({ slide: n, layout: cur, why: opt ? `closing stays: ${cl.layout} would drop "${opt.droppedCore[0].slice(0, 30)}"` : `closing stays: its text does not fit ${cl.layout}` });
+    }
   }
   // the other slides (the closing call to action is left alone unless the preset avoids it)
   for (let i = 1; i < n; i++) {
     const cur = specs[i].layout;
     const bad = avoid.includes(cur);
-    const notPreferred = !prefer.includes(cur);
+    // a layout with picture slots that the project's pictures can fill was chosen on purpose (the writer was told the pictures): the flavour keeps it
+    const pictured = picturedLayout(cur);
+    const notPreferred = !prefer.includes(cur) && !pictured;
     if (i === n - 1 && !bad) continue;
     if (!(bad || (notPreferred && preferredCount() < want))) continue;
     if (swaps.length >= cap) {

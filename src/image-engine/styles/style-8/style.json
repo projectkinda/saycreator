@@ -199,21 +199,25 @@
       "coverVariant": 0,
       "prefer": [
         "statement",
+        "prose",
+        "statement-question",
         "lead-statement",
         "big-stat",
-        "split-text",
-        "stat-bar",
-        "quote"
+        "quote",
+        "contact-closing"
       ],
       "avoid": [
         "numbered-list",
         "listicle-numeral",
-        "checklist"
+        "checklist",
+        "pill-stagger",
+        "statement-pill"
       ],
       "variants": {
         "statement": 0,
-        "big-stat": 1,
-        "quote": 0
+        "prose": 1,
+        "statement-question": 0,
+        "big-stat": 1
       }
     },
     "devices": {
@@ -225,7 +229,21 @@
       ],
       "rule": "lower-two-thirds",
       "footerRow": true,
-      "contactClosing": true
+      "contactClosing": true,
+      "art": [
+        {
+          "item": "style-8/divider-2",
+          "zone": "divider-low",
+          "w": 984,
+          "on": "inner"
+        },
+        {
+          "item": "style-8/divider-1",
+          "zone": "divider-high",
+          "w": 984,
+          "on": "inner"
+        }
+      ]
     }
   }
 }

@@ -211,32 +211,55 @@
   "library": {
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "flavour": {
-      "cover": "statement",
+      "cover": "statement-stacked",
       "coverVariant": 0,
       "prefer": [
-        "statement",
+        "statement-stacked",
+        "prose",
+        "bullet-list",
         "big-stat",
+        "contact-closing",
         "cta-button",
-        "lead-statement",
-        "step-numeral",
-        "checklist"
+        "step-numeral"
       ],
       "avoid": [
         "timeline",
         "card-grid",
         "quote",
-        "comparison"
+        "comparison",
+        "statement-question"
       ],
       "variants": {
-        "statement": 0,
-        "big-stat": 0,
-        "cta-button": 1
+        "statement-stacked": 0,
+        "prose": 1,
+        "bullet-list": 1,
+        "contact-closing": 0
       }
     },
     "devices": {
       "scallop": true,
       "footerRow": true,
-      "contactClosing": true
+      "contactClosing": true,
+      "art": [
+        {
+          "item": "style-4/frame-1",
+          "zone": "top-edge",
+          "w": 1080,
+          "on": "inner"
+        },
+        {
+          "item": "style-4/corner-1",
+          "zone": "corner-br",
+          "w": 110,
+          "on": "first"
+        },
+        {
+          "item": "style-4/sticker-1",
+          "zone": "corner-bl",
+          "w": 120,
+          "on": "inner"
+        }
+      ]
     }
   }
 }

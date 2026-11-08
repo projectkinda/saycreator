@@ -106,10 +106,23 @@ export function faithfulSvg(svg: string, W: number, slots: FaithfulSlot[], hidde
  * The faithful SVG as a PNG (the bundled fonts are inside the picture, so it draws the same everywhere). `width` is the PNG width in px.
  * `fit`: the PNG has another shape than the picture (a 4:5 design on a square card): the picture is scaled to fit whole and centred on the background colour.
  */
+/** Turns a project picture reference ("picture:<id>#...") into a data: URL, or null when the picture is not available. Set by the carousel's picture library. */
+let pictureResolver: ((ref: string) => Promise<string | null>) | null = null;
+export const setPictureResolver = (fn: ((ref: string) => Promise<string | null>) | null) => {
+  pictureResolver = fn;
+};
 export async function svgToPng(svg: string, width: number, fit?: { w: number; h: number; bg: string }): Promise<Blob> {
   await loadFonts();
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
   const root = doc.documentElement;
+  // the project's pictures: filled in from storage (a picture that is gone is left out, never drawn as a hole)
+  for (const el of Array.from(root.querySelectorAll('image'))) {
+    const href = el.getAttribute('href') ?? '';
+    if (!href.startsWith('picture:')) continue;
+    const data = pictureResolver ? await pictureResolver(href).catch(() => null) : null;
+    if (data) el.setAttribute('href', data);
+    else el.parentNode?.removeChild(el);
+  }
   const vb = (root.getAttribute('viewBox') ?? '0 0 1 1').split(/\s+/).map(Number);
   const outH = fit ? Math.round((width * fit.h) / fit.w) : Math.round((width * vb[3]) / vb[2]);
   const k = fit ? Math.min(width / vb[2], outH / vb[3]) : width / vb[2];

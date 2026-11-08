@@ -75,11 +75,15 @@ export interface PackLook {
   /** The preset's closing ground (byType.closing). */
   closing?: PackGround;
   flavour?: { cover?: string; coverVariant?: 0 | 1; prefer?: string[]; avoid?: string[]; variants?: Record<string, 0 | 1> };
+  /** The layout the closing slide takes (library.byType.closing) and the layouts it avoids. */
+  closingLayout?: { layout: string; variant?: 0 | 1; avoid?: string[] };
   caseStyle?: 'none' | 'upper' | 'lower';
   caseExceptions?: string[];
   weights?: { headline: number; body: number };
   /** The generic devices the preset asks for (style.json library.devices). */
   deco?: import('./deco').Deco;
+  /** The preset's corner radius (shape.radius): pictures take it. */
+  radius?: number;
   gradient?: { angle: number; stops: { at: number; color: string }[] };
 }
 export interface StylePack {
@@ -583,7 +587,7 @@ export function packFromStyle(spec: StyleSpec): StylePack {
   };
   const pack: StylePack = { name: `${spec.title} pack`, palette, fonts, motifs: [], designs, imageSlots, square: sq, canvas: { ...SIZE }, basic: true, notes: [`Basic pack: the ${spec.title} style's colours and fonts on the standard compositions (the same for every style). A pack made from a reference by the model is better.`] };
   const closeName = spec.byType?.closing;
-  pack.look = { rhythm: groundsOf(spec), ...(closeName && spec.palettes[closeName] ? { closing: groundOfName(spec, closeName) } : {}), ...(spec.library?.flavour ? { flavour: spec.library.flavour } : {}), ...(spec.library?.devices ? { deco: spec.library.devices } : {}), ...(spec.library?.caseExceptions?.length ? { caseExceptions: spec.library.caseExceptions } : {}), caseStyle: spec.caseStyle === 'upper' ? 'upper' : spec.caseStyle === 'lower' ? 'lower' : 'none', weights: { headline: spec.fonts.headlineWeight ?? 800, body: spec.fonts.bodyWeight ?? 500 }, ...(gradientOf((Object.values(spec.palettes)[0] as unknown as { bg?: unknown }).bg) ? { gradient: gradientOf((Object.values(spec.palettes)[0] as unknown as { bg?: unknown }).bg) } : {}) };
+  pack.look = { rhythm: groundsOf(spec), ...(closeName && spec.palettes[closeName] ? { closing: groundOfName(spec, closeName) } : {}), ...(spec.library?.flavour ? { flavour: spec.library.flavour } : {}), ...(spec.library?.byType?.closing ? { closingLayout: spec.library.byType.closing } : {}), ...(spec.library?.devices ? { deco: spec.library.devices } : {}), radius: spec.shape.radius, ...(spec.library?.caseExceptions?.length ? { caseExceptions: spec.library.caseExceptions } : {}), caseStyle: spec.caseStyle === 'upper' ? 'upper' : spec.caseStyle === 'lower' ? 'lower' : 'none', weights: { headline: spec.fonts.headlineWeight ?? 800, body: spec.fonts.bodyWeight ?? 500 }, ...(gradientOf((Object.values(spec.palettes)[0] as unknown as { bg?: unknown }).bg) ? { gradient: gradientOf((Object.values(spec.palettes)[0] as unknown as { bg?: unknown }).bg) } : {}) };
   return pack;
 }
 

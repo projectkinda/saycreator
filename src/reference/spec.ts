@@ -32,6 +32,7 @@ export function vocabularyText(): string {
     'Lilita One': 'chunky rounded display face, one weight',
     'Playfair Display': 'bold high-contrast serif for headlines',
     'Noto Emoji': 'a few emoji glyphs only (stickers); never for text',
+    'EB Garamond Italic': 'medium italic serif for an accent word inside EB Garamond text',
   };
   const fonts = FONT_FAMILIES.map((f) => `${f} (${LOOK[f] ?? 'a bundled font'}; weights ${FONT_WEIGHTS[f].join(', ')})`).join('; ');
   return [

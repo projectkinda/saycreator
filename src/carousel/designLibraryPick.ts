@@ -5,9 +5,11 @@
 //  - rewriteSlideText(): the only model call here: one small call for one slide, new text for the SAME layout.
 import type { Layer } from '../image-engine/types';
 import type { DesignedSlide, Look } from './designed';
-import { cutsOf, layoutDef, LAYOUT_IDS, validateSlideContent, type Cut, type Fields, type LayoutId } from './layouts';
+import { cutsOf, layoutDef, LAYOUT_IDS, placeholderImage, validateSlideContent, type Cut, type Fields, type LayoutId } from './layouts';
 import { clip, drawOne, scriptSlideOf, slideProblems, stubPack, isObj, type Drawn, type LibraryReport, type SlideSpec } from './designLibrary';
 import { cleanPaste, validateScriptText } from './script';
+import { imageSlotsOf } from './layouts/images';
+import { placeOne, unusedPictures, withoutImages } from './imagePlace';
 import type { CarouselScript } from '../image-engine/carousel/types';
 import type { WriteProvider } from './writer';
 
@@ -132,7 +134,10 @@ export async function drawGalleryTile(lib: LibraryReport, look: Look, handle: st
   const same = layout === spec.layout;
   const o = same ? null : layoutOptions(spec, look).find((x) => x.layout === layout);
   if (!same && !o) return null;
-  const fields = same ? (Object.fromEntries(Object.entries(spec.fields).filter(([k]) => k !== 'accent')) as Fields) : o!.fields;
+  const fields0 = same ? (Object.fromEntries(Object.entries(spec.fields).filter(([k]) => k !== 'accent')) as Fields) : o!.fields;
+  // a layout with a picture field is shown with a neutral stand-in (a flat tint with a sun and hills): clearly generic, never a photograph
+  const pics = (layoutDef(layout)?.fields ?? []).filter((q) => q.image).map((q) => q.name);
+  const fields: Fields = pics.length ? { ...fields0, ...Object.fromEntries(pics.map((k, i) => [k, placeholderImage(layout === 'portrait-closing' ? 'portrait' : i % 2 ? 'art' : 'photo')])) } : fields0;
   const accents = same ? spec.accents : accentsIn(spec.accents, fields);
   const density = same ? cur.density : 'normal';
   const d = await drawOne({ layout, fields, accents, ...(density === 'statement' ? { density } : {}) }, variant, lib.style, { handle, index: i, total: lib.plan.specs.length, cut: cutsOf(layout).includes(cur.cut) ? cur.cut : 'plain', invert: cur.invert, density, ...(lib.grounds?.[i] != null ? { ground: lib.grounds[i]! } : {}) });
@@ -163,6 +168,14 @@ export async function redrawLibrarySlide(lib: LibraryReport, look: Look, handle:
     accents = ch.accents ?? accentsIn(accents, fields);
   }
   const variant = ch.variant ?? now.variant;
+  // a slide moved to a layout with picture slots takes the project's pictures that no other slide uses (best fit); a layout that cannot get enough draws its text-only form
+  if (layout !== cur.layout && !ch.fields) {
+    fields = withoutImages(fields);
+    if (look.images?.length && imageSlotsOf(layout).length) {
+      const got = placeOne(layout, variant, unusedPictures(lib.plan.specs, look.images, i));
+      if (got) fields = { ...fields, ...got };
+    }
+  }
   const cut: Cut = ch.cut ?? (cutsOf(layout).includes(now.cut) ? now.cut : 'plain');
   const invert = ch.invert !== undefined ? ch.invert : now.invert;
   const density = layout === cur.layout ? now.density : 'normal';
@@ -184,7 +197,7 @@ export async function redrawLibrarySlide(lib: LibraryReport, look: Look, handle:
     plan: { ...lib.plan, specs },
     redraws: (lib.redraws ?? 0) + 1,
   };
-  const slide: DesignedSlide = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg } };
+  const slide: DesignedSlide = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}), ...(d.built.images ? { images: d.built.images } : {}) } };
   return { ok: true, slide, layout, spec: pinned, library, scriptSlide: scriptSlideOf(layout, fields) };
 }
 

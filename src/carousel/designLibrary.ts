@@ -15,6 +15,8 @@ import { withoutSwitches } from '../reference/deco';
 import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
+import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
+import { placeImages } from './imagePlace';
 import { flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { TONES } from './writerPrompt';
 
@@ -234,7 +236,9 @@ export function styleFromPack(pack: StylePack | null | undefined): { style: Layo
     }
     if (L.closing) base.closing = fixGround(L.closing, notes);
     if (L.flavour) base.flavour = L.flavour as LayoutStyle['flavour'];
+    if (L.closingLayout) base.closingLayout = L.closingLayout as LayoutStyle['closingLayout'];
     if (L.deco) base.deco = L.deco;
+    if (typeof L.radius === 'number') base.radius = L.radius;
     if (L.caseStyle && L.caseStyle !== 'none') base.caseStyle = L.caseStyle;
     if (L.caseExceptions?.length) base.caseExceptions = L.caseExceptions;
     if (L.weights) base.weights = { headline: L.weights.headline, body: L.weights.body };
@@ -267,6 +271,25 @@ const GOOD_FOR: Record<LayoutId, string> = {
   'stat-grid': '3 to 4 small figures, the first as the hero',
   timeline: '3 to 5 events in order, the last one highlighted',
   spotlight: 'a product or subject with exactly 3 numbered callouts',
+  prose: 'LONGER TEXT: 1 to 3 paragraphs (up to 300 characters each), optional heading, a bold pull line or 2 to 4 bullets; the only layout that takes whole paragraphs',
+  'statement-stacked': 'a hook of 2 to 4 words set huge, one word per line, with a short caption',
+  'statement-card': 'one bold claim on a rounded card, with an optional kicker and caption',
+  'statement-pill': 'a hook with a short call-out set in a pill under it (the caption is required)',
+  'statement-question': 'one question or thought set under a thin rule, quieter than big-question',
+  'contact-closing': 'the closing slide with contact details (2 to 4 lines: handle, site, phone, email), an optional button and brand name',
+  'cta-pair': 'a closing with TWO actions: a filled button and an outlined button, each with a line',
+  'numbered-stagger': '2 or 3 numbered points, each a sentence, staggered left and right',
+  'bullet-list': '3 to 5 short bold lines with bullets (what is in it, what you get)',
+  'pill-stagger': '3 to 5 short options or ways, each in its own pill, with a headline',
+  'headline-card': 'a headline over one key paragraph set on a card, with an optional subline, paragraph and closing line',
+  'headline-body-image': 'a headline and 1 to 2 lines of text with a picture the person supplied (the picture field is never written by you)',
+  'image-row': 'a headline, a row of 1 to 3 supplied pictures and a paragraph under them',
+  'thumb-rows': '3 or 4 short rows, each with a small supplied picture',
+  'cover-art': 'a hook with one big supplied picture (round or wide)',
+  'photo-cover': 'a hook, an intro line and one wide supplied photo',
+  'portrait-closing': 'a closing with a supplied portrait of a person: a band title, a heading, paragraphs and a link',
+  'art-side-text': 'a heading and a short paragraph beside a supplied picture, with a hand-drawn arrow',
+  'do-dont': 'a numbered do and do-not pair: what is wrong and what is right (text on each side; a supplied picture for each side is optional)',
 };
 const FIELD_NOTE: Record<string, string> = {
   bar: 'percent filled, a whole number 0-100',
@@ -283,27 +306,48 @@ const FIELD_NOTE: Record<string, string> = {
   paragraph: 'ONE idea, at most 14 words, no second sentence',
   callouts: 'exactly 3',
 };
+/** The writer's picture rules: metadata only (id, orientation, shape, pixel size), never pixels. */
+export function imageRules(images: { id: string; width: number; height: number }[]): string[] {
+  const ratio = (p: { width: number; height: number }) => (p.width >= p.height ? `${(p.width / p.height).toFixed(2)}:1` : `1:${(p.height / p.width).toFixed(2)}`);
+  const list = images.map((p, i) => `image ${i + 1}: ${picOrientation(p)}, ${ratio(p)}, ${p.width}x${p.height} px`);
+  const nl = (IMAGE_LAYOUT_IDS as readonly string[]).filter((id) => hasEnoughPictures(id, images));
+  return [
+    `- Pictures available (metadata only, you never see them and never write a picture field): ${list.join('; ')}.`,
+    '- Choose a layout with picture slots ONLY if there are enough pictures for its slots (the menu lists the slots and how many pictures each needs); every picture is used at most once in the deck, so the slots of all your picture layouts together must not exceed the pictures available. Prefer a layout whose slot orientation matches the pictures (landscape slots for landscape pictures, tall slots for portrait pictures). The code places the pictures.',
+    nl.includes('do-dont') ? '- Two-sided content (a do and do-not pair, before and after, myth and fact): use "do-dont" when two pictures are available; with fewer pictures use "comparison".' : '- Two-sided content (a do and do-not pair, before and after, myth and fact): use "comparison" (not enough pictures for "do-dont").',
+  ];
+}
+/** How a picture layout's slots read to the writer: how many pictures, which orientation. */
+const slotsNote = (id: LayoutId): string => {
+  const s = imageSlotsOf(id, 0);
+  if (!s.length) return '';
+  const o = [...new Set(s.flatMap((q) => q.accepts))];
+  return ` Slots: ${s.length} ${s.length === 1 ? 'picture' : 'pictures'} (${s[0].orientation}${o.length > 1 ? '; fits ' + o.join(' or ') : ''}); needs at least ${imagesNeeded(id)}.`;
+};
 const fieldLine = (id: LayoutId): string => {
   const def = layoutDef(id)!;
-  const parts = def.fields.map((f) => `${f.name}${f.required ? '' : '?'} (${f.list ? `list of ${f.list.min === f.list.max ? f.list.min : f.list.min + '-' + f.list.max}, each ≤${f.max} chars` : `≤${f.max} chars`}${f.maxWords ? `, ≤${f.maxWords} words` : ''}${FIELD_NOTE[f.name] ? '; ' + FIELD_NOTE[f.name] : ''})`);
-  return `- ${id}: ${GOOD_FOR[id]}. Fields: ${parts.join(', ')}.`;
+  const parts = def.fields.map((f) => f.image ? `${f.name}? (a picture the person supplied: never write it, leave it out)` : `${f.name}${f.required ? '' : '?'} (${f.list ? `list of ${f.list.min === f.list.max ? f.list.min : f.list.min + '-' + f.list.max}, each ≤${f.max} chars` : `≤${f.max} chars`}${f.maxWords ? `, ≤${f.maxWords} words` : ''}${FIELD_NOTE[f.name] ? '; ' + FIELD_NOTE[f.name] : ''})`);
+  return `- ${id}: ${GOOD_FOR[id]}. Fields: ${parts.join(', ')}.${slotsNote(id)}`;
 };
 /** What KIND of content a layout suits, in plain words (for the preset's shape line in the writer prompt). */
 const KIND: Partial<Record<LayoutId, string>> = {
   'card-grid': 'card lists', 'stat-grid': 'sets of figures', comparison: 'comparisons', spotlight: 'three callouts', checklist: 'short lists', stepper: 'step sequences', 'numbered-list': 'ranked lists', timeline: 'timelines',
   statement: 'big statements', 'lead-statement': 'big statements', 'big-question': 'big questions', 'big-stat': 'one big figure', 'stat-bar': 'a share with a bar', quote: 'quotes', 'split-text': 'a headline with one idea', 'feature-slider': 'one feature',
   'step-numeral': 'numbered steps', 'listicle-numeral': 'numbered entries', 'cta-button': 'a closing call to action',
+  'headline-body-image': 'a text with a picture', 'image-row': 'a text with pictures', 'thumb-rows': 'short lists with pictures', 'cover-art': 'big statements with a picture', 'photo-cover': 'big statements with a picture', 'portrait-closing': 'a closing with a person', 'art-side-text': 'a text with a picture', 'do-dont': 'do and do-not pairs',
+  prose: 'short paragraphs of text', 'statement-stacked': 'big statements', 'statement-card': 'big statements', 'statement-pill': 'big statements', 'statement-question': 'big questions', 'contact-closing': 'a closing with contact details', 'cta-pair': 'a closing call to action', 'numbered-stagger': 'numbered points', 'bullet-list': 'short lists', 'pill-stagger': 'short lists', 'headline-card': 'a key paragraph',
 };
 /** The preset's shape line: the kinds of content its preferred layouts suit, the layouts, and the honesty rule. Short on purpose (about 60 tokens). */
 export function flavourLine(fl: NonNullable<LayoutStyle['flavour']>): string {
   const kinds = [...new Set((fl.prefer ?? []).map((l) => KIND[l]).filter(Boolean))].slice(0, 4);
   return `- This look suits ${kinds.join(', ') || 'any content'} (layouts: ${(fl.prefer ?? []).join(', ') || 'any'}${fl.avoid?.length ? '; avoid unless needed: ' + fl.avoid.join(', ') : ''}). Use these forms where the topic honestly allows; never invent content to fit.`;
 }
-export const DENSE_LAYOUTS = ['statement', 'big-question', 'cta-button'];
+export const DENSE_LAYOUTS = ['statement', 'big-question', 'cta-button', 'statement-card', 'statement-stacked', 'statement-question'];
 
 export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutStyle, brief: string, n: number): string {
   const tone = TONES.find((t) => t.id === req.tone)!;
-  const ids = LAYOUT_IDS.filter((id) => look.hasPhoto || id !== 'photo-led');
+  // photo-led needs a photo; a layout with picture slots needs enough pictures that fit its slots (the metadata list below); without a list, any photo will do
+  const ids = LAYOUT_IDS.filter((id) => (id === 'photo-led' ? !!look.hasPhoto : (IMAGE_LAYOUT_IDS as readonly string[]).includes(id) ? (look.images ? hasEnoughPictures(id, look.images) : !!look.hasPhoto) : true));
   const example = { title: 'Short name of this carousel', note: 'optional, only if the text is thin', slides: [{ layout: 'statement', variant: 1, fields: { kicker: 'Small line', headline: 'The big promise in a few words', caption: 'One line that makes people swipe.' }, accents: ['big promise'], density: 'normal', cut: 'edge-h' }, { layout: 'checklist', fields: { title: 'Before you start', items: ['Short item', 'Short item', 'Short item'] }, accents: [] }] };
   return [
     '[carousel:library]',
@@ -320,7 +364,10 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     ...ids.map(fieldLine),
     '',
     'Rules:',
-    `- Write ${n} slides. Slide 1 is a strong hook (statement, big-question or lead-statement; at most 8 words). The last slide is a cta-button with a call to action. In between choose the layout that suits THAT slide's content.`,
+    `- Write ${n} slides. Slide 1 is a strong hook (statement, statement-stacked, statement-card, statement-pill, big-question or lead-statement; at most 8 words). The last slide is a closing: cta-button, cta-pair or contact-closing (contact-closing only when the text gives contact details such as a handle, site, phone or email; never invent them). In between choose the layout that suits THAT slide's content.`,
+    '- Prose: "prose" is the ONLY layout that takes whole paragraphs (up to 300 characters each, at most 3 paragraphs, about 450 characters in all). Use it for a slide that needs explaining in sentences; its heading is optional and, when present, reads on its own as a full title. Every other layout stays short: never put a paragraph into a statement, list or card layout.',
+    ...(look.images?.length ? imageRules(look.images) : []),
+    '- Forms: "statement-stacked" is 2 to 4 words (one per line); "statement-pill" needs a short caption (at most 40 characters) that is set in a pill; "statement-question" is one question or thought; "numbered-stagger" is 2 or 3 sentences; "bullet-list" and "pill-stagger" are short lines (at most 46 and 36 characters); "headline-card" has ONE key paragraph (the card) under a headline; "cta-pair" has two buttons with a short line each.',
     '- Variety: no two consecutive slides use the same layout, and no layout is used more than twice. Use "stepper" for 2 to 5 ordered steps, "stat-bar" or "big-stat" for a figure, "checklist" for benefits, "comparison" for two things set against each other, "quote" only for words that are in the text.',
     '- Stats: the "label" of big-stat and stat-bar is the continuation of the number, so "number label" reads as one phrase: "30%" + "off for early backers" (never a label that starts a new sentence, such as "Early backers save" under a 30%). split-text: the paragraph is ONE idea in at most 14 words.',
     '- Facts: use only facts, claims and numbers that are in the text. Never invent statistics, names, quotes, dates or results. If a slide would want a figure the text does not give, use a layout without one. A big-stat or stat-bar number must be a real figure from the text.',
@@ -352,7 +399,8 @@ export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 
 export function toSpec(raw: unknown): SlideSpec | null {
   if (!isObj(raw)) return null;
   const fields: Fields = {};
-  if (isObj(raw.fields)) for (const [k, v] of Object.entries(raw.fields)) fields[k] = Array.isArray(v) ? v.map((x) => String(x)) : typeof v === 'string' || typeof v === 'number' ? String(v) : '';
+  // the writer never fills a picture field: whatever it sends there is dropped
+  if (isObj(raw.fields)) for (const [k, v] of Object.entries(raw.fields).filter(([key]) => !isImageKey(key))) fields[k] = Array.isArray(v) ? v.map((x) => String(x)) : typeof v === 'string' || typeof v === 'number' ? String(v) : '';
   const cuts: Cut[] = ['plain', 'edge-h', 'edge-v', 'angle', 'curve'];
   return {
     layout: String(raw.layout ?? '').trim().toLowerCase(),
@@ -453,6 +501,10 @@ export function repairFields(id: string, f: Fields): Fields | null {
   const out: Fields = {};
   for (const spec of def.fields) {
     const v = f[spec.name];
+    if (spec.image) {
+      if (typeof v === 'string' && v.trim()) out[spec.name] = v;
+      continue;
+    }
     if (spec.list) {
       const list = (Array.isArray(v) ? v : typeof v === 'string' && v ? v.split(/\n|;/) : []).map((x) => String(x).trim()).filter(Boolean).slice(0, spec.list.max).map((x) => clip(x, spec.max));
       if (list.length < spec.list.min) return spec.required ? null : out;
@@ -496,6 +548,22 @@ export function scriptSlideOf(layout: string, f: Fields): Record<string, unknown
     case 'stat-grid': return { type: 'checklist', headline: s('title') || 'In numbers', items: pair(a('numbers'), a('labels')).slice(0, 6), ...tags };
     case 'timeline': return { type: 'checklist', headline: s('title'), items: pair(a('labels'), a('events')).slice(0, 6), ...tags };
     case 'spotlight': return { type: 'checklist', headline: s('subject'), items: a('callouts'), ...tags };
+    case 'headline-body-image': return { type: 'content', headline: s('headline'), body: s('body'), ...tags };
+    case 'image-row': return { type: 'content', headline: s('headline'), body: [s('subline'), s('paragraph')].filter(Boolean).join(' '), ...tags };
+    case 'thumb-rows': return { type: 'checklist', headline: s('title') || 'In short', items: a('items'), ...tags };
+    case 'cover-art': return { type: 'cover', headline: s('headline'), ...(s('subtitle') ? { sub: s('subtitle') } : {}), ...tags };
+    case 'photo-cover': return { type: 'cover', headline: s('headline'), sub: s('intro'), ...tags };
+    case 'portrait-closing': return { type: 'closing', headline: s('headline'), cta: s('url') || 'Get in touch', ...tags };
+    case 'art-side-text': return { type: 'content', headline: s('heading'), body: s('paragraph'), ...tags };
+    case 'do-dont': return { type: 'beforeafter', beforeLabel: 'Do not', before: s('wrong'), afterLabel: 'Do', after: s('right'), ...tags };
+    case 'prose': return { type: 'content', headline: s('heading') || s('p1').split(/\s+/).slice(0, 6).join(' '), body: [s('p1'), s('p2'), s('p3'), s('pull'), ...a('bullets')].filter(Boolean).join(' '), ...tags };
+    case 'statement-stacked': case 'statement-card': case 'statement-pill': return { type: 'cover', headline: s('headline'), ...(s('kicker') ? { kicker: s('kicker') } : {}), ...(s('caption') ? { sub: s('caption') } : {}), ...tags };
+    case 'statement-question': return { type: 'cover', headline: s('question'), ...(s('line') ? { sub: s('line') } : {}), ...tags };
+    case 'contact-closing': return { type: 'closing', headline: s('headline'), cta: s('button') || a('contacts')[0] || 'Get in touch', ...tags };
+    case 'cta-pair': return { type: 'closing', headline: s('headline'), cta: s('button1'), ...tags };
+    case 'numbered-stagger': case 'bullet-list': return { type: 'checklist', headline: s('title'), items: a('items'), ...tags };
+    case 'pill-stagger': return { type: 'checklist', headline: s('headline'), items: a('items'), ...tags };
+    case 'headline-card': return { type: 'content', headline: s('headline'), body: [s('card'), s('paragraph'), s('closing')].filter(Boolean).join(' '), ...tags };
     default: return { type: 'content', headline: s('headline') || s('title') || 'Slide', body: Object.values(f).flat().join('. ').slice(0, 250) || 'Slide', ...tags };
   }
 }
@@ -698,6 +766,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
       count[s.layout] = c + 1;
       return same ? rv[i].variant : ((c % 2) as 0 | 1);
     });
+    specs.forEach((s, i) => { if (s.pin?.variant !== undefined) variants[i] = s.pin.variant; }); // a variant the preset (closing) or the person pinned
     const repeats = new Map<number, string>();
     rv.forEach((r, i) => layoutDef(specs[i].layout) && r.layout !== specs[i].layout && repeats.set(i, r.note || `the layout "${specs[i].layout}" repeats or is over-used`));
     const rc = rotateCuts(ids.map((layout) => ({ layout: layoutDef(layout) ? layout : ('statement' as LayoutId) })), style, { suggest: specs.map((s) => ({ cut: s.cut })) });
@@ -705,6 +774,8 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   };
   const drawAll = async (only?: Set<number>, prev?: Map<number, Drawn>) => {
     const rot = rotate();
+    // the project's pictures go into the picture slots by code (best fit, each at most once); a layout that cannot get enough keeps its text-only form
+    if (look.images?.length) specs = placeImages(specs, rot.variants, look.images);
     const out = new Map<number, Drawn>(prev ?? []);
     for (let i = 0; i < specs.length; i++) {
       if (only && !only.has(i)) continue;
@@ -786,7 +857,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   specs.forEach((s, i) => {
     const d = drawn.get(i);
     if (!d?.built) return;
-    const ds: DesignedSlide = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}) } };
+    const ds: DesignedSlide = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}), ...(d.built.images ? { images: d.built.images } : {}) } };
     designed.slides[String(i)] = ds;
     designed.layouts![String(i)] = s.layout;
   });
@@ -878,7 +949,7 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
   drawn.forEach((d, i) => {
     adjustments.push(...d.adjustments);
     if (d.built) {
-      slides[String(i)] = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}) } };
+      slides[String(i)] = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}), ...(d.built.images ? { images: d.built.images } : {}) } };
       layouts[String(i)] = specs[i].layout;
     }
   });
