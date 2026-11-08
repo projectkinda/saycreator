@@ -15,12 +15,15 @@ import bn400 from './fonts/bebas-neue/bebas-neue-latin-400-normal.woff2?url';
 import cb400 from './fonts/caveat-brush/caveat-brush-latin-400-normal.woff2?url';
 import eg400 from './fonts/eb-garamond/eb-garamond-latin-400-normal.woff2?url';
 import eg500 from './fonts/eb-garamond/eb-garamond-latin-500-normal.woff2?url';
+import eg600 from './fonts/eb-garamond/eb-garamond-latin-600-normal.woff2?url';
+import eg700 from './fonts/eb-garamond/eb-garamond-latin-700-normal.woff2?url';
 import bc600 from './fonts/barlow-condensed/barlow-condensed-latin-600-normal.woff2?url';
 import bc700 from './fonts/barlow-condensed/barlow-condensed-latin-700-normal.woff2?url';
 import lo400 from './fonts/lilita-one/lilita-one-latin-400-normal.woff2?url';
 import pd700 from './fonts/playfair-display/playfair-display-latin-700-normal.woff2?url';
 import pd800 from './fonts/playfair-display/playfair-display-latin-800-normal.woff2?url';
 import ne400 from './fonts/noto-emoji/noto-emoji-sticker-400-normal.woff2?url';
+import egi500 from './fonts/eb-garamond/eb-garamond-latin-500-italic.woff2?url';
 import type { FontFamily } from './types';
 
 /** Weights that are actually bundled. Any other weight would be faked by the browser. */
@@ -32,11 +35,12 @@ export const FONT_WEIGHTS: Record<FontFamily, readonly number[]> = {
   'Instrument Serif Italic': [400],
   'Bebas Neue': [400],
   'Caveat Brush': [400],
-  'EB Garamond': [400, 500],
+  'EB Garamond': [400, 500, 600, 700],
   'Barlow Condensed': [600, 700],
   'Lilita One': [400],
   'Playfair Display': [700, 800],
   'Noto Emoji': [400],
+  'EB Garamond Italic': [500],
 };
 
 const FACES: { family: FontFamily; weight: number; url: string }[] = [
@@ -56,6 +60,8 @@ const FACES: { family: FontFamily; weight: number; url: string }[] = [
   { family: 'Caveat Brush', weight: 400, url: cb400 },
   { family: 'EB Garamond', weight: 400, url: eg400 },
   { family: 'EB Garamond', weight: 500, url: eg500 },
+  { family: 'EB Garamond', weight: 600, url: eg600 },
+  { family: 'EB Garamond', weight: 700, url: eg700 },
   { family: 'Barlow Condensed', weight: 600, url: bc600 },
   { family: 'Barlow Condensed', weight: 700, url: bc700 },
   { family: 'Lilita One', weight: 400, url: lo400 },
@@ -63,6 +69,8 @@ const FACES: { family: FontFamily; weight: number; url: string }[] = [
   { family: 'Playfair Display', weight: 800, url: pd800 },
   // only the sticker glyphs (16), used for emoji stickers: one weight, drawn in a flat colour
   { family: 'Noto Emoji', weight: 400, url: ne400 },
+  // the italic of EB Garamond (medium), registered as its own family like Instrument Serif Italic: for accent words set in italic inside upright text
+  { family: 'EB Garamond Italic', weight: 500, url: egi500 },
 ];
 
 let loading: Promise<void> | null = null;
