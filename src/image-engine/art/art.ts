@@ -11,6 +11,8 @@ export interface ArtItem {
   tokens: string[];
   role: ArtRole;
   shape: string;
+  /** A hand-drawn ring or scribble: it marks a word, so it is only drawn on a slide that has an accent word. */
+  ring?: boolean;
   source: { slide: string; at: { x: number; y: number; w: number; h: number }; alsoOn: string[] };
 }
 export interface ArtPalette {
@@ -35,12 +37,18 @@ export function recolour(svg: string, pal: ArtPalette): string {
 /**
  * The item as markup to draw inside a slide: a nested <svg> at (x, y, w, h) (aspect kept), recoloured, with its gradient ids made unique (`uid`).
  */
-export function artMarkup(it: ArtItem, x: number, y: number, w: number, pal: ArtPalette, uid: string): string | null {
+export function artMarkup(it: ArtItem, x: number, y: number, w: number, pal: ArtPalette, uid: string, soft?: { opacity: number; blur: number }, stretchH?: number): string | null {
   const src = artSource(it);
   if (!src) return null;
-  const h = (w * it.bbox.h) / it.bbox.w;
+  // stretchH: the item is fitted to a box of its own (a ring round a word), not to its own aspect
+  const h = stretchH ?? (w * it.bbox.h) / it.bbox.w;
   let inner = recolour(src, pal).replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
   inner = inner.replace(/\bid="(g\d+|m\d+_[^"]*)"/g, (_m, id: string) => `id="${uid}-${id}"`).replace(/url\(#(g\d+|m\d+_[^)]*)\)/g, (_m, id: string) => `url(#${uid}-${id})`);
   const r = (n: number) => Math.round(n * 10) / 10;
-  return `<svg x="${r(x)}" y="${r(y)}" width="${r(w)}" height="${r(h)}" viewBox="0 0 ${it.bbox.w} ${it.bbox.h}" overflow="visible" data-art="${artKey(it)}">${inner}</svg>`;
+  // a soft glow: low opacity and a blurred edge (the blur is a fraction of the item's own width), so it reads as light, not as a shape
+  if (soft) {
+    const sd = r(it.bbox.w * soft.blur);
+    inner = `<defs><filter id="${uid}-soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="${sd}"/></filter></defs><g opacity="${soft.opacity}" filter="url(#${uid}-soft)">${inner}</g>`;
+  }
+  return `<svg x="${r(x)}" y="${r(y)}" width="${r(w)}" height="${r(h)}" viewBox="0 0 ${it.bbox.w} ${it.bbox.h}"${stretchH ? ' preserveAspectRatio="none"' : ''} overflow="visible" data-art="${artKey(it)}"${soft ? ` data-art-opacity="${soft.opacity}"` : ''}>${inner}</svg>`;
 }

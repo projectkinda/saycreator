@@ -1,6 +1,6 @@
 // Vector art from a preset's own pack (src/image-engine/art), placed in the safe zones of a finished slide and recoloured to the slide's palette. Same rules as every other device:
 //  - off unless the preset lists art (deco.art) and the style panel has not switched it off;
-//  - never over text (a clear gap from every text, shape and picture), never over another device;
+//  - never over text (a clear gap from every text, shape and picture), never over another device; a soft glow is the one exception to the gap: it sits BEHIND everything, and the text over it must still read on the blend;
 //  - contrast floor: a line, ring or star that is not a soft background must read 3:1 against the ground, else it takes the ink colour; an item that would be invisible is not drawn;
 //  - every item reports its box, so the checks see it.
 import { artItem, artMarkup, type ArtItem, type ArtPalette } from '../../image-engine/art/art';
@@ -24,9 +24,23 @@ const inCanvas = (b: Box): Box | null => {
 };
 
 /** The palette an item is drawn in on this slide, with the contrast floor applied. */
+/** A glow is light, not a shape: at least this wide (35% of the page), at most this opaque, and blurred. */
+export const GLOW_MIN_W = 380;
+/** Art goes on every third slide at most. */
+export const ART_EVERY = 3;
+export const GLOW_MAX_OPACITY = 0.35;
+const isLight = (bg: string) => contrast(bg, '#000000') > 10;
+const WARM_TINT = '#EFD5A6';
+
 function paletteFor(it: ArtItem, x: DeviceCtx): { pal: ArtPalette; ink: string; visible: boolean } {
   const c = x.c;
   const soft = it.role === 'background';
+  if (soft) {
+    // a glow takes ONE colour: on a light page a very soft warm tint (never black, never the ink), on a dark page the style's accent
+    const tint = isLight(c.bg) ? WARM_TINT : c.accent;
+    const pal: ArtPalette = { primary: tint, accent: tint, ink: tint, surface: c.surface, bg: c.bg };
+    return { pal, ink: tint, visible: contrast(tint, c.bg) >= 1.08 };
+  }
   const floor = soft ? 1.2 : 3;
   const pick = (col: string) => (contrast(col, c.bg) >= floor ? col : contrast(c.text, c.bg) >= contrast(col, c.bg) ? c.text : col);
   const pal: ArtPalette = { primary: pick(c.accent), accent: pick(c.accent), ink: pick(c.text), surface: c.surface, bg: c.bg };
@@ -48,19 +62,52 @@ export function artDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box[
     ...taken.filter((p) => p.id !== 'glow' && p.id !== 'rule' && p.id !== 'scallop' && p.id !== 'inset-card').map((p) => ({ ...p.box, gap: 24 })),
   ];
   const free = (b: Box) => !busy.some((q) => hit(b, q, q.gap ?? 24));
-  list.forEach((p, k) => {
-    if (!matches(p.on, x.index, x.total)) return;
+  // a glow is BEHIND all content: it may sit under text and shapes (they are drawn over it) but not on another device; the text stays readable because the glow is blended into the ground
+  // first and every text over it must still read on that blend (4.5:1 for the text colour, 3.5:1 for the muted one)
+  const busyDevices: Box[] = taken.filter((p) => p.id !== 'glow' && p.id !== 'rule' && p.id !== 'scallop' && p.id !== 'inset-card').map((p) => ({ ...p.box, gap: 24 }));
+  const freeGlow = (b: Box) => !busyDevices.some((q) => hit(b, q, q.gap ?? 24)) && !out.placed.some((q) => hit(b, q.box, 24));
+  const mix = (a: string, b: string, t: number) => { const h = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)); const A = h(a), B = h(b); return '#' + A.map((v, i) => Math.round(v * (1 - t) + B[i] * t).toString(16).padStart(2, '0')).join(''); };
+  const textReads = (vis: Box, tint: string, opacity: number) => {
+    const blend = mix(x.c.bg, tint, opacity);
+    return x.textBoxes.every((t) => !hit(vis, t, 0) || (contrast(x.c.text, blend) >= 5.5 && contrast(x.c.muted, blend) >= 5.5));
+  };
+  // Frequency: art is a garnish, not a pattern. One art item on every ART_EVERY-th slide (the 1st, 4th, 7th ...: at most a third of the deck, never two slides in a row), the items of the
+  // preset's list in turn; a hand-drawn ring only on a slide that has an accent word. The first item of the turn that finds a clear spot is drawn.
+  // one decoration per slide, ring > sticker > art: a slide whose accent word is ringed, or that has a sticker, gets no art item
+  if (taken.some((p) => p.kind === 'sticker' || p.id === 'pen-circle')) return out;
+  if (x.index % ART_EVERY !== 0) return out;
+  const turn = Math.floor(x.index / ART_EVERY);
+  const order = list.map((p, k) => ({ p, k })).filter(({ p }) => matches(p.on, x.index, x.total) && !artItem(p.item)?.ring); // a ring is only drawn round an accent word (by the pen-circle device), never as a free-floating oval
+  const rotated = order.map((_, i) => order[(i + turn) % order.length]);
+  for (const { p, k } of rotated) {
+    if (out.placed.length) break;
+    placeOne(p, k);
+  }
+  return out;
+  function placeOne(p: ArtPlacement, k: number) {
     const it = artItem(p.item);
     if (!it) { out.notes.push(`Art "${p.item}" is not in the art folder.`); return; }
     const { pal, ink, visible } = paletteFor(it, x);
     if (!visible) { out.notes.push(`Art "${p.item}" would not show on this ground, so it is left out.`); return; }
     const ratio = it.bbox.h / it.bbox.w;
     let w = p.w ?? (p.zone === 'top-edge' || p.zone === 'bottom-edge' ? 1080 : p.zone.startsWith('divider') ? Math.min(320, it.bbox.w) : 220);
+    const glow = it.role === 'background';
+    if (glow) w = Math.max(GLOW_MIN_W, w);
     if (p.zone === 'top-edge' || p.zone === 'bottom-edge') w = Math.min(1080, w);
     const h = w * ratio;
-    const bleed = Math.max(0, Math.min(0.5, p.bleed ?? 0));
+    const bleed = Math.max(0, Math.min(0.5, p.bleed ?? (glow ? 0.3 : 0)));
     let spot: { x: number; y: number } | null = null;
-    const ok = (px: number, py: number) => { const vis = inCanvas({ x: px, y: py, w, h }); return !!vis && free(vis); };
+    const op0 = glow ? Math.min(GLOW_MAX_OPACITY, p.opacity ?? 0.3) : 1;
+    // a glow that would make text under it harder to read first gets fainter (three steps), then the spot is refused
+    let op = op0;
+    const ok = (px: number, py: number) => {
+      const vis = inCanvas({ x: px, y: py, w, h });
+      if (!vis) return false;
+      if (!glow) return free(vis);
+      if (!freeGlow(vis)) return false;
+      for (const k2 of [1, 0.75, 0.5, 0.35]) if (textReads(vis, pal.primary, op0 * k2)) { op = op0 * k2; return true; }
+      return false;
+    };
     if (p.zone === 'top-edge') {
       // an edge row keeps its own vertical offset when the pack bled it off the page (the star row sits half off the top)
       const y = it.source.at.y < 0 ? Math.max(-h, (it.source.at.y * w) / it.bbox.w) : 0;
@@ -84,12 +131,11 @@ export function artDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box[
       for (const y of ys) { for (const px of xs) if (!spot && ok(px, y)) spot = { x: px, y }; if (spot) break; }
     }
     if (!spot) { out.notes.push(`No clear spot for the art "${p.item}" (${p.zone}) on this slide.`); return; }
-    const mk = artMarkup(it, spot.x, spot.y, w, pal, `art${x.index}x${k}`);
+    const mk = artMarkup(it, spot.x, spot.y, w, pal, `art${x.index}x${k}`, glow ? { opacity: op, blur: 0.045 } : undefined);
     if (!mk) return;
     if (it.role === 'background') out.behind += mk; else out.over += mk;
     const box = inCanvas({ x: spot.x, y: spot.y, w, h }) as Box;
-    out.placed.push({ id: `art:${p.item}`, kind: 'decor', box, ink });
+    out.placed.push({ id: `art:${p.item}`, kind: 'decor', box, ink, ...(glow ? { opacity: op } : {}) });
     busy.push({ ...box, gap: 24 });
-  });
-  return out;
+  }
 }

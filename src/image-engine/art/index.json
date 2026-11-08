@@ -657,6 +657,7 @@
       "primary"
     ],
     "role": "sticker",
+    "ring": true,
     "shape": "path",
     "source": {
       "slide": "2.svg",
@@ -801,6 +802,7 @@
       "primary"
     ],
     "role": "sticker",
+    "ring": true,
     "shape": "path",
     "source": {
       "slide": "5.svg",
@@ -825,6 +827,7 @@
       "primary"
     ],
     "role": "sticker",
+    "ring": true,
     "shape": "path",
     "source": {
       "slide": "6.svg",

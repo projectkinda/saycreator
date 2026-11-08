@@ -188,6 +188,7 @@ for (const [pk, m] of [...kept.entries()].sort()) {
     const at = e.kind === 'single' ? e.c.bbox : { x: bt.union.x, y: bt.union.y, w: bt.union.x2 - bt.union.x, h: bt.union.y2 - bt.union.y };
     index.push({
       name, pack: pk, file: `${pk}/${name}.svg`, bbox: { w: bt.w, h: bt.h }, tokens: [...bt.used].sort(), role,
+      ...(role === 'sticker' && e.c.tag === 'path' && e.c.subpaths >= 2 && bt.w / Math.max(1, bt.h) > 1.4 && bt.w / Math.max(1, bt.h) < 3.5 && Math.max(bt.w, bt.h) >= 250 ? { ring: true } : {}),
       shape: e.kind === 'orbs' ? 'glow orbs (six overlapping gradient ellipses)' : e.kind === 'star-row' ? 'a row of four-point stars' : e.c.tag,
       source: { slide: e.c.slide, at: { x: Math.round(at.x), y: Math.round(at.y), w: Math.round(at.w), h: Math.round(at.h) }, alsoOn: [...it.slides].filter((s) => s !== e.c.slide) },
     });

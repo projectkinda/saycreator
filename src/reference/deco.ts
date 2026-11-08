@@ -13,6 +13,8 @@ export interface ArtPlacement {
   on?: 'all' | 'first' | 'last' | 'inner';
   /** How far a corner item may bleed off the page (0..0.5 of its size; default 0). */
   bleed?: number;
+  /** A glow (a background item) is always drawn soft: at most this opaque (default 0.3, never above 0.35). */
+  opacity?: number;
 }
 export interface Deco {
   // chrome
