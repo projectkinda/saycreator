@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Icon } from './Icon';
 import { Logo, Sidebar } from './Sidebar';
 import LiveView from '../live/LiveView';
@@ -42,6 +42,9 @@ export function Shell() {
 
       <main id="main" className="content" tabIndex={-1}>
         <Outlet />
+        <footer className="app-footer">
+          <Link to="/credits">Credits</Link>
+        </footer>
       </main>
       <LiveView />
     </div>

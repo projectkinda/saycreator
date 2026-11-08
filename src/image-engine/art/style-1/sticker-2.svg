@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 445 442" width="445" height="442"><defs><radialGradient id="g0" cx="0" cy="0" r="1" gradientTransform="matrix(-255.05 337.16 -642.76 -40.79 186.99 36.23)" gradientUnits="userSpaceOnUse">
+<stop stop-color="$primary"></stop>
+<stop offset="0.3" stop-color="$primary"></stop>
+<stop offset="0.66" stop-color="$ink"></stop>
+<stop offset="1" stop-color="$ink" stop-opacity="0"></stop>
+</radialGradient></defs><ellipse cx="164.69" cy="159.61" rx="164.69" ry="159.61" fill="url(#g0)" transform="matrix(-0.87 -0.5 -0.5 0.87 444.86 164.69)"></ellipse></svg>

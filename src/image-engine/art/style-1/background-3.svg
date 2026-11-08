@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 632" width="520" height="632"><defs><radialGradient id="g0" cx="0" cy="0" r="1" gradientTransform="matrix(-335.28 83.96 -559.06 -327.91 233.34 296.68)" gradientUnits="userSpaceOnUse">
+<stop stop-color="$primary"></stop>
+<stop offset="0.66" stop-color="$ink"></stop>
+<stop offset="1" stop-color="$ink" stop-opacity="0"></stop>
+</radialGradient><radialGradient id="g1" cx="0" cy="0" r="1" gradientTransform="matrix(-255.05 337.16 -642.76 -40.79 186.99 36.23)" gradientUnits="userSpaceOnUse">
+<stop stop-color="$primary"></stop>
+<stop offset="0.3" stop-color="$primary"></stop>
+<stop offset="0.66" stop-color="$ink"></stop>
+<stop offset="1" stop-color="$ink" stop-opacity="0"></stop>
+</radialGradient><radialGradient id="g2" cx="0" cy="0" r="1" gradientTransform="matrix(-255.05 337.16 -642.76 -40.79 186.99 36.23)" gradientUnits="userSpaceOnUse">
+<stop offset="0.3" stop-color="$primary"></stop>
+<stop offset="0.66" stop-color="$ink"></stop>
+<stop offset="1" stop-color="$ink" stop-opacity="0"></stop>
+</radialGradient><radialGradient id="g3" cx="0" cy="0" r="1" gradientTransform="matrix(-223.86 56.05 -373.26 -218.93 155.79 198.08)" gradientUnits="userSpaceOnUse">
+<stop stop-color="$primary"></stop>
+<stop offset="0.66" stop-color="$ink"></stop>
+<stop offset="1" stop-color="$ink" stop-opacity="0"></stop>
+</radialGradient></defs><g transform="translate(0 0)"><ellipse cx="246.67" cy="162.7" rx="246.67" ry="162.7" fill="url(#g0)" transform="matrix(0.47 0.88 0.88 -0.47 0 153.66)"></ellipse></g><g transform="translate(0.09 178.73)"><ellipse cx="164.69" cy="159.61" rx="164.69" ry="159.61" fill="url(#g1)" transform="matrix(-0.87 -0.5 -0.5 0.87 444.86 164.69)"></ellipse></g><g transform="translate(16.97 129.42)"><ellipse cx="164.69" cy="159.61" rx="164.69" ry="159.61" fill="url(#g2)" transform="matrix(-0.87 -0.5 -0.5 0.87 444.86 164.69)"></ellipse></g><g transform="translate(17.06 238.49)"><ellipse cx="164.69" cy="108.63" rx="164.69" ry="108.63" fill="url(#g3)" transform="matrix(0.47 0.88 0.88 -0.47 0 102.6)"></ellipse></g><g transform="translate(152.29 151)"><ellipse cx="106" cy="114" rx="106" ry="114" fill="$primary"></ellipse></g></svg>

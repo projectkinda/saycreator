@@ -1,0 +1,892 @@
+[
+  {
+    "name": "background-1",
+    "pack": "style-1",
+    "file": "style-1/background-1.svg",
+    "bbox": {
+      "w": 763,
+      "h": 758
+    },
+    "tokens": [
+      "ink",
+      "primary"
+    ],
+    "role": "background",
+    "shape": "glow orbs (six overlapping gradient ellipses)",
+    "source": {
+      "slide": "1.svg",
+      "at": {
+        "x": -169,
+        "y": 754,
+        "w": 762,
+        "h": 757
+      },
+      "alsoOn": [
+        "2.svg",
+        "3.svg",
+        "4.svg",
+        "5.svg",
+        "6.svg"
+      ]
+    }
+  },
+  {
+    "name": "sticker-1",
+    "pack": "style-1",
+    "file": "style-1/sticker-1.svg",
+    "bbox": {
+      "w": 520,
+      "h": 589
+    },
+    "tokens": [
+      "ink",
+      "primary"
+    ],
+    "role": "sticker",
+    "shape": "ellipse",
+    "source": {
+      "slide": "1.svg",
+      "at": {
+        "x": -10,
+        "y": 754,
+        "w": 520,
+        "h": 589
+      },
+      "alsoOn": [
+        "2.svg",
+        "3.svg",
+        "4.svg",
+        "5.svg",
+        "6.svg",
+        "7.svg"
+      ]
+    }
+  },
+  {
+    "name": "background-2",
+    "pack": "style-1",
+    "file": "style-1/background-2.svg",
+    "bbox": {
+      "w": 763,
+      "h": 757
+    },
+    "tokens": [
+      "ink",
+      "primary"
+    ],
+    "role": "background",
+    "shape": "ellipse",
+    "source": {
+      "slide": "1.svg",
+      "at": {
+        "x": -169,
+        "y": 755,
+        "w": 762,
+        "h": 756
+      },
+      "alsoOn": [
+        "2.svg",
+        "3.svg",
+        "4.svg",
+        "5.svg",
+        "6.svg"
+      ]
+    }
+  },
+  {
+    "name": "sticker-2",
+    "pack": "style-1",
+    "file": "style-1/sticker-2.svg",
+    "bbox": {
+      "w": 445,
+      "h": 442
+    },
+    "tokens": [
+      "ink",
+      "primary"
+    ],
+    "role": "sticker",
+    "shape": "ellipse",
+    "source": {
+      "slide": "1.svg",
+      "at": {
+        "x": -10,
+        "y": 933,
+        "w": 445,
+        "h": 441
+      },
+      "alsoOn": [
+        "2.svg",
+        "3.svg",
+        "4.svg",
+        "5.svg",
+        "6.svg",
+        "7.svg"
+      ]
+    }
+  },
+  {
+    "name": "sticker-3",
+    "pack": "style-1",
+    "file": "style-1/sticker-3.svg",
+    "bbox": {
+      "w": 348,
+      "h": 393
+    },
+    "tokens": [
+      "ink",
+      "primary"
+    ],
+    "role": "sticker",
+    "shape": "ellipse",
+    "source": {
+      "slide": "1.svg",
+      "at": {
+        "x": 7,
+        "y": 992,
+        "w": 347,
+        "h": 393
+      },
+      "alsoOn": [
+        "2.svg",
+        "3.svg",
+        "4.svg",
+        "5.svg",
+        "6.svg",
+        "7.svg"
+      ]
+    }
+  },
+  {
+    "name": "sticker-4",
+    "pack": "style-1",
+    "file": "style-1/sticker-4.svg",
+    "bbox": {
+      "w": 212,
+      "h": 228
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "sticker",
+    "shape": "ellipse",
+    "source": {
+      "slide": "1.svg",
+      "at": {
+        "x": 142,
+        "y": 905,
+        "w": 212,
+        "h": 228
+      },
+      "alsoOn": [
+        "2.svg",
+        "3.svg",
+        "4.svg",
+        "5.svg",
+        "6.svg",
+        "7.svg"
+      ]
+    }
+  },
+  {
+    "name": "background-3",
+    "pack": "style-1",
+    "file": "style-1/background-3.svg",
+    "bbox": {
+      "w": 520,
+      "h": 632
+    },
+    "tokens": [
+      "ink",
+      "primary"
+    ],
+    "role": "background",
+    "shape": "glow orbs (six overlapping gradient ellipses)",
+    "source": {
+      "slide": "7.svg",
+      "at": {
+        "x": -54,
+        "y": -123,
+        "w": 520,
+        "h": 631
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "badge-1",
+    "pack": "style-1",
+    "file": "style-1/badge-1.svg",
+    "bbox": {
+      "w": 226,
+      "h": 91
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "badge",
+    "shape": "rect",
+    "source": {
+      "slide": "7.svg",
+      "at": {
+        "x": 108,
+        "y": 1060,
+        "w": 226,
+        "h": 91
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "badge-1",
+    "pack": "style-2",
+    "file": "style-2/badge-1.svg",
+    "bbox": {
+      "w": 267,
+      "h": 96
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "badge",
+    "shape": "rect",
+    "source": {
+      "slide": "5.svg",
+      "at": {
+        "x": 407,
+        "y": 436,
+        "w": 267,
+        "h": 96
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "sticker-1",
+    "pack": "style-2",
+    "file": "style-2/sticker-1.svg",
+    "bbox": {
+      "w": 45,
+      "h": 30
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "sticker",
+    "shape": "path",
+    "source": {
+      "slide": "5.svg",
+      "at": {
+        "x": 688,
+        "y": 638,
+        "w": 45,
+        "h": 30
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "divider-1",
+    "pack": "style-2",
+    "file": "style-2/divider-1.svg",
+    "bbox": {
+      "w": 405,
+      "h": 3
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "divider",
+    "shape": "path",
+    "source": {
+      "slide": "5.svg",
+      "at": {
+        "x": 338,
+        "y": 1117,
+        "w": 404,
+        "h": 3
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "divider-2",
+    "pack": "style-2",
+    "file": "style-2/divider-2.svg",
+    "bbox": {
+      "w": 837,
+      "h": 5
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "divider",
+    "shape": "path",
+    "source": {
+      "slide": "6.svg",
+      "at": {
+        "x": 122,
+        "y": 674,
+        "w": 836,
+        "h": 4
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "sticker-2",
+    "pack": "style-2",
+    "file": "style-2/sticker-2.svg",
+    "bbox": {
+      "w": 95,
+      "h": 95
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "sticker",
+    "shape": "path",
+    "source": {
+      "slide": "6.svg",
+      "at": {
+        "x": 323,
+        "y": 132,
+        "w": 94,
+        "h": 94
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "badge-1",
+    "pack": "style-3",
+    "file": "style-3/badge-1.svg",
+    "bbox": {
+      "w": 661,
+      "h": 84
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "badge",
+    "shape": "rect",
+    "source": {
+      "slide": "1.svg",
+      "at": {
+        "x": 209,
+        "y": 472,
+        "w": 661,
+        "h": 84
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "frame-1",
+    "pack": "style-4",
+    "file": "style-4/frame-1.svg",
+    "bbox": {
+      "w": 1080,
+      "h": 88
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "frame",
+    "shape": "a row of four-point stars",
+    "source": {
+      "slide": "1.svg",
+      "at": {
+        "x": 0,
+        "y": -44,
+        "w": 1080,
+        "h": 88
+      },
+      "alsoOn": [
+        "2.svg",
+        "3.svg",
+        "4.svg",
+        "5.svg",
+        "6.svg"
+      ]
+    }
+  },
+  {
+    "name": "corner-1",
+    "pack": "style-4",
+    "file": "style-4/corner-1.svg",
+    "bbox": {
+      "w": 88,
+      "h": 88
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "corner",
+    "shape": "path",
+    "source": {
+      "slide": "1.svg",
+      "at": {
+        "x": 0,
+        "y": -44,
+        "w": 88,
+        "h": 88
+      },
+      "alsoOn": [
+        "2.svg",
+        "3.svg",
+        "4.svg",
+        "5.svg",
+        "6.svg"
+      ]
+    }
+  },
+  {
+    "name": "sticker-1",
+    "pack": "style-4",
+    "file": "style-4/sticker-1.svg",
+    "bbox": {
+      "w": 95,
+      "h": 95
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "sticker",
+    "shape": "path",
+    "source": {
+      "slide": "2.svg",
+      "at": {
+        "x": 100,
+        "y": 282,
+        "w": 94,
+        "h": 94
+      },
+      "alsoOn": [
+        "6.svg"
+      ]
+    }
+  },
+  {
+    "name": "badge-1",
+    "pack": "style-4",
+    "file": "style-4/badge-1.svg",
+    "bbox": {
+      "w": 234,
+      "h": 95
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "badge",
+    "shape": "rect",
+    "source": {
+      "slide": "6.svg",
+      "at": {
+        "x": 433,
+        "y": 850,
+        "w": 234,
+        "h": 95
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "frame-1",
+    "pack": "style-5",
+    "file": "style-5/frame-1.svg",
+    "bbox": {
+      "w": 1020,
+      "h": 1164
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "frame",
+    "shape": "rect",
+    "source": {
+      "slide": "1.svg",
+      "at": {
+        "x": 30,
+        "y": 30,
+        "w": 1020,
+        "h": 1164
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "divider-1",
+    "pack": "style-5",
+    "file": "style-5/divider-1.svg",
+    "bbox": {
+      "w": 152,
+      "h": 13
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "divider",
+    "shape": "path",
+    "source": {
+      "slide": "2.svg",
+      "at": {
+        "x": 826,
+        "y": 1242,
+        "w": 151,
+        "h": 12
+      },
+      "alsoOn": [
+        "3.svg",
+        "5.svg",
+        "6.svg"
+      ]
+    }
+  },
+  {
+    "name": "corner-1",
+    "pack": "style-5",
+    "file": "style-5/corner-1.svg",
+    "bbox": {
+      "w": 44,
+      "h": 72
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "corner",
+    "shape": "path",
+    "source": {
+      "slide": "2.svg",
+      "at": {
+        "x": 946,
+        "y": 1215,
+        "w": 43,
+        "h": 72
+      },
+      "alsoOn": [
+        "3.svg",
+        "5.svg",
+        "6.svg"
+      ]
+    }
+  },
+  {
+    "name": "frame-2",
+    "pack": "style-5",
+    "file": "style-5/frame-2.svg",
+    "bbox": {
+      "w": 1020,
+      "h": 1290
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "frame",
+    "shape": "rect",
+    "source": {
+      "slide": "4.svg",
+      "at": {
+        "x": 30,
+        "y": 30,
+        "w": 1020,
+        "h": 1290
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "badge-1",
+    "pack": "style-7",
+    "file": "style-7/badge-1.svg",
+    "bbox": {
+      "w": 783,
+      "h": 100
+    },
+    "tokens": [
+      "ink"
+    ],
+    "role": "badge",
+    "shape": "rect",
+    "source": {
+      "slide": "1.svg",
+      "at": {
+        "x": 148,
+        "y": 1074,
+        "w": 783,
+        "h": 100
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "frame-1",
+    "pack": "style-7",
+    "file": "style-7/frame-1.svg",
+    "bbox": {
+      "w": 422,
+      "h": 433
+    },
+    "tokens": [
+      "ink"
+    ],
+    "role": "frame",
+    "shape": "rect",
+    "source": {
+      "slide": "2.svg",
+      "at": {
+        "x": 106,
+        "y": 520,
+        "w": 422,
+        "h": 433
+      },
+      "alsoOn": [
+        "6.svg"
+      ]
+    }
+  },
+  {
+    "name": "sticker-1",
+    "pack": "style-7",
+    "file": "style-7/sticker-1.svg",
+    "bbox": {
+      "w": 362,
+      "h": 183
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "sticker",
+    "shape": "path",
+    "source": {
+      "slide": "2.svg",
+      "at": {
+        "x": 662,
+        "y": 127,
+        "w": 361,
+        "h": 183
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "frame-2",
+    "pack": "style-7",
+    "file": "style-7/frame-2.svg",
+    "bbox": {
+      "w": 543,
+      "h": 80
+    },
+    "tokens": [
+      "ink"
+    ],
+    "role": "frame",
+    "shape": "rect",
+    "source": {
+      "slide": "3.svg",
+      "at": {
+        "x": 334,
+        "y": 642,
+        "w": 543,
+        "h": 80
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "frame-3",
+    "pack": "style-7",
+    "file": "style-7/frame-3.svg",
+    "bbox": {
+      "w": 935,
+      "h": 195
+    },
+    "tokens": [
+      "ink"
+    ],
+    "role": "frame",
+    "shape": "rect",
+    "source": {
+      "slide": "4.svg",
+      "at": {
+        "x": 92,
+        "y": 680,
+        "w": 935,
+        "h": 195
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "frame-4",
+    "pack": "style-7",
+    "file": "style-7/frame-4.svg",
+    "bbox": {
+      "w": 947,
+      "h": 200
+    },
+    "tokens": [
+      "ink"
+    ],
+    "role": "frame",
+    "shape": "rect",
+    "source": {
+      "slide": "4.svg",
+      "at": {
+        "x": 53,
+        "y": 652,
+        "w": 947,
+        "h": 200
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "frame-5",
+    "pack": "style-7",
+    "file": "style-7/frame-5.svg",
+    "bbox": {
+      "w": 256,
+      "h": 433
+    },
+    "tokens": [
+      "ink"
+    ],
+    "role": "frame",
+    "shape": "rect",
+    "source": {
+      "slide": "5.svg",
+      "at": {
+        "x": 106,
+        "y": 615,
+        "w": 256,
+        "h": 433
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "frame-6",
+    "pack": "style-7",
+    "file": "style-7/frame-6.svg",
+    "bbox": {
+      "w": 243,
+      "h": 433
+    },
+    "tokens": [
+      "ink"
+    ],
+    "role": "frame",
+    "shape": "rect",
+    "source": {
+      "slide": "5.svg",
+      "at": {
+        "x": 444,
+        "y": 615,
+        "w": 243,
+        "h": 433
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "sticker-2",
+    "pack": "style-7",
+    "file": "style-7/sticker-2.svg",
+    "bbox": {
+      "w": 428,
+      "h": 183
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "sticker",
+    "shape": "path",
+    "source": {
+      "slide": "5.svg",
+      "at": {
+        "x": 568,
+        "y": 111,
+        "w": 428,
+        "h": 183
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "sticker-3",
+    "pack": "style-7",
+    "file": "style-7/sticker-3.svg",
+    "bbox": {
+      "w": 439,
+      "h": 183
+    },
+    "tokens": [
+      "primary"
+    ],
+    "role": "sticker",
+    "shape": "path",
+    "source": {
+      "slide": "6.svg",
+      "at": {
+        "x": 574,
+        "y": 273,
+        "w": 439,
+        "h": 183
+      },
+      "alsoOn": []
+    }
+  },
+  {
+    "name": "divider-1",
+    "pack": "style-8",
+    "file": "style-8/divider-1.svg",
+    "bbox": {
+      "w": 1030,
+      "h": 1
+    },
+    "tokens": [
+      "ink"
+    ],
+    "role": "divider",
+    "shape": "path",
+    "source": {
+      "slide": "2.svg",
+      "at": {
+        "x": 51,
+        "y": 387,
+        "w": 1029,
+        "h": 0
+      },
+      "alsoOn": [
+        "5.svg"
+      ]
+    }
+  },
+  {
+    "name": "divider-2",
+    "pack": "style-8",
+    "file": "style-8/divider-2.svg",
+    "bbox": {
+      "w": 1081,
+      "h": 1
+    },
+    "tokens": [
+      "ink"
+    ],
+    "role": "divider",
+    "shape": "path",
+    "source": {
+      "slide": "3.svg",
+      "at": {
+        "x": 0,
+        "y": 387,
+        "w": 1080,
+        "h": 0
+      },
+      "alsoOn": [
+        "4.svg"
+      ]
+    }
+  }
+]

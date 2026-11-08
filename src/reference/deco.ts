@@ -1,5 +1,19 @@
 // Generic design devices a preset can turn on (style.json "library.devices"). Each is drawn by the code from its own shapes (no copied art). A preset asks for the ones it wants;
 // the style panel can switch each one off (and on again) without a model call. Nothing here is a picture: only parameters.
+/** Where an art item may go: the edges, the corners (the item may bleed off the page), or a clear stretch low on the slide for a divider. Always only where no text is. */
+export type ArtZone = 'top-edge' | 'bottom-edge' | 'corner-tl' | 'corner-tr' | 'corner-bl' | 'corner-br' | 'divider-low' | 'divider-high';
+/** One vector art item of a preset's pack (src/image-engine/art), placed in a safe zone and recoloured to the preset's own palette. */
+export interface ArtPlacement {
+  /** "<pack>/<name>" as in src/image-engine/art/index.json, for example "style-4/frame-1". */
+  item: string;
+  zone: ArtZone;
+  /** The width it is drawn at, px (default: its own width for an edge, 220 for a corner, 320 for a divider). */
+  w?: number;
+  /** Which slides: every one (default), the first, the last, or the ones in between. */
+  on?: 'all' | 'first' | 'last' | 'inner';
+  /** How far a corner item may bleed off the page (0..0.5 of its size; default 0). */
+  bleed?: number;
+}
 export interface Deco {
   // chrome
   /** The profile header (avatar placeholder, name, handle). It is switched by the panel's own Profile header toggle. */
@@ -37,6 +51,9 @@ export interface Deco {
   italicAccent?: boolean;
   /** The headline is filled with this colour gradient (left to right, top to bottom). */
   gradientText?: string[];
+  // art
+  /** Vector art from the preset's own pack (a list of placements), recoloured to the preset's palette; drawn only where no text is. Off unless a preset lists it. */
+  art?: ArtPlacement[];
   // stickers
   /** Emoji stickers (a monochrome open-licence emoji font) in empty corners, never on text. */
   stickers?: boolean;
@@ -62,9 +79,10 @@ export const DECO_LABELS: Record<keyof Deco, string> = {
   italicAccent: 'Italic accent words',
   gradientText: 'Gradient headline',
   stickers: 'Emoji stickers',
+  art: 'Vector art from the style’s pack',
 };
 /** Keys that are switches (the rest only carry a value for a switch). */
-export const DECO_SWITCHES = ['pageIndex', 'sideLabel', 'footerRow', 'headerRow', 'arrowHeader', 'contactClosing', 'outlinedButton', 'scallop', 'hardShadow', 'insetCard', 'rule', 'glow', 'penCircle', 'italicAccent', 'gradientText', 'stickers'] as const satisfies readonly (keyof Deco)[];
+export const DECO_SWITCHES = ['pageIndex', 'sideLabel', 'footerRow', 'headerRow', 'arrowHeader', 'contactClosing', 'outlinedButton', 'scallop', 'hardShadow', 'insetCard', 'rule', 'glow', 'penCircle', 'italicAccent', 'gradientText', 'stickers', 'art'] as const satisfies readonly (keyof Deco)[];
 export type DecoSwitch = (typeof DECO_SWITCHES)[number];
 /** The devices a deco asks for (those that are on). */
 export const decoOn = (d: Deco | undefined): DecoSwitch[] => DECO_SWITCHES.filter((k) => !!d && d[k] !== undefined && d[k] !== false);

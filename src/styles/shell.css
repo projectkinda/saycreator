@@ -252,3 +252,9 @@
     transition: none !important;
   }
 }
+
+/* A small footer link (Credits) under the page content. */
+.app-footer { padding: 8px 20px 14px; font-size: 13px; text-align: right; }
+.app-footer a { color: inherit; opacity: .75; }
+.credits-list { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; }
+.credits-item { display: grid; gap: 4px; padding: 12px 14px; }

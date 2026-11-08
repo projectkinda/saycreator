@@ -1,0 +1,77 @@
+{
+  "note": "Vector art in this folder was extracted from the Figma Community style packs listed here. Author and source are filled in by the owner; entries with TODO show the pack name and licence only.",
+  "packs": [
+    {
+      "pack": "style-1",
+      "name": "Style 1: Mono editorial glow",
+      "author": "TODO",
+      "source": "TODO",
+      "licence": "CC BY 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "note": "Modified: recoloured and resized"
+    },
+    {
+      "pack": "style-2",
+      "name": "Style 2: Bold orange",
+      "author": "TODO",
+      "source": "TODO",
+      "licence": "CC BY 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "note": "Modified: recoloured and resized"
+    },
+    {
+      "pack": "style-3",
+      "name": "Style 3: Cream ink",
+      "author": "TODO",
+      "source": "TODO",
+      "licence": "CC BY 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "note": "Modified: recoloured and resized"
+    },
+    {
+      "pack": "style-4",
+      "name": "Style 4: Electric blue play",
+      "author": "TODO",
+      "source": "TODO",
+      "licence": "CC BY 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "note": "Modified: recoloured and resized"
+    },
+    {
+      "pack": "style-5",
+      "name": "Style 5: Green elegant serif",
+      "author": "TODO",
+      "source": "TODO",
+      "licence": "CC BY 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "note": "Modified: recoloured and resized"
+    },
+    {
+      "pack": "style-6",
+      "name": "Style 6: Cream social profile",
+      "author": "TODO",
+      "source": "TODO",
+      "licence": "CC BY 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "note": "Modified: recoloured and resized"
+    },
+    {
+      "pack": "style-7",
+      "name": "Style 7: Pink serif stickers",
+      "author": "TODO",
+      "source": "TODO",
+      "licence": "CC BY 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "note": "Modified: recoloured and resized"
+    },
+    {
+      "pack": "style-8",
+      "name": "Style 8: Black holographic",
+      "author": "TODO",
+      "source": "TODO",
+      "licence": "CC BY 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "note": "Modified: recoloured and resized"
+    }
+  ]
+}

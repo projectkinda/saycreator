@@ -6,6 +6,7 @@ import Analytics from './pages/Analytics';
 import Assets from './pages/Assets';
 import Branding from './pages/Branding';
 import Calendar from './pages/Calendar';
+import Credits from './pages/Credits';
 import Help from './pages/Help';
 import Home from './pages/Home';
 import Images from './pages/Images';
@@ -93,6 +94,7 @@ export default function App() {
           <Route path="analytics" element={<Analytics />} />
           <Route path="settings" element={<Settings />} />
           <Route path="help" element={<Help />} />
+          <Route path="credits" element={<Credits />} />
           <Route path="*" element={<Placeholder title="Page not found" note="That page does not exist. Use the menu to get back." />} />
         </Route>
       </Routes>
