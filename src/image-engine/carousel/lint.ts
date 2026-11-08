@@ -24,6 +24,8 @@ export const CAROUSEL_LIMITS = {
   wordsWarn: 35,
   /** More than this many words fails the check. */
   wordsFail: 50,
+  /** A prose slide (the one layout made for whole paragraphs) is held to this many words of slide text instead, the handle and the page number not counted. */
+  proseWordsFail: 70,
 };
 
 /** The slide types the words check applies to. Cover, stat, quote and closing slides are short by design. */

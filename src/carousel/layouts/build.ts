@@ -265,7 +265,9 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   {
     const tl = (pack.designs[key] ?? []).find((l) => l.kind === 'text' && l.name === 'title') as { style?: { size: number } } | undefined;
     const roles = S === 'p' ? P : F;
-    const ink = tl?.style && tl.style.size >= 96 ? roles.accentDisplay : roles.accentInk;
+    // a headline set ON A CARD takes the small-text accent whatever its size: the display accent only has to reach 3:1, and the app's phone check wants 4.5:1 on a card
+    const onCard = plan.fitAs === 'statement-card' || plan.fitAs === 'headline-card';
+    const ink = tl?.style && tl.style.size >= 96 && !onCard ? roles.accentDisplay : roles.accentInk;
     const pal = { ...pack.palette };
     if (ink && ink.toUpperCase() !== roles.accent.toUpperCase()) pal.accentInk = ink;
     else delete pal.accentInk;
@@ -333,7 +335,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     const top = Math.min(1350, ...[...contentBoxes, ...shapeBoxes].map((b) => b.y));
     const ruleY = st.deco.rule === 'lower-two-thirds' && cut === 'plain' ? Math.max(140, Math.min(420, Math.round(top - 44))) : 140;
     const deco = { ...st.deco };
-    const cx: DeviceCtx = { deco, index: o.index, total: o.total, handle: o.handle || '@yourname', c: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface }, textBoxes: [...contentBoxes, ...recLayers.map(boxOf)], hasAccent: (Array.isArray(fields0.accent) ? fields0.accent.length : fields0.accent ? 1 : 0) > 0, pictureBoxes: (plan.images ?? []).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })), ...(tl ? { title: boxOf(tl) } : {}), marker: !!st.devices.marker, fonts: st.fonts, ruleY };
+    const cx: DeviceCtx = { deco, index: o.index, total: o.total, handle: o.handle || '@yourname', c: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface }, textBoxes: [...contentBoxes, ...recLayers.map(boxOf)], shapeBoxes, hasAccent: (Array.isArray(fields0.accent) ? fields0.accent.length : fields0.accent ? 1 : 0) > 0, pictureBoxes: (plan.images ?? []).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })), ...(tl ? { title: boxOf(tl) } : {}), marker: !!st.devices.marker, fonts: st.fonts, ruleY };
     const bd = behindDevices(cx);
     done = done.replace(/(<rect id="bg"[^>]*\/>)/, (m) => m + bd.svg);
     const ig = insetGround(done, deco, F.bg);

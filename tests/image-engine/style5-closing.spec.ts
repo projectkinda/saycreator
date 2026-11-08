@@ -24,8 +24,11 @@ const CLOSINGS: Record<string, any> = {
 
 test('style-5: the closing slide is the preset closing layout, a green card with white text, on the rendered pixels', async ({ page }) => {
   fs.mkdirSync(OUT, { recursive: true });
-  await page.goto('/images/carousel');
-  const r = await page.evaluate(async ({ head, closings }) => {
+  // The dev server may reload the page once while it optimises dependencies (the first import in a fresh run): that destroys the page's execution context. So the page is let settle first
+  // (load, then no network for a moment), and an evaluate that is hit by a reload anyway is run once more on a freshly loaded page.
+  const open = async () => { await page.goto('/images/carousel', { waitUntil: 'load' }); await page.waitForLoadState('networkidle').catch(() => undefined); await page.waitForTimeout(500); };
+  await open();
+  const evalClosings = () => page.evaluate(async ({ head, closings }) => {
     const D = await import('/src/carousel/designLibrary.ts');
     const PR = await import('/src/carousel/presets.ts');
     const F = await import('/src/reference/faithful.ts');
@@ -78,6 +81,12 @@ test('style-5: the closing slide is the preset closing layout, a green card with
     }
     return out;
   }, { head, closings: CLOSINGS });
+  let r: Awaited<ReturnType<typeof evalClosings>>;
+  try { r = await evalClosings(); } catch (e) {
+    if (!/Execution context was destroyed|navigation|Target closed/i.test(String((e as Error).message))) throw e;
+    await open();
+    r = await evalClosings();
+  }
   for (const [name, x] of Object.entries<any>(r)) {
     expect(x.calls, `${name}: one fake writer answer, nothing else`).toBe(1);
     expect(x.inkLow, `${name}: every text run of the closing reads 4.5:1 on the rendered pixels`).toEqual([]);

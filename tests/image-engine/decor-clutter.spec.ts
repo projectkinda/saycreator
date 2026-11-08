@@ -37,6 +37,7 @@ test('style-7: stickers are rare and clear of pictures and cards, rings enclose 
       const shapes = (b.layers as any[]).filter((l) => l.kind === 'shape' && !/background|recurring/.test(String(l.name)) && l.width * l.height < 1080 * 1350 * 0.5 && l.height > 20).map((l) => ({ x: l.x, y: l.y, w: l.width, h: l.height }));
       const stickers = devices.filter((d) => d.kind === 'sticker');
       const rings = devices.filter((d) => d.id === 'pen-circle');
+      const unders = devices.filter((d) => d.id === 'pen-underline'); // the fallback of a ring that other text is too close to: one decoration too
       const arts = devices.filter((d) => d.id.startsWith('art:'));
       const bad: string[] = [];
       for (const s of stickers) {
@@ -53,10 +54,10 @@ test('style-7: stickers are rare and clear of pictures and cards, rings enclose 
       host.querySelectorAll('text[data-role="title"] tspan[fill]').forEach((t: any) => { try { const bb = t.getBBox(); accentBoxes.push({ x: bb.x, y: bb.y, w: bb.width, h: bb.height }); } catch { /* not measurable */ } });
       host.remove();
       for (const ring of rings) {
-        const ok = accentBoxes.some((a) => ring.box.x <= a.x + 3 && ring.box.x + ring.box.w >= a.x + a.w - 3 && ring.box.y <= a.y + a.h && ring.box.y + ring.box.h >= a.y && ring.box.w <= a.w + 60 && ring.box.h <= a.h * 1.6 + 20);
+        const ok = accentBoxes.some((a) => ring.box.x <= a.x + 3 && ring.box.x + ring.box.w >= a.x + a.w - 3 && ring.box.y <= a.y + a.h && ring.box.y + ring.box.h >= a.y && ring.box.w <= a.w + 80 && ring.box.h <= a.h * 1.6 + 20);
         if (!ok) bad.push(`a ring (${Math.round(ring.box.x)},${Math.round(ring.box.y)} ${Math.round(ring.box.w)}x${Math.round(ring.box.h)}) does not enclose an accent word (${accentBoxes.map((a) => `${Math.round(a.x)},${Math.round(a.y)} ${Math.round(a.w)}x${Math.round(a.h)}`).join(' / ') || 'none'})`);
       }
-      slides.push({ layout: lib.layouts[Number(id)], accents: lib.plan.specs[Number(id)].accents.length, rings: rings.length, stickers: stickers.length, arts: arts.map((a) => a.id), ringArtDrawn: /data-art="style-7\/sticker-/.test(b.svg), kinds: (rings.length ? 1 : 0) + (stickers.length ? 1 : 0) + (arts.length ? 1 : 0), pics: pics.length, bad });
+      slides.push({ layout: lib.layouts[Number(id)], accents: lib.plan.specs[Number(id)].accents.length, rings: rings.length + unders.length, stickers: stickers.length, arts: arts.map((a) => a.id), ringArtDrawn: /data-art="style-7\/sticker-/.test(b.svg) || /<path data-ring-art="(?:loop|underline)" d="M|<path d="M [^"]+" fill="none" stroke="[^"]+" stroke-width="\d+" stroke-linecap="round"/.test(b.svg), kinds: (rings.length + unders.length ? 1 : 0) + (stickers.length ? 1 : 0) + (arts.length ? 1 : 0), pics: pics.length, bad });
     }
     return slides;
   }, { DECK, IMAGES });
@@ -72,8 +73,8 @@ test('style-7: stickers are rare and clear of pictures and cards, rings enclose 
   expect(stickerSlides.length, 'at most one sticker per 3 slides').toBeLessThanOrEqual(Math.ceil(r.length / 3));
   for (let i = 1; i < stickerSlides.length; i++) expect(stickerSlides[i] - stickerSlides[i - 1], 'never consecutive').toBeGreaterThan(1);
   // the rings that exist are drawn from the pack's ring art, round an accent word
-  expect(r.some((s: any) => s.rings > 0), 'a ring appears where an accent word is').toBe(true);
-  expect(r.filter((s: any) => s.rings > 0).every((s: any) => s.ringArtDrawn), 'the ring is the pack ring art').toBe(true);
+  expect(r.some((s: any) => s.rings > 0), 'a ring (or its underline fallback) appears where an accent word is').toBe(true);
+  expect(r.filter((s: any) => s.rings > 0).every((s: any) => s.ringArtDrawn), 'the ring is the pack ring art, or the generated rounded loop or underline where the art ellipse would not clear the letters or other text').toBe(true);
   // a picture slide and a card slide are in the deck (the check above is meaningful)
   expect(r.some((s: any) => s.pics > 0)).toBe(true);
 });

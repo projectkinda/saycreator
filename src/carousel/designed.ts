@@ -764,7 +764,7 @@ export function stepperSvg(steps: string[], current = 1, bounds: { top: number; 
   const H = Math.max(300, bounds.bottom - bounds.top);
   const pitch = Math.min(300, Math.floor(H / n));
   const k = Math.max(1, Math.min(2.2, pitch / 120));
-  const r = Math.round(28 * k);
+  const r = Math.min(Math.round(28 * k), Math.floor((pitch - 36) / 2) - 3); // at least 36 px between two nodes, ring included, so the connector between them always has room
   const size = Math.max(44, Math.min(64, Math.round(pitch / 2.6)));
   const x = 48 + r + 6;
   const lx = x + r + 36;
@@ -772,7 +772,13 @@ export function stepperSvg(steps: string[], current = 1, bounds: { top: number; 
   const cy = (j: number) => Math.round(start + j * pitch + pitch / 2);
   const sw = (v: number) => Math.round(v * k);
   const parts: string[] = ['<g id="stepper">'];
-  if (n >= 2) parts.push('<line x1="' + x + '" y1="' + cy(0) + '" x2="' + x + '" y2="' + cy(n - 1) + '" stroke="$muted" stroke-width="' + sw(4) + '"/>');
+  // the connector is drawn only BETWEEN the nodes: from the bottom edge of one (its ring included) to the top edge of the next, 6 px apart from each, never through a node and never
+  // above the first or below the last. The edge of a node is its radius plus half its stroke (the ringed current node is the widest).
+  const edge = (j: number) => r + (j + 1 === current ? sw(6) : j + 1 < current ? 0 : sw(4)) / 2;
+  for (let j = 0; j + 1 < n; j++) {
+    const y1 = Math.ceil(cy(j) + edge(j) + 6), y2 = Math.floor(cy(j + 1) - edge(j + 1) - 6);
+    if (y2 > y1) parts.push('<line x1="' + x + '" y1="' + y1 + '" x2="' + x + '" y2="' + y2 + '" stroke="$muted" stroke-width="' + sw(4) + '"/>');
+  }
   steps.slice(0, n).forEach((text, j) => {
     const y = cy(j);
     const state = j + 1 < current ? 'done' : j + 1 === current ? 'current' : 'upcoming';

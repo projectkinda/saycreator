@@ -202,7 +202,10 @@ export class Draw {
       this.shape(`<rect x="${r(x + hs)}" y="${r(y + hs)}" width="${r(w)}" height="${r(h)}" rx="${o.rx}" fill="${sh}"/>`);
       o = { ...o, stroke: o.stroke ?? '$text', sw: o.sw ?? 3 };
     }
-    this.shape(`<rect x="${r(x)}" y="${r(y)}" width="${r(w)}" height="${r(h)}"${o.rx ? ` rx="${o.rx}"` : ''} fill="${fill}"${o.opacity !== undefined ? ` fill-opacity="${o.opacity}"` : ''}${o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw ?? 4}"` : ''}/>`, { y0: y, y1: y + h });
+    // a card colour too close to the ground to tell apart (a soft tint on a light page) gets a 2 px hairline in the ink at 20% instead of a darker, greyer colour
+    let hair = false;
+    if (fill === '$surface' && !o.stroke && o.opacity === undefined) { const p = this.st.palette; hair = contrast(p.surface, p.bg) < 1.4; }
+    this.shape(`<rect x="${r(x)}" y="${r(y)}" width="${r(w)}" height="${r(h)}"${o.rx ? ` rx="${o.rx}"` : ''} fill="${fill}"${o.opacity !== undefined ? ` fill-opacity="${o.opacity}"` : ''}${o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw ?? 4}"` : hair ? ' stroke="$text" stroke-opacity="0.2" stroke-width="2"' : ''}/>`, { y0: y, y1: y + h });
   }
   circle(cx: number, cy: number, rad: number, fill: string, o: { stroke?: string; sw?: number } = {}) {
     this.shape(`<circle cx="${r(cx)}" cy="${r(cy)}" r="${r(rad)}" fill="${fill}"${o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw ?? 4}"` : ''}/>`, { y0: cy - rad, y1: cy + rad });

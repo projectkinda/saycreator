@@ -147,6 +147,22 @@ export function applyOverrides(style: LayoutStyle, ov?: StyleOverrides | null): 
 }
 /** Maps a reference style (the pack the whole-slide read made, with its style brief and signature devices) to the tokens the layouts use. */
 const HEX6 = /^#[0-9a-f]{6}$/i;
+/**
+ * The card colour for a tinted ground, hue-preserving. First the preset's own tinted card colour when the ink reads on it (4.5:1) and it can be seen against every colour of the ground
+ * (1.04:1); otherwise the ground's own hue and saturation with the lightness moved 10, 8 or 6% toward the ink, the first step at which the ink reads at 7:1. null when neither exists.
+ */
+const HSL_TINT = (c: string) => { const [, s, l] = toHsl(c); return s >= 0.12 && l > 0.06 && l < 0.985; };
+export function tintedCard(grounds: string[], bg: string, ink: string, own: string, ownTinted: boolean): string | null {
+  const seen = (c: string) => grounds.every((g) => contrast(c, g) >= 1.04);
+  if (ownTinted && contrast(ink, own) >= 4.5 && seen(own)) return own;
+  const [h, s, l] = toHsl(bg);
+  const inkDark = contrast(ink, '#FFFFFF') > contrast(ink, '#000000');
+  for (const step of [0.1, 0.08, 0.06]) {
+    const c = fromHsl(h, s, Math.max(0, Math.min(1, l + (inkDark ? -step : step))));
+    if (contrast(ink, c) >= 7 && seen(c)) return c;
+  }
+  return null;
+}
 /** One ground of a rhythm made readable: the ink with the best contrast over every colour of the ground (gradient stops included), a muted ink and a card colour that clear 4.5:1 too. */
 export function fixGround(g: PackGround, notes: string[]): NonNullable<LayoutStyle['rhythm']>[number] {
   const hx = (v: string | undefined, fb: string) => (v && HEX6.test(v) ? v.toUpperCase() : fb);
@@ -185,8 +201,14 @@ export function fixGround(g: PackGround, notes: string[]): NonNullable<LayoutSty
   const cardBad = allFinal.some((st) => contrast(surface0, st) < 1.4) || contrast(text, surface0) < 4.5;
   // a card (and a bar track) must be told apart from the ground (at least 1.4:1) and keep the ink readable on it
   const cards = [0.1, 0.14, 0.2, 0.28, 0.36, 0.46, 0.58].flatMap((k) => [mixHex(bgFinal, '#FFFFFF', k), mixHex(bgFinal, '#000000', k), mixHex(bgFinal, text, k)]).filter((c) => allFinal.every((st) => contrast(c, st) >= 1.4) && contrast(text, c) >= 4.5);
-  const surface = cardBad ? cards[0] ?? bgFinal : surface0;
-  if (cardBad) notes.push(`Ground ${bgFinal}: the card colour ${surface0} is too close to the ground or unreadable under the ink, so cards use ${surface}.`);
+  // A tinted ground (or a tinted card colour) never gets a neutral grey card: the card keeps the ground's own hue and saturation and only its lightness moves a step toward the ink
+  // (6 to 10%), with the ink reading at 7:1 on it; a card that is too close to the ground to tell apart that way is drawn with a hairline (Draw.rect) instead of a darker colour.
+  const tinted = (c: string) => { const [, s, l] = toHsl(c); return s >= 0.12 && l > 0.06 && l < 0.985; };
+  const hueCard = tinted(bgFinal) || tinted(surface0) ? tintedCard(allFinal, bgFinal, text, surface0, tinted(surface0)) : null;
+  // only where the old fallback would have been a neutral grey (a coloured fallback, like the olive card on a lime ground, was never the problem and stays)
+  const oldFallback = cards[0] ?? bgFinal;
+  const surface = cardBad ? (hueCard && toHsl(oldFallback)[1] < 0.2 ? hueCard : oldFallback) : surface0;
+  if (cardBad) notes.push(`Ground ${bgFinal}: the card colour ${surface0} is too close to the ground or unreadable under the ink, so cards use ${surface}${hueCard ? ' (the ground\'s own hue' + (allFinal.some((st) => contrast(surface, st) < 1.4) ? ', with a hairline outline' : '') + ')' : ''}.`);
   const mutedMin = Math.max(4.5, Math.min(6, Math.min(...allFinal.map((s) => contrast(text, s))) * 0.7));
   const muted = quietOn(text, [...allFinal, surface], hx(g.muted, mixHex(text, bgFinal, 0.4)), mutedMin);
   const onAccent = readableInk(accent, [hx(g.onAccent, text), text, bgFinal, '#FFFFFF', '#000000']);
@@ -205,7 +227,7 @@ export function styleFromPack(pack: StylePack | null | undefined): { style: Layo
   const muted = quietOn(text, bg, hex(pal.muted ?? pal.accent2, quiet), 4.5);
   const surface0 = hex(pal.surface, mixHex(bg, text, 0.08));
   // a surface the read gave as the same colour as the ground would make every card and bar invisible: it is made a little darker (or lighter)
-  const surface = contrast(surface0, bg) < 1.04 ? mixHex(bg, text, 0.06) : surface0;
+  const surface = contrast(surface0, bg) < 1.04 ? (HSL_TINT(bg) ? tintedCard([bg], bg, text, surface0, false) : null) ?? mixHex(bg, text, 0.06) : surface0;
   if (surface !== surface0) notes.push(`The surface colour ${surface0} is the same as the ground ${bg}: cards use ${surface} instead.`);
   const svgs = Object.values(pack.svgs ?? {}).join('\n') + Object.values(pack.variants ?? {}).flat().map((v) => v!.svg).join('\n');
   const first = Object.values(pack.svgs ?? {})[0] ?? '';
@@ -406,7 +428,7 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     `- Write ${n} slides. Slide 1 is a strong hook (statement, statement-stacked, statement-card, statement-pill, statement-question, big-question or lead-statement; at most 8 words). In between choose the layout that suits THAT slide's content.`,
     '- The closing (last slide) depends on the TEXT, not on habit: "cta-button" ONLY when the text contains a real next action for the reader (book, buy, sign up, download, reply, follow, try, join); "cta-pair" when the text gives TWO different actions; "contact-closing" ONLY when the text itself contains contact details such as a handle, site, phone or email (never invent any); otherwise close on a closing statement ("statement" or "statement-card", a short closing line, NO button).',
     '- A button label is an ACTION PHRASE: verb first, 2 to 4 words, at most 20 characters, no question mark, comma or full stop ("Book a call", "Get the checklist", "Join the list"). Never a question, a slogan or a topic ("Which fits you?", "Sleep well"). If there is no real action in the text, there is no button: use a closing statement instead.',
-    '- Prose: "prose" is the ONLY layout that takes whole paragraphs (up to 300 characters each, at most 3 paragraphs, about 450 characters in all). Use it for a slide that needs explaining in sentences; its heading is optional and, when present, reads on its own as a full title. Every other layout stays short: never put a paragraph into a statement, list or card layout.',
+    '- Prose: "prose" is the ONLY layout that takes whole paragraphs (at most 3 paragraphs and 70 words in all, the heading and the pull line included; the handle and the page number are not counted; 300 characters each at most). Use it for a slide that needs explaining in sentences; its heading is optional and, when present, reads on its own as a full title. Every other layout stays short: never put a paragraph into a statement, list or card layout.',
     ...(look.images?.length ? imageRules(look.images) : []),
     '- Forms: "statement-stacked" is 2 to 4 words (one per line); "statement-pill" needs a short caption (at most 40 characters) that is set in a pill; "statement-question" is one question or thought; "numbered-stagger" is 2 or 3 sentences; "bullet-list" and "pill-stagger" are short lines (at most 46 and 36 characters); "headline-card" has ONE key paragraph (the card) under a headline; "cta-pair" has two buttons with a short line each.',
     '- Variety: no two consecutive slides use the same layout, and no layout is used more than twice. Use "stepper" for 2 to 5 ordered steps, "stat-bar" or "big-stat" for a figure, "checklist" for benefits, "comparison" for two things set against each other, "quote" only for words that are in the text.',
@@ -541,6 +563,44 @@ const LINE_FIELDS = ['caption', 'sub', 'subline', 'line', 'subtitle', 'kicker'];
  * A pill, caption or sub that only says the headline again is taken out (a trim, never a failure): the optional line goes; a statement-pill (whose caption is required) becomes a plain
  * statement without it. Returns the new specs and a log of what was done.
  */
+/** A prose slide holds at most this many words of slide text in all (heading, paragraphs, bullets and pull line; not the handle or the page number): the app's phone check holds a prose slide to 70 (every other content slide to 50). */
+export const PROSE_WORDS = 70;
+const wordsIn = (t: unknown) => String(t ?? '').split(/\s+/).filter(Boolean).length;
+/** Sentences of a paragraph, each kept with its end mark. */
+const sentencesOf = (t: string) => t.match(/[^.!?]+[.!?]*\s*/g)?.map((x) => x.trim()).filter(Boolean) ?? [t];
+/**
+ * A prose slide over PROSE_WORDS words is trimmed by the code (a trim, never a retry): bullets go from the end, then the third and the second paragraph lose their last sentences (or go),
+ * then the first loses its last sentences; the heading and the pull line stay. A single sentence still too long is cut at a word and closed with a full stop.
+ */
+export function trimProse(specs: SlideSpec[]): { specs: SlideSpec[]; trims: Trim[] } {
+  const trims: Trim[] = [];
+  const out = specs.map((s, i) => {
+    if (s.layout !== 'prose') return s;
+    const f: Record<string, unknown> = { ...s.fields };
+    const total = () => wordsIn(f.heading) + wordsIn(f.p1) + wordsIn(f.p2) + wordsIn(f.p3) + wordsIn(f.pull) + (Array.isArray(f.bullets) ? (f.bullets as string[]).reduce((n, b) => n + wordsIn(b), 0) : 0);
+    const before = total();
+    if (before <= PROSE_WORDS) return s;
+    const shorten = (k: 'p3' | 'p2' | 'p1') => {
+      const t = String(f[k] ?? '').trim();
+      if (!t) return false;
+      const ss = sentencesOf(t);
+      if (ss.length > 1) { f[k] = ss.slice(0, -1).join(' '); return true; }
+      if (k !== 'p1') { delete f[k]; return true; }
+      const w = t.split(/\s+/);
+      if (w.length <= 6) return false;
+      f[k] = w.slice(0, Math.max(6, w.length - Math.max(1, total() - PROSE_WORDS))).join(' ').replace(/[,;:\s]+$/, '') + '.';
+      return true;
+    };
+    for (let guard = 0; guard < 40 && total() > PROSE_WORDS; guard++) {
+      if (Array.isArray(f.bullets) && (f.bullets as string[]).length) { const b = (f.bullets as string[]).slice(0, -1); if (b.length >= 2) f.bullets = b; else delete f.bullets; continue; }
+      if (shorten('p3') || shorten('p2') || shorten('p1')) continue;
+      break;
+    }
+    trims.push({ slide: i + 1, field: 'prose words', from: String(before), to: String(total()), max: PROSE_WORDS });
+    return { ...s, fields: f as Fields };
+  });
+  return { specs: out, trims };
+}
 export function dropRepeats(specs: SlideSpec[]): { specs: SlideSpec[]; trims: Trim[] } {
   const trims: Trim[] = [];
   const out = specs.map((sp, i) => {
@@ -876,6 +936,10 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   const rp = dropRepeats(specs);
   specs = rp.specs;
   tr.trims.push(...rp.trims);
+  // a prose slide over 55 words is cut down (the app's phone check fails a content slide at 50)
+  const pw = trimProse(specs);
+  specs = pw.specs;
+  tr.trims.push(...pw.trims);
   const suggested = { cut: specs.map((s) => s.cut ?? null), invert: specs.map((s) => !!s.invert), density: specs.map((s) => s.density ?? null) };
   // A preset's flavour: layouts it avoids move to ones it prefers where the slide's text fits (deterministic, no model call; references have no flavour).
   const fp = look.pack?.look?.flavour ? flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, '')) : null;

@@ -20,7 +20,7 @@ const flat = (l: Layer): string | null => {
 };
 
 /** `layers`: the filled layers in the design's own coordinates; `k`: output pixels per design pixel (a design fitted on a smaller card is below 1). */
-export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: number }; bg: string; k: number; slideType: string }): CarouselLintResult[] {
+export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: number }; bg: string; k: number; slideType: string; /** A prose slide: its own, higher word limit, counted without the handle and the page number. */ prose?: boolean }): CarouselLintResult[] {
   const L = CAROUSEL_LIMITS;
   const texts = layers.filter((l): l is TextLayer => l.kind === 'text' && l.visible !== false && l.role !== 'decor' && !!l.text.trim());
   const out: CarouselLintResult[] = [];
@@ -37,8 +37,10 @@ export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: num
   const near = laid.filter(({ t, b }) => t.x < edge - 1 || t.x + t.width > o.canvas.w - edge + 1 || t.y + b.height > o.canvas.h - edge + 1 || t.y < edge - 1);
   res('edges', 'Margins and edges', near.length === 0, near.length ? `${near.length} text slot(s) come closer than ${L.edgePx} px to an edge.` : `Every text slot keeps ${L.edgePx} px from the edges.`);
 
-  const words = texts.reduce((n, t) => n + t.text.split(/\s+/).filter(Boolean).length, 0);
-  if (WORDS_CHECKED_TYPES.includes(o.slideType)) res('words', 'Words on the slide', words <= L.wordsFail, `${words} words on the slide.${words > L.wordsWarn ? ' That is a lot for a phone.' : ''}`, { warn: words > L.wordsWarn && words <= L.wordsFail, measured: words, limit: L.wordsFail });
+  const words = texts.filter((t) => !o.prose || t.name !== 'recurring').reduce((n, t) => n + t.text.split(/\s+/).filter(Boolean).length, 0);
+  const wordsLimit = o.prose ? L.proseWordsFail : L.wordsFail;
+  const warnAt = o.prose ? wordsLimit : L.wordsWarn; // a prose slide is made for words: no "a lot" warning below its own limit
+  if (WORDS_CHECKED_TYPES.includes(o.slideType)) res('words', 'Words on the slide', words <= wordsLimit, `${words} words on the slide.${words > warnAt ? " That is a lot for a phone." : ""}`, { warn: words > warnAt && words <= wordsLimit, measured: words, limit: wordsLimit });
 
   const hits: string[] = [];
   for (let i = 0; i < laid.length; i++)

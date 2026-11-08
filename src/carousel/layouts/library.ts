@@ -285,7 +285,7 @@ const BASE_LIST: LayoutDef[] = [
     plan(f, v, st, cx) {
       const al = v === 0 ? 'left' : 'center';
       // the biggest size at which the number fits the width: the type scale never takes it past that (the engine would shrink it and leave its box tall, with a gap under the digits)
-      const fitN = (limit: number) => { let s2 = limit; while (s2 > 120 && measureWidth(str(f, 'number'), st.fonts.headline, nearestWeight(st.fonts.headline, 800), s2) > cx.field.w * 0.98) s2 -= 6; return s2; };
+      const fitN = (limit: number) => { let s2 = limit; while (s2 > 120 && measureWidth(str(f, 'number'), st.fonts.headline, nearestWeight(st.fonts.headline, 800), s2) * (st.fonts.headline === 'Playfair Display' ? 1.1 : 1.02) > cx.field.w) s2 -= 6; return s2; };
       const d = place(st, cx, 'center', (d) => {
         // the number's line box is tight (digits have no descenders): the caption sits right under it, at most one caption line below the digits
         d.text('number', str(f, 'number'), { size: fitN(480), max: fitN(600), weight: 800, font: 'h', fill: accentInk(st), align: al, lines: 1, min: 120, lh: 1.0, gap: 20, figure: true });
@@ -308,7 +308,7 @@ const BASE_LIST: LayoutDef[] = [
     },
     plan(f, v, st, cx) {
       const value = Math.max(0, Math.min(100, Number(str(f, 'bar')) || 0));
-      const fitN = (limit: number) => { let s2 = limit; while (s2 > 120 && measureWidth(str(f, 'number'), st.fonts.headline, nearestWeight(st.fonts.headline, 800), s2) > cx.field.w * 0.98) s2 -= 6; return s2; };
+      const fitN = (limit: number) => { let s2 = limit; while (s2 > 120 && measureWidth(str(f, 'number'), st.fonts.headline, nearestWeight(st.fonts.headline, 800), s2) * (st.fonts.headline === 'Playfair Display' ? 1.1 : 1.02) > cx.field.w) s2 -= 6; return s2; };
       const d = place(st, cx, 'center', (d) => {
         d.text('number', str(f, 'number'), { size: fitN(300), max: fitN(420), weight: 800, font: 'h', fill: accentInk(st), lines: 1, min: 120, lh: 1.0, gap: 16, figure: true });
         d.text('title', str(f, 'label'), { size: 48, max: 48, weight: 700, font: 'h', lines: 2, min: 44, gap: 48 });
@@ -347,9 +347,11 @@ const BASE_LIST: LayoutDef[] = [
         else {
           const n = steps.length;
           const pitch = Math.min(n <= 3 ? 280 : 200, Math.max(128, Math.floor((d.by1 - top - 14) / n)));
-          const r = 60;
+          // the disc leaves at least 36 px between two discs (a 6 px gap, the rail and a 6 px gap with room to spare), so the gaps stay equal and the rail always has room
+          const r = Math.min(60, Math.floor((pitch - 36) / 2));
           const cxn = d.x0 + r;
-          if (n >= 2) d.rect(cxn - 2, top + pitch / 2, 4, pitch * (n - 1), '$muted');
+          // the rail runs only BETWEEN the discs, 6 px clear of each (never through one, never above the first or below the last)
+          for (let i = 0; i + 1 < n; i++) d.rect(cxn - 2, top + pitch * i + pitch / 2 + r + 6, 4, pitch - 2 * r - 12, '$muted');
           steps.forEach((s, i) => {
             const cy = top + pitch * i + pitch / 2;
             const lab = measure(s, st.fonts.body, nearestWeight(st.fonts.body, 500), 44, d.w - 2 * r - 40, 1.25);
@@ -803,7 +805,8 @@ const BASE_LIST: LayoutDef[] = [
           d.y += h + (last ? 2 * pad : 0) + 14;
         }
         d.y -= 14;
-        if (n >= 2) d.rect(lineX - 2, rows[0].cy, 4, rows[n - 1].cy - rows[0].cy, '$muted');
+        // the rail runs only BETWEEN the dots (6 px clear of each), never through a dot, above the first or below the last
+        for (let i = 0; i + 1 < n; i++) { const y1 = rows[i].cy + 14 + 6, y2 = rows[i + 1].cy - 14 - 6; if (y2 > y1) d.rect(lineX - 2, y1, 4, y2 - y1, '$muted'); }
         rows.forEach((r) => d.circle(lineX, r.cy, 14, r.last ? '$onAccent' : '$accent'));
       });
       return mk(d, { type: 'checklist', fitAs: 'timeline', slide: { type: 'checklist', headline: str(f, 'title') } });

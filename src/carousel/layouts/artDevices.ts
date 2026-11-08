@@ -74,7 +74,7 @@ export function artDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box[
   // Frequency: art is a garnish, not a pattern. One art item on every ART_EVERY-th slide (the 1st, 4th, 7th ...: at most a third of the deck, never two slides in a row), the items of the
   // preset's list in turn; a hand-drawn ring only on a slide that has an accent word. The first item of the turn that finds a clear spot is drawn.
   // one decoration per slide, ring > sticker > art: a slide whose accent word is ringed, or that has a sticker, gets no art item
-  if (taken.some((p) => p.kind === 'sticker' || p.id === 'pen-circle')) return out;
+  if (taken.some((p) => p.kind === 'sticker' || p.id === 'pen-circle' || p.id === 'pen-underline')) return out;
   if (x.index % ART_EVERY !== 0) return out;
   const turn = Math.floor(x.index / ART_EVERY);
   const order = list.map((p, k) => ({ p, k })).filter(({ p }) => matches(p.on, x.index, x.total) && !artItem(p.item)?.ring); // a ring is only drawn round an accent word (by the pen-circle device), never as a free-floating oval

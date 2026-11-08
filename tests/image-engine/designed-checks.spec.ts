@@ -332,7 +332,9 @@ test('hero headline uses the full width (3 lines at most), stat labels are at mo
     const frag = D.stepperSvg(['Unzip the back panel', 'Flip the hood inside out', 'Pull the straps and wear it'], 2, { top: 400, bottom: 1150 });
     const radius = Number(/<circle cx="\d+" cy="\d+" r="(\d+)"/.exec(frag)![1]);
     const sizes = [...frag.matchAll(/font-size="(\d+)"/g)].map((m) => Number(m[1]));
-    const cys = [...frag.matchAll(/<line x1="\d+" y1="(\d+)" x2="\d+" y2="(\d+)"/g)].map((m) => [Number(m[1]), Number(m[2])])[0];
+    // the connector is one segment between each pair of nodes: its span runs from just below the first node to just above the last, so its middle is the middle of the stepper
+    const segs = [...frag.matchAll(/<line x1="\d+" y1="(\d+)" x2="\d+" y2="(\d+)"/g)].map((m) => [Number(m[1]), Number(m[2])]);
+    const cys = [Math.min(...segs.map((s) => s[0])), Math.max(...segs.map((s) => s[1]))];
     const small = D.stepperSvg(['a', 'b', 'c'], 1, { top: 430, bottom: 1130 });
     return { x: t.x, w: t.width, lines, size: t.style.size, statSize: sl.style.size, statMin: sl.slot.minSize, radius, sizes, mid: (cys[0] + cys[1]) / 2, smallR: Number(/<circle cx="\d+" cy="\d+" r="(\d+)"/.exec(small)![1]) };
   }, PALJ);

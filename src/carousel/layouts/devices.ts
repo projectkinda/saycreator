@@ -22,6 +22,8 @@ export interface DeviceCtx {
   textBoxes: Box[];
   /** The headline's box, when there is one. */
   title?: Box;
+  /** The boxes of the shapes of the slide (cards, pills, panels): a pen ring keeps clear of them. */
+  shapeBoxes?: Box[];
   /** Whether the style draws the accent as a marker bar (the italic device then stays off: the bar is measured on the upright word). */
   marker: boolean;
   /** Fonts of the style. */
@@ -59,6 +61,47 @@ export function penLoop(b: Box, seed: number): string {
     pts.push(`${r1(cx + rx * wob * Math.cos(t))} ${r1(cy + ry * wob * Math.sin(t))}`);
   }
   return 'M ' + pts.join(' L ');
+}
+
+/**
+ * A hand-drawn ring round the INK of an accent word (its drawn letters, not the text box): a rounded loop that stays at least 10 px clear of every glyph pixel (the stroke's inner edge),
+ * goes round and overshoots its start. The corner radii are the largest at which the corner of the ink box is still `need` px from the stroke. The wobble only ever moves the stroke
+ * outward, so the clearance holds everywhere. Deterministic for a given text. Returns the path and the box it occupies.
+ */
+export function penRing(ink: Box, seed: number, sw: number, margins: { mh: number; mv: number } = { mh: 24, mv: 18 }): { d: string; box: Box } {
+  const { mh, mv } = margins;
+  const need = 10 + sw / 2 + 2;
+  const hw = ink.w / 2 + mh, hh = ink.h / 2 + mv, cx = ink.x + ink.w / 2, cy = ink.y + ink.h / 2;
+  const cornerClear = (rx: number, ry: number) => {
+    let m = 1e9;
+    for (let k = 0; k <= 24; k++) { const t = (k / 24) * Math.PI / 2; m = Math.min(m, Math.hypot(hw - rx + rx * Math.cos(t) - ink.w / 2, hh - ry + ry * Math.sin(t) - ink.h / 2)); }
+    return m;
+  };
+  let rx = Math.min(hw, 90), ry = Math.min(hh, 90);
+  while ((rx > 3 || ry > 3) && cornerClear(rx, ry) < need) { rx = Math.max(3, rx - 2); ry = Math.max(3, ry - 2); }
+  // the rounded rectangle as points along its length, from a start that depends on the text
+  const pts: [number, number][] = [];
+  const seg = (x0: number, y0: number, x1: number, y1: number, n: number) => { for (let i = 0; i < n; i++) pts.push([x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n]); };
+  const arc = (ax: number, ay: number, a0: number, n: number) => { for (let i = 0; i < n; i++) { const t = a0 + ((i / n) * Math.PI) / 2; pts.push([ax + rx * Math.cos(t), ay + ry * Math.sin(t)]); } };
+  seg(-hw + rx, -hh, hw - rx, -hh, 18); arc(hw - rx, -hh + ry, -Math.PI / 2, 8);
+  seg(hw, -hh + ry, hw, hh - ry, 6); arc(hw - rx, hh - ry, 0, 8);
+  seg(hw - rx, hh, -hw + rx, hh, 18); arc(-hw + rx, hh - ry, Math.PI / 2, 8);
+  seg(-hw, hh - ry, -hw, -hh + ry, 6); arc(-hw + rx, -hh + ry, Math.PI, 8);
+  const n = pts.length, start = (seed >> 3) % n, turn = 1.07;
+  const ph = (seed % 628) / 100;
+  const out: string[] = [];
+  let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+  const total = Math.round(n * turn);
+  for (let i = 0; i <= total; i++) {
+    const [px, py] = pts[(start + i) % n];
+    const u = i / total;
+    const out0 = Math.max(0, 1.2 + 1.2 * Math.sin(i / 5 + ph)) + (u > 0.93 ? (u - 0.93) / 0.07 * 7 : 0); // outward only, and the overshoot drifts out
+    const l = Math.hypot(px / hw, py / hh) || 1;
+    const x = cx + px + (px / hw / l) * out0, y = cy + py + (py / hh / l) * out0;
+    out.push(`${r1(x)} ${r1(y)}`);
+    minx = Math.min(minx, x); maxx = Math.max(maxx, x); miny = Math.min(miny, y); maxy = Math.max(maxy, y);
+  }
+  return { d: 'M ' + out.join(' L '), box: { x: r1(minx - sw / 2), y: r1(miny - sw / 2), w: r1(maxx - minx + sw), h: r1(maxy - miny + sw) } };
 }
 
 /** A sticker goes on every third slide at most (the 2nd, 5th, 8th ...). */
@@ -155,25 +198,81 @@ export function accentDevices(svg: string, x: DeviceCtx): { svg: string; over: s
   }
   svg = svg.replace(re, () => `<text data-role="title"${attrs}>${inner}</text>`);
   // pen circle round the (first) accent run
+  // The ring keeps at least RING_CLEAR px from every other piece of text (the other words of the headline, every other text box, the chrome) and every shape. When the full ring cannot,
+  // a smaller one is tried, then a hand-drawn underline, then nothing (the accent colour alone marks the word). It never touches other text.
   if (d.penCircle) {
     const s = spans.find((q) => q.fill);
-    if (s) {
+    // an accent phrase that wraps onto a second line is not ringed: a ring round one fragment would cut across the other
+    if (s && !spans.some((q) => q.fill && Math.abs(q.y - s.y) > 2)) {
       const isItal = /font-family="(Instrument Serif Italic|EB Garamond Italic)"/.test(s.raw);
       const w = isItal ? measureWidth(s.text, ital.fam, ital.w, Math.round(size * ital.k)) : measureWidth(s.text, fam, weight, size);
       const b: Box = { x: s.x, y: s.y - size * 0.8, w, h: size * 0.98 };
+      // the ink of the word: from the top of its tallest letter to the foot of its lowest (a descender only when it has one)
+      const inkBox: Box = { x: s.x, y: s.y - size * 0.82, w, h: size * (0.82 + (/[gjpqyQ,;]/.test(s.text) ? 0.26 : 0.04)) };
       const ink = readable([x.c.accent, x.c.text], x.c.bg, 3);
+      const RING_CLEAR = 14;
+      const inkOfSpan = (q: Span): Box => ({ x: q.x, y: q.y - size * 0.78, w: measureWidth(q.text.trim(), fam, weight, size), h: size * (0.78 + (/[gjpqyQ,;]/.test(q.text) ? 0.26 : 0.04)) });
+      const near = (a: Box, b: Box) => Math.hypot(Math.max(a.x - (b.x + b.w), b.x - (a.x + a.w), 0), Math.max(a.y - (b.y + b.h), b.y - (a.y + a.h), 0));
+      const sameBox = (a: Box, b: Box) => Math.abs(a.x - b.x) < 2 && Math.abs(a.y - b.y) < 2 && Math.abs(a.w - b.w) < 2 && Math.abs(a.h - b.h) < 2;
+      const textOthers: Box[] = [
+        ...spans.filter((q) => q !== s && q.text.trim()).map(inkOfSpan),
+        // every other text box (the headline's own box is replaced by its measured lines above)
+        ...x.textBoxes.filter((tb) => !(x.title && (sameBox(tb, x.title) || (tb.x >= x.title.x - 2 && tb.y >= x.title.y - 2 && tb.x + tb.w <= x.title.x + x.title.w + 2 && tb.y + tb.h <= x.title.y + x.title.h + 2)))),
+      ];
+      const shapeOthers = (x.shapeBoxes ?? []).filter((q) => q.w * q.h < 1080 * 1350 * 0.9);
+      // a ring (or underline) box is clear when no other text is within RING_CLEAR of it, and no shape either: a shape that holds the whole ring leaves RING_CLEAR of padding inside it
+      const clearOf = (r: Box): boolean => {
+        if (textOthers.some((q) => near(r, q) < RING_CLEAR)) return false;
+        return shapeOthers.every((q) => {
+          const inside = r.x >= q.x && r.y >= q.y && r.x + r.w <= q.x + q.w && r.y + r.h <= q.y + q.h;
+          if (inside) return r.x - q.x >= RING_CLEAR && r.y - q.y >= RING_CLEAR && q.x + q.w - (r.x + r.w) >= RING_CLEAR && q.y + q.h - (r.y + r.h) >= RING_CLEAR;
+          return near(r, q) >= RING_CLEAR;
+        });
+      };
       // the ring is drawn tight round the accent word (its measured box and a small margin): the pack's own ring art when the preset lists one, else a generated hand-drawn loop
       const rings = (x.deco.art ?? []).map((p) => artItem(p.item)).filter((it): it is NonNullable<typeof it> => !!it?.ring);
       let box = { x: b.x - 16, y: b.y - 10, w: b.w + 32, h: b.h + 20 };
       let drawn = false;
+      // the pack's ring art is an ellipse stretched over a box: it clears the letters only when the ellipse CIRCUMSCRIBES the ink box (corners included, 34 px of clearance to its mean line), which makes it about
+      // 1.4 times as wide and as tall. Where that does not fit the slide, or would grow over the lines above and below, the generated rounded loop is drawn instead.
       if (rings.length) {
-        const it = rings[hash(s.text + x.index) % rings.length];
-        box = { x: b.x - 14, y: b.y - 8, w: b.w + 28, h: b.h + 16 };
-        const mk = artMarkup(it, box.x, box.y, box.w, { primary: ink, accent: ink, ink, surface: x.c.surface, bg: x.c.bg }, `ring${x.index}`, undefined, box.h);
-        if (mk) { over += mk; drawn = true; }
+        const A = Math.SQRT2 * (inkBox.w / 2 + 34), B = Math.SQRT2 * (inkBox.h / 2 + 34); // 34: the art's inner loop and its wobble reach about 20 px inside the ellipse
+        const ab = { x: inkBox.x + inkBox.w / 2 - A, y: inkBox.y + inkBox.h / 2 - B, w: 2 * A, h: 2 * B };
+        if (ab.x >= 16 && ab.x + ab.w <= 1064 && ab.h <= size * 1.5 && clearOf(ab)) {
+          const it = rings[hash(s.text + x.index) % rings.length];
+          const mk = artMarkup(it, ab.x, ab.y, ab.w, { primary: ink, accent: ink, ink, surface: x.c.surface, bg: x.c.bg }, `ring${x.index}`, undefined, ab.h);
+          if (mk) { over += mk; drawn = true; box = ab; }
+        }
       }
-      if (!drawn) over += `<path d="${penLoop(b, hash(s.text + x.index))}" fill="none" stroke="${ink}" stroke-width="${Math.max(5, Math.round(size / 18))}" stroke-linecap="round" stroke-linejoin="round"/>`;
-      placed.push({ id: 'pen-circle', kind: 'accent', box, ink });
+      let kindId: 'pen-circle' | 'pen-underline' | null = drawn ? 'pen-circle' : null;
+      if (!drawn) {
+        const sw = Math.max(5, Math.round(size / 18));
+        // (a) the full ring, then a smaller one
+        for (const margins of [{ mh: 24, mv: 18 }, { mh: 17, mv: 15 }]) {
+          const ring = penRing(inkBox, hash(s.text + x.index), sw, margins);
+          if (!clearOf(ring.box)) continue;
+          // a preset that lists ring art keeps the ring in the art family (the art switch of the style panel turns the ring art off; the loop is then drawn untagged, as before)
+          over += `<path${rings.length ? ' data-ring-art="loop"' : ''} d="${ring.d}" fill="none" stroke="${ink}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`;
+          box = ring.box;
+          kindId = 'pen-circle';
+          if (margins.mh < 24) notes.push('Pen ring: a smaller ring, other text is close.');
+          break;
+        }
+        // (b) a hand-drawn underline under the word
+        if (!kindId) {
+          const uy = inkBox.y + inkBox.h + 14, x0 = inkBox.x - 4, x1 = inkBox.x + inkBox.w + 4;
+          const pts: string[] = [];
+          for (let k = 0; k <= 24; k++) pts.push(`${r1(x0 + ((x1 - x0) * k) / 24)} ${r1(uy + 2.5 * Math.sin(k / 3 + (hash(s.text) % 7)) + (k / 24) * 3)}`);
+          const ub: Box = { x: x0 - sw / 2, y: uy - 4 - sw / 2, w: x1 - x0 + sw, h: 12 + sw };
+          if (clearOf(ub)) {
+            over += `<path${rings.length ? ' data-ring-art="underline"' : ''} d="M ${pts.join(' L ')}" fill="none" stroke="${ink}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`;
+            box = ub;
+            kindId = 'pen-underline';
+            notes.push('Pen ring: an underline instead, other text is too close for a ring.');
+          } else notes.push('Pen ring: left out (other text is too close); the accent colour marks the word.'); // (c)
+        }
+      }
+      if (kindId) placed.push({ id: kindId, kind: 'accent', box, ink });
     }
   }
   return { svg, over, placed, notes };
@@ -216,7 +315,7 @@ export function overDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box
   }
   // stickers: one emoji glyph in an empty corner. It keeps a clear gap from every text (at least one line height of that text, and from the headline's whole box), 24 px from shapes and pictures
   // Stickers are rare: at most one on every third slide (never two in a row), never on a slide whose accent word is ringed (ring > sticker > art), and never within 24 px of a picture, card, pill or button.
-  if (d.stickers && x.index % STICKER_EVERY === 1 && !taken.some((p) => p.id === 'pen-circle')) {
+  if (d.stickers && x.index % STICKER_EVERY === 1 && !taken.some((p) => p.id === 'pen-circle' || p.id === 'pen-underline')) {
     const seed = hash(x.handle + x.index);
     const glyph = STICKERS[(seed + x.index * 5) % STICKERS.length];
     const S = 118;

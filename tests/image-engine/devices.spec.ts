@@ -52,7 +52,7 @@ async function drawAll(page: any, ids: string[], off: boolean) {
         for (const d of devs) {
           if (!['sticker', 'chrome', 'accent'].includes(d.kind)) continue;
           if (d.id === 'italic-accent' || d.id === 'gradient-text') continue; // these ARE the text
-          const others = texts.filter((t) => !(d.id === 'pen-circle' && t.name === 'title'));
+          const others = texts.filter((t) => !((d.id === 'pen-circle' || d.id === 'pen-underline') && t.name === 'title'));
           for (const t of others) if (hit(d.box, t, 0)) problems.push(`${d.id} overlaps ${t.name} "${t.chrome ? 'chrome' : ''}" (${Math.round(t.x)},${Math.round(t.y)},${Math.round(t.w)}x${Math.round(t.h)}) on slide ${i + 1}`);
         }
         // pen circle must also stay off the OTHER lines of its own headline (only the accent line holds it): the ring's box against the title box top and bottom is allowed, so check the neighbours by height
@@ -99,7 +99,7 @@ test('every device a preset asks for is drawn; none sits on text; the contrast f
     const asked = Object.keys(p.deco ?? {});
     seen[id] = [...new Set<string>(p.rows.flatMap((x: any) => x.ids))];
     for (const k of asked) {
-      if (MAP[k]) expect(seen[id], `${id}: ${k} is drawn`).toContain(MAP[k]);
+      if (MAP[k]) { if (k === 'penCircle') expect(seen[id].some((q: string) => q === 'pen-circle' || q === 'pen-underline'), `${id}: the pen ring (or its underline fallback) is drawn`).toBe(true); else expect(seen[id], `${id}: ${k} is drawn`).toContain(MAP[k]); }
     }
     if (p.deco?.contactClosing) expect(p.rows[7].ids, `${id}: the contact block is on the last slide`).toContain('contact-icons');
     if (p.deco?.contactClosing) expect(p.rows[0].ids, `${id}: not on the first`).not.toContain('contact-icons');

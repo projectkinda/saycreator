@@ -141,7 +141,7 @@ test('in the app: the style panel has a switch for the art; flipping it redraws 
   const artCount = () => page.evaluate(() => {
     const d = (JSON.parse(localStorage.getItem('creator.carousel.project.v1') ?? '{}') as { project?: { doc?: any } }).project?.doc;
     const slides = Object.values<any>(d?.designed?.slides ?? {});
-    return slides.reduce((n, s) => n + ((s.built?.svg ?? '').match(/data-art="/g) ?? []).length, 0);
+    return slides.reduce((n, s) => n + ((s.built?.svg ?? '').match(/data-(?:ring-)?art="/g) ?? []).length, 0); // the pack art, and the ring loop that stands in for a ring art that would not clear the letters
   });
   await expect.poll(artCount, { timeout: 30_000 }).toBeGreaterThanOrEqual(1);
   const base = calls.n; // the deck itself (a retry of the writer is part of making it)

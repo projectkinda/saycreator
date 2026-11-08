@@ -55,7 +55,7 @@ add(5, { title: 'Green elegant serif', description: 'White pages and a deep gree
 
 add(6, { title: 'Cream social profile', description: 'Warm cream pages with a profile header and bold numbered titles, for do and do-not lists.',
   tones: ['friendly', 'clear'], kw: ['dos', 'donts', 'myths', 'mistakes', 'vs', 'better', 'habits', 'before', 'after', 'tips', 'creator', 'personal', 'follow', 'routine'], types: ['beforeafter', 'step', 'content'],
-  palettes: { cream: pal('#F9FCEC', '#0A0A0A', '#585A4F', '#8F2F0E', '#FFFFFF', '#E6E8DA', { marker: '#F2C9A8', onMarker: '#0A0A0A', line: '#0A0A0A' }) },
+  palettes: { cream: pal('#F9FCEC', '#0A0A0A', '#585A4F', '#8F2F0E', '#FFFFFF', '#F1E6CB', { marker: '#F2C9A8', onMarker: '#0A0A0A', line: '#0A0A0A' }) },
   rhythm: ['cream'], byType: { closing: 'cream' }, fonts: { headline: 'Hanken Grotesk', headlineWeight: 700, body: 'Instrument Sans', bodyWeight: 400, strong: 600 },
   type: { cover: 112, headline: 84, body: 42, small: 34, stat: 300, quote: 70, label: 32 }, caseStyle: 'sentence', shape: { radius: 20, outline: 3, stroke: 5, badge: 'circle', marker: 'underline', sticker: 'pill', hardShadow: 0, decor: 'orbs' }, chrome: 'page-number', devices: { profileHeader: true },
   flavour: { cover: 'statement', coverVariant: 0, prefer: ['prose', 'numbered-list', 'comparison', 'listicle-numeral', 'checklist', 'statement', 'numbered-stagger'], avoid: ['stat-grid', 'feature-slider', 'timeline', 'statement-stacked', 'pill-stagger'], variants: { statement: 0, prose: 0, checklist: 0 } }, layouts: L({ step: 'step-badge' }) });

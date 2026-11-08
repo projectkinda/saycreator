@@ -55,16 +55,17 @@ export const MORE_LAYOUTS: LayoutDef[] = [
       const ts = big ? 96 : 88; // the heading's base size; the body base stays at most 70% of it, so the heading is the largest text on the slide
       const sizes = Array.from({ length: 31 }, (_, i) => (big ? 104 : 96) - 2 * i); // 104 (or 96) down to 44
       const bs = (sizes.filter((z) => !head || z <= Math.floor(ts * 0.7)).find((z) => z >= 44 && fits(z))) ?? 44;
+      const lo = bs >= 48 ? 48 : 44; // the body is at least 48 px whenever it fits at 48 (the fit step may not shrink it below)
       const d = place(st, cx, 'center', (d) => {
         if (head) d.text('title', num ? `${num}. ${head}` : head, { size: ts, max: big ? 150 : 200, weight: 800, font: 'h', lines: 3, min: 72, gap: 52 });
-        paras.forEach((p, i) => d.text('body', p, { size: bs, max: big ? 150 : 140, lines: 9, min: 44, lh: 1.3, gap: i < paras.length - 1 || bullets.length || pull ? 40 : 0 }));
+        paras.forEach((p, i) => d.text('body', p, { size: bs, max: big ? 150 : 140, lines: 9, min: lo, lh: 1.3, gap: i < paras.length - 1 || bullets.length || pull ? 40 : 0 }));
         bullets.forEach((b, i) => {
           const m = measure(b, st.fonts.body, bw(st), eff(bs, 72), d.w - S(56), 1.25);
           const h = Math.max(m.h + 2, S(60));
           d.circle(d.x0 + S(12), d.y + h / 2, S(9), '$accent');
-          d.text('body', b, { x: d.x0 + S(56), w: d.w - S(56), size: bs, max: 100, lines: 3, min: 44, boxH: h, gap: i < bullets.length - 1 || pull ? 20 : 0 });
+          d.text('body', b, { x: d.x0 + S(56), w: d.w - S(56), size: bs, max: 100, lines: 3, min: lo, boxH: h, gap: i < bullets.length - 1 || pull ? 20 : 0 });
         });
-        if (pull) d.text('body', pull, { size: bs + 4, max: 120, weight: 800, font: 'h', lines: 3, min: 44, lh: 1.2 });
+        if (pull) d.text('body', pull, { size: bs + 4, max: 120, weight: 800, font: 'h', lines: 3, min: lo, lh: 1.2 });
       });
       const items = rows >= 1 ? [...paras, ...bullets, ...(pull ? [pull] : [])] : [];
       // one text block alone is a plain content slide; several blocks are rows (like a checklist's)

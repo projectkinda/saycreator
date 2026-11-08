@@ -1,0 +1,1021 @@
+{
+  "kind": "say-creator-report",
+  "createdAt": "2026-11-08T08:44:14.215Z",
+  "style": "style-6",
+  "format": "carousel",
+  "referenceFiles": [],
+  "read": {
+    "colours": {
+      "bg": "#F9FCEC",
+      "text": "#0A0A0A",
+      "muted": "#585A4F",
+      "accent": "#8F2F0E",
+      "onAccent": "#FFFFFF",
+      "marker": "#F2C9A8",
+      "onMarker": "#0A0A0A",
+      "surface": "#E6E8DA",
+      "onSurface": "#0A0A0A",
+      "line": "#0A0A0A"
+    },
+    "fonts": {
+      "headline": "Hanken Grotesk",
+      "headlineWeight": 700,
+      "body": "Instrument Sans",
+      "bodyWeight": 400,
+      "strong": 600
+    },
+    "layouts": {
+      "cover": [
+        "cover-stack",
+        "cover-top"
+      ],
+      "content": [
+        "content-bar",
+        "content-stack"
+      ],
+      "step": [
+        "step-badge",
+        "step-pill"
+      ],
+      "stat": [
+        "stat-giant",
+        "stat-card"
+      ],
+      "checklist": [
+        "checklist-lines",
+        "checklist-icons"
+      ],
+      "beforeafter": [
+        "ba-split",
+        "ba-cards"
+      ],
+      "quote": [
+        "quote-centre",
+        "quote-marks"
+      ],
+      "closing": [
+        "closing-button",
+        "closing-bar"
+      ]
+    },
+    "graphics": {},
+    "skippedAsUnknown": []
+  },
+  "wholeRead": null,
+  "model": {
+    "job": "Carousel from 542 words of text, 7 slides",
+    "calls": null,
+    "pictures": null,
+    "seconds": 35.6,
+    "stages": [
+      {
+        "stage": "Ask the writer for the script",
+        "seconds": 35.4
+      },
+      {
+        "stage": "Check the script and pick a style",
+        "seconds": 0
+      },
+      {
+        "stage": "Draw the slides",
+        "seconds": 0.1
+      }
+    ],
+    "fromCache": false
+  },
+  "route": "designed",
+  "routeReason": "A built-in style (\"style-6\") is chosen, so the layout library draws it (the template route is behind the creator.templateRoute flag). 1 model call, 0 inspiration pictures, style brief derived from the pack.",
+  "designedCalls": 1,
+  "designed": {
+    "calls": 1,
+    "tokens": {
+      "input": 126922,
+      "output": 7402
+    },
+    "layouts": {
+      "0": "statement",
+      "1": "split-text",
+      "2": "prose",
+      "3": "numbered-list",
+      "4": "big-stat",
+      "5": "comparison",
+      "6": "statement-card"
+    },
+    "fallbacks": {},
+    "notes": [],
+    "requestBytes": null,
+    "library": {
+      "route": "library",
+      "provider": "dev-cli",
+      "tokenNote": "Provider is dev-cli (the Claude Code command line): these token numbers include its own overhead (system prompt, tools, cache reads), so they are inflated. Use the api provider (a key set on the server) for real numbers.",
+      "calls": 1,
+      "tokens": {
+        "input": 126922,
+        "output": 7402
+      },
+      "seconds": 35.4,
+      "layouts": [
+        "statement",
+        "split-text",
+        "prose",
+        "numbered-list",
+        "big-stat",
+        "comparison",
+        "statement-card"
+      ],
+      "variants": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "cuts": [
+        "plain",
+        "plain",
+        "plain",
+        "plain",
+        "plain",
+        "plain",
+        "plain"
+      ],
+      "inverts": [
+        "none",
+        "tint",
+        "none",
+        "none",
+        "tint",
+        "none",
+        "none"
+      ],
+      "densities": [
+        "normal",
+        "normal",
+        "normal",
+        "normal",
+        "normal",
+        "normal",
+        "normal"
+      ],
+      "suggested": {
+        "cut": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "invert": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "density": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      "retries": [],
+      "fallbacks": [],
+      "codeAdjustments": [],
+      "style": {
+        "palette": {
+          "bg": "#F9FCEC",
+          "text": "#0A0A0A",
+          "muted": "#353630",
+          "accent": "#8F2F0E",
+          "surface": "#C7CABD",
+          "onAccent": "#FFFFFF"
+        },
+        "fonts": {
+          "headline": "Hanken Grotesk",
+          "body": "Instrument Sans"
+        },
+        "background": "flat",
+        "devices": {
+          "marker": false,
+          "profileHeader": true,
+          "underline": true,
+          "planes": false
+        },
+        "accentStyle": "text",
+        "closing": {
+          "bg": "#F9FCEC",
+          "text": "#0A0A0A",
+          "muted": "#353630",
+          "accent": "#8F2F0E",
+          "surface": "#C7CABD",
+          "onAccent": "#FFFFFF"
+        },
+        "flavour": {
+          "cover": "statement",
+          "coverVariant": 0,
+          "prefer": [
+            "prose",
+            "numbered-list",
+            "comparison",
+            "listicle-numeral",
+            "checklist",
+            "statement",
+            "numbered-stagger"
+          ],
+          "avoid": [
+            "stat-grid",
+            "feature-slider",
+            "timeline",
+            "statement-stacked",
+            "pill-stagger"
+          ],
+          "variants": {
+            "statement": 0,
+            "prose": 0,
+            "checklist": 0
+          }
+        },
+        "deco": {
+          "profileHeader": true
+        },
+        "radius": 20,
+        "weights": {
+          "headline": 700,
+          "body": 400
+        }
+      },
+      "styleNotes": [
+        "Style tokens: background flat; marker false, profile header true, underline true, planes false; accent text.",
+        "Ground #F9FCEC: the card colour #E6E8DA is too close to the ground or unreadable under the ink, so cards use #C7CABD.",
+        "Ground #F9FCEC: the card colour #E6E8DA is too close to the ground or unreadable under the ink, so cards use #C7CABD.",
+        "Preset look: 1 ground in the rhythm, case none, weights 700/400."
+      ],
+      "plan": {
+        "title": "Testing the procrastination app idea",
+        "specs": [
+          {
+            "layout": "statement",
+            "variant": 0,
+            "fields": {
+              "kicker": "Honest review",
+              "headline": "Test the core assumption before you build",
+              "caption": "Twenty people and one week will show it."
+            },
+            "accents": [
+              "core assumption"
+            ]
+          },
+          {
+            "layout": "split-text",
+            "variant": 1,
+            "fields": {
+              "headline": "The idea in one sentence",
+              "paragraph": "An app that finds which of six failure modes causes your procrastination, then adapts."
+            },
+            "accents": [
+              "one sentence"
+            ]
+          },
+          {
+            "layout": "prose",
+            "variant": 0,
+            "fields": {
+              "heading": "The one assumption that must be true",
+              "p1": "Users who know why they procrastinate must use the app consistently. The AI's psychological adaptation must also be noticeably better than a well-designed non-adaptive app.",
+              "p2": "If users still churn with a correct profile, the psychological framework is irrelevant. If the adaptation is not clearly better than a clean todo app, there is no moat.",
+              "pull": "Both halves must be true."
+            },
+            "accents": [
+              "must be true"
+            ]
+          },
+          {
+            "layout": "numbered-list",
+            "variant": 1,
+            "fields": {
+              "title": "Three fatal flaws, ranked",
+              "items": [
+                "Retention fades after 7 to 21 days",
+                "Aha moment sits too deep in the product",
+                "Positioning: coaching sold as a to-do app"
+              ]
+            },
+            "accents": [
+              "fatal flaws"
+            ]
+          },
+          {
+            "layout": "big-stat",
+            "variant": 0,
+            "fields": {
+              "number": "10-15",
+              "label": "minutes before the aha moment"
+            },
+            "accents": []
+          },
+          {
+            "layout": "comparison",
+            "variant": 1,
+            "fields": {
+              "title": "Two different jobs",
+              "leftLabel": "Todo app user",
+              "leftText": "Wants speed and adds a task in 3 taps",
+              "rightLabel": "Coaching user",
+              "rightText": "Will answer 18 questions and invest time"
+            },
+            "accents": [
+              "different jobs"
+            ]
+          },
+          {
+            "layout": "statement-card",
+            "variant": 0,
+            "fields": {
+              "headline": "Build the smallest version first",
+              "kicker": "The verdict",
+              "caption": "It should test the core assumption."
+            },
+            "accents": [
+              "smallest version"
+            ]
+          }
+        ]
+      },
+      "grounds": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "flavour": {
+        "swaps": [],
+        "kept": [
+          {
+            "slide": 2,
+            "layout": "split-text",
+            "why": "no preferred layout fits: split-text carries open text and numbered-list would not"
+          },
+          {
+            "slide": 5,
+            "layout": "big-stat",
+            "why": "no preferred layout fits: big-stat carries a figure and listicle-numeral would not"
+          }
+        ]
+      },
+      "source": "style-6"
+    },
+    "model": "DRAW_MODEL, else CAROUSEL_MODEL, else sonnet (server setting)"
+  },
+  "slides": [
+    {
+      "number": 1,
+      "type": "cover",
+      "layout": "cover-stack",
+      "rule": 0,
+      "palette": "cream",
+      "because": "the headline has 7 words (at most 7)",
+      "notes": [
+        "Drawn by the layout library (statement)."
+      ],
+      "checks": [
+        {
+          "id": "size",
+          "label": "Text is big enough",
+          "pass": true,
+          "reason": "Every text slot is 32 px or bigger.",
+          "measured": 36,
+          "limit": 32
+        },
+        {
+          "id": "edges",
+          "label": "Margins and edges",
+          "pass": true,
+          "reason": "Every text slot keeps 48 px from the edges."
+        },
+        {
+          "id": "overlap",
+          "label": "Text slots do not overlap",
+          "pass": true,
+          "reason": "No two text slots overlap."
+        },
+        {
+          "id": "contrast",
+          "label": "Contrast",
+          "pass": true,
+          "reason": "3 text slot(s) with a known flat background have enough contrast."
+        }
+      ],
+      "failedChecks": [],
+      "warnings": [
+        "Faithful drawing: these checks cannot run on it. Contrast over gradients, patterns or drawn art: only a flat colour behind a text slot is known, so text on anything else is not checked. Whether a drawn graphic crosses a text slot (only text boxes are compared with each other). The picture-overlap and orphan-word checks that read the finished pixels."
+      ],
+      "repairs": [],
+      "textSizes": [
+        {
+          "role": "kicker",
+          "size": 48,
+          "words": 2
+        },
+        {
+          "role": "title",
+          "size": 130,
+          "words": 7
+        },
+        {
+          "role": "body",
+          "size": 58,
+          "words": 8
+        },
+        {
+          "role": "recurring",
+          "size": 40,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 3
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 2
+        }
+      ],
+      "words": 24,
+      "verdict": null
+    },
+    {
+      "number": 2,
+      "type": "content",
+      "layout": "content-bar",
+      "rule": 0,
+      "palette": "cream",
+      "because": "the body has 14 words (at most 17)",
+      "notes": [
+        "Drawn by the layout library (split-text)."
+      ],
+      "checks": [
+        {
+          "id": "size",
+          "label": "Text is big enough",
+          "pass": true,
+          "reason": "Every text slot is 32 px or bigger.",
+          "measured": 36,
+          "limit": 32
+        },
+        {
+          "id": "edges",
+          "label": "Margins and edges",
+          "pass": true,
+          "reason": "Every text slot keeps 48 px from the edges."
+        },
+        {
+          "id": "words",
+          "label": "Words on the slide",
+          "pass": true,
+          "reason": "26 words on the slide.",
+          "measured": 26,
+          "limit": 50
+        },
+        {
+          "id": "overlap",
+          "label": "Text slots do not overlap",
+          "pass": true,
+          "reason": "No two text slots overlap."
+        },
+        {
+          "id": "contrast",
+          "label": "Contrast",
+          "pass": true,
+          "reason": "2 text slot(s) with a known flat background have enough contrast."
+        }
+      ],
+      "failedChecks": [],
+      "warnings": [
+        "Faithful drawing: these checks cannot run on it. Contrast over gradients, patterns or drawn art: only a flat colour behind a text slot is known, so text on anything else is not checked. Whether a drawn graphic crosses a text slot (only text boxes are compared with each other). The picture-overlap and orphan-word checks that read the finished pixels."
+      ],
+      "repairs": [],
+      "textSizes": [
+        {
+          "role": "title",
+          "size": 150,
+          "words": 5
+        },
+        {
+          "role": "body",
+          "size": 72,
+          "words": 14
+        },
+        {
+          "role": "recurring",
+          "size": 40,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 3
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 2
+        }
+      ],
+      "words": 26,
+      "verdict": null
+    },
+    {
+      "number": 3,
+      "type": "content",
+      "layout": "content-stack",
+      "rule": 1,
+      "palette": "cream",
+      "because": "no condition (the fallback rule)",
+      "notes": [
+        "Drawn by the layout library (prose)."
+      ],
+      "checks": [
+        {
+          "id": "size",
+          "label": "Text is big enough",
+          "pass": true,
+          "reason": "Every text slot is 32 px or bigger.",
+          "measured": 36,
+          "limit": 32
+        },
+        {
+          "id": "edges",
+          "label": "Margins and edges",
+          "pass": true,
+          "reason": "Every text slot keeps 48 px from the edges."
+        },
+        {
+          "id": "words",
+          "label": "Words on the slide",
+          "pass": false,
+          "reason": "73 words on the slide. That is a lot for a phone.",
+          "measured": 73,
+          "limit": 50
+        },
+        {
+          "id": "overlap",
+          "label": "Text slots do not overlap",
+          "pass": true,
+          "reason": "No two text slots overlap."
+        },
+        {
+          "id": "contrast",
+          "label": "Contrast",
+          "pass": true,
+          "reason": "4 text slot(s) with a known flat background have enough contrast."
+        }
+      ],
+      "failedChecks": [
+        "words"
+      ],
+      "warnings": [
+        "Faithful drawing: these checks cannot run on it. Contrast over gradients, patterns or drawn art: only a flat colour behind a text slot is known, so text on anything else is not checked. Whether a drawn graphic crosses a text slot (only text boxes are compared with each other). The picture-overlap and orphan-word checks that read the finished pixels."
+      ],
+      "repairs": [],
+      "textSizes": [
+        {
+          "role": "title",
+          "size": 88,
+          "words": 7
+        },
+        {
+          "role": "body",
+          "size": 44,
+          "words": 25
+        },
+        {
+          "role": "body2",
+          "size": 44,
+          "words": 29
+        },
+        {
+          "role": "body3",
+          "size": 48,
+          "words": 5
+        },
+        {
+          "role": "recurring",
+          "size": 40,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 3
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 2
+        }
+      ],
+      "words": 73,
+      "verdict": null
+    },
+    {
+      "number": 4,
+      "type": "checklist",
+      "layout": "checklist-icons",
+      "rule": 1,
+      "palette": "cream",
+      "because": "no condition (the fallback rule)",
+      "notes": [
+        "Drawn by the layout library (numbered-list)."
+      ],
+      "checks": [
+        {
+          "id": "size",
+          "label": "Text is big enough",
+          "pass": true,
+          "reason": "Every text slot is 32 px or bigger.",
+          "measured": 36,
+          "limit": 32
+        },
+        {
+          "id": "edges",
+          "label": "Margins and edges",
+          "pass": true,
+          "reason": "Every text slot keeps 48 px from the edges."
+        },
+        {
+          "id": "words",
+          "label": "Words on the slide",
+          "pass": true,
+          "warn": true,
+          "reason": "36 words on the slide. That is a lot for a phone.",
+          "measured": 36,
+          "limit": 50
+        },
+        {
+          "id": "overlap",
+          "label": "Text slots do not overlap",
+          "pass": true,
+          "reason": "No two text slots overlap."
+        },
+        {
+          "id": "contrast",
+          "label": "Contrast",
+          "pass": true,
+          "reason": "7 text slot(s) with a known flat background have enough contrast."
+        }
+      ],
+      "failedChecks": [],
+      "warnings": [
+        "Faithful drawing: these checks cannot run on it. Contrast over gradients, patterns or drawn art: only a flat colour behind a text slot is known, so text on anything else is not checked. Whether a drawn graphic crosses a text slot (only text boxes are compared with each other). The picture-overlap and orphan-word checks that read the finished pixels."
+      ],
+      "repairs": [],
+      "textSizes": [
+        {
+          "role": "title",
+          "size": 88,
+          "words": 4
+        },
+        {
+          "role": "body",
+          "size": 144,
+          "words": 1
+        },
+        {
+          "role": "body2",
+          "size": 64,
+          "words": 7
+        },
+        {
+          "role": "body3",
+          "size": 144,
+          "words": 1
+        },
+        {
+          "role": "body4",
+          "size": 64,
+          "words": 8
+        },
+        {
+          "role": "body5",
+          "size": 144,
+          "words": 1
+        },
+        {
+          "role": "body6",
+          "size": 64,
+          "words": 7
+        },
+        {
+          "role": "recurring",
+          "size": 40,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 3
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 2
+        }
+      ],
+      "words": 36,
+      "verdict": null
+    },
+    {
+      "number": 5,
+      "type": "stat",
+      "layout": "stat-card",
+      "rule": 1,
+      "palette": "cream",
+      "because": "no condition (the fallback rule)",
+      "notes": [
+        "Drawn by the layout library (big-stat)."
+      ],
+      "checks": [
+        {
+          "id": "size",
+          "label": "Text is big enough",
+          "pass": true,
+          "reason": "Every text slot is 32 px or bigger.",
+          "measured": 36,
+          "limit": 32
+        },
+        {
+          "id": "edges",
+          "label": "Margins and edges",
+          "pass": true,
+          "reason": "Every text slot keeps 48 px from the edges."
+        },
+        {
+          "id": "overlap",
+          "label": "Text slots do not overlap",
+          "pass": true,
+          "reason": "No two text slots overlap."
+        },
+        {
+          "id": "contrast",
+          "label": "Contrast",
+          "pass": true,
+          "reason": "2 text slot(s) with a known flat background have enough contrast."
+        }
+      ],
+      "failedChecks": [],
+      "warnings": [
+        "Faithful drawing: these checks cannot run on it. Contrast over gradients, patterns or drawn art: only a flat colour behind a text slot is known, so text on anything else is not checked. Whether a drawn graphic crosses a text slot (only text boxes are compared with each other). The picture-overlap and orphan-word checks that read the finished pixels."
+      ],
+      "repairs": [],
+      "textSizes": [
+        {
+          "role": "number",
+          "size": 372,
+          "words": 1
+        },
+        {
+          "role": "title",
+          "size": 48,
+          "words": 5
+        },
+        {
+          "role": "recurring",
+          "size": 40,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 3
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 2
+        }
+      ],
+      "words": 13,
+      "verdict": null
+    },
+    {
+      "number": 6,
+      "type": "beforeafter",
+      "layout": "ba-split",
+      "rule": 0,
+      "palette": "cream",
+      "because": "it is the 1st slide of this type",
+      "notes": [
+        "Drawn by the layout library (comparison)."
+      ],
+      "checks": [
+        {
+          "id": "size",
+          "label": "Text is big enough",
+          "pass": true,
+          "reason": "Every text slot is 32 px or bigger.",
+          "measured": 36,
+          "limit": 32
+        },
+        {
+          "id": "edges",
+          "label": "Margins and edges",
+          "pass": true,
+          "reason": "Every text slot keeps 48 px from the edges."
+        },
+        {
+          "id": "words",
+          "label": "Words on the slide",
+          "pass": true,
+          "reason": "31 words on the slide.",
+          "measured": 31,
+          "limit": 50
+        },
+        {
+          "id": "overlap",
+          "label": "Text slots do not overlap",
+          "pass": true,
+          "reason": "No two text slots overlap."
+        },
+        {
+          "id": "contrast",
+          "label": "Contrast",
+          "pass": true,
+          "reason": "5 text slot(s) with a known flat background have enough contrast."
+        }
+      ],
+      "failedChecks": [],
+      "warnings": [
+        "Faithful drawing: these checks cannot run on it. Contrast over gradients, patterns or drawn art: only a flat colour behind a text slot is known, so text on anything else is not checked. Whether a drawn graphic crosses a text slot (only text boxes are compared with each other). The picture-overlap and orphan-word checks that read the finished pixels."
+      ],
+      "repairs": [],
+      "textSizes": [
+        {
+          "role": "title",
+          "size": 110,
+          "words": 3
+        },
+        {
+          "role": "body",
+          "size": 60,
+          "words": 3
+        },
+        {
+          "role": "body2",
+          "size": 60,
+          "words": 2
+        },
+        {
+          "role": "body3",
+          "size": 60,
+          "words": 9
+        },
+        {
+          "role": "body4",
+          "size": 60,
+          "words": 7
+        },
+        {
+          "role": "recurring",
+          "size": 40,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 3
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 2
+        }
+      ],
+      "words": 31,
+      "verdict": null
+    },
+    {
+      "number": 7,
+      "type": "cover",
+      "layout": "cover-stack",
+      "rule": 0,
+      "palette": "cream",
+      "because": "the headline has 5 words (at most 7)",
+      "notes": [
+        "Drawn by the layout library (statement-card)."
+      ],
+      "checks": [
+        {
+          "id": "size",
+          "label": "Text is big enough",
+          "pass": true,
+          "reason": "Every text slot is 32 px or bigger.",
+          "measured": 36,
+          "limit": 32
+        },
+        {
+          "id": "edges",
+          "label": "Margins and edges",
+          "pass": true,
+          "reason": "Every text slot keeps 48 px from the edges."
+        },
+        {
+          "id": "overlap",
+          "label": "Text slots do not overlap",
+          "pass": true,
+          "reason": "No two text slots overlap."
+        },
+        {
+          "id": "contrast",
+          "label": "Contrast",
+          "pass": true,
+          "reason": "3 text slot(s) with a known flat background have enough contrast."
+        }
+      ],
+      "failedChecks": [],
+      "warnings": [
+        "Faithful drawing: these checks cannot run on it. Contrast over gradients, patterns or drawn art: only a flat colour behind a text slot is known, so text on anything else is not checked. Whether a drawn graphic crosses a text slot (only text boxes are compared with each other). The picture-overlap and orphan-word checks that read the finished pixels."
+      ],
+      "repairs": [],
+      "textSizes": [
+        {
+          "role": "kicker",
+          "size": 48,
+          "words": 2
+        },
+        {
+          "role": "title",
+          "size": 138,
+          "words": 5
+        },
+        {
+          "role": "body",
+          "size": 44,
+          "words": 6
+        },
+        {
+          "role": "recurring",
+          "size": 40,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 1
+        },
+        {
+          "role": "recurring",
+          "size": 36,
+          "words": 3
+        }
+      ],
+      "words": 18,
+      "verdict": null
+    }
+  ],
+  "whatIWantedAndWhatsWrong": "In this style the grey is not looking good, we have to change that, see the 2nd 4th and 5, 6. The colors aren't good. They have to be changed"
+}
