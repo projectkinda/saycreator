@@ -245,20 +245,17 @@
         {
           "item": "style-7/sticker-1",
           "zone": "corner-tr",
-          "w": 190,
-          "on": "inner"
+          "w": 190
         },
         {
           "item": "style-7/sticker-2",
           "zone": "corner-bl",
-          "w": 170,
-          "on": "inner"
+          "w": 170
         },
         {
           "item": "style-7/sticker-3",
           "zone": "corner-br",
-          "w": 150,
-          "on": "last"
+          "w": 150
         }
       ]
     }

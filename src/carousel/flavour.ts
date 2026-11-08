@@ -125,7 +125,14 @@ export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look,
 
   // the cover
   const picturedLayout = (l: string) => (IMAGE_LAYOUT_IDS as readonly string[]).includes(l) && !!look.images && hasEnoughPictures(l, look.images);
-  if (fl.cover && specs[0].layout !== fl.cover && swaps.length < cap && !picturedLayout(specs[0].layout)) {
+  // a preset's own cover form is never changed to plain "statement", and a question cover takes the preset's question form (statement-question) when it has one
+  const q = fl.coverQuestion;
+  const head0 = String(specs[0].fields.headline ?? specs[0].fields.question ?? '').trim();
+  if (q && /\?\s*$/.test(head0) && specs[0].layout !== q && swaps.length < cap && !picturedLayout(specs[0].layout)) {
+    const r = tryLayout(0, q);
+    if (r.ok) apply(0, q, r.fields, r.dropped, `the hook of the cover is a question, so the cover of ${name} is "${q}"`);
+    else kept.push({ slide: 1, layout: specs[0].layout, why: `question cover stays: ${r.why}` });
+  } else if (fl.cover && specs[0].layout !== fl.cover && !(q && specs[0].layout === q) && swaps.length < cap && !picturedLayout(specs[0].layout)) {
     const r = tryLayout(0, fl.cover);
     if (r.ok) apply(0, fl.cover, r.fields, r.dropped, `the cover of ${name} is "${fl.cover}"`);
     else kept.push({ slide: 1, layout: specs[0].layout, why: `cover stays: ${r.why}` });

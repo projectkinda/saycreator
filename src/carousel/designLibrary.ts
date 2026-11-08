@@ -18,6 +18,7 @@ import type { WriteRequest } from './writerPrompt';
 import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
 import { placeImages } from './imagePlace';
 import { flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
+import { picturePass, type PictureSwap } from './picturePass';
 import { TONES } from './writerPrompt';
 
 /** The old route, where the model draws every slide as SVG, stays available behind this flag (off by default): localStorage "creator.legacySvgRoute" = "1" or VITE_LEGACY_SVG_ROUTE=1. */
@@ -278,7 +279,7 @@ const GOOD_FOR: Record<LayoutId, string> = {
   'statement-question': 'one question or thought set under a thin rule, quieter than big-question',
   'contact-closing': 'the closing slide with contact details (2 to 4 lines: handle, site, phone, email), an optional button and brand name',
   'cta-pair': 'a closing with TWO actions: a filled button and an outlined button, each with a line',
-  'numbered-stagger': '2 or 3 numbered points, each a sentence, staggered left and right',
+  'numbered-stagger': '2 or 3 numbered points, each a sentence, the numerals in one column',
   'bullet-list': '3 to 5 short bold lines with bullets (what is in it, what you get)',
   'pill-stagger': '3 to 5 short options or ways, each in its own pill, with a headline',
   'headline-card': 'a headline over one key paragraph set on a card, with an optional subline, paragraph and closing line',
@@ -313,6 +314,7 @@ export function imageRules(images: { id: string; width: number; height: number }
   const nl = (IMAGE_LAYOUT_IDS as readonly string[]).filter((id) => hasEnoughPictures(id, images));
   return [
     `- Pictures available (metadata only, you never see them and never write a picture field): ${list.join('; ')}.`,
+    '- Pictures were supplied: USE THEM. Choose a picture layout for at least one slide for every group of pictures that fits one (a single picture can head a text slide or the cover, two can be a comparison, three or more can be a row or thumbnails); a deck that ignores the pictures is wrong. The code places them.',
     '- Choose a layout with picture slots ONLY if there are enough pictures for its slots (the menu lists the slots and how many pictures each needs); every picture is used at most once in the deck, so the slots of all your picture layouts together must not exceed the pictures available. Prefer a layout whose slot orientation matches the pictures (landscape slots for landscape pictures, tall slots for portrait pictures). The code places the pictures.',
     nl.includes('do-dont') ? '- Two-sided content (a do and do-not pair, before and after, myth and fact): use "do-dont" when two pictures are available; with fewer pictures use "comparison".' : '- Two-sided content (a do and do-not pair, before and after, myth and fact): use "comparison" (not enough pictures for "do-dont").',
   ];
@@ -344,6 +346,43 @@ export function flavourLine(fl: NonNullable<LayoutStyle['flavour']>): string {
 }
 export const DENSE_LAYOUTS = ['statement', 'big-question', 'cta-button', 'statement-card', 'statement-stacked', 'statement-question'];
 
+/** When to use each of the layouts a preset can like (the pack layouts): said in the menu so the writer picks them on purpose, not by a hidden swap rule. */
+const WHEN: Partial<Record<LayoutId, string>> = {
+  'pill-stagger': 'a short list of 3 to 5 options, tags or places (each at most 36 characters)',
+  'statement-question': 'a slide that asks the reader ONE question or poses one thought',
+  'contact-closing': 'ONLY when the text gives contact details (handle, site, phone, email): never invent them',
+  'cta-pair': 'a closing with TWO real actions (a main one and a second one)',
+  'numbered-stagger': '2 or 3 numbered points, each ONE short sentence (under about 60 characters)',
+  'headline-card': 'one key paragraph under a headline',
+  'statement-card': 'one bold claim that should sit on a card',
+  'statement-pill': 'a hook with a short call-out (at most 40 characters) set in a pill',
+  'statement-stacked': 'a hook of 2 to 4 words, one word per line',
+  'bullet-list': 'a short list of 3 to 4 lines (at most 46 characters each)',
+  prose: 'a slide that has to explain something in whole sentences',
+};
+/** "This style likes: ..." with when to use each pack layout the preset prefers (the layouts it has no hidden swap for are left to the general rules). */
+export function flavourLikesLine(fl: NonNullable<LayoutStyle['flavour']>): string {
+  const likes = (fl.prefer ?? []).filter((l) => WHEN[l as LayoutId]);
+  if (!likes.length) return '';
+  return `- This style likes: ${likes.map((l) => `"${l}" (${WHEN[l as LayoutId]})`).join('; ')}. Choose them on purpose where the slide's content fits; a layout that does not fit the content is worse than a plain one.`;
+}
+/** The preset's own cover form (flavour.cover): the writer is told to write slide 1 for it, and which headline length it needs. */
+export function flavourCoverLine(fl: NonNullable<LayoutStyle['flavour']>): string {
+  const cover = fl.cover as LayoutId | undefined;
+  const parts: string[] = [];
+  if (cover && cover !== 'statement') {
+    const need: Partial<Record<LayoutId, string>> = {
+      'statement-stacked': 'a headline of 2 to 4 words (one per line) and an optional short caption',
+      'statement-pill': 'a short headline and a SHORT call-out of at most 40 characters for the pill (required)',
+      'statement-card': 'a bold headline of at most about 60 characters, with an optional kicker and caption',
+      'statement-question': 'one question as the headline',
+    };
+    parts.push(`this style's cover (slide 1) is "${cover}": write slide 1 as "${cover}" with ${need[cover] ?? 'a short headline'}; do not use plain "statement" for the cover`);
+  }
+  if (fl.coverQuestion) parts.push(`when the hook is a QUESTION (it ends with "?"), slide 1 is "${fl.coverQuestion}"`);
+  return parts.length ? `- Cover: ${parts.join('; ')}.` : '';
+}
+
 export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutStyle, brief: string, n: number): string {
   const tone = TONES.find((t) => t.id === req.tone)!;
   // photo-led needs a photo; a layout with picture slots needs enough pictures that fit its slots (the metadata list below); without a list, any photo will do
@@ -364,7 +403,9 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     ...ids.map(fieldLine),
     '',
     'Rules:',
-    `- Write ${n} slides. Slide 1 is a strong hook (statement, statement-stacked, statement-card, statement-pill, big-question or lead-statement; at most 8 words). The last slide is a closing: cta-button, cta-pair or contact-closing (contact-closing only when the text gives contact details such as a handle, site, phone or email; never invent them). In between choose the layout that suits THAT slide's content.`,
+    `- Write ${n} slides. Slide 1 is a strong hook (statement, statement-stacked, statement-card, statement-pill, statement-question, big-question or lead-statement; at most 8 words). In between choose the layout that suits THAT slide's content.`,
+    '- The closing (last slide) depends on the TEXT, not on habit: "cta-button" ONLY when the text contains a real next action for the reader (book, buy, sign up, download, reply, follow, try, join); "cta-pair" when the text gives TWO different actions; "contact-closing" ONLY when the text itself contains contact details such as a handle, site, phone or email (never invent any); otherwise close on a closing statement ("statement" or "statement-card", a short closing line, NO button).',
+    '- A button label is an ACTION PHRASE: verb first, 2 to 4 words, at most 20 characters, no question mark, comma or full stop ("Book a call", "Get the checklist", "Join the list"). Never a question, a slogan or a topic ("Which fits you?", "Sleep well"). If there is no real action in the text, there is no button: use a closing statement instead.',
     '- Prose: "prose" is the ONLY layout that takes whole paragraphs (up to 300 characters each, at most 3 paragraphs, about 450 characters in all). Use it for a slide that needs explaining in sentences; its heading is optional and, when present, reads on its own as a full title. Every other layout stays short: never put a paragraph into a statement, list or card layout.',
     ...(look.images?.length ? imageRules(look.images) : []),
     '- Forms: "statement-stacked" is 2 to 4 words (one per line); "statement-pill" needs a short caption (at most 40 characters) that is set in a pill; "statement-question" is one question or thought; "numbered-stagger" is 2 or 3 sentences; "bullet-list" and "pill-stagger" are short lines (at most 46 and 36 characters); "headline-card" has ONE key paragraph (the card) under a headline; "cta-pair" has two buttons with a short line each.',
@@ -376,6 +417,8 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     style.devices.planes ? '- "cut": optional suggestion, one of plain, edge-h, angle, curve (a colour plane the slide is cut by). "invert": optional suggestion (true swaps field and plane colours). The code may override both to keep the deck varied.' : '- This style is flat (no colour planes): "cut" and "invert" are not needed.',
     '- "variant" is optional (1 or 2) and only a suggestion: the code alternates variants.',
     style.flavour && (style.flavour.prefer?.length || style.flavour.avoid?.length) ? flavourLine(style.flavour) : '',
+    style.flavour ? flavourLikesLine(style.flavour) : '',
+    style.flavour ? flavourCoverLine(style.flavour) : '',
     look.pack?.look ? '- Every title and headline stands alone as a complete phrase: write "How to pack it", not a fragment like "To pack it".' : '',
     `- Tone: ${tone.label} (${tone.how}). Plain, specific language. No hashtags, no emoji, no links.`,
     `- The look the code will draw (for the feel of the copy only): ${brief.slice(0, 500)}`,
@@ -484,14 +527,91 @@ export function trimOptionalFields(specs: SlideSpec[]): { specs: SlideSpec[]; tr
   });
   return { specs: out, trims };
 }
+const wordsOf = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}\s'-]/gu, ' ').split(/\s+/).filter(Boolean);
+/** True when a line repeats the headline: at least 60% of the words of the shorter text are in the other (case and punctuation ignored). */
+export function repeatsHeadline(line: string, headline: string): boolean {
+  const a = wordsOf(line), b = wordsOf(headline);
+  if (a.length < 2 || b.length < 2) return a.length > 0 && a.join(' ') === b.join(' ');
+  const [short, long] = a.length <= b.length ? [a, new Set(b)] : [b, new Set(a)];
+  return short.filter((w) => long.has(w)).length / short.length >= 0.6;
+}
+const HEAD_FIELDS = ['headline', 'title', 'question', 'heading'];
+const LINE_FIELDS = ['caption', 'sub', 'subline', 'line', 'subtitle', 'kicker'];
+/**
+ * A pill, caption or sub that only says the headline again is taken out (a trim, never a failure): the optional line goes; a statement-pill (whose caption is required) becomes a plain
+ * statement without it. Returns the new specs and a log of what was done.
+ */
+export function dropRepeats(specs: SlideSpec[]): { specs: SlideSpec[]; trims: Trim[] } {
+  const trims: Trim[] = [];
+  const out = specs.map((sp, i) => {
+    const hk = HEAD_FIELDS.find((k) => typeof sp.fields[k] === 'string' && (sp.fields[k] as string).trim());
+    if (!hk) return sp;
+    const head = String(sp.fields[hk]);
+    let fields = sp.fields;
+    let layout = sp.layout;
+    for (const k of LINE_FIELDS) {
+      const v = fields[k];
+      if (typeof v !== 'string' || !v.trim() || !repeatsHeadline(v, head)) continue;
+      trims.push({ slide: i + 1, field: k, from: v, to: '(removed: it repeats the headline)', max: 0 });
+      fields = Object.fromEntries(Object.entries(fields).filter(([n]) => n !== k)) as Fields;
+      // the pill goes with its caption: a plain statement, or a statement card when a neighbour is already a plain statement (no two in a row)
+      if (layout === 'statement-pill' && k === 'caption') layout = specs[i - 1]?.layout === 'statement' || specs[i + 1]?.layout === 'statement' ? 'statement-card' : 'statement';
+    }
+    return fields === sp.fields ? sp : { ...sp, layout, fields };
+  });
+  return { specs: out, trims };
+}
 /** The slide's fields as the layout takes them (with its accent phrases). */
 export const fieldsOf = (s: SlideSpec): Fields => ({ ...s.fields, ...(s.accents.length ? { accent: s.accents } : {}) });
-/** Problems that need the model (or a repair): unknown layout, photo without a photo, fields over budget or missing. */
+/** Verbs a button label may start with: a button says what happens when it is pressed. */
+export const ACTION_VERBS = new Set([
+  'book', 'get', 'join', 'sign', 'start', 'try', 'download', 'click', 'read', 'save', 'share', 'follow', 'subscribe', 'buy', 'order', 'reserve', 'grab', 'claim', 'watch', 'learn', 'see', 'visit', 'contact', 'call', 'email', 'message', 'reply', 'comment',
+  'send', 'apply', 'register', 'shop', 'explore', 'discover', 'build', 'create', 'make', 'use', 'take', 'schedule', 'request', 'back', 'pledge', 'support', 'donate', 'listen', 'tell', 'ask', 'dm', 'find', 'check', 'view', 'open', 'unlock', 'access',
+  'pick', 'choose', 'test', 'print', 'copy', 'bookmark', 'tag', 'tap', 'stream', 'play', 'rsvp', 'enroll', 'upgrade', 'preorder', 'add', 'redeem', 'complete', 'answer', 'vote', 'write', 'publish', 'post', 'submit', 'talk', 'meet', 'connect', 'invite',
+  'give', 'enter', 'win', 'plan', 'compare', 'calculate', 'browse', 'install', 'launch', 'upload', 'review', 'rate', 'sample', 'taste', 'swap', 'trade', 'hire', 'work', 'ship', 'fix', 'audit', 'steal', 'borrow', 'remix', 'customize', 'customise',
+]);
+/**
+ * Why a button label is not a button: it must be an ACTION PHRASE, verb first, 2 to 4 words ("Book a call", "Get the checklist"), at most 20 characters, with no question mark, comma or
+ * full stop. Returns the reason, or null when the label is fine.
+ */
+export function buttonProblem(label: string): string | null {
+  const t = label.trim();
+  if (!t) return 'the button text is empty';
+  const words = t.split(/\s+/);
+  if (/[?!.,;:]/.test(t)) return `"${t}" has punctuation: a button label is a short action phrase (like "Book a call")`;
+  if (words.length < 2 || words.length > 4) return `"${t}" is ${words.length} word${words.length === 1 ? '' : 's'}: a button label is 2 to 4 words (like "Get the checklist")`;
+  if (t.length > 20) return `"${t}" is ${t.length} characters: a button label is at most 20`;
+  if (!ACTION_VERBS.has(words[0].toLowerCase())) return `"${t}" does not start with an action verb: a button label is verb first (like "Join the list")`;
+  return null;
+}
+/** The button fields of a closing layout (cta-button, cta-pair, contact-closing). */
+const BUTTON_FIELDS = ['button', 'button1', 'button2'];
+export const buttonProblems = (s: SlideSpec): string[] =>
+  BUTTON_FIELDS.flatMap((k) => (typeof s.fields[k] === 'string' && (s.fields[k] as string).trim() ? [buttonProblem(s.fields[k] as string)].filter((x): x is string => !!x).map((m) => `${k}: ${m}`) : []));
+
+/** Problems that need the model (or a repair): unknown layout, photo without a photo, fields over budget or missing, a button that is not an action phrase. */
 export function slideProblems(s: SlideSpec, look: Look): string[] {
   const id = s.layout;
   if (!layoutDef(id)) return [`"${s.layout}" is not a layout (use one of: ${LAYOUT_IDS.join(', ')}).`];
   if (id === 'photo-led' && !look.hasPhoto) return ['photo-led is only for the person\'s own photo and there is none: choose another layout.'];
-  return validateSlideContent(id, fieldsOf(s)).errors;
+  return [...validateSlideContent(id, fieldsOf(s)).errors, ...buttonProblems(s)];
+}
+/**
+ * A closing whose button is still not an action phrase (the retry did not fix it) loses the button instead of failing: it becomes a closing statement card with the same words and no
+ * button (the headline, and the line under it as the caption). A contact closing only loses its button text. Returns the new specs and a log of what was done.
+ */
+export function dropBadButtons(specs: SlideSpec[]): { specs: SlideSpec[]; trims: Trim[] } {
+  const trims: Trim[] = [];
+  const out = specs.map((s, i) => {
+    if (!buttonProblems(s).length) return s;
+    const labels = BUTTON_FIELDS.map((k) => String(s.fields[k] ?? '')).filter(Boolean).join(' / ');
+    trims.push({ slide: i + 1, field: 'button', from: labels, to: s.layout === 'contact-closing' ? '(no button)' : '(closing statement, no button)', max: 20 });
+    if (s.layout === 'contact-closing') return { ...s, fields: Object.fromEntries(Object.entries(s.fields).filter(([k]) => k !== 'button')) as Fields };
+    const f = s.fields;
+    const cap = [f.sub, f.line1, f.line].find((x) => typeof x === 'string' && x.trim()) as string | undefined;
+    return { layout: 'statement-card', fields: { headline: String(f.headline ?? '').trim(), ...(cap ? { caption: cap.trim().slice(0, 60) } : {}) } as Fields, accents: s.accents };
+  });
+  return { specs: out, trims };
 }
 /** Trims every field to its budget; null when a required list cannot reach its minimum. */
 export function repairFields(id: string, f: Fields): Fields | null {
@@ -597,6 +717,8 @@ export interface LibraryReport {
   trims?: { slide: number; field: string; from: string; to: string; max: number }[];
   /** The preset flavour pass: layouts moved to a preferred one (slide, from, to, why) and the slides that stayed with the reason. Presets only. */
   flavour?: { swaps: FlavourSwap[]; kept: FlavourKept[] };
+  /** Slides changed to a picture layout because pictures were left unused (slide, from, to, why). */
+  pictureSwaps?: PictureSwap[];
   /** What the deck was drawn from: a built-in preset's name, or 'reference' (the active reference style). The style toggles redraw it only for the same source. */
   source?: string;
   /** The palette-rhythm ground of each slide (an index into the style's rhythm, -1 = the closing ground, null = no rhythm). */
@@ -750,10 +872,21 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   // optional one-line texts a little over their limit are trimmed by the code (no retry call for a kicker one character long)
   const tr = trimOptionalFields(specs);
   specs = tr.specs;
+  // a pill, caption or sub that repeats the headline is taken out (a trim)
+  const rp = dropRepeats(specs);
+  specs = rp.specs;
+  tr.trims.push(...rp.trims);
   const suggested = { cut: specs.map((s) => s.cut ?? null), invert: specs.map((s) => !!s.invert), density: specs.map((s) => s.density ?? null) };
   // A preset's flavour: layouts it avoids move to ones it prefers where the slide's text fits (deterministic, no model call; references have no flavour).
   const fp = look.pack?.look?.flavour ? flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, '')) : null;
   if (fp) specs = fp.specs;
+  // pictures the writer left unused get a slide (a deterministic swap to a picture layout of the slide's own meaning, no text lost)
+  let pictureSwaps: PictureSwap[] = [];
+  if (look.images?.length) {
+    const pp = picturePass(specs, look);
+    specs = pp.specs;
+    pictureSwaps = pp.swaps;
+  }
 
   /** The deck's rotation: variants and cuts over the whole deck. A layout the rotation would change (repeated or over-used) is a problem for the retry. */
   const rotate = () => {
@@ -820,6 +953,15 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     // the layouts changed, so the rotation changes: redraw the whole deck (no model call)
     ({ out: drawn, rot } = await drawAll());
   }
+  // A closing whose button is still not an action phrase after the retry: the button goes (the closing becomes a statement card with no button): a trim, never a failure.
+  {
+    const db = dropBadButtons(specs);
+    if (db.trims.length) {
+      specs = db.specs;
+      tr.trims.push(...db.trims);
+      ({ out: drawn, rot } = await drawAll());
+    }
+  }
   // Slides still failing: a plain version of the SAME layout (fields trimmed to their budgets), never the old template look.
   const fallbacks: LibraryReport['fallbacks'] = [];
   const adjustments: string[] = [];
@@ -883,10 +1025,12 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     plan: { title: parsed.title || 'Carousel', specs },
     grounds: rot.cuts.map((c) => c.ground ?? null),
     ...(fp ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : {}),
+    ...(pictureSwaps.length ? { pictureSwaps } : {}),
     ...(tr.trims.length ? { trims: tr.trims } : {}),
   };
   designed.library = report;
-  report.codeAdjustments.unshift(...tr.trims.map((t) => `slide ${t.slide}: ${t.field} "${t.from}" is ${t.from.length} characters, over its limit of ${t.max}: trimmed to "${t.to}" at a word boundary by the code (no retry call).`));
+  report.codeAdjustments.unshift(...tr.trims.map((t) => t.to.startsWith('(removed') ? `slide ${t.slide}: ${t.field} "${t.from}" repeats the headline, so the code left it out.` : t.field === 'button' ? `slide ${t.slide}: the button "${t.from}" is not an action phrase (verb first, 2 to 4 words), so the code left it out: ${t.to}.` : `slide ${t.slide}: ${t.field} "${t.from}" is ${t.from.length} characters, over its limit of ${t.max}: trimmed to "${t.to}" at a word boundary by the code (no retry call).`));
+  designed.notes.push(...pictureSwaps.map((w) => `Pictures: slide ${w.slide} ${w.from} -> ${w.to} (${w.why})`));
   if (fp) designed.notes.push(...fp.swaps.map((w) => `Flavour: slide ${w.slide} ${w.from} -> ${w.to} (${w.why})${w.droppedOptional.length ? '; leaves out ' + w.droppedOptional.map((t) => '"' + t.slice(0, 24) + '"').join(', ') : ''}.`));
   designed.notes.push(...retries.map((r) => `Retry for slide ${r.slide}: ${r.reasons.join('; ')}`), ...fallbacks.map((f) => `Slide ${f.slide} fell back to a ${f.level}: ${f.reason}`), ...adjustments);
   return { script, style: null, note: parsed.note, attempts: calls > 1 ? 2 : 1, ms, warnings: v.warnings, provider: p.id, designed };

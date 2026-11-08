@@ -249,14 +249,12 @@
         {
           "item": "style-5/divider-1",
           "zone": "divider-low",
-          "w": 150,
-          "on": "inner"
+          "w": 150
         },
         {
           "item": "style-5/corner-1",
           "zone": "corner-br",
-          "w": 60,
-          "on": "inner"
+          "w": 66
         }
       ]
     },

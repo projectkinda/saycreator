@@ -74,7 +74,7 @@ export interface PackLook {
   rhythm?: PackGround[];
   /** The preset's closing ground (byType.closing). */
   closing?: PackGround;
-  flavour?: { cover?: string; coverVariant?: 0 | 1; prefer?: string[]; avoid?: string[]; variants?: Record<string, 0 | 1> };
+  flavour?: { cover?: string; coverVariant?: 0 | 1; coverQuestion?: string; prefer?: string[]; avoid?: string[]; variants?: Record<string, 0 | 1> };
   /** The layout the closing slide takes (library.byType.closing) and the layouts it avoids. */
   closingLayout?: { layout: string; variant?: 0 | 1; avoid?: string[] };
   caseStyle?: 'none' | 'upper' | 'lower';
@@ -253,7 +253,7 @@ function packLayers(pack: StylePack, slideType: string, slide: Record<string, un
   const hasSteps = Array.isArray(slide.steps) && (slide.steps as unknown[]).filter((x) => typeof x === 'string' && x.trim()).length >= 2;
   if ((key === 'list' || hasSteps) && texts.body) {
     // A design with a body slot per row: item k goes in row k (top to bottom); extra rows are left empty (hidden with their row); more items than rows share the last row.
-    const rows = d.filter((l) => l.kind === 'text' && l.name === 'body').sort((a, b) => a.y - b.y);
+    const rows = d.filter((l) => l.kind === 'text' && l.name === 'body').sort((a, b) => (Math.abs(a.y - b.y) < 30 ? a.x - b.x || a.y - b.y : a.y - b.y)); // reading order, boxes within 30 px of each other are one row (see readingOrder in designed.ts)
     if (rows.length >= 2) {
       const list = texts.body.split('\n').filter(Boolean);
       const renamed = d.map((l) => {

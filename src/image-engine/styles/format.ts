@@ -170,7 +170,7 @@ export interface StyleSpec {
     /** Words that keep their written case when the style sets headlines in lower or upper case (brand names). */
     caseExceptions?: string[];
     gradients?: Record<string, { angle: number; stops: { at: number; color: string }[] }>;
-    flavour?: { cover?: string; coverVariant?: 0 | 1; prefer?: string[]; avoid?: string[]; variants?: Record<string, 0 | 1> };
+    flavour?: { cover?: string; coverVariant?: 0 | 1; coverQuestion?: string; prefer?: string[]; avoid?: string[]; variants?: Record<string, 0 | 1> };
     /** The layout a slide TYPE takes in this preset (library.byType): the closing slide, as a layout and its variant, and the layouts the closing avoids. */
     byType?: { closing?: { layout: string; variant?: 0 | 1; avoid?: string[] } };
     /** Generic design devices this preset turns on (see reference/deco.ts). */

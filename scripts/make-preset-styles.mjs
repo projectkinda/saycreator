@@ -72,17 +72,19 @@ add(8, { title: 'Black holographic', description: 'Pure black, thin rules, light
   palettes: { black: pal('#000000', '#FFFFFF', '#A6A6A6', '#DA88F4', '#000000', '#161616', { marker: '#DA88F4', onMarker: '#000000', line: '#3A3A3A' }) },
   rhythm: ['black'], byType: { closing: 'black' }, fonts: { headline: 'Hanken Grotesk', headlineWeight: 500, body: 'Hanken Grotesk', bodyWeight: 300, strong: 500 },
   type: { cover: 150, headline: 96, body: 42, small: 34, stat: 320, quote: 74, label: 32 }, caseStyle: 'sentence', shape: { radius: 12, outline: 2, stroke: 3, badge: 'circle', marker: 'underline', sticker: 'pill', hardShadow: 0, decor: 'rings' }, chrome: 'none', devices: { gradientText: ['#D63DF2', '#F58FD6', '#6FA8F5', '#7FE8D2'], rule: 'lower-two-thirds', footerRow: true, contactClosing: true },
-  flavour: { cover: 'statement', coverVariant: 0, prefer: ['statement', 'prose', 'statement-question', 'lead-statement', 'big-stat', 'quote', 'contact-closing'], avoid: ['numbered-list', 'listicle-numeral', 'checklist', 'pill-stagger', 'statement-pill'], variants: { statement: 0, prose: 1, 'statement-question': 0, 'big-stat': 1 } }, layouts: L({ step: 'step-pill' }) });
+  flavour: { cover: 'statement', coverVariant: 0, coverQuestion: 'statement-question', prefer: ['statement', 'prose', 'statement-question', 'lead-statement', 'big-stat', 'quote', 'contact-closing'], avoid: ['numbered-list', 'listicle-numeral', 'checklist', 'pill-stagger', 'statement-pill'], variants: { statement: 0, prose: 1, 'statement-question': 0, 'big-stat': 1 } }, layouts: L({ step: 'step-pill' }) });
 
 // Vector art of each preset's own pack (src/image-engine/art), placed in safe zones and recoloured to the preset's palette (devices.art). Only the items the pack really used.
+// Art frequency is capped by the code (one item on every third slide, rings only on a slide with an accent word), so the placements carry no slide filter.
+// Style 1's art is only soft glows (large, low opacity, blurred, behind the content, a warm tint on light pages); no art is a small lone dot: a compact filled shape is at least 12% of the page wide or part of a pattern.
 // Style 3 (one text backing bar), style 6 (pictures only) and style 8 (two hairlines) have little or no vector art: see out/art-inventory/inventory.md.
 const ART = {
-  1: [{ item: 'style-1/background-1', zone: 'corner-tr', w: 380, bleed: 0.3 }, { item: 'style-1/sticker-4', zone: 'corner-br', w: 110, on: 'inner' }, { item: 'style-1/sticker-2', zone: 'corner-bl', w: 130, on: 'inner' }],
-  2: [{ item: 'style-2/sticker-2', zone: 'corner-tr', w: 110, on: 'inner' }, { item: 'style-2/divider-1', zone: 'divider-low', w: 405, on: 'inner' }, { item: 'style-2/sticker-1', zone: 'corner-br', w: 90, on: 'last' }],
-  4: [{ item: 'style-4/frame-1', zone: 'top-edge', w: 1080, on: 'inner' }, { item: 'style-4/corner-1', zone: 'corner-br', w: 110, on: 'first' }, { item: 'style-4/sticker-1', zone: 'corner-bl', w: 120, on: 'inner' }],
-  5: [{ item: 'style-5/divider-1', zone: 'divider-low', w: 150, on: 'inner' }, { item: 'style-5/corner-1', zone: 'corner-br', w: 60, on: 'inner' }],
-  7: [{ item: 'style-7/sticker-1', zone: 'corner-tr', w: 190, on: 'inner' }, { item: 'style-7/sticker-2', zone: 'corner-bl', w: 170, on: 'inner' }, { item: 'style-7/sticker-3', zone: 'corner-br', w: 150, on: 'last' }],
-  8: [{ item: 'style-8/divider-2', zone: 'divider-low', w: 984, on: 'inner' }, { item: 'style-8/divider-1', zone: 'divider-high', w: 984, on: 'inner' }],
+  1: [{ item: 'style-1/background-1', zone: 'corner-tr', w: 520, bleed: 0.35 }, { item: 'style-1/background-2', zone: 'corner-bl', w: 600, bleed: 0.4, opacity: 0.25 }, { item: 'style-1/background-3', zone: 'corner-br', w: 480, bleed: 0.35 }],
+  2: [{ item: 'style-2/sticker-2', zone: 'corner-tr', w: 220, bleed: 0.42 }, { item: 'style-2/divider-1', zone: 'divider-low', w: 405 }, { item: 'style-2/sticker-1', zone: 'corner-br', w: 90 }],
+  4: [{ item: 'style-4/frame-1', zone: 'top-edge', w: 1080 }, { item: 'style-4/corner-1', zone: 'corner-tr', w: 220, bleed: 0.42 }, { item: 'style-4/sticker-1', zone: 'corner-bl', w: 220, bleed: 0.42 }],
+  5: [{ item: 'style-5/divider-1', zone: 'divider-low', w: 150 }, { item: 'style-5/corner-1', zone: 'corner-br', w: 66 }],
+  7: [{ item: 'style-7/sticker-1', zone: 'corner-tr', w: 190 }, { item: 'style-7/sticker-2', zone: 'corner-bl', w: 170 }, { item: 'style-7/sticker-3', zone: 'corner-br', w: 150 }],
+  8: [{ item: 'style-8/divider-2', zone: 'divider-low', w: 984 }, { item: 'style-8/divider-1', zone: 'divider-high', w: 984 }],
 };
 for (const [n, o] of S) {
   const name = `style-${n}`;

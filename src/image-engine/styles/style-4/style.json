@@ -244,20 +244,19 @@
         {
           "item": "style-4/frame-1",
           "zone": "top-edge",
-          "w": 1080,
-          "on": "inner"
+          "w": 1080
         },
         {
           "item": "style-4/corner-1",
-          "zone": "corner-br",
-          "w": 110,
-          "on": "first"
+          "zone": "corner-tr",
+          "w": 220,
+          "bleed": 0.42
         },
         {
           "item": "style-4/sticker-1",
           "zone": "corner-bl",
-          "w": 120,
-          "on": "inner"
+          "w": 220,
+          "bleed": 0.42
         }
       ]
     }

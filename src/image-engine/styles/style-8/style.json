@@ -197,6 +197,7 @@
     "flavour": {
       "cover": "statement",
       "coverVariant": 0,
+      "coverQuestion": "statement-question",
       "prefer": [
         "statement",
         "prose",
@@ -234,14 +235,12 @@
         {
           "item": "style-8/divider-2",
           "zone": "divider-low",
-          "w": 984,
-          "on": "inner"
+          "w": 984
         },
         {
           "item": "style-8/divider-1",
           "zone": "divider-high",
-          "w": 984,
-          "on": "inner"
+          "w": 984
         }
       ]
     }

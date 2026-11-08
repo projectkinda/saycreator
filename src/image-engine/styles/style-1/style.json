@@ -254,20 +254,21 @@
         {
           "item": "style-1/background-1",
           "zone": "corner-tr",
-          "w": 380,
-          "bleed": 0.3
+          "w": 520,
+          "bleed": 0.35
         },
         {
-          "item": "style-1/sticker-4",
-          "zone": "corner-br",
-          "w": 110,
-          "on": "inner"
-        },
-        {
-          "item": "style-1/sticker-2",
+          "item": "style-1/background-2",
           "zone": "corner-bl",
-          "w": 130,
-          "on": "inner"
+          "w": 600,
+          "bleed": 0.4,
+          "opacity": 0.25
+        },
+        {
+          "item": "style-1/background-3",
+          "zone": "corner-br",
+          "w": 480,
+          "bleed": 0.35
         }
       ]
     }
