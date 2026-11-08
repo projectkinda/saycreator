@@ -405,7 +405,7 @@ export function flavourCoverLine(fl: NonNullable<LayoutStyle['flavour']>): strin
   return parts.length ? `- Cover: ${parts.join('; ')}.` : '';
 }
 
-export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutStyle, brief: string, n: number): string {
+export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutStyle, brief: string, n: number, handle?: string): string {
   const tone = TONES.find((t) => t.id === req.tone)!;
   // photo-led needs a photo; a layout with picture slots needs enough pictures that fit its slots (the metadata list below); without a list, any photo will do
   const ids = LAYOUT_IDS.filter((id) => (id === 'photo-led' ? !!look.hasPhoto : (IMAGE_LAYOUT_IDS as readonly string[]).includes(id) ? (look.images ? hasEnoughPictures(id, look.images) : !!look.hasPhoto) : true));
@@ -426,9 +426,11 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     '',
     'Rules:',
     `- Write ${n} slides. Slide 1 is a strong hook (statement, statement-stacked, statement-card, statement-pill, statement-question, big-question or lead-statement; at most 8 words). In between choose the layout that suits THAT slide's content.`,
-    '- The closing (last slide) depends on the TEXT, not on habit: "cta-button" ONLY when the text contains a real next action for the reader (book, buy, sign up, download, reply, follow, try, join); "cta-pair" when the text gives TWO different actions; "contact-closing" ONLY when the text itself contains contact details such as a handle, site, phone or email (never invent any); otherwise close on a closing statement ("statement" or "statement-card", a short closing line, NO button).',
-    '- A button label is an ACTION PHRASE: verb first, 2 to 4 words, at most 20 characters, no question mark, comma or full stop ("Book a call", "Get the checklist", "Join the list"). Never a question, a slogan or a topic ("Which fits you?", "Sleep well"). If there is no real action in the text, there is no button: use a closing statement instead.',
-    '- Prose: "prose" is the ONLY layout that takes whole paragraphs (at most 3 paragraphs and 70 words in all, the heading and the pull line included; the handle and the page number are not counted; 300 characters each at most). Use it for a slide that needs explaining in sentences; its heading is optional and, when present, reads on its own as a full title. Every other layout stays short: never put a paragraph into a statement, list or card layout.',
+    '- The closing (last slide) depends on the TEXT, not on habit. If the text contains a real next action for the reader (book, buy, sign up, download, visit, reply, join): "cta-button" with that action; "cta-pair" when it gives TWO different actions; "contact-closing" when the text itself contains contact details such as a handle, site, phone or email (never invent any). These always win over a generic call to action.',
+    `- If the text has NO real action, the closing is STILL a "cta-button", with ONE generic label picked to fit the content: how-to, list, tips or steps: "${GENERIC_CTA_OF.save}"; opinion, story, critique or insight: ${isSetHandle(handle) ? `"Follow ${handle!.trim()}" (the brand handle) or "${GENERIC_CTA_OF.follow}"` : `"${GENERIC_CTA_OF.follow}" (no @, no handle)`}; relatable, funny or common-pain posts: "${GENERIC_CTA_OF.friend}". Use only these labels; do not invent another action. Its headline is a real takeaway sentence from the text, never "Thanks for reading" or other filler. Never invent a link, "link in bio", website, email, offer or number${isSetHandle(handle) ? '' : ', and never a handle'}. A closing that is a plain statement with no button counts as a miss and is asked for again.`,
+    '- Every other button label is an ACTION PHRASE: verb first, 2 to 4 words, at most 20 characters, no question mark, comma or full stop ("Book a call", "Get the checklist", "Join the list"). Never a question, a slogan or a topic ("Which fits you?", "Sleep well"). The three generic labels above are the only exceptions to the length.',
+    '- Prose: "prose" is the ONLY layout that takes whole paragraphs. Aim for 35 to 50 words in all (the heading and the pull line included); use up to 70 only when the source text truly needs it. 70 is a hard limit (the handle and the page number are not counted; 300 characters per paragraph at most), and the code cuts anything past it. Prefer ONE short paragraph plus a bold one-line takeaway (the "pull" field) to three paragraphs. Use prose for a slide that needs explaining in sentences; its heading is optional and, when present, reads on its own as a full title. Every other layout stays short: never put a paragraph into a statement, list or card layout.',
+    '- Long passages: if the text for ONE slide would run past 70 words, split it across two slides, a prose slide and then a statement, bullet-list or numbered-list slide for the rest, instead of cramming it into one. The number of slides is fixed (see above): split only when another slide of your plan can be spared for it (a slide that would only repeat or pad); when every slide is needed, tighten the prose to 70 words or fewer instead.',
     ...(look.images?.length ? imageRules(look.images) : []),
     '- Forms: "statement-stacked" is 2 to 4 words (one per line); "statement-pill" needs a short caption (at most 40 characters) that is set in a pill; "statement-question" is one question or thought; "numbered-stagger" is 2 or 3 sentences; "bullet-list" and "pill-stagger" are short lines (at most 46 and 36 characters); "headline-card" has ONE key paragraph (the card) under a headline; "cta-pair" has two buttons with a short line each.',
     '- Variety: no two consecutive slides use the same layout, and no layout is used more than twice. Use "stepper" for 2 to 5 ordered steps, "stat-bar" or "big-stat" for a figure, "checklist" for benefits, "comparison" for two things set against each other, "quote" only for words that are in the text.',
@@ -624,6 +626,80 @@ export function dropRepeats(specs: SlideSpec[]): { specs: SlideSpec[]; trims: Tr
 /** The slide's fields as the layout takes them (with its accent phrases). */
 export const fieldsOf = (s: SlideSpec): Fields => ({ ...s.fields, ...(s.accents.length ? { accent: s.accents } : {}) });
 /** Verbs a button label may start with: a button says what happens when it is pressed. */
+// ----- the closing call to action -----
+/** The three generic closing calls to action, for a text with no real action of its own. Not subject to the 4 word / 20 character limit of other labels ("Send this to a friend" is 5 words). */
+export const GENERIC_CTAS = ['Save this for later', 'Follow for more', 'Send this to a friend'] as const;
+export type CtaKind = 'save' | 'follow' | 'friend';
+export const GENERIC_CTA_OF: Record<CtaKind, (typeof GENERIC_CTAS)[number]> = { save: 'Save this for later', follow: 'Follow for more', friend: 'Send this to a friend' };
+/** What the button check needs to know: the profile handle (when one is set) and the person's text (links, handles and numbers in a label must come from it). */
+export interface CtaCtx { handle?: string; text?: string }
+/** A handle that is really set (the default placeholder is not). */
+export const isSetHandle = (h?: string): boolean => !!h && /^@[\w.]{2,30}$/.test(h.trim()) && h.trim().toLowerCase() !== '@yourname';
+/** The generic labels allowed for this profile: the three, and "Follow @handle" when the handle is set. */
+export const genericLabels = (handle?: string): string[] => [...GENERIC_CTAS, ...(isSetHandle(handle) ? [`Follow ${handle!.trim()}`] : [])];
+export const isGenericCta = (label: string, handle?: string): boolean => genericLabels(handle).some((g) => g.toLowerCase() === label.trim().toLowerCase());
+/** Whether the text holds a real next action for the reader (book, buy, sign up, download, visit, reply, join ...) or contact details (a link, an email, a phone number, a handle). */
+export function textHasAction(text: string): boolean {
+  const t = text;
+  if (/[\w.+-]+@[\w-]+\.[\w.]{2,}/.test(t)) return true; // an email
+  if (/(?:\+?\d[\d\s().-]{7,}\d)/.test(t) && /(?:\+\d|\(\d{2,4}\)|\d{3}[\s.-]\d{3,4}[\s.-]\d{3,4})/.test(t)) return true; // a phone number
+  if (/https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|io|co|net|org|app|me|ai|dev|xyz)\b/i.test(t)) return true; // a link or a site
+  if (/(?:^|\s)@[\w.]{2,}/.test(t)) return true; // a handle
+  if (/\b(?:sign ?up|subscribe|download|register|pre-?order|rsvp|link in bio|dm me|message me|email me|call me|text me)\b/i.test(t)) return true;
+  if (/\b(?:book|reserve|schedule) (?:a|an|your|the|now|today|me|us|it)\b/i.test(t)) return true;
+  if (/\b(?:buy|order|get|grab|claim|try|join|visit|shop|back|pledge|donate|follow|reply|comment)\b[^.!?\n]{0,40}\b(?:now|today|here|below|free|link|waitlist|newsletter|checklist|course|store|offer|list|us|me)\b/i.test(t)) return true;
+  return false;
+}
+/** Which generic label fits the content: how-to, list, tips or steps save; relatable or funny posts are sent to a friend; opinion, story, critique and insight follow. */
+export function genericKindOf(text: string): CtaKind {
+  if (/\b(?:how to|tips?|ways to|checklist|step by step|steps to|(?:three|four|five|six|seven|\d+) steps|here is how|here's how|cheat ?sheet)\b/i.test(text)) return 'save';
+  if (/\b(?:we'?ve all|everyone has|relatable|ever (?:feel|notice)|funny|lol|that moment when|every monday)\b/i.test(text)) return 'friend';
+  return 'follow';
+}
+/** The slide forms that close on a plain statement (no button). */
+const PLAIN_CLOSINGS = new Set(['statement', 'statement-stacked', 'statement-pill', 'statement-question', 'big-question', 'lead-statement', 'statement-card']);
+const CLOSING_FILLER = /^(?:thanks?(?: you)?(?: for (?:reading|watching|stopping by))?|thank you|the end|that'?s all|see you|bye)\W*$/i;
+/**
+ * The closing rule for a text with NO real action: the last slide is a cta-button with one of the generic labels (a statement card, on a preset that closes on one, carries the label in its
+ * caption). A last slide that is a plain statement, a button with another label, or filler as a headline is a miss. A text with a real action (or contact details) is not checked here: the
+ * writer chooses cta-button, cta-pair or contact-closing as before. Returns the reasons (empty when fine).
+ */
+export function closingProblems(s: SlideSpec, text: string, handle?: string): string[] {
+  if (textHasAction(text)) return [];
+  const labels = genericLabels(handle);
+  const say = `the text has no real action, so the closing is a "cta-button" with ONE generic label: ${labels.join(' / ')} ("${GENERIC_CTA_OF.save}" for how-to, list, tips or steps; "${isSetHandle(handle) ? `Follow ${handle!.trim()}` : GENERIC_CTA_OF.follow}" for an opinion, story, critique or insight; "${GENERIC_CTA_OF.friend}" for relatable, funny or common-pain posts). Keep the headline a real takeaway sentence from the text. Never invent a link, website, email, offer or number`;
+  const f = s.fields;
+  const head = String(f.headline ?? '').trim();
+  const out: string[] = [];
+  if (s.layout === 'cta-button') {
+    if (!isGenericCta(String(f.button ?? ''), handle)) out.push(`closing: ${say} (it is "${String(f.button ?? '')}")`);
+  } else if (s.layout === 'statement-card') {
+    if (!isGenericCta(String(f.caption ?? ''), handle)) out.push(`closing: ${say} (a statement card closing carries the label in its caption)`);
+  } else if (PLAIN_CLOSINGS.has(s.layout)) out.push(`closing: the last slide is a plain statement but ${say}`);
+  if (out.length && CLOSING_FILLER.test(head)) out.push('closing: the headline must be a real takeaway sentence from the text, not "Thanks for reading"');
+  return out;
+}
+/**
+ * The same rule applied by the code when the retry did not fix it (a trim, never a failure): the last plain statement becomes a cta-button with the generic label that fits the text (its
+ * headline kept, a caption line kept as the sub line); a statement card keeps its layout and takes the label as its caption; a button with another label gets the generic label.
+ */
+export function ensureGenericClosing(specs: SlideSpec[], text: string, handle: string | undefined, keepCard: boolean): { specs: SlideSpec[]; trims: Trim[] } {
+  const i = specs.length - 1;
+  if (i < 1 || !closingProblems(specs[i], text, handle).length) return { specs, trims: [] };
+  const s = specs[i];
+  const kind = genericKindOf(text);
+  const label: string = kind === 'follow' && isSetHandle(handle) ? `Follow ${handle!.trim()}` : GENERIC_CTA_OF[kind];
+  const head = String(s.fields.headline ?? '').trim();
+  const clip60 = (t: string) => (t.length <= 60 ? t : t.slice(0, 60).replace(/\s+\S*$/, '').replace(/[,;:\s]+$/, ''));
+  let next: SlideSpec;
+  if (s.layout === 'statement-card' && keepCard) next = { ...s, fields: { ...s.fields, caption: label } as Fields };
+  else if (s.layout === 'cta-button') next = { ...s, fields: { ...s.fields, button: label } as Fields };
+  else {
+    const sub = [s.fields.caption, s.fields.sub, s.fields.line].find((x) => typeof x === 'string' && x.trim()) as string | undefined;
+    next = { layout: 'cta-button', fields: { headline: clip60(head || String(s.fields.lead ?? s.fields.question ?? '')), button: label, ...(sub ? { sub: clip60(sub) } : {}) } as Fields, accents: s.accents };
+  }
+  return { specs: specs.map((x, k) => (k === i ? next : x)), trims: [{ slide: i + 1, field: 'closing cta', from: s.layout === 'cta-button' ? String(s.fields.button ?? '') : s.layout, to: `${label} (${next.layout})`, max: 20 }] };
+}
 export const ACTION_VERBS = new Set([
   'book', 'get', 'join', 'sign', 'start', 'try', 'download', 'click', 'read', 'save', 'share', 'follow', 'subscribe', 'buy', 'order', 'reserve', 'grab', 'claim', 'watch', 'learn', 'see', 'visit', 'contact', 'call', 'email', 'message', 'reply', 'comment',
   'send', 'apply', 'register', 'shop', 'explore', 'discover', 'build', 'create', 'make', 'use', 'take', 'schedule', 'request', 'back', 'pledge', 'support', 'donate', 'listen', 'tell', 'ask', 'dm', 'find', 'check', 'view', 'open', 'unlock', 'access',
@@ -634,9 +710,19 @@ export const ACTION_VERBS = new Set([
  * Why a button label is not a button: it must be an ACTION PHRASE, verb first, 2 to 4 words ("Book a call", "Get the checklist"), at most 20 characters, with no question mark, comma or
  * full stop. Returns the reason, or null when the label is fine.
  */
-export function buttonProblem(label: string): string | null {
+export function buttonProblem(label: string, ctx?: CtaCtx): string | null {
   const t = label.trim();
   if (!t) return 'the button text is empty';
+  // the three generic closing calls to action (a closing with no real action in the text), and "Follow @handle" with the handle that is set: always fine
+  if (GENERIC_CTAS.some((g) => g.toLowerCase() === t.toLowerCase())) return null;
+  if (ctx ? isSetHandle(ctx.handle) && t.toLowerCase() === `follow ${ctx.handle!.trim()}`.toLowerCase() : /^follow @[\w.]{2,30}$/i.test(t)) return null;
+  // a link, a handle, a "link in bio", an offer or a number in a label must come from the text (checked when the text is known)
+  if (ctx?.text !== undefined) {
+    const src = ctx.text.toLowerCase();
+    const bits = t.toLowerCase().match(/https?:\/\/\S+|www\.\S+|\b[a-z0-9-]+\.(?:com|io|co|net|org|app|me|ai|dev|xyz)\b\S*|@[\w.]+|link in bio|\d[\d,.%]*/g) ?? [];
+    const invented = bits.filter((b) => !src.includes(b.replace(/[.,]+$/, '')));
+    if (invented.length) return `"${t}" contains "${invented[0]}", which is not in the text: never invent a link, handle, website, email, offer or number`;
+  }
   const words = t.split(/\s+/);
   if (/[?!.,;:]/.test(t)) return `"${t}" has punctuation: a button label is a short action phrase (like "Book a call")`;
   if (words.length < 2 || words.length > 4) return `"${t}" is ${words.length} word${words.length === 1 ? '' : 's'}: a button label is 2 to 4 words (like "Get the checklist")`;
@@ -646,24 +732,24 @@ export function buttonProblem(label: string): string | null {
 }
 /** The button fields of a closing layout (cta-button, cta-pair, contact-closing). */
 const BUTTON_FIELDS = ['button', 'button1', 'button2'];
-export const buttonProblems = (s: SlideSpec): string[] =>
-  BUTTON_FIELDS.flatMap((k) => (typeof s.fields[k] === 'string' && (s.fields[k] as string).trim() ? [buttonProblem(s.fields[k] as string)].filter((x): x is string => !!x).map((m) => `${k}: ${m}`) : []));
+export const buttonProblems = (s: SlideSpec, ctx?: CtaCtx): string[] =>
+  BUTTON_FIELDS.flatMap((k) => (typeof s.fields[k] === 'string' && (s.fields[k] as string).trim() ? [buttonProblem(s.fields[k] as string, ctx)].filter((x): x is string => !!x).map((m) => `${k}: ${m}`) : []));
 
 /** Problems that need the model (or a repair): unknown layout, photo without a photo, fields over budget or missing, a button that is not an action phrase. */
-export function slideProblems(s: SlideSpec, look: Look): string[] {
+export function slideProblems(s: SlideSpec, look: Look, ctx?: CtaCtx): string[] {
   const id = s.layout;
   if (!layoutDef(id)) return [`"${s.layout}" is not a layout (use one of: ${LAYOUT_IDS.join(', ')}).`];
   if (id === 'photo-led' && !look.hasPhoto) return ['photo-led is only for the person\'s own photo and there is none: choose another layout.'];
-  return [...validateSlideContent(id, fieldsOf(s)).errors, ...buttonProblems(s)];
+  return [...validateSlideContent(id, fieldsOf(s)).errors, ...buttonProblems(s, ctx)];
 }
 /**
  * A closing whose button is still not an action phrase (the retry did not fix it) loses the button instead of failing: it becomes a closing statement card with the same words and no
  * button (the headline, and the line under it as the caption). A contact closing only loses its button text. Returns the new specs and a log of what was done.
  */
-export function dropBadButtons(specs: SlideSpec[]): { specs: SlideSpec[]; trims: Trim[] } {
+export function dropBadButtons(specs: SlideSpec[], ctx?: CtaCtx): { specs: SlideSpec[]; trims: Trim[] } {
   const trims: Trim[] = [];
   const out = specs.map((s, i) => {
-    if (!buttonProblems(s).length) return s;
+    if (!buttonProblems(s, ctx).length) return s;
     const labels = BUTTON_FIELDS.map((k) => String(s.fields[k] ?? '')).filter(Boolean).join(' / ');
     trims.push({ slide: i + 1, field: 'button', from: labels, to: s.layout === 'contact-closing' ? '(no button)' : '(closing statement, no button)', max: 20 });
     if (s.layout === 'contact-closing') return { ...s, fields: Object.fromEntries(Object.entries(s.fields).filter(([k]) => k !== 'button')) as Fields };
@@ -904,11 +990,12 @@ function buildRetry(first: string, specs: SlideSpec[], why: Map<number, string[]
 
 export async function designLibraryDeck(req: WriteRequest, look: Look, handle: string, p: WriteProvider, signal: AbortSignal, onPhase: (ph: 'writing' | 'retrying') => void = () => undefined): Promise<GenerateResult & { designed: Designed }> {
   const t0 = performance.now();
-  const { style, notes: styleNotes } = styleFromPack(look.pack);
+  const { style: style0, notes: styleNotes } = styleFromPack(look.pack);
+  const style: LayoutStyle = look.site?.trim() ? { ...style0, site: look.site.trim() } : style0;
   const brief = look.pack ? look.pack.brief ?? styleBriefOf(look.pack) : look.brief?.trim() || 'a clean, confident look';
   const [lo, hi] = SLIDE_RANGE[req.format];
   const n = Math.min(hi, Math.max(lo, req.slides));
-  const first = buildLibraryPrompt(req, look, style, brief, n);
+  const first = buildLibraryPrompt(req, look, style, brief, n, handle);
   let calls = 0;
   let ms = 0;
   const tokens = { input: 0, output: 0 };
@@ -969,6 +1056,8 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     const rc = rotateCuts(ids.map((layout) => ({ layout: layoutDef(layout) ? layout : ('statement' as LayoutId) })), style, { suggest: specs.map((s) => ({ cut: s.cut })) });
     return { variants, repeats, cuts: rc };
   };
+  const ctaCtx: CtaCtx = { handle, text: req.text };
+  let closingOpen = true;
   const drawAll = async (only?: Set<number>, prev?: Map<number, Drawn>) => {
     const rot = rotate();
     // the project's pictures go into the picture slots by code (best fit, each at most once); a layout that cannot get enough keeps its text-only form
@@ -976,7 +1065,9 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     const out = new Map<number, Drawn>(prev ?? []);
     for (let i = 0; i < specs.length; i++) {
       if (only && !only.has(i)) continue;
-      const pr = slideProblems(specs[i], look);
+      const pr = slideProblems(specs[i], look, ctaCtx);
+      // the last slide of a text with no real action must close on a generic call to action (checked until the retry has been used)
+      if (closingOpen && i === specs.length - 1) pr.push(...closingProblems(specs[i], req.text, handle));
       if (pr.length) {
         out.set(i, { built: null, cut: 'plain', invert: false, density: 'normal', adjustments: [], problems: pr });
         continue;
@@ -1014,15 +1105,29 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
         changed.add(i);
       }
     }
+    // the closing check had its one retry: from here on the code settles it (below)
+    closingOpen = false;
+    // a preset that closes on a card moves the new closing onto it again (the preset's flavour)
+    if (style.closingLayout && look.pack?.look?.flavour) specs = flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, '')).specs;
     // the layouts changed, so the rotation changes: redraw the whole deck (no model call)
     ({ out: drawn, rot } = await drawAll());
   }
+  closingOpen = false;
   // A closing whose button is still not an action phrase after the retry: the button goes (the closing becomes a statement card with no button): a trim, never a failure.
   {
-    const db = dropBadButtons(specs);
+    const db = dropBadButtons(specs, ctaCtx);
     if (db.trims.length) {
       specs = db.specs;
       tr.trims.push(...db.trims);
+      ({ out: drawn, rot } = await drawAll());
+    }
+  }
+  // A text with no real action whose closing is still a plain statement (or a button with another label) after the retry: the closing becomes the generic call to action that fits the text.
+  {
+    const gc = ensureGenericClosing(specs, req.text, handle, !!style.closingLayout && style.closingLayout.layout === 'statement-card');
+    if (gc.trims.length) {
+      specs = gc.specs;
+      tr.trims.push(...gc.trims);
       ({ out: drawn, rot } = await drawAll());
     }
   }
@@ -1120,7 +1225,10 @@ async function plainSameLayout(sp: SlideSpec, v: 0 | 1, style: LayoutStyle, o: {
  */
 export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: string): Promise<{ slides: Record<string, DesignedSlide>; layouts: Record<string, string>; library: LibraryReport }> {
   if (!lib.plan) throw new Error('This deck has no stored plan to draw again.');
-  const { style, notes: styleNotes } = styleFromPack(look.pack);
+  const { style: style0, notes: styleNotes } = styleFromPack(look.pack);
+  // the website of the profile / brand settings (the one the deck was made with, when the caller gives none)
+  const site = look.site?.trim() || (lib.style as { site?: string } | null)?.site?.trim();
+  const style: LayoutStyle = site ? { ...style0, site } : style0;
   let specs = lib.plan.specs;
   const ids = specs.map((s) => (layoutDef(s.layout) ? (s.layout as LayoutId) : ('statement' as LayoutId)));
   const rv = rotateVariants(ids.map((layout) => ({ layout })), { photo: !!look.hasPhoto, flavour: style.flavour });

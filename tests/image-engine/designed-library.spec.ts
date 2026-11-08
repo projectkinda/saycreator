@@ -51,7 +51,7 @@ const ANSWERS = `
   const fixed = { slides: { '4': good().slides[3], '5': good().slides[4] } };
 `;
 
-const REQ = { text: 'Quick Flip is a hoodie that flips into a backpack in 10 seconds. '.repeat(3), slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'auto', styles: [] };
+const REQ = { text: 'Quick Flip is a hoodie that flips into a backpack in 10 seconds. '.repeat(3) + ' Back it on Kickstarter today.', slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'auto', styles: [] };
 
 test('library route: choose-only deck, one retry for the failing slides, plain fallback of the same layout, silent density fallback, report', async ({ page }) => {
   await page.goto('/images/carousel');

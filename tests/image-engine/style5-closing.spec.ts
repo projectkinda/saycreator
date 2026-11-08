@@ -42,7 +42,7 @@ test('style-5: the closing slide is the preset closing layout, a green card with
       const answer = JSON.stringify({ title: 'Quick Flip', slides: [...head, closing] });
       let calls = 0;
       const provider: any = { id: 'dev-cli', label: 'fake', async write() { calls++; return { text: answer, ms: 5 }; } };
-      const req: any = { text: 'Quick Flip is a hoodie that flips into a backpack in ten seconds. '.repeat(3), slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'style-5', styles: [] };
+      const req: any = { text: 'Quick Flip is a hoodie that flips into a backpack in ten seconds. '.repeat(3) + ' Back it on Kickstarter today.', slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'style-5', styles: [] };
       const res: any = await D.designLibraryDeck(req, { pack }, '@quick.flip', provider, new AbortController().signal);
       const lib = res.designed.library;
       const layouts = lib.layouts as string[];

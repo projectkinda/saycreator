@@ -18,6 +18,7 @@ import { presetKey, presetPackFor, presetThumbSvg } from './presets';
 import { svgToPng } from '../reference/faithful';
 import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
 import { LayoutGallery } from './LayoutGallery';
+import { profileWebsite } from './profileSite';
 import { ImagesField } from './ImagesField';
 import { UnusedPictures, type SlotChoice } from './UnusedPictures';
 import { prepareForSlots } from './imagePrep';
@@ -433,7 +434,7 @@ export default function CarouselPage() {
     const next = dropMissing(lib.plan.specs, (pid) => pid !== id);
     if (next.every((s, k) => s === lib.plan!.specs[k])) return;
     const pack = presetPackFor(doc.style) ?? activeReference()?.pack ?? null;
-    const out = await redrawLibraryDeck({ ...lib, plan: { ...lib.plan, specs: next } }, { pack, hasPhoto: pictures.length > 1, images: photoInfos.filter((p) => p.id !== id) }, options.handle.trim() || doc.script?.brand.handle || '');
+    const out = await redrawLibraryDeck({ ...lib, plan: { ...lib.plan, specs: next } }, { pack, hasPhoto: pictures.length > 1, images: photoInfos.filter((p) => p.id !== id), site: profileWebsite() }, options.handle.trim() || doc.script?.brand.handle || '');
     apply(patches.setDesigned({ ...d0, slides: out.slides, layouts: out.layouts, library: out.library }, 'Remove a picture from its slides'));
     setNotice('A picture was removed: the slides that used it are drawn in their text-only form.');
   };
@@ -547,7 +548,7 @@ export default function CarouselPage() {
     const presetPack = presetName ? presetPackFor(presetName) : null;
     const plan = chooseRoute({ style: pickPre ? presetName! : doc.style, activeStyle: ACTIVE_STYLE, pack: refPack, mode: quickAfter ? 'quick' : doc.style === ACTIVE_STYLE ? options.mode : undefined, presetPack, format: doc.format });
     const presetUsed = plan.route === 'designed' && !refPack && presetPack ? presetName : null;
-    const look = { pack: refPack ?? (presetUsed ? presetPack : null), brief: '', hasPhoto: pictures.length > 0, images: photoInfos };
+    const look = { pack: refPack ?? (presetUsed ? presetPack : null), brief: '', hasPhoto: pictures.length > 0, images: photoInfos, site: profileWebsite() };
     let routeNote: { route: 'designed' | 'pack'; reason: string; error?: string; requestBytes?: ReturnType<typeof lastRequestBytes> & object } = quickAfter ? { route: 'pack', reason: 'Quick templates were chosen after Designed mode failed: ' + quickAfter.slice(0, 200) } : plan;
     let designedOut: Designed | undefined = noDesign();
     let r: Awaited<ReturnType<typeof runGenerate>>;
@@ -627,7 +628,7 @@ export default function CarouselPage() {
     if (lib?.plan && doc.designed && (lib.source ?? 'reference') !== (presetBase ? doc.style : 'reference')) {
       setNotice('Saved with this style. The slides on the page were drawn from another style, so it applies the next time you make a carousel.');
     } else if (lib?.plan && doc.designed) {
-      const out = await redrawLibraryDeck(lib, { pack, hasPhoto: pictures.length > 0 }, options.handle.trim());
+      const out = await redrawLibraryDeck(lib, { pack, hasPhoto: pictures.length > 0, site: profileWebsite() }, options.handle.trim());
       apply(patches.setDesigned({ ...doc.designed, slides: out.slides, layouts: out.layouts, library: out.library }, 'Change the style devices'));
       setNotice('Style devices changed: the slides were drawn again from the same plan, no model call.');
     } else setNotice('Saved with this style: it applies the next time you make a carousel.');

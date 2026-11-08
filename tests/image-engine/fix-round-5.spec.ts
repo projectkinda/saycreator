@@ -25,7 +25,7 @@ test('the picture post-pass: with 1, 2, 3 and 5 pictures and a writer that picks
     const flat = (f: any) => Object.entries(f).filter(([k]) => k !== 'accent' && !I.IMAGE_KEYS.includes(k)).flatMap(([, v]) => (Array.isArray(v) ? v : [v])).map(String);
     const words = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
     const pack = PR.presetPackFor('hot-flat', false);
-    const req: any = { text: 'Quick Flip is a hoodie that flips into a backpack in ten seconds. '.repeat(3), slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'hot-flat', styles: [] };
+    const req: any = { text: 'Quick Flip is a hoodie that flips into a backpack in ten seconds. '.repeat(3) + ' Back it on Kickstarter today.', slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'hot-flat', styles: [] };
     const SETS: Record<string, any[]> = {
       one: [{ id: 'a', width: 1600, height: 900 }],
       two: [{ id: 'a', width: 1600, height: 900 }, { id: 'b', width: 1000, height: 1500 }],
@@ -162,8 +162,8 @@ test('a long handle in a three-part footer or header: the handle is cut, the mid
     const widthOf = (t: any) => T.measureWidth(t.text, font, t.weight ?? 500, t.size);
     const box = (t: any) => { const w = widthOf(t); const x0 = t.anchor === 'end' ? t.x - w : t.anchor === 'middle' ? t.x - w / 2 : t.x; return { x0, x1: x0 + w, y: t.y, text: t.text }; };
     for (const [name, deco] of [['footer', { footerRow: true }], ['header', { headerRow: true }]] as [string, any][]) for (const handle of ['@abcdefghijklmnopqrs', '@maya.designs', '@buildinpublic.dan']) {
-      const brandT = (C.chromeFor({ handle, index: 2, total: 8, profile: false, font, deco }) as any[]).find((t) => t.x === 1032 && t.anchor === 'end' && t.y > 1200);
-      const list = (C.chromeFor({ handle, index: 2, total: 8, profile: false, font, deco }) as any[]).filter((t) => t.text && !t.shape && (name === 'header' ? t.y < 200 : t.y > 1200)).map(box);
+      const brandT = (C.chromeFor({ handle, index: 2, total: 8, profile: false, font, deco, site: 'quickflip.studio' }) as any[]).find((t) => t.x === 1032 && t.anchor === 'end' && t.y > 1200);
+      const list = (C.chromeFor({ handle, index: 2, total: 8, profile: false, font, deco, site: 'quickflip.studio' }) as any[]).filter((t) => t.text && !t.shape && (name === 'header' ? t.y < 200 : t.y > 1200)).map(box);
       // the footer logo star sits left of the brand (devices.ts: 24 px gap, 32 px wide)
       if (name === 'footer' && brandT) { const sx = 1032 - Math.max(widthOf(brandT), brandT.text.length * 36 * 0.58) - 24 - 32; list.push({ x0: sx, x1: sx + 32, y: 1288, text: 'logo star' }); }
       const bad: string[] = [];
@@ -206,7 +206,7 @@ test('a pill, caption or sub that repeats the headline is taken out (a trim, nev
     const answer = JSON.stringify({ title: 'T', slides: [specs[0], ...body, { layout: 'statement-card', fields: { headline: 'Done', caption: 'Done for today' }, accents: [] }] });
     let n = 0;
     const provider: any = { id: 'dev-cli', label: 'fake', async write() { n++; return { text: answer, ms: 5 }; } };
-    const res: any = await D.designLibraryDeck({ text: 'Northbeam 2.0. '.repeat(10), slides: 6, tone: 'clear', format: 'carousel', styleChoice: 'style-7', styles: [] }, { pack: PR.presetPackFor('style-7', false) }, '@northbeam', provider, new AbortController().signal);
+    const res: any = await D.designLibraryDeck({ text: 'Northbeam 2.0. '.repeat(10) + ' Join the waitlist today.', slides: 6, tone: 'clear', format: 'carousel', styleChoice: 'style-7', styles: [] }, { pack: PR.presetPackFor('style-7', false) }, '@northbeam', provider, new AbortController().signal);
     const lib = res.designed.library;
     return { table, dr: { layouts: dr.specs.map((s: any) => s.layout), fields: dr.specs.map((s: any) => Object.keys(s.fields)), trims: dr.trims.length }, calls: n, first: lib.layouts[0], firstFields: lib.plan.specs[0].fields, notes: lib.codeAdjustments, layouts: lib.layouts };
   });

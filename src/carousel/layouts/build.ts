@@ -11,7 +11,8 @@ import { balanceVertical, clampSlots, finalGuards, fitSlots, readingOrder, recur
 import { avatarMarkup, chromeFor } from './chrome';
 import { cropRect, parseRef } from './images';
 import { artDevices } from './artDevices';
-import { accentDevices, behindDevices, insetGround, overDevices, shapeBoxesOf, type Box, type DeviceCtx, type PlacedDevice } from './devices';
+import { centreButtons } from './buttons';
+import { accentDevices, behindDevices, insetGround, overDevices, shapeBoxesOf, siteText, type Box, type DeviceCtx, type PlacedDevice } from './devices';
 import { CUT_RATIO, RAKE, coloursFor, geometry, type Geometry, type Roles } from './cuts';
 import { contrast, esc, setWeights } from './draw';
 import { cutsOf, layoutDef } from './library';
@@ -284,7 +285,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   if (!r.faithful) return fail(['the drawing could not be made: ' + r.notes.join(' ')]);
   notes.push(...r.notes);
   // The chrome (profile header, counter, swipe cue) uses the field's roles; an item on the plane takes the plane's ink, one that straddles the plane edge an ink that reads on both.
-  const rec = chromeFor({ handle: o.handle, name: o.name, index: o.index, total: o.total, profile: !!st.devices.profileHeader, font: st.fonts.body, deco: st.deco }).map((c) => {
+  const rec = chromeFor({ handle: o.handle, name: o.name, index: o.index, total: o.total, profile: !!st.devices.profileHeader, font: st.fonts.body, deco: st.deco, site: st.site }).map((c) => {
     if (c.shape) return c;
     const w = c.text.length * c.size * 0.58;
     const x0 = c.anchor === 'end' ? c.x - w : c.anchor === 'middle' ? c.x - w / 2 : c.x;
@@ -295,6 +296,8 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     return { ...c, fill: best };
   });
   let done = r.faithful.replace(/<\/svg>\s*$/i, () => resolveSvgTokens(recurringMarkup(rec, pack), palette) + (o.avatarUrl && st.devices.profileHeader ? avatarMarkup(o.avatarUrl) : '') + '</svg>');
+  // the pill buttons: the label centred on its capitals, the arrow centred, equal padding at both ends (layouts/buttons.ts)
+  done = centreButtons(done, layoutId);
   if (plan.bleedLeft) {
     // The giant numeral bleeds off the left edge: drawn further left (the checks still see it inside the margin).
     const doc = new DOMParser().parseFromString(done, 'image/svg+xml');
@@ -335,7 +338,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     const top = Math.min(1350, ...[...contentBoxes, ...shapeBoxes].map((b) => b.y));
     const ruleY = st.deco.rule === 'lower-two-thirds' && cut === 'plain' ? Math.max(140, Math.min(420, Math.round(top - 44))) : 140;
     const deco = { ...st.deco };
-    const cx: DeviceCtx = { deco, index: o.index, total: o.total, handle: o.handle || '@yourname', c: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface }, textBoxes: [...contentBoxes, ...recLayers.map(boxOf)], shapeBoxes, hasAccent: (Array.isArray(fields0.accent) ? fields0.accent.length : fields0.accent ? 1 : 0) > 0, pictureBoxes: (plan.images ?? []).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })), ...(tl ? { title: boxOf(tl) } : {}), marker: !!st.devices.marker, fonts: st.fonts, ruleY };
+    const cx: DeviceCtx = { deco, index: o.index, total: o.total, handle: o.handle || '@yourname', c: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface }, textBoxes: [...contentBoxes, ...recLayers.map(boxOf)], shapeBoxes, site: siteText(st.site), hasAccent: (Array.isArray(fields0.accent) ? fields0.accent.length : fields0.accent ? 1 : 0) > 0, pictureBoxes: (plan.images ?? []).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })), ...(tl ? { title: boxOf(tl) } : {}), marker: !!st.devices.marker, fonts: st.fonts, ruleY };
     const bd = behindDevices(cx);
     done = done.replace(/(<rect id="bg"[^>]*\/>)/, (m) => m + bd.svg);
     const ig = insetGround(done, deco, F.bg);

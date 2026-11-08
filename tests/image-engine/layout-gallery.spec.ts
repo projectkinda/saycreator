@@ -12,7 +12,7 @@ test.use({ viewport: { width: 1280, height: 900 } });
 const fixture = JSON.parse(fs.readFileSync('tests/image-engine/fixtures/hot-flat-app-library.json', 'utf8')).library;
 const SPECS = fixture.plan.specs.map((s: any) => ({ layout: s.layout, fields: s.fields, accents: s.accents }));
 const WRITER = JSON.stringify({ title: fixture.plan.title ?? 'Stop storing your life in your head', slides: SPECS });
-const TEXT = 'Stop storing your life in your head. Hold things in a system you trust. Three steps: capture, sort, review. Build your own.';
+const TEXT = 'Stop storing your life in your head. Hold things in a system you trust. Three steps: capture, sort, review. Build your own. Join the waitlist today.';
 
 async function fake(page: Page) {
   const f = { calls: 0 };

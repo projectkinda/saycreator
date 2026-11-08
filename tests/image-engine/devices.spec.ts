@@ -39,7 +39,7 @@ async function drawAll(page: any, ids: string[], off: boolean) {
       if (off) pack = { ...pack, overrides: { deco: Object.fromEntries(DC.DECO_SWITCHES.map((k: string) => [k, false])), profileHeader: false } };
       const { style } = D.styleFromPack(pack);
       const lib: any = { route: 'library', provider: 'none', tokenNote: '', calls: 0, tokens: null, seconds: 0, layouts: [], variants: [], cuts: [], inverts: [], densities: [], suggested: { cut: [], invert: [], density: [] }, retries: [], fallbacks: [], codeAdjustments: [], style: null, styleNotes: [], plan: { title: 'Sample', specs: specs.map((s: any) => ({ ...s })) } };
-      const res = await D.redrawLibraryDeck(lib, { pack, hasPhoto: false }, '@quick.flip');
+      const res = await D.redrawLibraryDeck(lib, { pack, hasPhoto: false, site: 'quickflip.com' }, '@quick.flip');
       const slides = Object.entries<any>(res.slides).sort((a, b) => Number(a[0]) - Number(b[0])).map(([, s]) => s.built);
       const rows = slides.map((b: any, i: number) => {
         const layers = b.layers as any[];

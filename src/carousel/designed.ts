@@ -107,6 +107,8 @@ export interface Look {
   hasPhoto?: boolean;
   /** The project's pictures as metadata only (id, pixel size): no pixels. The layouts with picture slots are offered only when enough of them fit; the code places them. */
   images?: { id: string; width: number; height: number }[];
+  /** The website set in the profile / brand settings (shown in the footer; none set: no website line). */
+  site?: string;
 }
 
 // ----- the estimate, shown before anything runs -----

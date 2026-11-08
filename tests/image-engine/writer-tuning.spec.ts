@@ -29,15 +29,15 @@ test('the prompt: the closing depends on the content, a button is an action phra
   });
   for (const [id, p] of Object.entries<string>(r)) {
     expect(p, `${id}: closing rule`).toContain('The closing (last slide) depends on the TEXT, not on habit');
-    expect(p).toContain('"cta-button" ONLY when the text contains a real next action');
-    expect(p).toContain('"cta-pair" when the text gives TWO different actions');
-    expect(p).toContain('"contact-closing" ONLY when the text itself contains contact details');
+    expect(p).toContain('"cta-button" with that action');
+    expect(p).toContain('"cta-pair" when it gives TWO different actions');
+    expect(p).toContain('"contact-closing" when the text itself contains contact details');
     expect(p).toContain('never invent any');
-    expect(p).toContain('NO button');
-    expect(p, `${id}: button rule`).toContain('A button label is an ACTION PHRASE: verb first, 2 to 4 words');
+    expect(p, `${id}: no real action: a generic cta`).toContain('If the text has NO real action, the closing is STILL a "cta-button"');
+    expect(p, `${id}: button rule`).toContain('button label is an ACTION PHRASE: verb first, 2 to 4 words');
     expect(p).toContain('"Book a call"');
     expect(p).toContain('"Which fits you?"');
-    expect(p).toContain('If there is no real action in the text, there is no button');
+    expect(p).toContain('Save this for later');
     // the old habit is gone
     expect(p).not.toContain('The last slide is a closing: cta-button, cta-pair or contact-closing');
   }
@@ -75,7 +75,7 @@ test('a button that is not an action phrase: one retry asks for a new one; if it
     const D = await import('/src/carousel/designLibrary.ts');
     const PR = await import('/src/carousel/presets.ts');
     const pack = PR.presetPackFor('hot-flat', false);
-    const req: any = { text: 'Quick Flip is a hoodie that flips into a backpack in ten seconds. '.repeat(3), slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'hot-flat', styles: [] };
+    const req: any = { text: 'Quick Flip is a hoodie that flips into a backpack in ten seconds. '.repeat(3) + ' Back it on Kickstarter today.', slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'hot-flat', styles: [] };
     const run = async (closing: any, answers: string[]) => {
       let n = 0;
       const prompts: string[] = [];
@@ -117,7 +117,7 @@ test('covers: each preset keeps its own cover form (statement-stacked, statement
   const r = await page.evaluate(async (BODY) => {
     const D = await import('/src/carousel/designLibrary.ts');
     const PR = await import('/src/carousel/presets.ts');
-    const req: any = { text: 'Quick Flip is a hoodie that flips into a backpack in ten seconds. '.repeat(3), slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'x', styles: [] };
+    const req: any = { text: 'Quick Flip is a hoodie that flips into a backpack in ten seconds. '.repeat(3) + ' Back it on Kickstarter today.', slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'x', styles: [] };
     const run = async (preset: string, cover: any) => {
       const pack = PR.presetPackFor(preset, false);
       const answer = JSON.stringify({ title: 'T', slides: [cover, ...BODY.slice(1), { layout: 'statement-card', fields: { headline: 'One hoodie. Two jobs.' }, accents: [] }] });

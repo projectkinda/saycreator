@@ -24,6 +24,8 @@ export interface DeviceCtx {
   title?: Box;
   /** The boxes of the shapes of the slide (cards, pills, panels): a pen ring keeps clear of them. */
   shapeBoxes?: Box[];
+  /** The website line shown in the footer / contact block (already in its display form); empty or missing: none is drawn. */
+  site?: string;
   /** Whether the style draws the accent as a marker bar (the italic device then stays off: the bar is measured on the upright word). */
   marker: boolean;
   /** Fonts of the style. */
@@ -44,7 +46,8 @@ export const hit = (a: Box, b: Box, pad = 0) => a.x < b.x + b.w + pad && a.x + a
 /** The first colour of a list that reads on the ground at `min`:1, else the best one. */
 const readable = (cands: string[], bg: string, min: number) => cands.find((c) => contrast(c, bg) >= min) ?? cands.reduce((b, c) => (contrast(c, bg) > contrast(b, bg) ? c : b));
 
-export const siteOf = (handle: string) => (handle.replace(/^@/, '').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'yourname') + '.com';
+/** The website line of the footer: ONLY the website the person has set in their profile / brand settings, shown as host and path (no protocol, no www, no trailing slash). Empty when none is set: the line is not drawn. Never made up from the handle. */
+export const siteText = (site?: string): string => (site ?? '').trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '');
 export const brandOf = (handle: string) => { const w = handle.replace(/^@/, '').split(/[._\-\s]+/).filter(Boolean)[0] || 'yourname'; return w[0].toUpperCase() + w.slice(1); };
 
 /** A hand-drawn loop around a box: one stroke that goes round and overshoots its start. Deterministic for a given text. */
@@ -310,8 +313,9 @@ export function overDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box
     // two plain contact lines with small drawn icons (a camera-like frame for the socials, a globe for the site)
     const c = x.c.text;
     svg += `<rect x="52" y="1210" width="32" height="32" rx="9" fill="none" stroke="${c}" stroke-width="3"/><circle cx="68" cy="1226" r="7" fill="none" stroke="${c}" stroke-width="3"/>`;
-    svg += `<circle cx="68" cy="1272" r="16" fill="none" stroke="${c}" stroke-width="3"/><ellipse cx="68" cy="1272" rx="7" ry="16" fill="none" stroke="${c}" stroke-width="3"/><path d="M 52 1272 H 84" stroke="${c}" stroke-width="3"/>`;
-    placed.push({ id: 'contact-icons', kind: 'chrome', box: { x: 50, y: 1208, w: 36, h: 82 }, ink: c });
+    // the globe belongs to the website line: drawn only when a website is set
+    if (x.site) svg += `<circle cx="68" cy="1272" r="16" fill="none" stroke="${c}" stroke-width="3"/><ellipse cx="68" cy="1272" rx="7" ry="16" fill="none" stroke="${c}" stroke-width="3"/><path d="M 52 1272 H 84" stroke="${c}" stroke-width="3"/>`;
+    placed.push({ id: 'contact-icons', kind: 'chrome', box: { x: 50, y: 1208, w: 36, h: x.site ? 82 : 36 }, ink: c });
   }
   // stickers: one emoji glyph in an empty corner. It keeps a clear gap from every text (at least one line height of that text, and from the headline's whole box), 24 px from shapes and pictures
   // Stickers are rare: at most one on every third slide (never two in a row), never on a slide whose accent word is ringed (ring > sticker > art), and never within 24 px of a picture, card, pill or button.

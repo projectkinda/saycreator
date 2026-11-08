@@ -52,6 +52,8 @@ export interface LayoutStyle {
   closing?: Ground;
   /** The layout the closing slide takes in a preset (library.byType.closing): the layout, its variant, and the layouts a closing avoids. */
   closingLayout?: { layout: LayoutId; variant?: 0 | 1; avoid?: LayoutId[] };
+  /** The website the person has set in their profile / brand settings: the footer shows it, and shows no website line when there is none. */
+  site?: string;
   /** Layout flavour (see Flavour). */
   flavour?: Flavour;
   /** Case of the headlines only (not handles, counters or body). */

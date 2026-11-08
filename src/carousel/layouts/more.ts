@@ -224,7 +224,8 @@ export const MORE_LAYOUTS: LayoutDef[] = [
           const fs = eff(48, 52);
           const th = Math.ceil(fs * 1.25) + 2;
           const bh = th + 2 * CARD_PAD;
-          const bwid = Math.min(d.w, Math.max(measureWidth(button, st.fonts.headline, hw(st, 700), fs) + 2 * CARD_PAD + 52 + 28, 420));
+          // the label on the left and the arrow at the far right, the same padding at both ends (layouts/buttons.ts): a wide pill, like the call-to-action button
+          const bwid = Math.min(d.w, Math.max(measureWidth(button, st.fonts.headline, hw(st, 700), fs) + 2 * CARD_PAD + 52 + 28, 640));
           d.rect(d.x0, d.y, bwid, bh, '$accent', { rx: bh / 2 });
           d.text('body', button, { x: d.x0 + CARD_PAD, w: bwid - 2 * CARD_PAD - 52, size: 48, max: 52, weight: 700, font: 'h', fill: '$onAccent', lines: 1, min: 44, at: d.y + CARD_PAD, boxH: th });
           arrow(d, d.x0 + bwid - CARD_PAD - 36, d.y + bh / 2, 36);
@@ -260,7 +261,7 @@ export const MORE_LAYOUTS: LayoutDef[] = [
           const fs = eff(48, 52);
           const th = Math.ceil(fs * 1.25) + 2;
           const bh = th + 2 * CARD_PAD;
-          const bwid = Math.min(d.w, Math.max(measureWidth(label, st.fonts.headline, hw(st, 700), fs) + 2 * CARD_PAD + (filled ? 52 : 0) + 28, 420));
+          const bwid = Math.min(d.w, Math.max(measureWidth(label, st.fonts.headline, hw(st, 700), fs) + 2 * CARD_PAD + (filled ? 52 : 0) + 28, filled ? 640 : 420));
           const bx = al === 'center' ? d.cx - bwid / 2 : d.x0;
           if (filled) d.rect(bx, d.y, bwid, bh, '$accent', { rx: bh / 2 });
           else d.rect(bx, d.y, bwid, bh, 'none', { rx: bh / 2, stroke: '$text', sw: 5, noShadow: true });

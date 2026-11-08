@@ -1,0 +1,13 @@
+An honest review of a product idea: an app that finds out which of six failure modes causes your procrastination, then adapts the way it coaches you.
+
+The idea in one sentence: the app runs a short quiz, decides whether you avoid tasks because of fear, boredom, perfectionism, overwhelm, unclear next steps or low energy, and then changes its reminders, task sizes and tone to match that profile. It sells itself as coaching, not as another to-do list.
+
+Before anyone writes a line of code, one assumption has to be true. Users who know why they procrastinate must use the app consistently. The AI's psychological adaptation must also be noticeably better than a well-designed non-adaptive app. If users still churn with a correct profile, the psychological framework is irrelevant. If the adaptation is not clearly better than a clean todo app, there is no moat. Both halves must be true, and nothing in the idea proves either half yet.
+
+There are three fatal flaws, ranked by how much damage they do. First, retention fades after 7 to 21 days, which is the normal pattern for habit and productivity apps, and a clever profile does not change it. Second, the aha moment sits too deep in the product. A new user answers a quiz, waits for a profile and then has to use the app for days before anything feels different. Our estimate is 10 to 15 minutes before the aha moment, and that is far too long for someone who is already avoiding work. Third, the positioning is confused: it is a coaching product sold as a to-do app, so people compare it to free tools.
+
+These are two different jobs. A todo app user wants speed and a task added in 3 taps. A coaching user will answer 18 questions and invest time because they want change, not convenience. One product cannot serve both without disappointing one of them. Pricing shows the gap: coaching products charge about $15-30 a month, while todo apps charge $5-10.
+
+So how do we test it cheaply? Take 20 people who say they procrastinate. Run them through the quiz. Assign each person to a profile bucket by hand, without any AI. Then send a week of WhatsApp nudges written for that bucket and compare completed tasks against a control group that gets generic reminders. Measure completed tasks, not opinions. Check day 7, day 14 and day 30 retention if the first week works.
+
+The verdict: build the smallest version that tests the core assumption. Twenty people and one week will show it. If it fails, stop now and save the months you would have spent on an app nobody keeps.

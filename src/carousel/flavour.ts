@@ -148,7 +148,10 @@ export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look,
     else {
       const opt = layoutOptionsFor(specs[i], look, { joinStat: true }).find((o) => o.layout === cl.layout) ?? closingCard(specs[i], cl.layout);
       if (opt && !opt.droppedCore.length) {
-        apply(i, cl.layout, opt.fields, opt.dropped, `the closing of ${name} is ${cl.layout}${(cl.avoid ?? []).includes(cur as LayoutId) ? ` (it avoids ${cur} for a closing)` : ''}`);
+        // a generic call to action ("Save this for later", "Follow for more", "Send this to a friend", "Follow @handle") goes into the card's caption line, in place of the button
+        const btn = String(specs[i].fields.button ?? '').trim();
+        const generic = cur === 'cta-button' && cl.layout === 'statement-card' && (/^(?:save this for later|follow for more|send this to a friend)$/i.test(btn) || /^follow @[\w.]{2,30}$/i.test(btn));
+        apply(i, cl.layout, generic ? { ...opt.fields, caption: btn } : opt.fields, opt.dropped, `the closing of ${name} is ${cl.layout}${(cl.avoid ?? []).includes(cur as LayoutId) ? ` (it avoids ${cur} for a closing)` : ''}`);
         if (cl.variant !== undefined) specs[i] = { ...specs[i], pin: { ...specs[i].pin, variant: cl.variant } };
       } else kept.push({ slide: n, layout: cur, why: opt ? `closing stays: ${cl.layout} would drop "${opt.droppedCore[0].slice(0, 30)}"` : `closing stays: its text does not fit ${cl.layout}` });
     }

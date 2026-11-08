@@ -573,7 +573,7 @@ const BASE_LIST: LayoutDef[] = [
   // 14 -----------------------------------------------------------------------------------------------------------------------------
   {
     id: 'cta-button', label: 'Call to action', shapes: ['ask'], variants: ['button bottom', 'button under headline'],
-    fields: [{ name: 'headline', required: true, max: 60 }, { name: 'button', required: true, max: 20 }, { name: 'sub', required: false, max: 60 }],
+    fields: [{ name: 'headline', required: true, max: 60 }, { name: 'button', required: true, max: 24 }, { name: 'sub', required: false, max: 60 }],
     samples: {
       normal: { headline: 'Back Quick Flip today', button: 'Back it now', sub: 'Early backers save 30%.' },
       long: { headline: 'Back Quick Flip on Kickstarter today', button: 'Back the project', sub: 'Early backers save thirty percent this week.' },
