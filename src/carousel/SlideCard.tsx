@@ -17,6 +17,7 @@ import type { ObjectChoice } from '../image-engine/photo/objects';
 import { PhotoControls, type AddFiles } from './PhotoControls';
 import type { PhotoChoice } from './photoChoices';
 import type { PictureMeta } from './photoLibrary';
+import { SlotOverlay, SlotPanel, type OnSlotChange, type SlotView } from './PictureSlots';
 
 export interface SlideView {
   status: 'drawing' | 'ready' | 'error';
@@ -48,7 +49,7 @@ function Alternatives({ slide, info, used, onPick }: { slide: StyledSlide; info:
   );
 }
 
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, gallery, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, gallery, pictureSlots, onSlotChange, picturesUsedElsewhere, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -71,11 +72,17 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   onRedesign?: (words: string) => Promise<string>;
   /** Library decks: the layout gallery (under the picture, replaces the old Layout dropdown) with the plane/colour controls and Rewrite text. */
   gallery?: React.ReactNode;
+  /** Library slides with pictures: the picture slots (tap one to replace, remove, move or zoom it). */
+  pictureSlots?: SlotView[];
+  onSlotChange?: OnSlotChange;
+  /** The ids of the project pictures other slides use (they are not offered as a replacement here). */
+  picturesUsedElsewhere?: Set<string>;
   onOpen: () => void;
   onDownload: () => void;
   deckLabel: string;
 }) {
   const [elementsOpen, setElementsOpen] = useState(false);
+  const [openSlot, setOpenSlot] = useState<string | null>(null);
   const [problem, setProblem] = useState('');
   const run = (r: ReturnType<Apply>) => setProblem(r.ok ? '' : r.reasons[0]);
   const title = `Slide ${index + 1} of ${count}, ${TYPE_LABEL[script.type]}`;
@@ -99,9 +106,13 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
 
   const pic = (
     <div className="cr-pic">
+        <div style={{ position: 'relative' }}>
         <button type="button" className="cr-pic-btn" style={{ position: "relative" }} onClick={onOpen} disabled={!view?.url} aria-label={`Open ${deckLabel} slide ${index + 1} full size`}>
           {emptyOverlay}{view?.url ? <img src={view.url} alt={`${deckLabel}, slide ${index + 1}: ${slide.type}, ${slide.layout} layout`} width={216} height={216 * (slide.plan.canvas.height / slide.plan.canvas.width)} /> : <span className="cr-pic-wait small muted" role="status">{view?.status === 'error' ? 'Could not draw this slide' : 'Drawing…'}</span>}
         </button>
+        {pictureSlots?.length && onSlotChange ? <SlotOverlay index={index} slots={pictureSlots} open={openSlot} onOpen={setOpenSlot} onChange={onSlotChange} /> : null}
+        </div>
+        {pictureSlots?.length && onSlotChange && openSlot && pictureSlots.find((s) => s.field === openSlot) ? <SlotPanel index={index} slot={pictureSlots.find((s) => s.field === openSlot)!} pictures={pictures} usedElsewhere={picturesUsedElsewhere ?? new Set()} onChange={onSlotChange} onClose={() => setOpenSlot(null)} /> : null}
         <LintBadges lint={view?.rendered?.lint} />
         {slide.notes
           .filter((n) => n.startsWith("Highlight '") || n.startsWith("This slide fell back"))

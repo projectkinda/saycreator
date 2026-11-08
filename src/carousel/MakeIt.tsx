@@ -80,7 +80,7 @@ export async function runDesign(req: WriteRequest, look: { pack?: import('../ref
   }
 }
 
-export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onUseQuick, onCancel, provider, providers, styles, referenceBox, styleExtra, styleReady = true, part = 'main' }: {
+export function MakeIt({ images, doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onUseQuick, onCancel, provider, providers, styles, referenceBox, styleExtra, styleReady = true, part = 'main' }: {
   doc: Doc;
   options: GenerateOptions;
   setTopic: (t: string) => void;
@@ -102,6 +102,8 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
   styleExtra?: React.ReactNode;
   /** A style is chosen (or "Pick for me" is on): the button needs one. */
   styleReady?: boolean;
+  /** Under the text input: the optional "Add images" area. */
+  images?: React.ReactNode;
   /** "main": the text, the styles and the one button. "options": format, count, platform, handle and tone (they live under Advanced). */
   part?: 'main' | 'options';
 }) {
@@ -220,6 +222,7 @@ export function MakeIt({ doc, options, setTopic, setOptions, onFormat, onHandle,
         <p id="cr-count" className={`small ${n > MAX_CHARS ? 'cr-problem' : 'muted'}`} role={n > MAX_CHARS ? 'alert' : undefined}>
           {n.toLocaleString('en')} of {MAX_CHARS.toLocaleString('en')} characters{problem ? `. ${problem}` : ''}
         </p>
+        {images}
 
         </li>
         <li aria-label="Step 2: pick a style">

@@ -18,6 +18,7 @@ import { fillsFor } from '../images/store';
 import { applyPhotoSlots, fillRecreate, recreateFor, textsOf } from '../reference/recreate';
 import { designKey, designUsed, packFor, packSlide } from '../reference/pack';
 import { resolveSvgTokens, svgToPng } from '../reference/faithful';
+import { pictureStamp } from './photoLibrary';
 import { cleanScript } from './clean';
 import { deckFallbackPack, recurringFor, recurringLayers, recurringMarkup } from './designed';
 import { faithfulChecks, UNCHECKED } from '../reference/faithfulChecks';
@@ -196,7 +197,7 @@ class Renderer {
   /** Draws one slide and checks it. The same plan is drawn only once. */
   render(slide: StyledSlide, margin: number): Promise<Rendered> {
     const fa = faithfulOf(slide);
-    const key = `${margin}|${JSON.stringify(slide.plan)}${fa ? `|${fa.svg}` : ''}`;
+    const key = `${margin}|${JSON.stringify(slide.plan)}${fa ? `|${fa.svg}${fa.svg.includes('picture:') ? `|pictures@${pictureStamp()}` : ''}` : ''}`;
     let p = this.cache.get(key);
     if (!p) {
       p = this.enqueue(async () => {

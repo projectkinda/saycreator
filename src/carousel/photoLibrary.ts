@@ -7,6 +7,7 @@ import { coverCrop } from '../image-engine/draw/geometry';
 import { THRESHOLDS } from '../image-engine/lint/thumbnail-lint';
 import type { ObjectInput } from '../image-engine/photo/objects';
 import type { PhotoInput } from '../image-engine/photo/zones';
+import { setPictureResolver } from '../reference/faithful';
 import { deletePicture, getPicture, isQuotaError, putPicture, storageRoom, type StoredPicture } from './photoStore';
 
 /** What the project remembers about a picture (the picture itself is in the browser's storage). */
@@ -143,6 +144,7 @@ export async function addPicture(file: File, kind: 'photo' | 'object'): Promise<
 }
 
 export async function removePicture(id: string) {
+  dataUrls.delete(id);
   const l = live.get(id);
   if (l) URL.revokeObjectURL(l.url);
   live.delete(id);
@@ -172,6 +174,38 @@ export async function hydrate(metas: PictureMeta[]) {
   bump();
 }
 
+// ---------- pictures inside a drawn slide ----------
+// A slide drawn by the layout library holds a picture as a reference ("picture:<id>#..."); when the slide is turned into a picture (the preview, the gallery, the export) the reference is
+// replaced by the stored picture, scaled to at most 1600 px on its long side (a slot is never wider than 1080), as a data: URL. Cached per picture.
+const dataUrls = new Map<string, Promise<string | null>>();
+export const PICTURE_DRAW_MAX = 1600;
+export function pictureDataUrl(id: string): Promise<string | null> {
+  let p = dataUrls.get(id);
+  if (!p) {
+    p = (async () => {
+      const blob = live.get(id)?.work;
+      if (!blob) return null;
+      const bm = await createImageBitmap(blob);
+      try {
+        const k = Math.min(1, PICTURE_DRAW_MAX / Math.max(bm.width, bm.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(bm.width * k));
+        c.height = Math.max(1, Math.round(bm.height * k));
+        c.getContext('2d')!.drawImage(bm, 0, 0, c.width, c.height);
+        return c.toDataURL('image/jpeg', 0.88);
+      } finally {
+        bm.close();
+      }
+    })();
+    dataUrls.set(id, p);
+    p.then((v) => v === null && dataUrls.delete(id));
+  }
+  return p;
+}
+setPictureResolver(async (ref) => pictureDataUrl(ref.slice('picture:'.length).split('#')[0]));
+
+/** Changes whenever a picture becomes available or goes: a slide drawn before its pictures were loaded must not be reused afterwards. */
+export const pictureStamp = () => version;
 export const isMissing = (id: string) => missing.has(id);
 export const memoryOnlyCount = () => [...live.values()].filter((l) => l.memoryOnly).length;
 
@@ -221,6 +255,7 @@ export const useLibraryVersion = () => useSyncExternalStore(subscribe, () => ver
 
 /** Test hook: forget everything in memory (the stored pictures stay). */
 export function forgetMemory() {
+  dataUrls.clear();
   live.forEach((l) => URL.revokeObjectURL(l.url));
   live.clear();
   missing.clear();

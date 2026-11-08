@@ -1,0 +1,85 @@
+// "Add images" next to the text input of the creation form: optional pictures for the slides. Choose files, drop them, or paste them; each one is checked, scaled to at most 2400 px on its
+// long side and stripped of metadata; a thumbnail with its orientation (portrait, landscape or square) shows what was added, and the order can be changed (the order is the order the code
+// tries the pictures in when it places them) or a picture removed. Only metadata (the pixel size) ever reaches the writer: never the pixels.
+import { useRef, useState } from 'react';
+import { orientationOf } from './layouts/images';
+import { prepareForSlots } from './imagePrep';
+import { urlOf, type PictureMeta } from './photoLibrary';
+import type { AddFiles } from './PhotoControls';
+
+const LABEL = { portrait: 'Portrait', landscape: 'Landscape', square: 'Square' } as const;
+
+export function ImagesField({ pictures, addFiles, onRemove, onMove, disabled }: {
+  /** The project's pictures (photos only are listed here). */
+  pictures: PictureMeta[];
+  addFiles: AddFiles;
+  onRemove: (id: string) => void;
+  /** Moves a picture one place earlier (-1) or later (+1). */
+  onMove: (id: string, dir: -1 | 1) => void;
+  disabled?: boolean;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('');
+  const photos = pictures.filter((p) => p.kind === 'photo');
+  const go = async (files: File[]) => {
+    if (!files.length) return;
+    setBusy(true);
+    const messages: string[] = [];
+    const ready: File[] = [];
+    for (const f of files) {
+      const r = await prepareForSlots(f);
+      if ('message' in r) messages.push(r.message);
+      else {
+        ready.push(r.file);
+        if (r.note) messages.push(r.note);
+      }
+    }
+    let added = 0;
+    if (ready.length) {
+      const res = await addFiles(ready, 'photo');
+      added = res.added.length;
+      messages.push(...res.messages);
+    }
+    setBusy(false);
+    setStatus(`${added ? `Added ${added} image${added === 1 ? '' : 's'}. ` : ''}${messages.join(' ')}`.trim());
+  };
+  return (
+    <div
+      className={`cr-images${over ? ' over' : ''}`}
+      data-testid="images-field"
+      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); setOver(false); void go([...e.dataTransfer.files]); }}
+      onPaste={(e) => { const files = [...(e.clipboardData?.files ?? [])]; if (files.length) { e.preventDefault(); void go(files); } }}
+      tabIndex={-1}
+    >
+      <div className="row-actions" style={{ alignItems: 'center', gap: 8 }}>
+        <strong className="field-label">Images (optional)</strong>
+        <button type="button" className="btn btn-outline btn-sm" disabled={disabled || busy} onClick={() => input.current?.click()}>Add images</button>
+        <span className="small muted">Choose, drop or paste pictures. They stay in this browser; the writer is told only how many there are and their shapes, never the pictures.</span>
+      </div>
+      <input ref={input} type="file" multiple accept="image/*" className="visually-hidden" tabIndex={-1} aria-label="Choose images for the slides" onChange={(e) => { void go([...(e.target.files ?? [])]); e.target.value = ''; }} />
+      {photos.length > 0 && (
+        <ul className="cr-strip-list" aria-label={`${photos.length} image${photos.length === 1 ? '' : 's'} for the slides`} data-testid="images-list">
+          {photos.map((p, i) => {
+            const o = orientationOf(p.width, p.height);
+            return (
+              <li key={p.id} className="cr-strip-item" data-testid={`image-${i}`} data-orientation={o} aria-label={`Image ${i + 1}, ${LABEL[o]}`}>
+                {urlOf(p.id) ? <img src={urlOf(p.id)!} alt="" draggable={false} /> : <span className="cr-strip-gone small">Not in storage</span>}
+                <span className="small" data-testid={`image-${i}-orientation`}>{LABEL[o]} · {p.width}×{p.height}</span>
+                <span className="row-actions">
+                  <button type="button" className="btn btn-outline btn-sm" disabled={i === 0} onClick={() => onMove(p.id, -1)} aria-label={`Move image ${i + 1} earlier`}>←</button>
+                  <button type="button" className="btn btn-outline btn-sm" disabled={i === photos.length - 1} onClick={() => onMove(p.id, 1)} aria-label={`Move image ${i + 1} later`}>→</button>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => onRemove(p.id)} aria-label={`Remove image ${i + 1}`}>Remove</button>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {status && <p className="small" role="status" aria-live="polite" data-testid="images-status">{status}</p>}
+    </div>
+  );
+}

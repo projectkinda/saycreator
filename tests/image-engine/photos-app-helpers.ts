@@ -61,7 +61,7 @@ export function withExifOrientation6(jpeg: Buffer): Buffer {
 
 export const openEditor = async (page: Page) => {
   await page.goto('/images/carousel');
-  await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Make a carousel', exact: true })).toBeVisible();
 };
 
 /** A seven-slide script with a photo hint on slides 1, 3 and 5 (so those slides get a photo slot). */

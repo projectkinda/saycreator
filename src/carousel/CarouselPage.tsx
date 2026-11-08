@@ -18,6 +18,13 @@ import { presetKey, presetPackFor, presetThumbSvg } from './presets';
 import { svgToPng } from '../reference/faithful';
 import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
 import { LayoutGallery } from './LayoutGallery';
+import { ImagesField } from './ImagesField';
+import { UnusedPictures, type SlotChoice } from './UnusedPictures';
+import { prepareForSlots } from './imagePrep';
+import { imageSlotsOf, imagesNeeded, makeRef, parseRef, withCrop } from './layouts/images';
+import { dropMissing, unusedPictures, usedIds, withoutImages } from './imagePlace';
+import type { Fields } from './layouts';
+import type { SlotChange, SlotView } from './PictureSlots';
 import { setActiveReference as setActiveRef } from '../reference/active';
 import { saveOverrides } from '../reference/overrides';
 import { templates as savedTemplates, updateTemplatePack } from '../reference/templates';
@@ -229,6 +236,8 @@ export default function CarouselPage() {
   const options = { ...DEFAULT_OPTIONS, ...doc.options };
   const style = styleByName(doc.style);
   const pictures = doc.photos ?? [];
+  // the writer and the picker are told only the pictures' metadata (id and pixel size), never the pixels
+  const photoInfos = pictures.filter((p) => p.kind === 'photo').map((p) => ({ id: p.id, width: p.width, height: p.height }));
   const libVersion = useLibraryVersion();
   const tplVersion = useTemplatesVersion();
   const refVersion = useActiveReference().version;
@@ -403,7 +412,33 @@ export default function CarouselPage() {
     return { added, messages };
   };
   const usedOn = (id: string) => slides.filter((s) => s.plan.meta?.photoSlots?.some((p) => p.photo === id)).length + Object.values(doc.choices).filter((c) => c.object?.id === id).length;
+  /** Puts a picture one place earlier or later (the order is the order the code tries the pictures in when it places them). */
+  const moveImage = (id: string, dir: -1 | 1) =>
+    setPhotos((before) => {
+      const photos = before.filter((p) => p.kind === 'photo');
+      const k = photos.findIndex((p) => p.id === id);
+      const other = photos[k + dir];
+      if (k < 0 || !other) return before;
+      const a = before.findIndex((p) => p.id === id);
+      const b = before.findIndex((p) => p.id === other.id);
+      const next = [...before];
+      [next[a], next[b]] = [next[b], next[a]];
+      return next;
+    });
+  /** A removed picture leaves the library slides that used it: they are drawn again in their text-only form (one undo step, no model call). */
+  const dropPictureFromDeck = async (id: string) => {
+    const lib = doc.designed?.library;
+    const d0 = doc.designed;
+    if (!lib?.plan || !d0) return;
+    const next = dropMissing(lib.plan.specs, (pid) => pid !== id);
+    if (next.every((s, k) => s === lib.plan!.specs[k])) return;
+    const pack = presetPackFor(doc.style) ?? activeReference()?.pack ?? null;
+    const out = await redrawLibraryDeck({ ...lib, plan: { ...lib.plan, specs: next } }, { pack, hasPhoto: pictures.length > 1, images: photoInfos.filter((p) => p.id !== id) }, options.handle.trim() || doc.script?.brand.handle || '');
+    apply(patches.setDesigned({ ...d0, slides: out.slides, layouts: out.layouts, library: out.library }, 'Remove a picture from its slides'));
+    setNotice('A picture was removed: the slides that used it are drawn in their text-only form.');
+  };
   const removePictureEverywhere = async (id: string) => {
+    await dropPictureFromDeck(id);
     const n = usedOn(id);
     if (n > 0 && !window.confirm(`This picture is on ${n} slide${n === 1 ? '' : 's'}. Remove it anyway? Those slides go back to filling their photo from your list.`)) return;
     const ops = Object.entries(doc.choices).flatMap(([k, c]) => [...(c.photo?.id === id ? [{ path: ['choices', k, 'photo', 'id'] as (string | number)[], value: undefined }] : []), ...(c.object?.id === id ? [{ path: ['choices', k, 'object'] as (string | number)[], value: undefined }] : [])]);
@@ -512,7 +547,7 @@ export default function CarouselPage() {
     const presetPack = presetName ? presetPackFor(presetName) : null;
     const plan = chooseRoute({ style: pickPre ? presetName! : doc.style, activeStyle: ACTIVE_STYLE, pack: refPack, mode: quickAfter ? 'quick' : doc.style === ACTIVE_STYLE ? options.mode : undefined, presetPack, format: doc.format });
     const presetUsed = plan.route === 'designed' && !refPack && presetPack ? presetName : null;
-    const look = { pack: refPack ?? (presetUsed ? presetPack : null), brief: '', hasPhoto: pictures.length > 0 };
+    const look = { pack: refPack ?? (presetUsed ? presetPack : null), brief: '', hasPhoto: pictures.length > 0, images: photoInfos };
     let routeNote: { route: 'designed' | 'pack'; reason: string; error?: string; requestBytes?: ReturnType<typeof lastRequestBytes> & object } = quickAfter ? { route: 'pack', reason: 'Quick templates were chosen after Designed mode failed: ' + quickAfter.slice(0, 200) } : plan;
     let designedOut: Designed | undefined = noDesign();
     let r: Awaited<ReturnType<typeof runGenerate>>;
@@ -598,7 +633,7 @@ export default function CarouselPage() {
     } else setNotice('Saved with this style: it applies the next time you make a carousel.');
   };
   // ----- the layout picker and Rewrite text (library decks): the code draws; only Rewrite text calls the model -----
-  const pickLook = { hasPhoto: pictures.length > 0 };
+  const pickLook = { hasPhoto: pictures.length > 0, images: photoInfos };
   const pickHandle = () => options.handle.trim() || doc.script?.brand.handle || '';
   const pickModel = (i: number) => {
     const lib = doc.designed?.library;
@@ -627,6 +662,61 @@ export default function CarouselPage() {
     const bad = putSlide(i, r, c.layout ? `Change slide ${i + 1} to ${r.layout}` : `Redraw slide ${i + 1}`);
     return bad ?? `Redrew slide ${i + 1}${c.layout ? ' as ' + r.layout : ''} in code: no model call. Undo brings the old one back.`;
   };
+  /** The picture slots of a library slide (a project picture is in them): where each is on the slide. */
+  const pictureSlotsOf = (i: number): SlotView[] | undefined => {
+    const lib = doc.designed?.library;
+    const spec = lib?.plan?.specs[i];
+    const built = doc.designed?.slides?.[String(i)]?.built;
+    if (!lib || !spec || !built?.images?.length) return undefined;
+    const variant = (((lib.variants[i] ?? 1) - 1) % 2) as 0 | 1;
+    const defs = imageSlotsOf(spec.layout, variant).filter((s) => parseRef(spec.fields[s.field]));
+    const out = defs.flatMap((s, k) => (built.images![k] ? [{ field: s.field, n: k + 1, ref: spec.fields[s.field] as string, box: { x: built.images![k].x, y: built.images![k].y, w: built.images![k].w, h: built.images![k].h } }] : []));
+    return out.length ? out : undefined;
+  };
+  const usedElsewhereOf = (i: number): Set<string> => new Set((doc.designed?.library?.plan?.specs ?? []).flatMap((s, k) => (k === i ? [] : usedIds(s.fields))));
+  /** Replace, remove, move or zoom a picture of one slide: that slide's layout is drawn again from its plan (no model call, one undo step). */
+  const slotChange = async (i: number, field: string, change0: SlotChange): Promise<string> => {
+    const lib = doc.designed?.library;
+    const spec = lib?.plan?.specs[i];
+    if (!lib?.plan || !spec) return 'This deck has no stored plan to draw from.';
+    let change = change0;
+    let added: PictureMeta | undefined;
+    if (change.file) {
+      const prep = await prepareForSlots(change.file);
+      if ('message' in prep) return prep.message;
+      const res = await addFiles([prep.file], 'photo');
+      added = res.added[0];
+      if (!added) return res.messages.join(' ') || 'The file could not be added.';
+      change = { picture: added.id };
+    }
+    let fields = { ...spec.fields } as Fields;
+    const layout = spec.layout;
+    if (change.remove) {
+      delete fields[field];
+      // fewer pictures than the layout needs: the slide goes back to the layout's text-only form
+      if (usedIds(fields).length < imagesNeeded(layout)) fields = withoutImages(fields);
+    } else if (change.picture) {
+      const meta = added ?? pictures.find((p) => p.id === change.picture);
+      if (!meta) return 'That picture is not in the project.';
+      fields[field] = makeRef({ id: meta.id, w: meta.width, h: meta.height });
+    } else fields[field] = withCrop(String(fields[field] ?? ''), change);
+    const r = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, { fields });
+    if (!r.ok) return `Could not redraw slide ${i + 1}: ${r.reasons[0]} The slide is unchanged.`;
+    const bad = putSlide(i, r, change.remove ? `Remove a picture from slide ${i + 1}` : change.picture ? `Change a picture on slide ${i + 1}` : `Move or zoom a picture on slide ${i + 1}`);
+    return bad ?? 'Done: this slide was drawn again in code, no model call. Undo brings the old one back.';
+  };
+  /** The pictures no slide of the deck uses, and every picture slot of the deck (where one of them can be dropped). */
+  const unusedList: PictureMeta[] = (() => {
+    const specs = doc.designed?.library?.plan?.specs;
+    if (!specs) return [];
+    const free = new Set(unusedPictures(specs, photoInfos).map((p) => p.id));
+    return pictures.filter((p) => p.kind === 'photo' && free.has(p.id));
+  })();
+  const slotChoices: SlotChoice[] = (() => {
+    const lib = doc.designed?.library;
+    if (!lib?.plan) return [];
+    return lib.plan.specs.flatMap((spec, i) => imageSlotsOf(spec.layout, (((lib.variants[i] ?? 1) - 1) % 2) as 0 | 1).map((s, k) => ({ slide: i, field: s.field, label: `Slide ${i + 1}, picture ${k + 1}${parseRef(spec.fields[s.field]) ? ' (replaces the picture there)' : ''}` })));
+  })();
   const pickRewrite = async (i: number, words: string): Promise<string> => {
     const lib = doc.designed?.library;
     if (!lib?.plan) return 'This deck has no stored plan to draw from.';
@@ -775,6 +865,7 @@ export default function CarouselPage() {
 
       {/* Three steps: your text, a style (the reference box is under it), Generate. Everything else is under Advanced. */}
       <MakeIt
+        images={<ImagesField pictures={pictures} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onMove={moveImage} disabled={busy} />}
         doc={doc}
         options={options}
         setTopic={setTopic}
@@ -937,6 +1028,7 @@ export default function CarouselPage() {
           </div>
         )}
 
+        {hasWork && style && unusedList.length > 0 && <UnusedPictures unused={unusedList} slots={slotChoices} onPut={(id, slide, field) => slotChange(slide, field, { picture: id })} />}
         {hasWork && style && (
           <ol className="cr-list" aria-label={`${slides.length} slides`}>
             {slides.map((s, i) => (
@@ -977,6 +1069,9 @@ export default function CarouselPage() {
                     return `Could not redesign slide ${i + 1}: ${(e as Error).message}`;
                   }
                 } : undefined}
+                pictureSlots={pictureSlotsOf(i)}
+                onSlotChange={(field, change) => slotChange(i, field, change)}
+                picturesUsedElsewhere={usedElsewhereOf(i)}
                 gallery={doc.designed?.library?.plan ? <LayoutGallery index={i} model={pickModel(i)} draw={pickDraw(i)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
                 onImageText={(text) => {
                   const r = requestFromText(text, i, packFor(doc.style)?.palette ?? {});
