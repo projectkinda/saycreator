@@ -103,7 +103,9 @@ test('every layout x variant x cut x style x text length (+ invert, density, wei
         if (bot > (b.fieldBottom ?? 1210) + 2) out.push(`${tag}: content runs past the free field (${Math.round(bot)} > ${b.fieldBottom})`);
         if (b.cut === 'plain' && opts.len === 'normal' && !opts.invert && !opts.density && FILL.includes(id)) {
           const share = (bot - top) / 1000;
-          if (share < 0.65) out.push(`${tag}: content fills only ${Math.round(share * 100)}% of the free height (< 65%)`);
+          // a hero figure is as wide as the page allows and its caption sits right under it (polish round 7: within one caption line), so a stat slide is a shorter block than a text slide: 45%
+          const floor = id === 'big-stat' || id === 'stat-bar' ? 0.45 : 0.65;
+          if (share < floor) out.push(`${tag}: content fills only ${Math.round(share * 100)}% of the free height (< ${Math.round(floor * 100)}%)`);
         }
         if (b.cut === 'edge-v') for (const q of texts) if (!q.name.startsWith('recurring') && q.x1 > b.geometry.edge - 20) out.push(`${tag}: ${q.name} text runs onto the side plane`);
       }

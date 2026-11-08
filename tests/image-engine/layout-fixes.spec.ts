@@ -67,13 +67,15 @@ test('statement-card: text inside the card with 40 px of padding, the card insid
   expect(bad.slice(0, 10)).toEqual([]);
 });
 
-test('numbered-stagger, big numerals: bold numerals at least twice the body size and an even stagger', async ({ page }) => {
+test('numbered-stagger, big numerals: bold numerals at least twice the body size, in one column', async ({ page }) => {
   await page.goto('/images/carousel');
   const rows = await build(page, ['numbered-stagger'], ['short', 'normal', 'long']);
   const bad: string[] = [];
   let checked = 0;
   for (const r of rows.filter((q) => q.v === 1)) {
     if (!r.ok) { bad.push(`${r.tag}: not drawn (${r.errors[0]})`); continue; }
+    // three long items are a numbered list instead (aligned, writer-tuning.spec.ts checks the fall-back): no stagger to measure
+    if (/[/]long$/.test(r.tag)) continue;
     const nums = r.texts.filter((t: any) => /^\d$/.test(t.text.trim())).sort((a: any, b: any) => a.y - b.y);
     const body = r.texts.filter((t: any) => t.name.startsWith('body') && !/^\d$/.test(t.text.trim()));
     const bodySize = Math.max(...body.map((t: any) => t.size));
@@ -82,13 +84,13 @@ test('numbered-stagger, big numerals: bold numerals at least twice the body size
       if (n.weight < Math.min(700, r.maxW)) bad.push(`${r.tag}: numeral ${n.text} is weight ${n.weight} (the heaviest of its font is ${r.maxW})`);
       if (n.size < 2 * bodySize) bad.push(`${r.tag}: numeral ${n.text} is ${Math.round(n.size)} px, body ${Math.round(bodySize)} (needs 2x)`);
     });
-    // the stagger: x alternates between x0 and x0 + the same offset; the texts keep the same width
-    nums.forEach((n: any, i: number) => { if (Math.abs(n.x - (48 + (i % 2) * 140)) > 1) bad.push(`${r.tag}: numeral ${i + 1} starts at ${Math.round(n.x)} (the even stagger is ${48 + (i % 2) * 140})`); });
+    // the numerals share ONE column (no stagger); the texts share one left edge and one width
+    nums.forEach((n: any) => { if (Math.abs(n.x - nums[0].x) > 1) bad.push(`${r.tag}: numeral ${n.text} starts at ${Math.round(n.x)}, the column is at ${Math.round(nums[0].x)}`); });
     const widths = new Set(body.filter((t: any) => t.size >= 44 && t.w < 900).map((t: any) => Math.round(t.w)));
     if (widths.size > 1) bad.push(`${r.tag}: the item widths differ (${[...widths].join(', ')})`);
   }
   console.log('STAGGER checked ' + checked);
-  expect(checked).toBe(4 * 3);
+  expect(checked).toBe(4 * 2);
   expect(bad.slice(0, 10)).toEqual([]);
 });
 

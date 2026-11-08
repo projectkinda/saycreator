@@ -4,7 +4,7 @@
 import { measureWidth } from '../../image-engine/draw/text';
 import { star } from './devices';
 import { CARD_PAD, measure, nearestWeight, S, arrow, type Draw } from './draw';
-import { arr, kickerOf, mk, place, str, withAccent } from './library';
+import { arr, kickerOf, layoutDef, mk, place, str, withAccent } from './library';
 import type { LayoutDef, LayoutStyle } from './types';
 
 /** The size a text is really drawn at: its planned size on the type scale, up to its own largest size. */
@@ -293,24 +293,25 @@ export const MORE_LAYOUTS: LayoutDef[] = [
     },
     plan(f, v, st, cx) {
       const items = arr(f, 'items').slice(0, 3);
-      // An even stagger: every item has the same width and every second one starts OFF px further right. Variant 2 sets a big bold numeral (at least twice the body size) in its own
-      // column in front of each item. The base size is the biggest at which the title and all the rows fit 80% of the free height (long sentences start smaller).
-      const OFF = 140;
+      // Numbered points, each a sentence: the numerals sit in ONE column at the left margin (variant 2: big bold numerals, at least twice the body size) and the sentences share one left edge, so
+      // wrapped lines never start under a number and no row is indented. The type is the biggest at which the title and every row fit 86% of the free height, so a short list fills the page.
+      // Three items of long text (over 60 characters, or more than two lines) are a numbered list instead.
       const fh = cx.field.y1 - cx.field.y0;
-      const colW = cx.field.w - OFF;
-      const NW = 150;
-      const steps: [number, number][] = [[56, 144], [52, 132], [48, 120], [44, 110]];
-      const rowH = (it: string, bs: number, nsz: number) => (v === 1 ? Math.max(measure(it, st.fonts.body, bw(st), bs, colW - NW, 1.3).h + 2, Math.round(nsz * 0.95)) : measure(`0. ${it}`, st.fonts.body, bw(st), bs, colW, 1.3).h + 2);
-      const [bs, ns] = steps.find(([b, n]) => items.reduce((a, it) => a + rowH(it, b, n) + 56, 0) + 200 + 64 <= 0.8 * fh) ?? steps[3];
+      const NW = (bs: number, ns: number) => (v === 1 ? Math.round(ns * 0.62) + 24 : Math.round(bs * 1.1) + 36);
+      const lines = (it: string) => measure(it, st.fonts.body, bw(st), 44, cx.field.w - NW(44, 110) - 20, 1.3).n;
+      if (items.length >= 3 && (items.some((it) => it.length > 60) || items.some((it) => lines(it) > 2))) {
+        return layoutDef('numbered-list')!.plan({ title: str(f, 'title'), items }, v, st, cx);
+      }
+      const SZ: [number, number][] = [[72, 160], [64, 144], [56, 128], [52, 116], [48, 104], [44, 96]];
+      const rowH = (it: string, bs: number, ns: number) => Math.max(measure(it, st.fonts.body, bw(st), bs, cx.field.w - NW(bs, ns) - 20, 1.3).h + 2, v === 1 ? Math.round(ns * 0.95) : Math.round(bs * 1.3));
+      const [bs, ns] = SZ.find(([b, n]) => items.reduce((a, it) => a + rowH(it, b, n) + 52, 0) + 88 * 2.1 + 64 <= 0.86 * fh) ?? SZ[SZ.length - 1];
       const d = place(st, cx, 'center', (d) => {
         d.text('title', str(f, 'title'), { size: 88, max: 120, weight: 800, font: 'h', lines: 2, min: 72, gap: 64 });
+        const nw = NW(eff(bs, 96), eff(ns, 200)); // the type scale may have grown the numerals: the column is as wide as the scaled numeral needs
         items.forEach((it, i) => {
-          const x = d.x0 + (i % 2) * OFF;
-          if (v === 1) {
-            const h = Math.max(measure(it, st.fonts.body, bw(st), eff(bs, 64), colW - NW, 1.3).h + 2, Math.round(eff(ns, 200) * 0.95));
-            d.text('body', String(i + 1), { x, w: NW, size: ns, max: 200, weight: 800, font: 'h', fill: '$accentText', lines: 1, min: 44, at: d.y, boxH: h });
-            d.text('body', it, { x: x + NW, w: colW - NW, size: bs, max: 64, lines: 6, min: 44, lh: 1.3, boxH: h, gap: i < items.length - 1 ? 56 : 0 });
-          } else d.text('body', `${i + 1}. ${it}`, { x, w: colW, size: bs, max: 68, lines: 6, min: 44, lh: 1.3, gap: i < items.length - 1 ? 56 : 0 });
+          const h = Math.max(measure(it, st.fonts.body, bw(st), eff(bs, 96), d.w - nw - 20, 1.3).h + 2, v === 1 ? Math.round(eff(ns, 200) * 0.95) : Math.round(eff(bs, 96) * 1.3));
+          d.text('body', String(i + 1), { x: d.x0, w: nw, size: v === 1 ? ns : bs, max: v === 1 ? 200 : 96, weight: 800, font: 'h', fill: '$accentText', lines: 1, min: 44, at: d.y, boxH: h });
+          d.text('body', it, { x: d.x0 + nw + 20, w: d.w - nw - 20, size: bs, max: 96, lines: 4, min: 44, lh: 1.3, boxH: h, gap: i < items.length - 1 ? 52 : 0 });
         });
       });
       return mk(d, { type: 'checklist', fitAs: 'numbered-stagger', slide: rowsSlide(d, str(f, 'title')) });

@@ -40,7 +40,10 @@ test('every layout: text at or above its role minimum and a block that fills the
           const top = Math.min(...boxes.map((q: any) => q.y));
           const bot = Math.max(...boxes.map((q: any) => q.y + q.height));
           const fill = (bot - top) / 1000;
-          if (fill < 0.55) (thin[id] ??= []).push(`${sname}/v${v + 1}/${len}: fills ${Math.round(fill * 100)}%`);
+          // a nine-character figure ("1,250,000") can only be set as wide as the page: the caption sits right under it (at most one caption line), so a block of number and caption is shorter than the old
+          // one that spread them apart; big-stat with such a figure is held to 45%
+          const floor = id === 'big-stat' && len === 'long' ? 0.45 : 0.55;
+          if (fill < floor) (thin[id] ??= []).push(`${sname}/v${v + 1}/${len}: fills ${Math.round(fill * 100)}%`);
           // a real run showed numbered-list leaving 40% empty and lead-statement a big gap above its headline: these two are held to the checklist's fill and to a centred block
           if (id === 'numbered-list' && fill < 0.65) (thin[id] ??= []).push(`${sname}/v${v + 1}/${len}: fills ${Math.round(fill * 100)}% (needs 65%)`);
           if (id === 'lead-statement') {

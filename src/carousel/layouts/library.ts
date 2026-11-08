@@ -3,6 +3,7 @@
 // then runs the existing fit, balance, collision and final checks and draws planes, accent, chrome and background.
 import { measureWidth } from '../../image-engine/draw/text';
 import { measure, lineTexts, nearestWeight, Draw, CARD_PAD, S, setScale, accentInk, checkIcon, segmentBar, solidBar, sliderGraphic, toggleGraphic, arrow, quoteMark, questionMark } from './draw';
+import { readingOrder } from '../designed';
 import { IMAGE_LAYOUTS } from './images';
 import { MORE_LAYOUTS } from './more';
 import type { Cut, Cx, Fields, LayoutDef, LayoutId, LayoutStyle, Plan, Slot } from './types';
@@ -92,7 +93,8 @@ const heroTitle = (d: Draw, text: string, align: 'left' | 'center', size = 140, 
 };
 export const kickerOf = (d: Draw, text: string, align: 'left' | 'center', gap = 24) => text && d.text('kicker', text, { size: 48, weight: 600, fill: '$muted', align, lines: 1, gap });
 export const mk = (d: Draw, p: Pick<Plan, 'type' | 'fitAs' | 'slide'> & Partial<Plan>): Plan => ({
-  slots: d.slots,
+  // reading order (top to bottom, then left to right): the engine takes a slide's rows in this order, so the slots must come in it (cells set side by side no longer swap their texts)
+  slots: [...d.slots].sort(readingOrder),
   shapes: d.shapes.join(''),
   planeShapes: d.planeShapes.join(''),
   span: Math.max(0, d.maxY - Math.min(d.minY, d.maxY)),
@@ -282,11 +284,14 @@ const BASE_LIST: LayoutDef[] = [
     },
     plan(f, v, st, cx) {
       const al = v === 0 ? 'left' : 'center';
+      // the biggest size at which the number fits the width: the type scale never takes it past that (the engine would shrink it and leave its box tall, with a gap under the digits)
+      const fitN = (limit: number) => { let s2 = limit; while (s2 > 120 && measureWidth(str(f, 'number'), st.fonts.headline, nearestWeight(st.fonts.headline, 800), s2) > cx.field.w * 0.98) s2 -= 6; return s2; };
       const d = place(st, cx, 'center', (d) => {
-        d.text('number', str(f, 'number'), { size: 480, weight: 800, font: 'h', fill: accentInk(st), align: al, lines: 1, min: 120, gap: 28 });
+        // the number's line box is tight (digits have no descenders): the caption sits right under it, at most one caption line below the digits
+        d.text('number', str(f, 'number'), { size: fitN(480), max: fitN(600), weight: 800, font: 'h', fill: accentInk(st), align: al, lines: 1, min: 120, lh: 1.0, gap: 20, figure: true });
         d.part();
-        d.text('title', str(f, 'label'), { size: 48, max: 48, weight: 700, font: 'h', align: al, lines: 2, min: 40, gap: 28 });
-        if (str(f, 'source')) d.text('body', str(f, 'source'), { size: 44, max: 48, fill: '$muted', align: al, lines: 2 });
+        d.text('title', str(f, 'label'), { size: 48, max: 48, weight: 700, font: 'h', align: al, lines: 2, min: 44, gap: 24 });
+        if (str(f, 'source')) d.text('body', str(f, 'source'), { size: 48, max: 48, fill: '$muted', align: al, lines: 2, min: 44 });
         d.underline(d.x0, al);
       });
       return mk(d, { type: 'stat', fitAs: 'big-stat', slide: { type: 'stat', value: str(f, 'number'), label: str(f, 'label'), note: str(f, 'source') } });
@@ -303,9 +308,10 @@ const BASE_LIST: LayoutDef[] = [
     },
     plan(f, v, st, cx) {
       const value = Math.max(0, Math.min(100, Number(str(f, 'bar')) || 0));
+      const fitN = (limit: number) => { let s2 = limit; while (s2 > 120 && measureWidth(str(f, 'number'), st.fonts.headline, nearestWeight(st.fonts.headline, 800), s2) > cx.field.w * 0.98) s2 -= 6; return s2; };
       const d = place(st, cx, 'center', (d) => {
-        d.text('number', str(f, 'number'), { size: 300, weight: 800, font: 'h', fill: accentInk(st), lines: 1, min: 120, gap: 12 });
-        d.text('title', str(f, 'label'), { size: 48, max: 48, weight: 700, font: 'h', lines: 2, min: 40, gap: 56 });
+        d.text('number', str(f, 'number'), { size: fitN(300), max: fitN(420), weight: 800, font: 'h', fill: accentInk(st), lines: 1, min: 120, lh: 1.0, gap: 16, figure: true });
+        d.text('title', str(f, 'label'), { size: 48, max: 48, weight: 700, font: 'h', lines: 2, min: 44, gap: 48 });
         d.part();
         const y = d.y;
         if (v === 0) segmentBar(d, y, value);
@@ -313,7 +319,7 @@ const BASE_LIST: LayoutDef[] = [
         d.y = y + 64;
         if (str(f, 'note')) {
           d.gap(36);
-          d.text('body', str(f, 'note'), { size: 44, max: 48, fill: '$muted', lines: 2 });
+          d.text('body', str(f, 'note'), { size: 48, max: 48, fill: '$muted', lines: 2, min: 44 });
         }
       });
       return mk(d, { type: 'stat', fitAs: 'stat-bar', slide: { type: 'stat', value: str(f, 'number'), label: str(f, 'label'), note: str(f, 'note') } });
@@ -426,23 +432,32 @@ const BASE_LIST: LayoutDef[] = [
     },
     plan(f, v, st, cx) {
       const items = arr(f, 'items').slice(0, 5);
+      // The biggest size at which the title and every row fit 86% of the free height: short items start big (items up to 72 px, numerals up to 160 px), so a list of three short entries fills
+      // the page instead of sitting in the middle of it; five long items keep the compact rows.
+      const fh = cx.field.y1 - cx.field.y0;
+      const few = items.length <= 3;
+      const SZ: [number, number, number][] = [[72, 160, 176], [64, 144, 156], [56, 128, 140], [52, 116, 128], [48, 104, 116], [44, 96, 108]];
+      const fits = ([bs, ns, rowMin]: [number, number, number]) => {
+        const nw = Math.round(ns * 0.72) + 24;
+        const tw = cx.field.w - nw - 24;
+        const rows = items.reduce((a, it) => a + Math.max(measure(it, st.fonts.body, nearestWeight(st.fonts.body, 500), bs, tw, 1.25).h + 2, rowMin) + (few ? 40 : 24), 0);
+        return rows + 88 * 2.1 + 48 <= 0.86 * fh;
+      };
+      const [bs, ns, rowMin] = SZ.find(fits) ?? SZ[SZ.length - 1];
       const d = place(st, cx, 'center', (d) => {
         d.text('title', str(f, 'title'), { size: 88, weight: 800, font: 'h', lines: 2, min: 72, gap: 48 });
         d.part();
-        // like the checklist: the rows grow with the type scale (items up to 72 px, numerals up to 144 px) and breathe, so three short items fill the slide
-        // up to three items get the big treatment; four or five keep the compact rows so they still fit above a plane
-        const few = items.length <= 3;
-        const nw = v === 0 ? Math.max(few ? 140 : 120, S(few ? 150 : 120)) : Math.max(120, S(few ? 120 : 112));
+        const nw = v === 0 ? Math.round(ns * 0.72) + 24 : Math.max(120, Math.round(ns * 0.62) + 24);
         const tx = d.x0 + nw + 24;
         items.forEach((it, i) => {
-          const m = measure(it, st.fonts.body, nearestWeight(st.fonts.body, 500), few ? 48 : 44, d.x0 + d.w - tx, 1.25);
-          const h = Math.max(m.h + 2, S(few ? 128 : 112));
+          const m = measure(it, st.fonts.body, nearestWeight(st.fonts.body, 500), bs, d.x0 + d.w - tx, 1.25);
+          const h = Math.max(m.h + 2, rowMin);
           const cy = d.y + h / 2;
-          if (v === 1) d.circle(d.x0 + 56, cy, Math.min(56, h / 2), '$accent');
-          d.text('body', String(i + 1), { x: d.x0, w: nw, size: v === 1 ? 56 : few ? 96 : 88, max: v === 1 ? 72 : 144, weight: 800, font: 'h', fill: v === 1 ? '$onAccent' : accentInk(st), align: v === 1 ? 'center' : 'left', lines: 1, min: 44, at: d.y, boxH: h });
+          if (v === 1) d.circle(d.x0 + nw / 2 - 12, cy, Math.min(nw / 2 - 12, h / 2), '$accent');
+          d.text('body', String(i + 1), { x: d.x0, w: nw, size: v === 1 ? Math.round(ns * 0.62) : ns, max: v === 1 ? 140 : 200, weight: 800, font: 'h', fill: v === 1 ? '$onAccent' : accentInk(st), align: v === 1 ? 'center' : 'left', lines: 1, min: 44, at: d.y, boxH: h });
           // the last two words stay together, so a wrapped item never leaves one word alone on its second line
-          const glued = it.replace(/ (\S+)$/, ' $1');
-          d.text('body', glued, { x: tx, w: d.x0 + d.w - tx, size: few ? 48 : 44, max: 72, lines: 2, min: 44, boxH: h });
+          const glued = it.replace(/ (\S+)$/, ' $1');
+          d.text('body', glued, { x: tx, w: d.x0 + d.w - tx, size: bs, max: 96, lines: 2, min: 44, boxH: h });
           d.gap(few ? 40 : 24);
         });
       });
@@ -470,15 +485,14 @@ const BASE_LIST: LayoutDef[] = [
           { label: str(f, 'leftLabel'), text: str(f, 'leftText'), lc: '$muted', tc: '$text', fill: '$surface', line: undefined as string | undefined },
           { label: str(f, 'rightLabel'), text: str(f, 'rightText'), lc: unequal ? '$onAccent' : accentInk(st), tc: unequal ? '$onAccent' : '$text', fill: unequal ? '$accent' : '$surface', line: unequal ? undefined : '$accent' },
         ];
-        // the cards take most of the room that is left (taller cards, the words centred in them), not two small boxes in the middle
-        const avail = d.by1 - d.y;
         if (v === 0) {
           const total = d.w - 24;
           const ws = unequal ? [Math.round(total * 0.38), total - Math.round(total * 0.38)] : [total / 2, total / 2];
           const lh = Math.max(...cols.map((c, i) => body(c.label, ws[i] - 2 * pad, 800).h)) + 2;
           const th = Math.max(...cols.map((c, i) => body(c.text, ws[i] - 2 * pad).h)) + 2;
           const ch0 = pad + lh + 16 + th + pad;
-          const ch = Math.max(ch0, Math.round(avail * 0.84));
+          // cards sized to their content (room for 3 lines of text at least), the pair is centred in the free area by place(): no dead zone inside the cards
+          const ch = Math.max(ch0, pad + lh + 16 + 3 * Math.ceil(52 * 1.25) + pad);
           const off = Math.floor((ch - ch0) / 2);
           cols.forEach((c, i) => {
             const x = d.x0 + (i ? ws[0] + 24 : 0);
@@ -489,12 +503,11 @@ const BASE_LIST: LayoutDef[] = [
           d.y += ch;
         } else {
           const iw = d.w - 2 * pad;
-          const each = Math.round((avail - 28) * 0.47);
           cols.forEach((c, i) => {
             const lh = body(c.label, iw, 800).h + 2;
             const th = body(c.text, iw).h + 2;
             const ch0 = pad + lh + 12 + th + pad;
-            const ch = Math.max(ch0, each);
+            const ch = Math.max(ch0, pad + lh + 12 + 2 * Math.ceil(52 * 1.25) + pad);
             const off = Math.floor((ch - ch0) / 2);
             d.rect(d.x0, d.y, d.w, ch, c.fill, { rx: 28, ...(c.line ? { stroke: c.line, sw: 4 } : {}) });
             d.text('body', c.label, { x: d.x0 + pad, w: iw, size: 52, weight: 800, font: 'h', fill: c.lc, lines: 1, min: 44, at: d.y + off + pad });

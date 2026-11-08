@@ -86,6 +86,8 @@ export interface TextOpts {
   boxH?: number;
   /** The largest size the type scale may take this text to (default by role). */
   max?: number;
+  /** A big figure with a tight line height: the box is as tall as the engine's floor (1.2 x the size) and the digits sit at its BOTTOM, so the caption under it is close to the digits. */
+  figure?: boolean;
 }
 
 const r = (n: number) => Math.round(n * 10) / 10;
@@ -171,7 +173,8 @@ export class Draw {
     // Display text (96 px and up) takes the display accent, smaller text the small-text accent
     const fill0 = o.fill ?? '$text';
     const fill = fill0 === '$accentText' && size >= 96 ? '$accentDisplay' : fill0;
-    const slot: Slot = { role, text, x, y, w, h: o.boxH ?? Math.ceil(m.h) + 2, size, weight, font, fill, align: o.align ?? 'left', lines: Math.max(maxLines, m.n), min, lh, plane: this.onPlane, ...(o.boxH ? { valign: 'middle' as const } : {}) };
+    const boxH = o.boxH ?? (o.figure ? Math.max(Math.ceil(m.h) + 2, Math.ceil(size * 1.2)) : undefined);
+    const slot: Slot = { role, text, x, y, w, h: boxH ?? Math.ceil(m.h) + 2, size, weight, font, fill, align: o.align ?? 'left', lines: Math.max(maxLines, m.n), min, lh, plane: this.onPlane, ...(o.boxH ? { valign: 'middle' as const } : o.figure ? { valign: 'bottom' as const } : {}) };
     this.slots.push(slot);
     this.track(y, y + slot.h);
     if (o.at === undefined) {
