@@ -1,12 +1,12 @@
-// Presets v9 (ZERO model calls): the fixed 8-slide sample for all 15 built-in presets (the 7 older ones and style-1..8), drawn by the layout library. Output: out/presets-v12/.
-// layout library with the preset's palette rhythm, case, weights and gradient (packFromStyle -> styleFromPack). Output: out/presets-v12/.
+// Presets v9 (ZERO model calls): the fixed 8-slide sample for all 15 built-in presets (the 7 older ones and style-1..8), drawn by the layout library. Output: out/presets-v16/.
+// layout library with the preset's palette rhythm, case, weights and gradient (packFromStyle -> styleFromPack). Output: out/presets-v16/.
 import { test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
 test.setTimeout(30 * 60_000);
 test.use({ viewport: { width: 1300, height: 1000 } });
-const OUT = path.resolve(process.cwd(), 'out/presets-v12');
+const OUT = path.resolve(process.cwd(), 'out/presets-v16');
 const PRESETS = ['dark-quiet', 'editorial-collage', 'film-paper', 'glass-gradient', 'hot-flat', 'mono-poster', 'object-neon', 'style-1', 'style-2', 'style-3', 'style-4', 'style-5', 'style-6', 'style-7', 'style-8'];
 const SPECS = [
   { layout: 'statement-stacked', fields: { headline: 'Flip it, wear it', caption: 'One hoodie that turns into a backpack in ten seconds.' }, accents: ['wear it'] },
