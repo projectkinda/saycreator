@@ -190,11 +190,8 @@ test('Edit slides is four tabs: Layout | Text | Pictures | Fine-tune, with no se
   await expect(page.getByRole('button', { name: 'Rewrite text' })).toBeVisible();
   // pictures: slots, the unused tray, "Put a picture here" inside its box, tags
   await openTab(page, 'Pictures', 2);
-  const put = page.getByLabel('Picture for slide 2');
-  await expect(put).toBeVisible();
-  const fit = await put.evaluate((el) => { const r = el.getBoundingClientRect(); const p = el.closest('.cr-tabpanel')!.getBoundingClientRect(); return r.left >= p.left - 1 && r.right <= p.right + 1; });
-  expect(fit, 'the "Put a picture here" input stays inside the panel').toBe(true);
-  await expect(page.getByText('Picture tags (2 to 4)')).toBeVisible();
+  // (round 2b: with no picture slot the tab says to add pictures; the picture box and the tags are developer tools)
+  await expect(page.getByText('Add pictures in step 1')).toBeVisible();
   // fine-tune: the Detected style toggles
   await openTab(page, 'Fine-tune', 2);
   await expect(page.getByTestId('detected-style')).toBeVisible();
@@ -203,6 +200,13 @@ test('Edit slides is four tabs: Layout | Text | Pictures | Fine-tune, with no se
   await page.getByRole('checkbox', { name: 'Developer tools' }).check();
   await expect(page.getByRole('button', { name: 'Shuffle elements' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Regenerate from the plan' })).toBeVisible();
+  // and the picture box (inside its panel) and the tags
+  await openTab(page, 'Pictures', 2);
+  const put = page.getByLabel('Picture for slide 2');
+  await expect(put).toBeVisible();
+  const fit = await put.evaluate((el) => { const r = el.getBoundingClientRect(); const p = el.closest('.cr-tabpanel')!.getBoundingClientRect(); return r.left >= p.left - 1 && r.right <= p.right + 1; });
+  expect(fit, 'the "Put a picture here" input stays inside the panel').toBe(true);
+  await expect(page.getByText('Picture tags (2 to 4)')).toBeVisible();
 });
 
 test('a word edit draws the slide again (no model call), keeps the stored plan and the script in step, and Undo takes it back', async ({ page }) => {

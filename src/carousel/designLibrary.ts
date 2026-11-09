@@ -992,7 +992,9 @@ function buildRetry(first: string, specs: SlideSpec[], why: Map<number, string[]
   ].join('\n');
 }
 
-export async function designLibraryDeck(req: WriteRequest, look: Look, handle: string, p: WriteProvider, signal: AbortSignal, onPhase: (ph: 'writing' | 'retrying') => void = () => undefined): Promise<GenerateResult & { designed: Designed }> {
+/** The person's own script, already turned into a plan by code (see libraryFromScript.ts): the deck is drawn from it with NO model call and none of the writer-only rules (generic closing, text trims). */
+export interface OwnScript { title: string; specs: SlideSpec[]; script: CarouselScript }
+export async function designLibraryDeck(req: WriteRequest, look: Look, handle: string, p: WriteProvider, signal: AbortSignal, onPhase: (ph: 'writing' | 'retrying') => void = () => undefined, own?: OwnScript): Promise<GenerateResult & { designed: Designed }> {
   const t0 = performance.now();
   const { style: style0, notes: styleNotes } = styleFromPack(look.pack);
   const style: LayoutStyle = look.site?.trim() ? { ...style0, site: look.site.trim() } : style0;
@@ -1012,25 +1014,28 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     tokens.output += a.usage?.output ?? 0;
     return a.text;
   };
-  let text = await ask(first);
-  let parsed = parseLibraryAnswer(text);
-  if (parsed.errors.length || parsed.slides.length < lo) {
+  let text = own ? '' : await ask(first);
+  let parsed = own ? { title: own.title, note: null as string | null, slides: own.specs, errors: [] as string[] } : parseLibraryAnswer(text);
+  if (!own && (parsed.errors.length || parsed.slides.length < lo)) {
     text = await ask([first, '', 'Your previous answer was:', text.slice(0, 6000), '', 'It cannot be used, for these reasons:', ...parsed.errors.map((e) => '- ' + e), '', 'Reply again with the corrected JSON object only.'].join('\n'));
     parsed = parseLibraryAnswer(text);
   }
-  if (parsed.errors.length || parsed.slides.length < lo) throw new WriterError('invalid', 'The writer answered twice, but neither answer could be used as a slide list.', parsed.errors.map((message) => ({ severity: 'error' as const, path: '', message })));
-  let specs = parsed.slides.slice(0, hi);
+  if (!own && (parsed.errors.length || parsed.slides.length < lo)) throw new WriterError('invalid', 'The writer answered twice, but neither answer could be used as a slide list.', parsed.errors.map((message) => ({ severity: 'error' as const, path: '', message })));
+  let specs = own ? parsed.slides : parsed.slides.slice(0, hi);
   // optional one-line texts a little over their limit are trimmed by the code (no retry call for a kicker one character long)
-  const tr = trimOptionalFields(specs);
+  const tr = own ? { specs, trims: [] as ReturnType<typeof trimOptionalFields>['trims'] } : trimOptionalFields(specs);
   specs = tr.specs;
-  // a pill, caption or sub that repeats the headline is taken out (a trim)
-  const rp = dropRepeats(specs);
-  specs = rp.specs;
-  tr.trims.push(...rp.trims);
-  // a prose slide over 55 words is cut down (the app's phone check fails a content slide at 50)
-  const pw = trimProse(specs);
-  specs = pw.specs;
-  tr.trims.push(...pw.trims);
+  // The person's own words are never trimmed by the code. For a written deck:
+  if (!own) {
+    // a pill, caption or sub that repeats the headline is taken out (a trim)
+    const rp = dropRepeats(specs);
+    specs = rp.specs;
+    tr.trims.push(...rp.trims);
+    // a prose slide over 55 words is cut down (the app's phone check fails a content slide at 50)
+    const pw = trimProse(specs);
+    specs = pw.specs;
+    tr.trims.push(...pw.trims);
+  }
   const suggested = { cut: specs.map((s) => s.cut ?? null), invert: specs.map((s) => !!s.invert), density: specs.map((s) => s.density ?? null) };
   // A preset's flavour: layouts it avoids move to ones it prefers where the slide's text fits (deterministic, no model call; references have no flavour).
   const fp = look.pack?.look?.flavour ? flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, '')) : null;
@@ -1061,7 +1066,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     return { variants, repeats, cuts: rc };
   };
   const ctaCtx: CtaCtx = { handle, text: req.text };
-  let closingOpen = true;
+  let closingOpen = !own; // the closing rules (a generic call to action when the text has no action) are for written decks; the person's own closing stays as written
   const drawAll = async (only?: Set<number>, prev?: Map<number, Drawn>) => {
     const rot = rotate();
     // the project's pictures go into the picture slots by code (best fit, each at most once); a layout that cannot get enough keeps its text-only form
@@ -1090,7 +1095,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   const retries: LibraryReport['retries'] = [];
   const bad = failing();
   // The repeats only matter when they are the sole problem of a slide that otherwise drew: the retry asks for another layout.
-  if (bad.size && calls < 3) {
+  if (bad.size && calls < 3 && !own) {
     for (const [i, why] of bad) retries.push({ slide: i + 1, reasons: why });
     const answer = await ask(buildRetry(first, specs, bad));
     let fix: unknown;
@@ -1127,7 +1132,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     }
   }
   // A text with no real action whose closing is still a plain statement (or a button with another label) after the retry: the closing becomes the generic call to action that fits the text.
-  {
+  if (!own) {
     const gc = ensureGenericClosing(specs, req.text, handle, !!style.closingLayout && style.closingLayout.layout === 'statement-card');
     if (gc.trims.length) {
       specs = gc.specs;
@@ -1166,8 +1171,8 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     raw.slides = raw.slides.map((s, i) => (v.errors.some((e) => e.path.startsWith(`slides[${i}]`)) ? { type: 'content', headline: clip(String(s.headline ?? s.quote ?? 'Slide ' + (i + 1)), 90), body: clip(JSON.stringify(specs[i].fields), 250), element_tags: ['idea', 'message'] } : s));
     v = validateScriptText(JSON.stringify(raw), req.format);
   }
-  if (!v.script) throw new WriterError('invalid', 'The slides could not be turned into a script.', v.errors);
-  const script: CarouselScript = { ...v.script, brand: { ...v.script.brand, handle: handle.trim() || v.script.brand.handle } };
+  if (!v.script && !own) throw new WriterError('invalid', 'The slides could not be turned into a script.', v.errors);
+  const script: CarouselScript = own ? { ...own.script, brand: { ...own.script.brand, handle: handle.trim() || own.script.brand.handle } } : { ...v.script!, brand: { ...v.script!.brand, handle: handle.trim() || v.script!.brand.handle } };
   const designed: Designed = { slides: {}, fallbacks: {}, notes: [], calls, ms, layouts: {}, ...(tokens.input || tokens.output ? { tokens } : {}) };
   specs.forEach((s, i) => {
     const d = drawn.get(i);

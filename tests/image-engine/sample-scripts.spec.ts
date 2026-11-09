@@ -24,6 +24,8 @@ test('the sample scripts pass the app checker with no problems', () => {
 
 test('each sample script loads in the app and draws in every style; phone-check failures are written down', async ({ page }) => {
   test.setTimeout(300_000);
+  // This spec checks the older template route in every style (a pasted script now goes to the layout library unless this flag is set).
+  await page.addInitScript(() => localStorage.setItem('creator.templateRoute', '1'));
   const report: { script: string; style: string; failing: { slide: number; reasons: string[] }[] }[] = [];
   for (const f of FILES) {
     await page.goto('/images/carousel');
@@ -35,7 +37,7 @@ test('each sample script loads in the app and draws in every style; phone-check 
     await toStep(page, 3);
     const real = page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasNotText: 'Pick for me' }).getByRole('button');
     await expect(page.getByRole('list', { name: 'Styles' }).getByText('Drawing…')).toHaveCount(0, { timeout: 60_000 });
-    const names = await real.evaluateAll((els) => els.map((e) => e.querySelector('span.small')?.textContent ?? ''));
+    const names = await real.evaluateAll((els) => els.map((e) => e.querySelector('strong')?.textContent ?? ''));
     expect(names.length).toBeGreaterThanOrEqual(4);
     for (let i = 0; i < names.length; i++) {
       await real.nth(i).click();

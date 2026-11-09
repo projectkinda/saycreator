@@ -59,7 +59,7 @@ const TABS: { id: EditTab; label: string }[] = [
 ];
 
 /** The editor of ONE slide, as four tabs: Layout | Text | Pictures | Fine-tune. There is no second preview here: the big preview and the thumbnail strip stay on the left. */
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, fineTuneBox, tab, onTab, devTools, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -95,6 +95,13 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   onTab: (t: EditTab) => void;
   /** Developer tools are on: the older tools show even on a library deck. */
   devTools: boolean;
+  /** The picture slot whose controls are open (a tap on the preview opens it too). */
+  openSlot: string | null;
+  onOpenSlot: (field: string | null) => void;
+  /** 'none': the project has no pictures; 'free': there are unused ones; 'used': all are on other slides. */
+  picturesState: 'none' | 'free' | 'used';
+  /** Library slide without a picture slot: moves it to a picture layout of its own meaning and puts an unused picture in; says what happened. */
+  onAddPicture?: () => Promise<string>;
   /** Library slides with pictures: the picture slots (tap one to replace, remove, move or zoom it). */
   pictureSlots?: SlotView[];
   onSlotChange?: OnSlotChange;
@@ -104,7 +111,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   deckLabel: string;
 }) {
   const [elementsOpen, setElementsOpen] = useState(false);
-  const [openSlot, setOpenSlot] = useState<string | null>(null);
+  const [addMsg, setAddMsg] = useState('');
+  const [addBusy, setAddBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const run = (r: ReturnType<Apply>) => setProblem(r.ok ? '' : r.reasons[0]);
   const title = `Slide ${index + 1} of ${count}, ${TYPE_LABEL[script.type]}`;
@@ -147,30 +155,45 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
           <span className="field-label">Picture slots on this slide</span>
           <div className="row-actions" role="group" aria-label={`Picture slots of slide ${index + 1}`}>
             {pictureSlots.map((sl) => (
-              <button key={sl.field} type="button" className="btn btn-outline btn-sm" data-testid={`slot-${index}-${sl.n}`} aria-label={`Edit picture ${sl.n} on slide ${index + 1}`} aria-expanded={openSlot === sl.field} onClick={() => setOpenSlot(openSlot === sl.field ? null : sl.field)}>
+              <button key={sl.field} type="button" className="btn btn-outline btn-sm" data-testid={`slot-tab-${index}-${sl.n}`} aria-label={`Edit picture ${sl.n} on slide ${index + 1}`} aria-expanded={openSlot === sl.field} onClick={() => onOpenSlot(openSlot === sl.field ? null : sl.field)}>
                 Picture {sl.n}
               </button>
             ))}
           </div>
-          {open && onSlotChange ? <SlotPanel index={index} slot={open} pictures={pictures} usedElsewhere={picturesUsedElsewhere ?? new Set()} onChange={onSlotChange} onClose={() => setOpenSlot(null)} /> : null}
+          {open && onSlotChange ? <SlotPanel index={index} slot={open} pictures={pictures} usedElsewhere={picturesUsedElsewhere ?? new Set()} onChange={onSlotChange} onClose={() => onOpenSlot(null)} /> : null}
         </div>
       ) : (
-        isLibrary && <p className="small muted">This layout has no picture slot. Pick a layout with pictures in the Layout tab, or add pictures in step 1.</p>
+        isLibrary && (
+          <div className="tn-field" data-testid="add-picture">
+            {picturesState === 'none' && <p className="small muted">This slide has no picture. Add pictures in step 1, then come back here.</p>}
+            {picturesState === 'used' && <p className="small muted">This slide has no picture, and every one of your pictures is already used on another slide.</p>}
+            {picturesState === 'free' && onAddPicture && (
+              <>
+                <p className="small muted">This slide has no picture. This picks a picture layout that suits what the slide says and puts one of your unused pictures in it.</p>
+                <div className="row-actions">
+                  <button type="button" className="btn btn-dark btn-sm" disabled={addBusy} onClick={async () => { setAddBusy(true); setAddMsg(''); setAddMsg(await onAddPicture()); setAddBusy(false); }}>{addBusy ? 'Working…' : 'Add a picture to this slide'}</button>
+                </div>
+                {addMsg && <span className="small" role="status">{addMsg}</span>}
+              </>
+            )}
+          </div>
+        )
       )}
       {unusedBox}
-      {onImageText && (
+      {onImageText && (devTools || !isLibrary) && (
         <label className="tn-field">
           <span className="field-label">Put a picture here</span>
           <input className="cr-input cr-wide" value={imgText} placeholder="put a sunrise as the background here" aria-label={`Picture for slide ${index + 1}`} onChange={(e) => setImgText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setImgMsg(onImageText(imgText)); setImgText(''); } }} />
           {imgMsg && <span className="small" role="status">{imgMsg}</span>}
         </label>
       )}
-      <TagEditor index={index} tags={script.element_tags ?? []} apply={apply} />
+      {(devTools || !isLibrary) && <TagEditor index={index} tags={script.element_tags ?? []} apply={apply} />}
       <PhotoControls index={index} slide={slide} script={script} choice={photo} object={object} pictures={pictures} palette={palette} hasPhotoStyle={hasPhotoStyle} apply={apply} addFiles={addFiles} />
     </>
   );
   const fine = (
     <>
+      <h4 className="h4" data-testid="fine-scope">Applies to all slides</h4>
       {fineTuneBox}
       {oldTools && (
         <div className="cr-oldtools" data-testid="old-tools">

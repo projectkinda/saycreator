@@ -77,7 +77,7 @@ test('an existing style: 0 design calls and 1 writer call (the cheap model\'s ki
   const calls = await fake(page);
   await open(page);
   await toStep(page, 3);
-  await styles(page).getByRole('button', { name: /dark-quiet/ }).click();
+  await styles(page).getByRole('button', { name: /Quiet dark minimal/ }).click();
   await make(page).click();
   await drawn(page);
   expect(calls.length).toBe(1);
@@ -92,7 +92,7 @@ test('pasted slide text (blocks split by blank lines): 0 calls of any kind', asy
   await open(page, slides);
   await toStep(page, 3);
   await expect(page.getByTestId('cost-line')).toHaveText('0 design calls, 0 writing calls: your slide text is used as it is.');
-  await styles(page).getByRole('button', { name: /dark-quiet/ }).click();
+  await styles(page).getByRole('button', { name: /Quiet dark minimal/ }).click();
   await make(page).click();
   await drawn(page, 5);
   expect(calls.length).toBe(0);
@@ -142,7 +142,7 @@ test('Redesign this slide: shows its cost, and runs 1 design call only when pres
   const calls = await fake(page, (c) => (c.kind === 'draw' ? svgFor(1, script.slides[1]) : SCRIPT));
   await open(page);
   await toStep(page, 3);
-  await styles(page).getByRole('button', { name: /dark-quiet/ }).click();
+  await styles(page).getByRole('button', { name: /Quiet dark minimal/ }).click();
   await make(page).click();
   await drawn(page);
   await openEdit(page, 2);
@@ -168,7 +168,7 @@ test('script notes ("Placeholder: ...", "Note: ...", "TODO", [brackets]) are nev
   const calls = await fake(page, () => JSON.stringify(dirty));
   await open(page);
   await toStep(page, 3);
-  await styles(page).getByRole('button', { name: /dark-quiet/ }).click();
+  await styles(page).getByRole('button', { name: /Quiet dark minimal/ }).click();
   await make(page).click();
   await drawn(page);
   expect(calls.length).toBe(1);

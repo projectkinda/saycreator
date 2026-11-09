@@ -11,6 +11,8 @@ import { MakeIt, runDesign, runGenerate, useWriters, type GenState } from './Mak
 import { DeckFlags, DesignedCard } from './DesignedCard';
 import { NewStyleFlow } from './NewStyleFlow';
 import { scriptFromBlocks, slideBlocks } from './pasted';
+import { libraryDeckFromScript, scriptText } from './libraryFromScript';
+import type { CarouselScript } from '../image-engine/carousel/types';
 import { clearPageState } from './resetState';
 import { DetectedStyleBox } from './DetectedStyle';
 import { DRAW_VERSION, legacySvgRoute, redrawLibraryDeck, templateRoute } from './designLibrary';
@@ -48,6 +50,8 @@ import { listCutouts, putCutout, type CutoutRecord } from '../image-engine/cutou
 import type { AddFiles } from './PhotoControls';
 import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, useLibraryVersion, type PictureMeta } from './photoLibrary';
 import { SlideCard, type EditTab, type SlideView } from './SlideCard';
+import { SlotOverlay } from './PictureSlots';
+import { IMAGE_LAYOUT_IDS } from './layouts/images';
 import type { TextDelta } from './TextTab';
 import { PreviewStage } from './Studio';
 import { packFor, packFromStyle, distinctCheck } from '../reference/pack';
@@ -100,7 +104,7 @@ const keepPreview = async (k: string, blob: Blob) => {
   }
 };
 
-function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyleOpen, rebuildOnly }: { format: Format; value: string; auto: boolean; onAuto: () => void; onPick: (name: string, title: string) => void; onNewStyle?: () => void; newStyleOpen?: boolean; rebuildOnly?: boolean }) {
+function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyleOpen, rebuildOnly, showIds }: { /** The style ids (dark-quiet, style-1 ...) show only with Developer tools on. */ showIds?: boolean; format: Format; value: string; auto: boolean; onAuto: () => void; onPick: (name: string, title: string) => void; onNewStyle?: () => void; newStyleOpen?: boolean; rebuildOnly?: boolean }) {
   useTemplatesVersion();
   // Mine first, then the built-in ones.
   const styles = [...carouselStyles()].sort((a, b) => Number(isUserStyle(b.spec.name)) - Number(isUserStyle(a.spec.name)));
@@ -204,7 +208,7 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
               <button type="button" className="card start-opt cr-style" aria-pressed={!auto && value === st.spec.name} onClick={() => onPick(st.spec.name, st.spec.title)}>
                 <span className={`cr-style-pic r${format === 'quote' ? '1-1' : '4-5'}`}>{img && img !== 'none' ? <img src={img} alt={`Preview of the ${st.spec.title} style`} /> : <span className="small muted" role="status">{img === 'none' ? 'No preview' : 'Drawing…'}</span>}</span>
                 <strong>{st.spec.title}</strong>
-                <span className="small muted">{isUserStyle(st.spec.name) ? 'Made from your references' : st.spec.name}</span>
+                <span className="small muted">{isUserStyle(st.spec.name) ? 'Made from your references' : showIds ? st.spec.name : ''}</span>
                 {isUserStyle(st.spec.name) && <span className="chip chip-tag">Mine</span>}
                 {packFor(st.spec.name)?.basic && <span className="chip chip-tag">Basic</span>}
                 {auto && value === st.spec.name && <span className="chip chip-tag">In use</span>}
@@ -368,18 +372,59 @@ export default function CarouselPage() {
 
   const prompt = useMemo(() => scriptPrompt(doc.topic, doc.format), [doc.topic, doc.format]);
 
+  /** "Use this script": the pasted (or example) script is drawn by the layout library like a written deck, with ZERO model calls. A script the library cannot show falls back to the older templates. */
   const useScript = (text: string) => {
     const r = validateScriptText(text, doc.format);
     setCheck(r);
     if (!r.script) return false;
-    const done = apply(patches.useScript(r.script));
-    if (!done.ok) return false;
+    void applyScript(r.script, r.warnings.length);
+    return true;
+  };
+  const applyScript = async (script: CarouselScript, warnings: number) => {
+    const unit = doc.format === 'quote' ? 'quote card' : 'slide';
+    const handle = options.handle.trim() || script.brand.handle;
+    const withHandle = { ...script, brand: { ...script.brand, handle } };
+    let why = '';
+    // the same choices as a written deck: a built-in preset or a reference style goes to the library; "Pick for me" chooses by the tone and the words of the script
+    const refPack = doc.style === ACTIVE_STYLE ? (activeReference()?.pack ?? null) : null;
+    const presetsOnly = carouselStyles().filter((x) => !isUserStyle(x.spec.name));
+    const pickPre = options.autoStyle && doc.style !== ACTIVE_STYLE && !templateRoute() && presetsOnly.length ? pickStyle({ text: scriptText(script), tone: options.tone, slideTypes: script.slides.map((x) => x.type), styles: presetsOnly, writerSuggestion: null }) : null;
+    const presetName = doc.style === ACTIVE_STYLE ? null : pickPre?.name ?? doc.style;
+    const presetPack = presetName ? presetPackFor(presetName) : null;
+    const plan = chooseRoute({ style: pickPre ? presetName! : doc.style, activeStyle: ACTIVE_STYLE, pack: refPack, mode: doc.style === ACTIVE_STYLE ? options.mode : undefined, presetPack, format: doc.format });
+    if (plan.route === 'designed') {
+      const presetUsed = !refPack && presetPack ? presetName : null;
+      const look = { pack: refPack ?? (presetUsed ? presetPack : null), brief: '', hasPhoto: pictures.length > 0, images: photoInfos, site: profileWebsite() };
+      try {
+        const out = await libraryDeckFromScript(withHandle, look, options.handle.trim());
+        if (out.ok) {
+          const designedOut = out.designed.library ? { ...out.designed, library: { ...out.designed.library, source: presetUsed ?? 'reference' } } : out.designed;
+          const gp = patches.generate(out.script, presetUsed, 'Use your script');
+          const done = apply({ ...gp, ops: [...gp.ops, { path: ['designed'], value: designedOut }, { path: ['route'], value: { route: 'designed', reason: 'Your script was drawn by the layout library from its own words: 0 model calls.' } }] });
+          if (done.ok) {
+            setPasted('');
+            setCheck(null);
+            setOptions({ autoStyle: false });
+            goStep(4);
+            setGen({ phase: 'drawing', ms: 0, attempts: 1, message: `Drawing slide 1 of ${script.slides.length}…` });
+            setNotice(`Script loaded: ${script.slides.length} ${unit}${script.slides.length === 1 ? '' : 's'}, 0 model calls${warnings ? `, with ${warnings} suggestion${warnings > 1 ? 's' : ''} to review` : ''}. Edit any slide in Edit slides.`);
+            return;
+          }
+          why = done.reasons[0] ?? 'the deck could not be stored';
+        } else why = out.reason;
+      } catch (e) {
+        why = (e as Error).message;
+      }
+    } else why = plan.reason;
+    // the older template route (the reason is kept in the project's route note; the person sees no developer wording)
+    const done = apply(patches.useScript(withHandle));
+    if (!done.ok) return;
+    if (why) apply({ label: 'Record the route of the pasted script', ops: [{ path: ['route'], value: { route: 'pack', reason: 'Your script was drawn with the older templates: ' + why.slice(0, 300) } }] });
     setPasted('');
     setCheck(null);
     setOptions({ autoStyle: false });
     goStep(4);
-    setNotice(`Script loaded: ${r.script.slides.length} ${doc.format === 'quote' ? 'quote card' : 'slide'}${r.script.slides.length === 1 ? '' : 's'}${r.warnings.length ? `, with ${r.warnings.length} suggestion${r.warnings.length > 1 ? 's' : ''} to review` : ''}. Edit any slide below.`);
-    return true;
+    setNotice(`Script loaded: ${script.slides.length} ${unit}${script.slides.length === 1 ? '' : 's'}, 0 model calls${warnings ? `, with ${warnings} suggestion${warnings > 1 ? 's' : ''} to review` : ''}. Edit any slide in Edit slides.`);
   };
 
   const copyPrompt = async () => {
@@ -817,6 +862,20 @@ export default function CarouselPage() {
     textQueue.current = job.catch(() => undefined);
     return job;
   };
+  /** Pictures tab, a slide with no picture slot: the slide moves to the first picture layout that fits what it says (the layout gallery's own rule), and one unused picture goes in. No model call. */
+  const addPictureTo = async (i: number): Promise<string> => {
+    const lib = docRef.current.designed?.library;
+    if (!lib?.plan) return 'This deck has no stored plan to draw from.';
+    const model = pickModel(i);
+    const tries = (model?.entries ?? []).filter((e) => e.enabled && !e.current && (IMAGE_LAYOUT_IDS as readonly string[]).includes(e.layout));
+    for (const e of tries) {
+      const r = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, { layout: e.layout });
+      if (!r.ok || usedIds(r.spec.fields).length === 0) continue;
+      const bad = putSlide(i, r, `Add a picture to slide ${i + 1}`);
+      return bad ?? `Added a picture to slide ${i + 1}: the layout is now ${r.layout}. Undo takes it back.`;
+    }
+    return 'No picture layout fits what this slide says without losing words. Pick a layout in the Layout tab.';
+  };
   /** Reset page: cancels what is running, then the page is as after a fresh load. Saved templates and Mine styles are not touched. */
   const resetPage = async () => {
     if (!window.confirm('Start over? This clears the reference, the text and the slides on this page. Your saved styles stay.')) return;
@@ -918,7 +977,11 @@ export default function CarouselPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gen.phase]);
   const editOn = editView && !!doc.script && slides.length > 0;
+  const previewSlots = hasWork ? pictureSlotsOf(Math.min(sel, Math.max(0, slides.length - 1))) : undefined;
   const [editTab, setEditTab] = useState<EditTab | null>(null);
+  const [slotOpen, setSlotOpen] = useState<string | null>(null);
+  useEffect(() => setSlotOpen(null), [sel]);
+  const picturesState: 'none' | 'free' | 'used' = pictures.filter((p) => p.kind === 'photo').length === 0 ? 'none' : unusedList.length > 0 ? 'free' : 'used';
   const si = Math.min(sel, Math.max(0, slides.length - 1));
 
   /** The card of one slide: its picture with the picture slots, the layout gallery and the older editors. Shown only in the Edit slides view. */
@@ -943,6 +1006,10 @@ export default function CarouselPage() {
         }}
         tab={editTab ?? (doc.designed?.library?.plan ? 'layout' : 'text')}
         onTab={setEditTab}
+        openSlot={slotOpen}
+        onOpenSlot={setSlotOpen}
+        picturesState={picturesState}
+        onAddPicture={doc.designed?.library?.plan ? () => addPictureTo(i) : undefined}
         devTools={devTools}
         onDownload={() => downloadOne(i)}
         deckLabel={deck}
@@ -1085,7 +1152,7 @@ export default function CarouselPage() {
   );
 
   return (
-    <div className="page page-tight cr-studio">
+    <div className="page page-tight cr-studio" data-step={editOn ? 'edit' : step}>
       <header className="page-header">
         <div className="page-header-text">
           <p className="small"><Link to="/images">← Back to Images</Link></p>
@@ -1141,7 +1208,7 @@ export default function CarouselPage() {
           {hasWork && ready && !exporting && ` ${failing === 0 ? 'Every slide passes the phone-size check.' : `${failing} of ${slides.length} slides have something to fix at phone size.`}`}
         </p>
 
-            <PreviewStage count={hasWork ? slides.length : 0} items={slides.map((_, i) => views[i] ?? { status: 'drawing' })} selected={sel} onSelect={setSel} onOpen={setOpen} />
+            <PreviewStage overlay={previewSlots && previewSlots.length ? <SlotOverlay index={si} slots={previewSlots} open={slotOpen} onOpen={(field) => { setSlotOpen(field); if (field) { setEditTab('pictures'); setStep(4); setEditView(true); } }} onChange={(field, change) => slotChange(si, field, change)} /> : undefined} count={hasWork ? slides.length : 0} items={slides.map((_, i) => views[i] ?? { status: 'drawing' })} selected={sel} onSelect={setSel} onOpen={setOpen} />
             {hasWork && style && (
               <div className="cr-edit-open">
                 <button type="button" className="btn btn-dark btn-lg" aria-pressed={editOn} onClick={() => { setStep(4); setEditView(true); }} data-testid="edit-slides">Edit slides</button>
@@ -1187,7 +1254,7 @@ export default function CarouselPage() {
         </div>
         <div hidden={step !== 3} data-step="3">
           <MakeIt part="style" {...makeProps} styles={<>
-            <StylePicker key={resetKey} format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} onNewStyle={() => setNewStyleOpen((v) => !v)} newStyleOpen={newStyleOpen} />
+            <StylePicker showIds={devTools} key={resetKey} format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} onNewStyle={() => setNewStyleOpen((v) => !v)} newStyleOpen={newStyleOpen} />
             {targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}
           </>} referenceBox={newStyleBox} styleReady={options.autoStyle || !!styleByName(doc.style)} />
           <div className="row-actions cr-wiz-nav">

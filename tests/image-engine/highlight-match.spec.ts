@@ -147,8 +147,10 @@ test.describe('on the slide card (the app)', () => {
         { type: 'content', headline: 'Save 50% on e-mail tools', body: 'It’s a limited offer for early users.', highlight: '50% e-mail', element_tags: ['money', 'message'] },
       ],
     };
+    // the older template route draws the highlight note this test reads
+    await page.addInitScript(() => localStorage.setItem('creator.templateRoute', '1'));
     await page.goto('/images/carousel');
-    await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
+    await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); localStorage.setItem('creator.templateRoute', '1'); });
     await page.reload();
     await page.getByRole('button', { name: 'I already have a script' }).click();
     await page.getByLabel('Paste the script Claude wrote (JSON)').fill(JSON.stringify(script));

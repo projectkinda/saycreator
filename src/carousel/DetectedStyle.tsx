@@ -14,17 +14,16 @@ export function DetectedStyleBox({ onChange, hasDeck, pack: given }: { onChange:
   const now = applyOverrides(detected, ov).style;
   const shapes: 'off' | 'subtle' | 'bold' = !now.devices.planes ? 'off' : now.planeStrength === 'subtle' ? 'subtle' : 'bold';
   const set = (patch: Partial<StyleOverrides>) => onChange({ ...ov, ...patch });
-  const yn = (b: boolean) => (b ? 'yes' : 'no');
   const toggle = (label: string, key: 'marker' | 'underline' | 'profileHeader', value: boolean, was: boolean) => (
     <label className="small" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
       <input type="checkbox" aria-label={label} checked={value} onChange={(e) => set({ [key]: e.target.checked })} />
       <span>{label}</span>
-      <span className="muted">(detected: {yn(was)}{ov[key] !== undefined && ov[key] !== was ? ', changed by you' : ''})</span>
+      <span className="muted">({ov[key] !== undefined && ov[key] !== was ? 'changed by you' : was ? 'this style uses it' : 'this style does not use it'})</span>
     </label>
   );
   return (
     <section className="card ws-card" role="group" aria-label="Detected style" data-testid="detected-style" style={{ marginTop: 12 }}>
-      <h3 className="h4">Detected style</h3>
+      <h3 className="h4">Style details</h3>
       <p className="small muted">{hasDeck ? 'Flip any of these and the slides are drawn again from the same plan: no model call.' : 'These apply the next time you make a carousel.'}</p>
       {toggle('Highlight marker', 'marker', now.devices.marker, detected.devices.marker)}
       {toggle('Underline', 'underline', now.devices.underline, detected.devices.underline)}
@@ -33,7 +32,7 @@ export function DetectedStyleBox({ onChange, hasDeck, pack: given }: { onChange:
         <label key={k} className="small" style={{ display: 'flex', gap: 8, alignItems: 'center' }} data-testid={'deco-' + k}>
           <input type="checkbox" aria-label={DECO_LABELS[k]} checked={ov.deco?.[k] !== false} onChange={(e) => set({ deco: { ...ov.deco, [k]: e.target.checked } })} />
           <span>{DECO_LABELS[k]}</span>
-          <span className="muted">(this style: yes{ov.deco?.[k] === false ? ', switched off by you' : ''})</span>
+          <span className="muted">({ov.deco?.[k] === false ? 'switched off by you' : 'this style uses it'})</span>
         </label>
       ))}
       <div role="radiogroup" aria-label="Shapes" className="chip-group" style={{ marginTop: 6 }}>
@@ -41,7 +40,7 @@ export function DetectedStyleBox({ onChange, hasDeck, pack: given }: { onChange:
         {(['off', 'subtle', 'bold'] as const).map((s) => (
           <button key={s} type="button" role="radio" aria-checked={shapes === s} aria-label={'Shapes: ' + s} className="chip-btn" aria-pressed={shapes === s} onClick={() => set({ shapes: s })}>{s[0].toUpperCase() + s.slice(1)}</button>
         ))}
-        <span className="small muted">(detected: {detected.devices.planes ? 'bold' : 'off'})</span>
+        <span className="small muted">(this style: {detected.devices.planes ? 'bold' : 'off'})</span>
       </div>
       {Object.keys(ov).length > 0 && <button type="button" className="btn btn-outline btn-sm" style={{ marginTop: 6 }} onClick={() => onChange(null)}>Reset to detected</button>}
     </section>
