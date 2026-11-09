@@ -31,6 +31,15 @@ export const deckDrawn = async (page: Page, n = 7) => {
   await expect(page.locator('.cr-film img')).toHaveCount(n, { timeout: 60_000 });
 };
 
+/** The style cards draw when they come into view: scroll through the list, then wait until none says Drawing. */
+export const stylesDrawn = async (page: Page) => {
+  const list = page.getByRole('list', { name: 'Styles' });
+  await list.scrollIntoViewIfNeeded();
+  for (let y = 0; y < 10; y++) { await page.mouse.wheel(0, 700); await page.waitForTimeout(250); }
+  await expect(list.getByText('Drawing…')).toHaveCount(0, { timeout: 60_000 });
+  await list.scrollIntoViewIfNeeded();
+};
+
 /** Open a tab of the Edit slides view: Layout | Text | Pictures | Fine-tune (slide n, 1-based). */
 export type EditTabName = 'Layout' | 'Text' | 'Pictures' | 'Fine-tune';
 export const openTab = async (page: Page, tab: EditTabName, n = 1) => {

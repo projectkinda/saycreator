@@ -7,7 +7,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { deckDrawn, openTab, toStep } from './ui';
+import { deckDrawn, openTab, stylesDrawn, toStep } from './ui';
 
 test.setTimeout(300_000);
 const KEY = 'creator.carousel.project.v1';
@@ -156,7 +156,7 @@ test('Fine-tune says it applies to all slides, in plain words; style cards have 
   expect(fine).not.toMatch(/detected:/i);
   await toStep(page, 3);
   const list = page.getByRole('list', { name: 'Styles' });
-  await expect(list.getByText('Drawing…')).toHaveCount(0, { timeout: 20_000 });
+  await stylesDrawn(page);
   expect(await list.innerText()).not.toMatch(/\b(dark-quiet|editorial-collage|hot-flat|style-\d)\b/);
   await page.getByRole('checkbox', { name: 'Developer tools' }).check();
   expect(await list.innerText()).toMatch(/dark-quiet/);

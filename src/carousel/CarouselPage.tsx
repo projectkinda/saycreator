@@ -20,6 +20,7 @@ import { flavourPass } from './flavour';
 import { canSplitLayout, splitSpec } from './splitSlide';
 import { presetKey, presetPackFor, presetThumbSvg } from './presets';
 import { svgToPng } from '../reference/faithful';
+import { cardSlides, previewDeck, PREVIEW_COUNT } from './stylePreview';
 import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
 import { LayoutGallery } from './LayoutGallery';
 import { profileWebsite } from './profileSite';
@@ -106,6 +107,63 @@ const keepPreview = async (k: string, blob: Blob) => {
   }
 };
 
+/** The Preview panel of a built-in style: seven sample slides in that style (cover, step, checklist, big stat, myth and fact, quote, closing), drawn as a deck by the layout library. No model call. */
+function StylePreviewPanel({ name, title, onUse, onClose }: { name: string; title: string; onUse: () => void; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const [slides, setSlides] = useState<(string | null)[]>(() => Array(PREVIEW_COUNT).fill(null));
+  useEffect(() => {
+    const d = ref.current;
+    if (d && !d.open) d.showModal();
+    let live = true;
+    (async () => {
+      const cached = Array.from({ length: PREVIEW_COUNT }, (_, i) => readPreviewCache()[`panel:${name}:${i}:${DRAW_VERSION}`] ?? null);
+      if (cached.every(Boolean)) return setSlides(cached);
+      try {
+        const deck = await previewDeck(name);
+        let next = 0;
+        // four slides at a time; one that fails shows "No preview" for that slide only
+        const worker = async () => {
+          while (live && next < PREVIEW_COUNT) {
+            const i = next++;
+            let url = 'none';
+            try {
+              const svg = deck[i]?.svg;
+              if (svg) {
+                const blob = await svgToPng(svg, 300);
+                url = URL.createObjectURL(blob);
+                void keepPreview(`panel:${name}:${i}:${DRAW_VERSION}`, blob);
+              }
+            } catch { /* this slide only */ }
+            if (live) setSlides((a) => a.map((x, k) => (k === i ? url : x)));
+          }
+        };
+        await Promise.all([worker(), worker(), worker(), worker()]);
+      } catch {
+        if (live) setSlides(Array(PREVIEW_COUNT).fill('none'));
+      }
+    })();
+    return () => { live = false; };
+  }, [name]);
+  return (
+    <dialog ref={ref} className="cr-dialog cr-style-preview" aria-label={`Preview of the ${title} style`} data-testid="style-preview" onClose={onClose}>
+      <div className="cr-sp-head">
+        <h2 className="h3">{title}</h2>
+        <button type="button" className="btn btn-outline btn-sm" onClick={() => ref.current?.close()}>Close</button>
+      </div>
+      <ol className="cr-sp-strip" aria-label="Sample slides in this style">
+        {slides.map((u, i) => (
+          <li key={i} data-testid={`style-preview-slide-${i + 1}`}>
+            {u && u !== 'none' ? <img src={u} alt={`Sample slide ${i + 1} in the ${title} style`} /> : <span className="small muted" role="status">{u === 'none' ? 'No preview' : 'Drawing…'}</span>}
+          </li>
+        ))}
+      </ol>
+      <div className="row-actions">
+        <button type="button" className="btn btn-dark" onClick={() => { onUse(); ref.current?.close(); }}>Use this style</button>
+      </div>
+    </dialog>
+  );
+}
+
 function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyleOpen, rebuildOnly, showIds }: { /** The style ids (dark-quiet, style-1 ...) show only with Developer tools on. */ showIds?: boolean; format: Format; value: string; auto: boolean; onAuto: () => void; onPick: (name: string, title: string) => void; onNewStyle?: () => void; newStyleOpen?: boolean; rebuildOnly?: boolean }) {
   useTemplatesVersion();
   // Mine first, then the built-in ones.
@@ -125,59 +183,113 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
     await saveTemplate({ name, target: 'carousel', spec: { ...packBlank(), name: packStyleName(name), title: name }, preview, pack });
     setPackNote(`Saved “${name}” (Mine): ${Object.keys(pack.designs).length} designs${check.ok ? ', each with its own composition' : `, but ${check.alike.length} pair(s) look alike`}. The ${st.spec.title} style is unchanged.`);
   };
+  // The cards draw when they come into view (a card that is far off screen waits), four at a time; one that fails shows "No preview" and does not stop the rest.
+  const [seen, setSeen] = useState<Set<string>>(() => new Set());
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const previewsRef = useRef(previews);
+  previewsRef.current = previews;
+  const stylesRef = useRef(styles);
+  stylesRef.current = styles;
+  const io = useRef<IntersectionObserver | null>(null);
+  const watch = (el: HTMLElement | null, name: string) => {
+    if (!el) return;
+    el.dataset.style = name;
+    if (typeof IntersectionObserver === 'undefined') return void setSeen((cur) => (cur.has(name) ? cur : new Set(cur).add(name)));
+    if (!io.current) io.current = new IntersectionObserver((es) => {
+      const add = es.filter((e) => e.isIntersecting).map((e) => (e.target as HTMLElement).dataset.style!).filter(Boolean);
+      if (add.length) setSeen((cur) => { const n = new Set(cur); add.forEach((x) => n.add(x)); return n; });
+    }, { rootMargin: '400px' });
+    io.current.observe(el);
+  };
+  const queue = useRef<string[]>([]);
+  const running = useRef(0);
+  const started = useRef(new Set<string>());
+  const alive = useRef(true);
+  const drawRef = useRef<(st: (typeof styles)[number]) => Promise<void>>(async () => undefined);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; io.current?.disconnect(); }; }, []);
+  const pump = () => {
+    while (running.current < 4 && queue.current.length) {
+      const nm = queue.current.shift();
+      const st = stylesRef.current.find((x) => x.spec.name === nm);
+      if (!st) continue;
+      running.current++;
+      void drawRef.current(st).catch(() => undefined).finally(() => { running.current--; pump(); });
+    }
+  };
+  {
+    const f = formatOf(format);
+    const live = alive.current;
+     const drawCard = async (st: (typeof styles)[number]) => {
+       const key = `${format}:${st.spec.name}`;
+       if (previewsRef.current[key]) return;
+       // A built-in style's card picture is kept in this browser (by drawing version), so the next visit shows every card at once.
+       const ck = !isUserStyle(st.spec.name) && !packFor(st.spec.name) ? `${key}:${DRAW_VERSION}` : null;
+       const kept = ck ? readPreviewCache()[ck] : undefined;
+       if (kept) {
+         if (live) setPreviews((p) => ({ ...p, [key]: kept }));
+         return;
+       }
+       try {
+         let blob: Blob | null = null;
+         // A pack is previewed with its own cover design, not the plain style under it.
+         const pk = packFor(st.spec.name);
+         if (pk) blob = await packPicture(pk, 'cover', { type: 'cover', kicker: 'Example', headline: 'A headline that makes people stop', sub: 'And a line that makes them read on' }, 216);
+         // A built-in preset is previewed by the layout library (the route the deck is drawn with), not by the old templates.
+         if (!blob && format !== 'quote') {
+           try {
+             const svg = await presetThumbSvg(st.spec.name);
+             if (svg) blob = await svgToPng(svg, 216);
+           } catch { /* fall back to the old preview */ }
+         }
+         if (!blob) {
+           const sample =
+             format === 'quote'
+               ? { id: 'preview', brand: { handle: '@yourname' }, slides: [{ type: 'quote' as const, quote: 'Clear beats clever, every single time.', by: 'An editor', highlight: 'Clear' }] }
+               : { id: 'preview', brand: { handle: '@yourname' }, slides: [{ type: 'cover' as const, kicker: 'Example', headline: 'A headline that makes people stop', sub: 'And a line that makes them swipe.', highlight: 'stop' }] };
+           const slide = composeStyled(sample, st, { width: f.width, height: f.height, chrome: format === 'quote' ? 'none' : undefined }, true)[0];
+           blob = await renderer.preview(slide.plan, 0.2);
+         }
+         if (!live) return;
+         const url = URL.createObjectURL(blob);
+         setPreviews((p) => ({ ...p, [key]: url }));
+         if (ck) void keepPreview(ck, blob);
+       } catch {
+         if (live) setPreviews((p) => ({ ...p, [key]: 'none' }));
+       }
+       // the two small slides, in the layouts this style likes (built-in carousel styles only)
+       if (format !== 'quote' && ck) {
+         try {
+           const cached = [0, 1].map((k) => readPreviewCache()[`${key}:s${k}:${DRAW_VERSION}`]);
+           if (cached.every(Boolean)) {
+             if (live) setPreviews((p) => ({ ...p, [`${key}:s0`]: cached[0], [`${key}:s1`]: cached[1] }));
+             return;
+           }
+           const svgs = await cardSlides(st.spec.name);
+           for (const [k, svg] of svgs.entries()) {
+             if (!svg) continue;
+             const blob = await svgToPng(svg, 140);
+             if (!live) return;
+             setPreviews((p) => ({ ...p, [`${key}:s${k}`]: URL.createObjectURL(blob) }));
+             void keepPreview(`${key}:s${k}:${DRAW_VERSION}`, blob);
+           }
+         } catch { /* the small slides are an extra: the cover still shows */ }
+       }
+     };
+  
+    drawRef.current = drawCard;
+  }
   useEffect(() => {
     if (rebuildOnly) return;
-    let live = true;
-    const f = formatOf(format);
-    // Each card draws on its own: four at a time, and one that fails shows "No preview" instead of stopping the rest.
-    const one = async (st: (typeof styles)[number]) => {
+    for (const st of styles) {
       const key = `${format}:${st.spec.name}`;
-      if (previews[key]) return;
-      // A built-in style's card picture is kept in this browser (by drawing version), so the next visit shows every card at once.
-      const ck = !isUserStyle(st.spec.name) && !packFor(st.spec.name) ? `${key}:${DRAW_VERSION}` : null;
-      const kept = ck ? readPreviewCache()[ck] : undefined;
-      if (kept) {
-        if (live) setPreviews((p) => ({ ...p, [key]: kept }));
-        return;
+      if (seen.has(st.spec.name) && !started.current.has(key)) {
+        started.current.add(key);
+        queue.current.push(st.spec.name);
       }
-      try {
-        let blob: Blob | null = null;
-        // A pack is previewed with its own cover design, not the plain style under it.
-        const pk = packFor(st.spec.name);
-        if (pk) blob = await packPicture(pk, 'cover', { type: 'cover', kicker: 'Example', headline: 'A headline that makes people stop', sub: 'And a line that makes them read on' }, 216);
-        // A built-in preset is previewed by the layout library (the route the deck is drawn with), not by the old templates.
-        if (!blob && format !== 'quote') {
-          try {
-            const svg = await presetThumbSvg(st.spec.name);
-            if (svg) blob = await svgToPng(svg, 216);
-          } catch { /* fall back to the old preview */ }
-        }
-        if (!blob) {
-          const sample =
-            format === 'quote'
-              ? { id: 'preview', brand: { handle: '@yourname' }, slides: [{ type: 'quote' as const, quote: 'Clear beats clever, every single time.', by: 'An editor', highlight: 'Clear' }] }
-              : { id: 'preview', brand: { handle: '@yourname' }, slides: [{ type: 'cover' as const, kicker: 'Example', headline: 'A headline that makes people stop', sub: 'And a line that makes them swipe.', highlight: 'stop' }] };
-          const slide = composeStyled(sample, st, { width: f.width, height: f.height, chrome: format === 'quote' ? 'none' : undefined }, true)[0];
-          blob = await renderer.preview(slide.plan, 0.2);
-        }
-        if (!live) return;
-        const url = URL.createObjectURL(blob);
-        setPreviews((p) => ({ ...p, [key]: url }));
-        if (ck) void keepPreview(ck, blob);
-      } catch {
-        if (live) setPreviews((p) => ({ ...p, [key]: 'none' }));
-      }
-    };
-    let next = 0;
-    const worker = async () => {
-      while (live && next < styles.length) await one(styles[next++]);
-    };
-    void Promise.all([worker(), worker(), worker(), worker()]);
-    return () => {
-      live = false;
-    };
+    }
+    pump();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [format, styles]);
+  }, [seen, format, styles]);
   if (rebuildOnly)
     return (
       <>
@@ -206,9 +318,17 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
         {styles.map((st) => {
           const img = previews[`${format}:${st.spec.name}`];
           return (
-            <li key={st.spec.name}>
+            <li key={st.spec.name} ref={(el) => watch(el, st.spec.name)}>
               <button type="button" className="card start-opt cr-style" aria-pressed={!auto && value === st.spec.name} onClick={() => onPick(st.spec.name, st.spec.title)}>
                 <span className={`cr-style-pic r${format === 'quote' ? '1-1' : '4-5'}`}>{img && img !== 'none' ? <img src={img} alt={`Preview of the ${st.spec.title} style`} /> : <span className="small muted" role="status">{img === 'none' ? 'No preview' : 'Drawing…'}</span>}</span>
+                {format !== 'quote' && !isUserStyle(st.spec.name) && !packFor(st.spec.name) && (
+                  <span className="cr-style-smalls" aria-hidden="true">
+                    {[0, 1].map((k) => {
+                      const u = previews[`${format}:${st.spec.name}:s${k}`];
+                      return <span key={k} className="cr-style-small">{u && u !== 'none' ? <img src={u} alt="" /> : null}</span>;
+                    })}
+                  </span>
+                )}
                 <strong>{st.spec.title}</strong>
                 <span className="small muted">{isUserStyle(st.spec.name) ? 'Made from your references' : showIds ? st.spec.name : ''}</span>
                 {isUserStyle(st.spec.name) && <span className="chip chip-tag">Mine</span>}
@@ -216,6 +336,9 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
                 {auto && value === st.spec.name && <span className="chip chip-tag">In use</span>}
                 {st.warnings.some((w) => /phone-size checker needs at least 32 px/.test(w)) && <span className="chip chip-warn">Some text is below phone size</span>}
               </button>
+              {format !== 'quote' && !isUserStyle(st.spec.name) && !packFor(st.spec.name) && (
+                <button type="button" className="btn btn-outline btn-sm cr-preview-btn" aria-label="Preview" title={`Preview the ${st.spec.title} style`} onClick={() => setPreviewing(st.spec.name)}>Preview</button>
+              )}
             </li>
           );
         })}
@@ -231,6 +354,7 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
           </li>
         )}
       </ul>
+      {previewing && <StylePreviewPanel name={previewing} title={styleByName(previewing)?.spec.title ?? previewing} onUse={() => onPick(previewing, styleByName(previewing)?.spec.title ?? previewing)} onClose={() => setPreviewing(null)} />}
       {packNote && <p className="small" role="status" data-testid="pack-note">{packNote}</p>}
       {problems.length > 0 && (
         <div className="notice notice-warn" role="status">

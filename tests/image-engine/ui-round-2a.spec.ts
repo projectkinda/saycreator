@@ -6,7 +6,7 @@
 // Screenshots of the four steps and the four tabs at a phone and a desktop width: out/ui-round-2/
 import { expect, test, type Page, type Route } from '@playwright/test';
 import fs from 'node:fs';
-import { deckDrawn, openEdit, openTab, toStep } from './ui';
+import { deckDrawn, openEdit, openTab, stylesDrawn, toStep } from './ui';
 
 test.setTimeout(300_000);
 
@@ -53,7 +53,7 @@ test('every style card draws in a few seconds, "Pick for me" has a card picture,
   await toStep(page, 3);
   const list = page.getByRole('list', { name: 'Styles' });
   const t0 = Date.now();
-  await expect(list.getByText('Drawing…')).toHaveCount(0, { timeout: 20_000 });
+  await stylesDrawn(page);
   console.log('STYLE_CARDS_MS', Date.now() - t0);
   const cards = list.locator('li:not(.cr-new-li)');
   const n = await cards.count();
@@ -262,7 +262,7 @@ test('screenshots: the four steps and the four tabs, phone and desktop', async (
     await toStep(page, 2);
     await shot('2-format');
     await toStep(page, 3);
-    await expect(page.getByRole('list', { name: 'Styles' }).getByText('Drawing…')).toHaveCount(0, { timeout: 20_000 });
+    await stylesDrawn(page);
     await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat/ }).first().click();
     await shot('3-style');
     await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
