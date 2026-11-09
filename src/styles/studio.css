@@ -121,3 +121,40 @@ body:has(.cr-studio) .lv { right: var(--sp-4); bottom: 0; max-height: 46vh; bord
 .cr-group-body .rf-embedded .rf-sec select { width: 100%; }
 .cr-group-body .rf-embedded .page-header { display: none; }
 .cr-group-body .rf-embedded.page { display: grid; gap: var(--sp-5); }
+
+/* ---- UI round 1: four steps, the Edit slides view, the developer tools toggle ---- */
+.cr-studio [hidden] { display: none !important; }
+.cr-wiz { display: grid; gap: var(--sp-2); }
+.cr-wiz-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-2); }
+.cr-wiz-step { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); min-height: var(--ctl); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--page); font-weight: 600; font-size: 14px; }
+.cr-wiz-step:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.cr-wiz-step[aria-current='step'] { background: #111; color: #fff; border-color: #111; }
+.cr-wiz-step:disabled { opacity: 0.45; cursor: default; }
+.cr-wiz-n { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid currentColor; font-size: 12px; }
+.cr-wiz-name { min-width: 0; overflow-wrap: anywhere; line-height: 1.2; }
+.cr-wiz-nav { margin-top: var(--sp-3); }
+.cr-wiz-body > div > .cr-step-card { margin: 0; }
+.cr-step-card { display: grid; gap: var(--sp-3); }
+.cr-script-choice { margin: var(--sp-1) 0; }
+.cr-script-own { border: 1px solid var(--line); border-radius: var(--radius-card); padding: var(--sp-4); }
+.cr-format-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.cr-format-card { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: var(--sp-2); align-content: start; padding: var(--sp-4); min-height: 120px; border: 2px solid var(--line); border-radius: var(--radius-card); background: var(--page); }
+.cr-format-card:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.cr-format-card[aria-pressed='true'] { border-color: #111; box-shadow: 0 0 0 1px #111 inset; }
+.cr-format-card:disabled { opacity: 0.5; cursor: default; }
+.cr-format-title { font-size: 18px; }
+.cr-edit-open { display: flex; }
+.cr-edit-open .btn { width: 100%; justify-content: center; }
+.cr-edit-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.cr-edit-bar h2 { margin: 0; }
+.cr-edit-view .cr-list { margin: 0; padding: 0; list-style: none; }
+.cr-fine { border: 1px solid var(--line); border-radius: var(--radius-card); padding: var(--sp-3) var(--sp-4); }
+.cr-fine > summary { cursor: pointer; margin: 0; }
+.cr-linkbtn { all: unset; cursor: pointer; text-decoration: underline; }
+.cr-dev { border: 1px dashed var(--line); padding: var(--sp-4); display: grid; gap: var(--sp-3); }
+.cr-dev-toggle { display: inline-flex; align-items: center; gap: var(--sp-2); justify-self: start; }
+@media (max-width: 899px) {
+  .cr-wiz-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cr-format-cards { grid-template-columns: minmax(0, 1fr); }
+  .cr-wiz-step { min-height: 44px; }
+}

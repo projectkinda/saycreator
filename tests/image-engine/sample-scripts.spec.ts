@@ -5,6 +5,7 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openEdit, toStep } from './ui';
 import { validateScriptText } from '../../src/carousel/script';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -28,23 +29,28 @@ test('each sample script loads in the app and draws in every style; phone-check 
     await page.goto('/images/carousel');
     await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
     await page.reload();
-    await page.getByText('Advanced: write the script yourself').click();
+    await page.getByRole('button', { name: 'I already have a script' }).click();
     await page.getByLabel('Paste the script Claude wrote (JSON)').fill(fs.readFileSync(path.join(DIR, f), 'utf8'));
     await page.getByRole('button', { name: 'Use this script' }).click();
+    await toStep(page, 3);
     const real = page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasNotText: 'Pick for me' }).getByRole('button');
+    await expect(page.getByRole('list', { name: 'Styles' }).getByText('Drawing…')).toHaveCount(0, { timeout: 60_000 });
     const names = await real.evaluateAll((els) => els.map((e) => e.querySelector('span.small')?.textContent ?? ''));
     expect(names.length).toBeGreaterThanOrEqual(4);
     for (let i = 0; i < names.length; i++) {
       await real.nth(i).click();
-      await expect(page.locator('.cr-card')).toHaveCount(7);
-      await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(7, { timeout: 30_000 });
-      await page.waitForTimeout(300);
-      const failing = await page.locator('.cr-card').evaluateAll((cards) =>
-        cards.flatMap((c, n) => {
-          const li = [...c.querySelectorAll('.cr-lint-fail li')].map((x) => x.textContent ?? '');
-          return li.length ? [{ slide: n + 1, reasons: li }] : [];
-        }),
-      );
+      await expect(page.locator('.cr-film li')).toHaveCount(7);
+      // The phone check is on the slide card, which is in the Edit slides view: look at the slides one by one.
+      const failing: { slide: number; reasons: string[] }[] = [];
+      for (let n = 1; n <= 7; n++) {
+        await openEdit(page, n);
+        await expect(page.locator('.cr-card').getByText('Drawing…')).toHaveCount(0, { timeout: 60_000 });
+        await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(1, { timeout: 30_000 });
+        await page.waitForTimeout(600);
+        const li = await page.locator('.cr-card .cr-lint-fail li').evaluateAll((els) => els.map((x) => x.textContent ?? ''));
+        if (li.length) failing.push({ slide: n, reasons: li });
+      }
+      await toStep(page, 3);
       report.push({ script: f, style: names[i], failing });
     }
   }

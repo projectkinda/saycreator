@@ -869,7 +869,11 @@ export interface LibraryReport {
   source?: string;
   /** The palette-rhythm ground of each slide (an index into the style's rhythm, -1 = the closing ground, null = no rhythm). */
   grounds?: (number | null)[];
+  /** The version of the drawing code the stored slides were drawn with (DRAW_VERSION). A deck stored by older code is drawn again from its plan when it is opened. */
+  drawVersion?: number;
 }
+/** Raise this whenever the drawing changes how a stored plan looks (pen ring, cards, buttons, stat margins...): decks stored with a lower number are redrawn on open. */
+export const DRAW_VERSION = 2;
 
 // ----- the deck -----
 export const stubPack = (style: LayoutStyle, name: string): StylePack => {
@@ -1175,6 +1179,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   const seconds = Math.round((performance.now() - t0) / 100) / 10;
   const report: LibraryReport = {
     route: 'library',
+    drawVersion: DRAW_VERSION,
     provider: p.id,
     tokenNote: p.id === 'dev-cli' ? 'Provider is dev-cli (the Claude Code command line): these token numbers include its own overhead (system prompt, tools, cache reads), so they are inflated. Use the api provider (a key set on the server) for real numbers.' : 'Real usage reported by the API provider.',
     calls,
@@ -1281,6 +1286,7 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
     styleNotes,
     plan: { ...lib.plan, specs },
     redraws: (lib.redraws ?? 0) + 1,
+    drawVersion: DRAW_VERSION,
     grounds: rc.map((c) => c.ground ?? null),
   };
   return { slides, layouts, library };

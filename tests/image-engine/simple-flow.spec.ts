@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exampleScript } from '../../src/carousel/script';
+import { deckDrawn, openEdit, toStep } from './ui';
 
 test.setTimeout(240_000);
 test.use({ viewport: { width: 1280, height: 900 } });
@@ -51,26 +52,23 @@ const open = async (page: Page, text = TEXT) => {
 };
 const make = (page: Page) => page.getByRole('button', { name: 'Make carousel', exact: true });
 const styles = (page: Page) => page.getByRole('list', { name: 'Styles' });
-const drawn = async (page: Page, n = 7) => {
-  await expect(page.locator('.cr-card')).toHaveCount(n, { timeout: 60_000 });
-  await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(n, { timeout: 60_000 });
-};
+/** The deck is drawn: the page moved to step 4 by itself and the strip has n thumbnails. */
+const drawn = (page: Page, n = 7) => deckDrawn(page, n);
 
-test('the page: a text box, the styles with "New style" last, one button with its cost, and everything else under a collapsed Advanced', async ({ page }) => {
+test('the page: a text box, the styles with "New style" last, one button with its cost, and the other tools behind a Developer tools toggle', async ({ page }) => {
   await fake(page);
   await open(page);
   await expect(page.getByLabel('Your text or topic')).toBeVisible();
+  await toStep(page, 3);
   const cards = styles(page).getByRole('listitem');
   await expect(cards.last()).toContainText('New style');
   await expect(make(page)).toBeVisible();
   await expect(page.getByTestId('cost-line')).toHaveText('0 design calls, 1 small writing call.');
-  expect(await page.locator('details.cr-advanced').evaluate((el) => (el as HTMLDetailsElement).open)).toBe(false);
-  // the options (format, handle, tone), the rebuild buttons, the image requests and the photos are inside Advanced, hidden until it is opened
-  await expect(page.getByLabel('Your handle (optional)')).toBeHidden();
+  // the handle sits in step 3; the rebuild buttons, the image requests and the photos are in Developer tools, off to start with
+  await expect(page.getByLabel('Your handle (optional)')).toBeVisible();
   await expect(page.getByRole('button', { name: /^Rebuild the .* style as a pack$/ }).first()).toBeHidden();
   await expect(page.getByRole('button', { name: 'Quick (free, templates)' })).toHaveCount(0);
-  await page.locator('details.cr-advanced > summary').click();
-  await expect(page.getByLabel('Your handle (optional)')).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Developer tools' }).check();
   await expect(page.getByRole('button', { name: /^Rebuild the .* style as a pack$/ }).first()).toBeVisible();
   fs.mkdirSync(path.join(ROOT, 'out/image-engine/page'), { recursive: true });
 });
@@ -78,6 +76,7 @@ test('the page: a text box, the styles with "New style" last, one button with it
 test('an existing style: 0 design calls and 1 writer call (the cheap model\'s kind); code fills the slides', async ({ page }) => {
   const calls = await fake(page);
   await open(page);
+  await toStep(page, 3);
   await styles(page).getByRole('button', { name: /dark-quiet/ }).click();
   await make(page).click();
   await drawn(page);
@@ -91,12 +90,14 @@ test('pasted slide text (blocks split by blank lines): 0 calls of any kind', asy
   const calls = await fake(page);
   const slides = 'Fix your profile in 15 minutes\nThree edits that make people stop scrolling\n\n1. Rewrite your headline\nSkip the job title. Say who you help and how.\n\nPin one proof post\nFeature your best post at the top.\n\nBefore you hit save\n- Clear, well-lit photo\n- Headline names who you help\n- Contact info is current\n\nSave this and fix it tonight\nFollow for weekly posts';
   await open(page, slides);
+  await toStep(page, 3);
   await expect(page.getByTestId('cost-line')).toHaveText('0 design calls, 0 writing calls: your slide text is used as it is.');
   await styles(page).getByRole('button', { name: /dark-quiet/ }).click();
   await make(page).click();
   await drawn(page, 5);
   expect(calls.length).toBe(0);
-  await expect(page.locator('.cr-card').nth(3).getByLabel('Headline')).toHaveValue('Before you hit save');
+  await openEdit(page, 4);
+  await expect(page.locator('.cr-card').getByLabel('Headline')).toHaveValue('Before you hit save');
 });
 
 test('a missing style: an error and the picker, and no call', async ({ page }) => {
@@ -105,6 +106,7 @@ test('a missing style: an error and the picker, and no call', async ({ page }) =
     localStorage.setItem('creator.carousel.project.v1', JSON.stringify({ project: { doc: { version: 1, format: 'carousel', style: 'mine-gone-style', topic: '', options: { slides: 7, tone: 'clear', autoStyle: false, handle: '', platform: null }, script: null, choices: {} }, past: [], future: [] } }));
   });
   await open(page);
+  await toStep(page, 3);
   await make(page).click();
   await expect(page.getByText(/is missing or broken/)).toBeVisible();
   await expect(styles(page)).toBeVisible();
@@ -114,6 +116,7 @@ test('a missing style: an error and the picker, and no call', async ({ page }) =
 test('New style from a description: nothing runs until the person confirms, then exactly 1 design call; the style is saved, selected, and used by code', async ({ page }) => {
   const calls = await fake(page);
   await open(page);
+  await toStep(page, 3);
   await styles(page).getByRole('button', { name: /New style/ }).click();
   const flow = page.getByTestId('new-style');
   await flow.getByLabel('Describe the look').fill('warm paper big serif');
@@ -127,6 +130,7 @@ test('New style from a description: nothing runs until the person confirms, then
   expect(calls.length).toBe(1);
   expect(calls[0].kind).toBe('draw');
   // saved as a style, listed first (Mine), selected; the slides were filled by code from it
+  await toStep(page, 3);
   const mine = styles(page).getByRole('listitem').nth(1);
   await expect(mine).toContainText('warm paper big serif');
   await expect(mine.getByRole('button')).toHaveAttribute('aria-pressed', 'true');
@@ -137,10 +141,12 @@ test('New style from a description: nothing runs until the person confirms, then
 test('Redesign this slide: shows its cost, and runs 1 design call only when pressed', async ({ page }) => {
   const calls = await fake(page, (c) => (c.kind === 'draw' ? svgFor(1, script.slides[1]) : SCRIPT));
   await open(page);
+  await toStep(page, 3);
   await styles(page).getByRole('button', { name: /dark-quiet/ }).click();
   await make(page).click();
   await drawn(page);
-  const second = page.locator('.cr-card').nth(1);
+  await openEdit(page, 2);
+  const second = page.locator('.cr-card').first();
   await expect(second.getByText(/1 Sonnet call, about 30 seconds/)).toBeVisible();
   expect(calls.length, 'only the writer so far').toBe(1);
   await second.getByLabel('Words for redesigning slide 2').fill('bolder');
@@ -161,6 +167,7 @@ test('script notes ("Placeholder: ...", "Note: ...", "TODO", [brackets]) are nev
   content.body = '[add one sentence here]';
   const calls = await fake(page, () => JSON.stringify(dirty));
   await open(page);
+  await toStep(page, 3);
   await styles(page).getByRole('button', { name: /dark-quiet/ }).click();
   await make(page).click();
   await drawn(page);

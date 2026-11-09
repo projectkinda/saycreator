@@ -1,6 +1,7 @@
 // The simple carousel page: one panel with three steps (drop a reference, Read it, paste text and Generate); everything else under Advanced; a project that points to a style
 // that no longer exists opens with the default style and a note. A fake reader stands in for the model: no model calls.
 import { expect, test, type Page } from '@playwright/test';
+import { toStep } from './ui';
 import { fakeReader, labelsAnswer, readAnswer, refineAnswer, storedTemplates } from './reference-helpers';
 
 test.setTimeout(180_000);
@@ -36,21 +37,21 @@ const storedStyle = (page: Page) =>
     }
   });
 
-test('the page has the three steps, the reference box is behind a link, and the other tools are under Advanced and nothing was deleted', async ({ page }) => {
+test('the page has the steps, the reference box is behind a link, and the other tools are under Developer tools and nothing was deleted', async ({ page }) => {
   await fakeReader(page, usual);
   await page.goto('/images/carousel');
-  await expect(page.getByRole('heading', { name: 'Your text', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Pick a style', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Generate', exact: true })).toBeVisible();
+  await expect(page.locator('.cr-wiz-steps .cr-wiz-name')).toHaveText(['Your content', 'Format', 'Style', 'Your slides']);
+  await expect(page.getByLabel('Your text or topic')).toBeVisible();
+  await toStep(page, 3);
   await expect(page.getByRole('button', { name: 'Make carousel' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Read it' })).toHaveCount(0);
   await page.getByRole('button', { name: /^New style/ }).click();
   await expect(page.getByRole('button', { name: 'Read it' })).toBeDisabled();
-  // The old tools are not on the page until Advanced is opened.
+  // The old tools are not on the page until Developer tools is switched on.
   await expect(page.getByText('Match a reference', { exact: true })).toBeHidden();
   await expect(page.getByRole('button', { name: /New style/ }).first()).toBeVisible();
   await expect(page.getByRole('list', { name: 'Styles' }).first()).toBeVisible();
-  await page.locator('summary', { hasText: 'Advanced:' }).click();
+  await page.getByRole('checkbox', { name: 'Developer tools' }).check();
   await expect(page.getByRole('link', { name: 'Open the Styles page' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Report' })).toBeVisible();
   // Recreate and Match mode (from a reference) are under Advanced, in the same Match a reference panel as before.
@@ -64,6 +65,7 @@ test('the page has the three steps, the reference box is behind a link, and the 
 test('a PDF becomes one slide per page, Read it saves the result as a style and selects it', async ({ page }) => {
   const rec = await fakeReader(page, usual);
   await page.goto('/images/carousel');
+  await toStep(page, 3);
   await page.getByRole('button', { name: /^New style/ }).click();
   const quick = page.getByTestId('quick-start');
   await quick.getByLabel('Choose reference images or a PDF').setInputFiles({ name: 'my deck.pdf', mimeType: 'application/pdf', buffer: twoPagePdf() });
@@ -92,6 +94,6 @@ test('an old project that names a style that no longer exists opens with the def
   await page.reload();
   await expect(page.getByText(/no longer available, so it opens with the default style/).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText('Something went wrong')).toHaveCount(0);
-  await expect(page.getByRole('list', { name: /slides$/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('list', { name: 'Filmstrip' })).toBeVisible({ timeout: 30_000 });
   await expect.poll(() => storedStyle(page), { timeout: 30_000 }).toBe('editorial-collage');
 });

@@ -1,5 +1,6 @@
 // The carousel page flow: 1 Your text, 2 Pick a style (the reference box is behind a link under the list), 3 Generate. Fake reader and fake writer: no model calls.
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { deckDrawn, toStep } from './ui';
 import { fakeReader, labelsAnswer, makeReference, readAnswer, refineAnswer } from './reference-helpers';
 
 test.setTimeout(180_000);
@@ -38,25 +39,24 @@ const storedStyle = (page: Page) =>
 const styleList = (page: Page) => page.getByRole('list', { name: 'Styles' }).first();
 const make = (page: Page) => page.getByRole('button', { name: 'Make carousel', exact: true });
 
-test('the three steps are in order, and the reference box is closed until New style is pressed', async ({ page }) => {
+test('the steps are in order, and the reference box is closed until New style is pressed', async ({ page }) => {
   await fakeReader(page, usual);
   await page.goto('/images/carousel');
-  await expect(page.getByRole('heading', { name: 'Generate', exact: true })).toBeVisible({ timeout: 30_000 });
+  const names = page.locator('.cr-wiz-steps .cr-wiz-name');
+  await expect(names).toHaveText(['Your content', 'Format', 'Style', 'Your slides'], { timeout: 30_000 });
+  await expect(page.getByLabel('Your text or topic')).toBeVisible();
+  await toStep(page, 3);
+  // in step 3 the style list comes first, the New style card is in it, and the make button is last
   const order = await page.evaluate(() => {
     const pos = (el: Element | null) => (el ? el.getBoundingClientRect().top + window.scrollY : -1);
-    const h = (t: string) => [...document.querySelectorAll('h3')].find((x) => x.textContent?.trim() === t) ?? null;
-    const link = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('New style')) ?? null;
+    const link = [...document.querySelectorAll('button')].find((x) => x.textContent?.includes('New style') && x.getBoundingClientRect().width > 0) ?? null;
     const list = document.querySelector('ul[aria-label="Styles"]');
-    const area = document.querySelector('textarea.cr-source');
-    return { text: pos(h('Your text')), area: pos(area), style: pos(h('Pick a style')), list: pos(list), link: pos(link), gen: pos(h('Generate')), btn: pos([...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Make carousel') ?? null) };
+    const btn = [...document.querySelectorAll('button')].find((x) => x.textContent?.trim() === 'Make carousel') ?? null;
+    return { list: pos(list), link: pos(link), btn: pos(btn) };
   });
-  expect(order.text).toBeGreaterThan(0);
-  expect(order.text).toBeLessThan(order.area);
-  expect(order.area).toBeLessThan(order.style);
-  expect(order.style).toBeLessThan(order.list);
-  expect(order.list, 'the link is under the style list').toBeLessThan(order.link);
-  expect(order.link).toBeLessThan(order.gen);
-  expect(order.gen).toBeLessThan(order.btn);
+  expect(order.list).toBeGreaterThan(0);
+  expect(order.link, 'New style is in the style list').toBeGreaterThanOrEqual(order.list);
+  expect(order.link).toBeLessThan(order.btn);
   // Closed by default: no drop box, no Read it.
   await expect(page.getByLabel('Choose reference images or a PDF')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Read it' })).toHaveCount(0);
@@ -71,6 +71,7 @@ test('the three steps are in order, and the reference box is closed until New st
 test('reading a reference adds a Mine style to the same list and selects it', async ({ page }) => {
   await fakeReader(page, usual);
   await page.goto('/images/carousel');
+  await toStep(page, 3);
   await expect(styleList(page).getByRole('listitem').first()).toBeVisible({ timeout: 30_000 });
   await expect(styleList(page).getByRole('button').filter({ hasText: 'Mine' })).toHaveCount(0);
   const before = await styleList(page).getByRole('listitem').count();
@@ -97,8 +98,11 @@ test('Generate needs text and a style, and uses the selected style', async ({ pa
   await page.goto('/images/carousel');
   const calls = await fakeWriter(page, await scriptJson(page));
   await page.reload();
+  await toStep(page, 3);
   await expect(make(page)).toBeDisabled();
+  await toStep(page, 1);
   await page.getByLabel('Your text or topic').fill(TEXT);
+  await toStep(page, 3);
   await expect(make(page)).toBeEnabled({ timeout: 30_000 });
   // Pick a built-in style that is not the default one.
   const pick = await page.evaluate(async () => {
@@ -110,9 +114,10 @@ test('Generate needs text and a style, and uses the selected style', async ({ pa
   await card.click();
   await expect(card).toHaveAttribute('aria-pressed', 'true');
   await make(page).click();
-  await expect(page.locator('.cr-card')).toHaveCount(7, { timeout: 60_000 });
+  await deckDrawn(page, 7);
   expect(calls.length).toBe(1);
   await expect.poll(() => storedStyle(page), { timeout: 30_000 }).toBe(pick.name);
+  await toStep(page, 3);
   await expect(styleList(page).getByRole('button').filter({ hasText: pick.title }).first()).toHaveAttribute('aria-pressed', 'true');
 });
 
@@ -124,15 +129,18 @@ test('Reset page still clears the text, the slides and the style', async ({ page
   const calls = await fakeWriter(page, await scriptJson(page));
   await page.reload();
   await page.getByLabel('Your text or topic').fill(TEXT);
+  await toStep(page, 3);
   await make(page).click();
-  await expect(page.locator('.cr-card')).toHaveCount(7, { timeout: 60_000 });
+  await deckDrawn(page, 7);
   expect(calls.length).toBe(1);
+  await toStep(page, 3);
   await page.getByRole('button', { name: LINK }).click();
   page.once('dialog', (d) => void d.accept());
   await page.getByRole('button', { name: 'Reset page' }).click();
-  await expect(page.locator('.cr-card')).toHaveCount(0);
+  await expect(page.locator('.cr-film li')).toHaveCount(0);
   await expect(page.getByLabel('Your text or topic')).toHaveValue('');
   await expect(page.getByLabel('Choose reference images or a PDF'), 'the reference box is closed again').toHaveCount(0);
   await expect.poll(() => storedStyle(page), { timeout: 30_000 }).toBe('editorial-collage');
+  await toStep(page, 3);
   await expect(make(page)).toBeDisabled();
 });

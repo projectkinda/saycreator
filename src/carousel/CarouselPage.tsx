@@ -13,7 +13,7 @@ import { NewStyleFlow } from './NewStyleFlow';
 import { scriptFromBlocks, slideBlocks } from './pasted';
 import { clearPageState } from './resetState';
 import { DetectedStyleBox } from './DetectedStyle';
-import { legacySvgRoute, redrawLibraryDeck, templateRoute } from './designLibrary';
+import { DRAW_VERSION, legacySvgRoute, redrawLibraryDeck, templateRoute } from './designLibrary';
 import { presetKey, presetPackFor, presetThumbSvg } from './presets';
 import { svgToPng } from '../reference/faithful';
 import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
@@ -48,7 +48,7 @@ import { listCutouts, putCutout, type CutoutRecord } from '../image-engine/cutou
 import type { AddFiles } from './PhotoControls';
 import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, useLibraryVersion, type PictureMeta } from './photoLibrary';
 import { SlideCard, type SlideView } from './SlideCard';
-import { Group, PreviewStage, useGroups } from './Studio';
+import { PreviewStage, useGroups } from './Studio';
 import { packFor, packFromStyle, distinctCheck } from '../reference/pack';
 import { packPicture } from '../reference/packRender';
 import { ImageRequestsPanel } from '../images/ImageRequestsPanel';
@@ -65,6 +65,13 @@ const ReferenceStylePage = lazy(() => import('../reference/ReferenceStylePage'))
 import '../styles/carousel.css';
 
 const DEFAULT_STYLE = 'editorial-collage';
+/** The four steps of the page. The Edit slides view is not a step: it opens from step 4. */
+const STEPS = [
+  { n: 1 as const, name: 'Your content' },
+  { n: 2 as const, name: 'Format' },
+  { n: 3 as const, name: 'Style' },
+  { n: 4 as const, name: 'Your slides' },
+];
 /** Designed slides come only from "New style" and "Redesign this slide", never from Make carousel. */
 const noDesign = (): Designed | undefined => undefined;
 
@@ -277,6 +284,27 @@ export default function CarouselPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A deck stored by older drawing code (the pen ring, the cards, the buttons were drawn differently) is drawn again from its stored plan when it is opened: no model call, one undo step.
+  const redrawnKey = useRef('');
+  useEffect(() => {
+    const lib = doc.designed?.library;
+    const d0 = doc.designed;
+    if (!tplLoaded || !lib?.plan || !d0 || (lib.drawVersion ?? 0) >= DRAW_VERSION) return;
+    const key = `${lib.plan.title}|${lib.redraws ?? 0}|${lib.source ?? ''}`;
+    if (redrawnKey.current === key) return;
+    redrawnKey.current = key;
+    const src = lib.source ?? 'reference';
+    const pack = src === 'reference' ? activeReference()?.pack ?? null : presetPackFor(src);
+    if (!pack) return;
+    void redrawLibraryDeck(lib, { pack, hasPhoto: pictures.length > 0, images: photoInfos, site: profileWebsite() }, options.handle.trim() || doc.script?.brand.handle || '')
+      .then((out) => {
+        apply(patches.setDesigned({ ...d0, slides: out.slides, layouts: out.layouts, library: out.library }, 'Redraw with the current drawing code'));
+        setNotice('This deck was drawn by an older version of the drawing code, so it was drawn again from its stored plan (no model call). Undo brings the old drawing back.');
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tplLoaded, doc.designed]);
+
   // pasted text (kept across refreshes) and its live check
   const [pasted, setPasted] = useState(() => readStore(PASTE_KEY) ?? '');
   const [check, setCheck] = useState<ScriptResult | null>(null);
@@ -294,7 +322,6 @@ export default function CarouselPage() {
   const provider = providers?.[0] ?? null;
   const abort = useRef<AbortController | null>(null);
   const busy = gen.phase === 'writing' || gen.phase === 'retrying' || gen.phase === 'drawing';
-  const [advanced, setAdvanced] = useState(false);
 
   useEffect(() => {
     writeStore(PASTE_KEY, pasted || null);
@@ -314,7 +341,7 @@ export default function CarouselPage() {
     setPasted('');
     setCheck(null);
     setOptions({ autoStyle: false });
-    setAdvanced(false);
+    goStep(4);
     setNotice(`Script loaded: ${r.script.slides.length} ${doc.format === 'quote' ? 'quote card' : 'slide'}${r.script.slides.length === 1 ? '' : 's'}${r.warnings.length ? `, with ${r.warnings.length} suggestion${r.warnings.length > 1 ? 's' : ''} to review` : ''}. Edit any slide below.`);
     return true;
   };
@@ -367,7 +394,7 @@ export default function CarouselPage() {
     // Slides that are being redrawn keep their old picture until the new one is ready.
     setViews((v) => Object.fromEntries(Object.entries(v).filter(([k]) => Number(k) < composed.slides.length).map(([k, x]) => [k, { ...x, status: 'drawing' as const }])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.script, doc.style, doc.format, doc.choices, doc.photos, doc.imageRequests, imagesVersion, libVersion, tplVersion, refVersion]);
+  }, [doc.script, doc.designed, doc.style, doc.format, doc.choices, doc.photos, doc.imageRequests, imagesVersion, libVersion, tplVersion, refVersion]);
 
   /** Adds files to the project's pictures. Unusable files are reported in plain words and skipped; the rest are added. */
   /** Remove background: the cutout is made by the cutout provider, the original and the cutout are kept in IndexedDB, and the cutout is added as an object. */
@@ -750,7 +777,8 @@ export default function CarouselPage() {
     setQuickSaved('');
     setReaderState(null);
     setNewStyleOpen(false);
-    setAdvanced(false);
+    goStep(1);
+    setScriptMode('write');
     setOpen(null);
     setSel(0);
     setResetKey((k) => k + 1);
@@ -784,7 +812,7 @@ export default function CarouselPage() {
       const note = gen.note ? ` Note from the writer: ${gen.note}` : '';
       const retry = gen.attempts === 2 ? ' It needed a second try.' : '';
       const why = gen.styleWhy ? ` Style: ${gen.styleWhy}` : '';
-      const handle = options.handle.trim() ? '' : ' The last slide shows the placeholder @yourname: type your handle above to replace it.';
+      const handle = options.handle.trim() ? '' : ' The last slide shows the placeholder @yourname: type your handle in step 3 (Style) to replace it.';
       setGen((g) => ({ ...g, phase: 'done', message: `Done: ${slides.length} ${doc.format === 'quote' ? 'cards' : 'slides'} in ${((gen.ms ?? 0) / 1000).toFixed(0)} s of writing.${retry}${why}${note}${gen.extra ?? ''}${handle} Edit anything below.` }));
     } else setGen((g) => (g.phase === 'drawing' ? { ...g, message: `Drawing slide ${drawnCount + 1} of ${slides.length}…` } : g));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -794,6 +822,192 @@ export default function CarouselPage() {
   const nextLabel = future[0]?.label;
   const openItems = slides.map((s, i) => ({ url: views[i]?.url ?? '', alt: `${deck}, slide ${i + 1}: ${s.type}` }));
   const hasWork = !!doc.script;
+
+  // ----- the steps -----
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(() => (doc.script ? 4 : 1));
+  const [editView, setEditView] = useState(false);
+  const [scriptMode, setScriptMode] = useState<'write' | 'own'>(() => (readStore(PASTE_KEY) ? 'own' : 'write'));
+  const [devTools, setDevTools] = useState(() => {
+    try {
+      return localStorage.getItem('creator.devtools') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleDev = (b: boolean) => {
+    setDevTools(b);
+    try {
+      localStorage.setItem('creator.devtools', b ? '1' : '0');
+    } catch {
+      /* not remembered */
+    }
+  };
+  const goStep = (n: 1 | 2 | 3 | 4) => {
+    setEditView(false);
+    setStep(n);
+  };
+  // A generation that starts drawing takes the person to their slides.
+  useEffect(() => {
+    if (gen.phase === 'drawing') goStep(4);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gen.phase]);
+  const editOn = editView && !!doc.script && slides.length > 0;
+  const si = Math.min(sel, Math.max(0, slides.length - 1));
+
+  /** The card of one slide: its picture with the picture slots, the layout gallery and the older editors. Shown only in the Edit slides view. */
+  const slideCardFor = (i: number) => {
+    const s = slides[i];
+    if (!s || !style || !doc.script) return null;
+    return (
+      <SlideCard
+        key={i}
+        index={i}
+        count={slides.length}
+        slide={s}
+        script={doc.script.slides[i]}
+        swaps={doc.choices[String(i)]?.swaps}
+        view={views[i]}
+        apply={apply}
+        onShuffle={() => {
+          const salt = pickShuffleSalt(doc, i);
+          if (salt === null) return false;
+          apply(patches.shuffle(i, salt));
+          return true;
+        }}
+        onOpen={() => setOpen(i)}
+        onDownload={() => downloadOne(i)}
+        deckLabel={deck}
+        photo={doc.choices[String(i)]?.photo}
+        object={doc.choices[String(i)]?.object}
+        pictures={pictures}
+        palette={style.spec.palettes[s.palette]}
+        hasPhotoStyle={hasPhotoStyle}
+        addFiles={addFiles}
+        onRedesign={legacySvgRoute() && !doc.designed?.library?.plan && doc.script && provider ? async (words) => {
+          const look = { pack: packFor(doc.style), brief: options.brief || 'the look of the "' + (style?.spec.title ?? doc.style) + '" style' };
+          try {
+            const r = await redesignSlide(doc.script!, i, doc.designed, look, words, provider, new AbortController().signal);
+            if (!r.ok) return `Could not redesign slide ${i + 1}: ${r.reasons[0] ?? 'the design could not be used'} The current look is kept (${r.calls} calls).`;
+            const d = doc.designed ?? { slides: {}, fallbacks: {}, notes: [], calls: 0, ms: 0 };
+            const { [String(i)]: _gone, ...fallbacks } = d.fallbacks;
+            apply(patches.setDesigned({ ...d, slides: { ...d.slides, [String(i)]: { pack: r.pack, ...(r.recurring?.length ? { recurring: r.recurring } : {}) } }, fallbacks, calls: d.calls + r.calls }, `Redesign slide ${i + 1}`));
+            return `Redesigned slide ${i + 1} (${r.calls} model call${r.calls === 1 ? '' : 's'}). Undo brings the old design back.`;
+          } catch (e) {
+            return `Could not redesign slide ${i + 1}: ${(e as Error).message}`;
+          }
+        } : undefined}
+        pictureSlots={pictureSlotsOf(i)}
+        onSlotChange={(field, change) => slotChange(i, field, change)}
+        picturesUsedElsewhere={usedElsewhereOf(i)}
+        gallery={doc.designed?.library?.plan ? <LayoutGallery index={i} model={pickModel(i)} draw={pickDraw(i)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
+        onImageText={(text) => {
+          const r = requestFromText(text, i, packFor(doc.style)?.palette ?? {});
+          if (!r) return 'Say what the picture should show.';
+          apply(patches.setImageRequests([...(doc.imageRequests ?? []), r], `Add a picture request on slide ${i + 1}`));
+          return `Added a picture request for slide ${i + 1}. Generate it under "Pictures for the image slots".`;
+        }}
+      />
+    );
+  };
+
+  /** "I already have a script": the prompt for Claude, the paste box with its live check, and the example. */
+  const scriptBox = (
+    <div className="create-form cr-script-own">
+      <p className="small muted">Copy a prompt for Claude, paste it in any Claude chat, then paste the JSON it returns here. Or try the example script.</p>
+      <div className="row-actions">
+        <button type="button" className="btn btn-dark btn-lg" onClick={copyPrompt}>Copy prompt for Claude</button>
+        <button type="button" className="btn btn-outline btn-lg" onClick={() => useScript(exampleScript(doc.format))}>Try an example script</button>
+      </div>
+      <p className="small" role="status" aria-live="polite">{copied}</p>
+      <details open={showPrompt} onToggle={(e) => setShowPrompt((e.target as HTMLDetailsElement).open)}>
+        <summary className="small">Show the prompt</summary>
+        <textarea className="cr-prompt" readOnly rows={10} value={prompt} aria-label="The prompt to paste into Claude" onFocus={(e) => e.currentTarget.select()} />
+      </details>
+      <label className="field">
+        <span className="field-label">Paste the script Claude wrote (JSON)</span>
+        <textarea className="cr-paste" rows={8} value={pasted} onChange={(e) => setPasted(e.target.value)} spellCheck={false} placeholder='{ "title": "…", "slides": [ … ] }' aria-describedby="cr-check" />
+      </label>
+      <div id="cr-check" aria-live="polite">
+        {check && check.errors.length > 0 && (
+          <div className="notice notice-error" role="alert">
+            <strong>{check.errors.length} problem{check.errors.length > 1 ? 's' : ''} to fix before this script can be used</strong>
+            <ul className="cr-issues">
+              {check.errors.map((e, i) => (
+                <li key={i}>
+                  {e.message} {e.path && <span className="muted">(in the JSON: <code>{e.path}</code>)</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {check && check.errors.length === 0 && (
+          <div className="notice notice-ok" role="status">
+            <strong>This script looks good: {check.script?.slides.length} {doc.format === 'quote' ? 'cards' : 'slides'}</strong>
+            {doc.format === 'carousel' && check.script && platformWarning(check.script.slides.length, options.platform) && <p className="small cr-problem">{platformWarning(check.script.slides.length, options.platform)}</p>}
+            {check.warnings.length > 0 && (
+              <ul className="cr-issues">
+                {check.warnings.map((w, i) => (
+                  <li key={i}>
+                    {w.message} <span className="muted">(<code>{w.path}</code>)</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="row-actions">
+        <button type="button" className="btn btn-dark btn-lg" disabled={!check || check.errors.length > 0} onClick={() => useScript(pasted)}>Use this script</button>
+      </div>
+    </div>
+  );
+
+  /** Props the three input steps share. */
+  const makeProps = {
+    doc,
+    options,
+    setTopic,
+    setOptions: (o: Partial<typeof options>) => setOptions(o),
+    onFormat: (f: Format) => {
+      pickFormat(f);
+      const [lo, hi] = SLIDE_RANGE[f];
+      setOptions({ slides: f === 'quote' ? 3 : 7 > hi ? hi : 7 < lo ? lo : 7 });
+    },
+    onHandle: (h: string) => {
+      setOptions({ handle: h });
+      if (doc.script) apply(patches.handle(h.trim() || '@yourname'));
+    },
+    busy,
+    gen,
+    onGenerate: () => void generate(),
+    onUseQuick: () => void generate({ quickAfterFail: gen.designFailed ?? 'Designed mode failed' }),
+    onCancel: cancel,
+    provider,
+    providers,
+  };
+  const newStyleBox = (
+    <NewStyleBox key={resetKey} open={newStyleOpen} onClose={() => setNewStyleOpen(false)} control={readerControl} state={readerState} saved={quickSaved} description={
+      <NewStyleFlow
+        key={resetKey}
+        text={doc.topic}
+        tone={options.tone}
+        slides={options.slides}
+        handle={options.handle.trim()}
+        provider={provider}
+        only="description"
+        onClose={() => setNewStyleOpen(false)}
+        onCreated={(r) => {
+          setOptions({ autoStyle: false });
+          if (r.script) {
+            const gp = patches.generate({ ...r.script, brand: { ...r.script.brand, handle: options.handle.trim() || r.script.brand.handle } }, r.name, 'New style: ' + r.title);
+            apply({ ...gp, ops: [...gp.ops, { path: ['designed'], value: undefined }] });
+          } else apply(patches.style(r.name, r.title));
+          setNewStyleOpen(false);
+          setNotice('Made the style ' + r.title + ' and selected it.');
+        }}
+      />
+    } />
+  );
 
   return (
     <div className="page page-tight cr-studio">
@@ -818,9 +1032,6 @@ export default function CarouselPage() {
             </button>
             <button type="button" className="btn btn-outline btn-sm cr-quiet" onClick={redo} disabled={future.length === 0} title="Shift+Ctrl+Z">
               Redo{nextLabel ? `: ${nextLabel}` : ''}
-            </button>
-            <button type="button" className="btn btn-dark btn-sm" onClick={downloadAll} disabled={!ready || !!exporting}>
-              <Icon name="upload" size={14} /> Download all (zip)
             </button>
             <details className="cr-more" open={g.all}>
               <summary className="btn btn-outline btn-sm cr-quiet">More</summary>
@@ -854,6 +1065,11 @@ export default function CarouselPage() {
         </p>
 
             <PreviewStage count={hasWork ? slides.length : 0} items={slides.map((_, i) => views[i] ?? { status: 'drawing' })} selected={sel} onSelect={setSel} onOpen={setOpen} />
+            {hasWork && style && (
+              <div className="cr-edit-open">
+                <button type="button" className="btn btn-dark btn-lg" aria-pressed={editOn} onClick={() => { setStep(4); setEditView(true); }} data-testid="edit-slides">Edit slides</button>
+              </div>
+            )}
           </section>
         </aside>
         <div className="cr-controls">
@@ -863,228 +1079,116 @@ export default function CarouselPage() {
           <span>{error}</span>
         </div>
       )}
-
-      {/* Three steps: your text, a style (the reference box is under it), Generate. Everything else is under Advanced. */}
-      <MakeIt
-        images={<ImagesField pictures={pictures} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onMove={moveImage} disabled={busy} />}
-        doc={doc}
-        options={options}
-        setTopic={setTopic}
-        setOptions={(o) => setOptions(o)}
-        onFormat={(f) => {
-          pickFormat(f);
-          const [lo, hi] = SLIDE_RANGE[f];
-          setOptions({ slides: f === 'quote' ? 3 : 7 > hi ? hi : 7 < lo ? lo : 7 });
-        }}
-        onHandle={(h) => {
-          setOptions({ handle: h });
-          if (doc.script) apply(patches.handle(h.trim() || '@yourname'));
-        }}
-        busy={busy}
-        gen={gen}
-        onGenerate={() => void generate()}
-        onUseQuick={() => void generate({ quickAfterFail: gen.designFailed ?? 'Designed mode failed' })}
-        onCancel={cancel}
-        provider={provider}
-        providers={providers}
-        styles={<>
-          <StylePicker key={resetKey} format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} onNewStyle={() => setNewStyleOpen((v) => !v)} newStyleOpen={newStyleOpen} />
-          {targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}
-        </>}
-        styleExtra={<DetectedStyleBox pack={presetPackFor(doc.style)} onChange={(ov) => void handleOverrides(ov)} hasDeck={!!doc.designed?.library?.plan} />}
-        referenceBox={<NewStyleBox key={resetKey} open={newStyleOpen} onClose={() => setNewStyleOpen(false)} control={readerControl} state={readerState} saved={quickSaved} description={
-        <NewStyleFlow
-          key={resetKey}
-          text={doc.topic}
-          tone={options.tone}
-          slides={options.slides}
-          handle={options.handle.trim()}
-          provider={provider}
-          only="description"
-          onClose={() => setNewStyleOpen(false)}
-          onCreated={(r) => {
-            setOptions({ autoStyle: false });
-            if (r.script) {
-              const gp = patches.generate({ ...r.script, brand: { ...r.script.brand, handle: options.handle.trim() || r.script.brand.handle } }, r.name, 'New style: ' + r.title);
-              apply({ ...gp, ops: [...gp.ops, { path: ['designed'], value: undefined }] });
-            } else apply(patches.style(r.name, r.title));
-            setNewStyleOpen(false);
-            setNotice('Made the style ' + r.title + ' and selected it.');
-          }}
-        />
-        } />}
-        styleReady={options.autoStyle || !!styleByName(doc.style)}
-      />
       {notice && <p className="small" role="status">{notice}</p>}
-      <DeckFlags doc={doc} />
 
-      <details className="card ws-card cr-advanced" open={advanced} onToggle={(e) => setAdvanced((e.target as HTMLDetailsElement).open)}>
-        <summary className="h4">Advanced: write the script yourself, options and tools</summary>
-          <h3 className="h4">Styles, New style and the reference tools</h3>
-          <p className="small muted">New style (from a description or a reference), Recreate and Match mode, the pack maker and the saved styles all live here.</p>
-          <h3 className="h4">Recreate and Match mode (from a reference)</h3>
-          <MatchPanel skipReader target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { if (justSaved.current && (activeReference()?.source ?? 'reference') === 'reference') return; setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} />
+      {/* Four steps (Your content, Format, Style, Your slides) and, from step 4, the Edit slides view. Every step stays mounted (hidden), so nothing is lost when you go back. */}
+      <nav className="cr-wiz" aria-label="Steps">
+        <ol className="cr-wiz-steps">
+          {STEPS.map((s) => (
+            <li key={s.n}>
+              <button type="button" className="cr-wiz-step" aria-current={!editOn && step === s.n ? 'step' : undefined} disabled={s.n === 4 && !hasWork} onClick={() => goStep(s.n)}>
+                <span className="cr-wiz-n" aria-hidden="true">{s.n}</span>
+                <span className="cr-wiz-name">{s.name}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        {editOn && <p className="small muted cr-wiz-edit">Editing slides. <button type="button" className="cr-linkbtn" onClick={() => setEditView(false)}>Done</button> returns to step 4.</p>}
+      </nav>
 
-          <details className="tn-more" aria-label="Reference reader">
-            <summary className="small">Reference reader (match mode: the full reader that steps 1 and 2 use)</summary>
-            <Suspense fallback={<p className="small muted" role="status">Loading…</p>}>
-              <ReferenceStylePage key={resetKey} embedded target="carousel" title={doc.script?.title} controlRef={readerControl} onState={(st) => { if (st.busy) justSaved.current = false; setReaderState(st); }} onStyleSaved={onQuickSaved} />
-            </Suspense>
-          </details>
-          <p className="small"><Link to="/images/styles">Open the Styles page</Link> (your saved styles and templates).</p>
-          <ReportPanel doc={doc} />
-        <div className="create-form">
-          <h3 className="h4">Options</h3>
-      <MakeIt
-        doc={doc}
-        options={options}
-        setTopic={setTopic}
-        setOptions={(o) => setOptions(o)}
-        onFormat={(f) => {
-          pickFormat(f);
-          const [lo, hi] = SLIDE_RANGE[f];
-          setOptions({ slides: f === 'quote' ? 3 : 7 > hi ? hi : 7 < lo ? lo : 7 });
-        }}
-        onHandle={(h) => {
-          setOptions({ handle: h });
-          if (doc.script) apply(patches.handle(h.trim() || '@yourname'));
-        }}
-        busy={busy}
-        gen={gen}
-        onGenerate={() => void generate()}
-        onUseQuick={() => void generate({ quickAfterFail: gen.designFailed ?? 'Designed mode failed' })}
-        onCancel={cancel}
-        provider={provider}
-        providers={providers}
-        styles={null}
-        part="options"
-      />
-          <h3 className="h4">Rebuild a built-in style as a pack (no model call)</h3>
-          <StylePicker key={resetKey} rebuildOnly format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => undefined} onPick={() => undefined} />
-          <h3 className="h4">Write the script yourself</h3>
-        <div className="create-form">
-          <p className="small muted">Copy a prompt for Claude, paste it in any Claude chat, then paste the JSON it returns here. Or try the example script.</p>
-          <div className="row-actions">
-            <button type="button" className="btn btn-dark btn-lg" onClick={copyPrompt}>Copy prompt for Claude</button>
-            <button type="button" className="btn btn-outline btn-lg" onClick={() => useScript(exampleScript(doc.format))}>Try an example script</button>
-          </div>
-          <p className="small" role="status" aria-live="polite">{copied}</p>
-          <details open={showPrompt} onToggle={(e) => setShowPrompt((e.target as HTMLDetailsElement).open)}>
-            <summary className="small">Show the prompt</summary>
-            <textarea className="cr-prompt" readOnly rows={10} value={prompt} aria-label="The prompt to paste into Claude" onFocus={(e) => e.currentTarget.select()} />
-          </details>
-          <label className="field">
-            <span className="field-label">Paste the script Claude wrote (JSON)</span>
-            <textarea className="cr-paste" rows={8} value={pasted} onChange={(e) => setPasted(e.target.value)} spellCheck={false} placeholder='{ "title": "…", "slides": [ … ] }' aria-describedby="cr-check" />
-          </label>
-          <div id="cr-check" aria-live="polite">
-            {check && check.errors.length > 0 && (
-              <div className="notice notice-error" role="alert">
-                <strong>{check.errors.length} problem{check.errors.length > 1 ? 's' : ''} to fix before this script can be used</strong>
-                <ul className="cr-issues">
-                  {check.errors.map((e, i) => (
-                    <li key={i}>
-                      {e.message} {e.path && <span className="muted">(in the JSON: <code>{e.path}</code>)</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {check && check.errors.length === 0 && (
-              <div className="notice notice-ok" role="status">
-                <strong>This script looks good: {check.script?.slides.length} {doc.format === 'quote' ? 'cards' : 'slides'}</strong>
-                {doc.format === 'carousel' && check.script && platformWarning(check.script.slides.length, options.platform) && <p className="small cr-problem">{platformWarning(check.script.slides.length, options.platform)}</p>}
-                {check.warnings.length > 0 && (
-                  <ul className="cr-issues">
-                    {check.warnings.map((w, i) => (
-                      <li key={i}>
-                        {w.message} <span className="muted">(<code>{w.path}</code>)</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="row-actions">
-            <button type="button" className="btn btn-dark btn-lg" disabled={!check || check.errors.length > 0} onClick={() => useScript(pasted)}>Use this script</button>
+      <div hidden={editOn} className="cr-wiz-body">
+        <div hidden={step !== 1} data-step="1">
+          <MakeIt part="content" {...makeProps} images={<ImagesField pictures={pictures} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onMove={moveImage} disabled={busy} />} scriptBox={scriptBox} scriptMode={scriptMode} onScriptMode={setScriptMode} />
+          <div className="row-actions cr-wiz-nav"><button type="button" className="btn btn-dark btn-lg" onClick={() => goStep(2)}>Next: Format</button></div>
+        </div>
+        <div hidden={step !== 2} data-step="2">
+          <MakeIt part="format" {...makeProps} />
+          <div className="row-actions cr-wiz-nav">
+            <button type="button" className="btn btn-outline btn-lg" onClick={() => goStep(1)}>Back</button>
+            <button type="button" className="btn btn-dark btn-lg" onClick={() => goStep(3)}>Next: Style</button>
           </div>
         </div>
-              <h3 className="h4">Designed slides, pictures and photos</h3>
-      <DesignedCard doc={doc} />
-      <ImageRequestsPanel doc={doc} apply={apply} />
-      <PhotosStrip pictures={pictures} supported={hasPhotoStyle} styleTitle={style?.spec.title ?? 'This style'} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onCutout={makeCutout} editableCutouts={cutouts.ids} onEditCutout={(id) => void editCutout(id)} usedOn={usedOn} storageProblem={currentStorageProblem()} lowRoom={lowRoom} />
-      {editing && <CutoutEditor record={editing} onSave={(r) => void saveEdited(r)} onClose={() => setEditing(null)} />}
-          <div className="cr-groups-tools">
-            <button type="button" className="btn btn-outline btn-sm cr-quiet" aria-pressed={g.all} onClick={() => g.setAll(!g.all)}>{g.all ? 'One group at a time' : 'Open all groups'}</button>
+        <div hidden={step !== 3} data-step="3">
+          <MakeIt part="style" {...makeProps} styles={<>
+            <StylePicker key={resetKey} format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} onNewStyle={() => setNewStyleOpen((v) => !v)} newStyleOpen={newStyleOpen} />
+            {targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}
+          </>} referenceBox={newStyleBox} styleReady={options.autoStyle || !!styleByName(doc.style)} />
+          <div className="row-actions cr-wiz-nav">
+            <button type="button" className="btn btn-outline btn-lg" onClick={() => goStep(2)}>Back</button>
+            {hasWork && <button type="button" className="btn btn-outline btn-lg" onClick={() => goStep(4)}>Go to your slides</button>}
           </div>
         </div>
-      </details>
+        <div hidden={step !== 4} data-step="4">
+          <section className="card ws-card cr-step-card" aria-labelledby="cr-s4-h" data-testid="step-slides">
+            <h2 id="cr-s4-h" className="h3">Your slides</h2>
+            {!hasWork && (
+              <div className="card empty">
+                <strong>No slides yet</strong>
+                <span className="muted">Write your text in step 1, pick a format and a style, then press the make button in step 3.</span>
+              </div>
+            )}
+            {hasWork && (
+              <>
+                <p className="small" role="status" aria-live="polite" data-testid="progress-done">{gen.phase === 'drawing' || gen.phase === 'done' ? gen.message : ''}</p>
+                <DeckFlags doc={doc} />
+                <div className="row-actions" role="group" aria-label="Download">
+                  <button type="button" className="btn btn-dark" onClick={downloadAll} disabled={!ready || !!exporting}>
+                    <Icon name="upload" size={14} /> Download all (zip)
+                  </button>
+                  <button type="button" className="btn btn-outline" onClick={() => void downloadOne(Math.min(sel, slides.length - 1))} disabled={!ready || !!exporting}>
+                    <Icon name="upload" size={14} /> Download slide {Math.min(sel, slides.length - 1) + 1} (PNG)
+                  </button>
+                </div>
+                <p className="small muted">Pick a slide in the strip on the left to see it large. Press "Edit slides" under the strip to change a layout, a picture or the style devices.</p>
+              </>
+            )}
+          </section>
+          <div className="row-actions cr-wiz-nav"><button type="button" className="btn btn-outline btn-lg" onClick={() => goStep(3)}>Back</button></div>
+        </div>
+      </div>
 
-          <Group id="edit" title="Edit" hint="Each slide, its layers and photos" g={g}>
-        {!hasWork && (
-          <div className="card empty">
-            <strong>No script yet</strong>
-            <span className="muted">Copy the prompt, paste Claude’s answer above, or try the example script to see how it works.</span>
+      {editOn && style && (
+        <section className="card ws-card cr-step-card cr-edit-view" aria-labelledby="cr-edit-h" data-testid="edit-view">
+          <div className="cr-edit-bar">
+            <h2 id="cr-edit-h" className="h3">Edit slide {si + 1} of {slides.length}</h2>
+            <button type="button" className="btn btn-dark" onClick={() => setEditView(false)}>Done</button>
           </div>
-        )}
-
-        {hasWork && style && unusedList.length > 0 && <UnusedPictures unused={unusedList} slots={slotChoices} onPut={(id, slide, field) => slotChange(slide, field, { picture: id })} />}
-        {hasWork && style && (
-          <ol className="cr-list" aria-label={`${slides.length} slides`}>
-            {slides.map((s, i) => (
-              <SlideCard
-                key={i}
-                index={i}
-                count={slides.length}
-                slide={s}
-                script={doc.script!.slides[i]}
-                swaps={doc.choices[String(i)]?.swaps}
-                view={views[i]}
-                apply={apply}
-                onShuffle={() => {
-                  const salt = pickShuffleSalt(doc, i);
-                  if (salt === null) return false;
-                  apply(patches.shuffle(i, salt));
-                  return true;
-                }}
-                onOpen={() => setOpen(i)}
-                onDownload={() => downloadOne(i)}
-                deckLabel={deck}
-                photo={doc.choices[String(i)]?.photo}
-                object={doc.choices[String(i)]?.object}
-                pictures={pictures}
-                palette={style.spec.palettes[s.palette]}
-                hasPhotoStyle={hasPhotoStyle}
-                addFiles={addFiles}
-                onRedesign={legacySvgRoute() && !doc.designed?.library?.plan && doc.script && provider ? async (words) => {
-                  const look = { pack: packFor(doc.style), brief: options.brief || 'the look of the "' + (style?.spec.title ?? doc.style) + '" style' };
-                  try {
-                    const r = await redesignSlide(doc.script!, i, doc.designed, look, words, provider, new AbortController().signal);
-                    if (!r.ok) return `Could not redesign slide ${i + 1}: ${r.reasons[0] ?? 'the design could not be used'} The current look is kept (${r.calls} calls).`;
-                    const d = doc.designed ?? { slides: {}, fallbacks: {}, notes: [], calls: 0, ms: 0 };
-                    const { [String(i)]: _gone, ...fallbacks } = d.fallbacks;
-                    apply(patches.setDesigned({ ...d, slides: { ...d.slides, [String(i)]: { pack: r.pack, ...(r.recurring?.length ? { recurring: r.recurring } : {}) } }, fallbacks, calls: d.calls + r.calls }, `Redesign slide ${i + 1}`));
-                    return `Redesigned slide ${i + 1} (${r.calls} model call${r.calls === 1 ? '' : 's'}). Undo brings the old design back.`;
-                  } catch (e) {
-                    return `Could not redesign slide ${i + 1}: ${(e as Error).message}`;
-                  }
-                } : undefined}
-                pictureSlots={pictureSlotsOf(i)}
-                onSlotChange={(field, change) => slotChange(i, field, change)}
-                picturesUsedElsewhere={usedElsewhereOf(i)}
-                gallery={doc.designed?.library?.plan ? <LayoutGallery index={i} model={pickModel(i)} draw={pickDraw(i)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
-                onImageText={(text) => {
-                  const r = requestFromText(text, i, packFor(doc.style)?.palette ?? {});
-                  if (!r) return 'Say what the picture should show.';
-                  apply(patches.setImageRequests([...(doc.imageRequests ?? []), r], `Add a picture request on slide ${i + 1}`));
-                  return `Added a picture request for slide ${i + 1}. Generate it under "Pictures for the image slots".`;
-                }}
-              />
-            ))}
+          <p className="small muted">Pick a slide in the strip on the left to edit it. Undo and Redo are above the preview.</p>
+          {unusedList.length > 0 && <UnusedPictures unused={unusedList} slots={slotChoices} onPut={(id, slide, field) => slotChange(slide, field, { picture: id })} />}
+          <ol className="cr-list" aria-label={`Slide ${si + 1} of ${slides.length}`}>
+            {slideCardFor(si)}
           </ol>
-        )}
-          </Group>
+          <details className="cr-fine">
+            <summary className="h4">Fine-tune</summary>
+            <DetectedStyleBox pack={presetPackFor(doc.style)} onChange={(ov) => void handleOverrides(ov)} hasDeck={!!doc.designed?.library?.plan} />
+          </details>
+        </section>
+      )}
+
+      {/* Developer tools: always mounted (the New style box reads the reference reader), shown only when the toggle is on. */}
+      <section className="card ws-card cr-dev" hidden={!devTools} aria-label="Developer tools" data-testid="dev-tools">
+        <h2 className="h3">Developer tools</h2>
+        <h3 className="h4">Recreate and Match mode (from a reference)</h3>
+        <MatchPanel skipReader target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { if (justSaved.current && (activeReference()?.source ?? 'reference') === 'reference') return; setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} />
+        <details className="tn-more" aria-label="Reference reader">
+          <summary className="small">Reference reader (match mode: the full reader that the New style box uses)</summary>
+          <Suspense fallback={<p className="small muted" role="status">Loading…</p>}>
+            <ReferenceStylePage key={resetKey} embedded target="carousel" title={doc.script?.title} controlRef={readerControl} onState={(st) => { if (st.busy) justSaved.current = false; setReaderState(st); }} onStyleSaved={onQuickSaved} />
+          </Suspense>
+        </details>
+        <p className="small"><Link to="/images/styles">Open the Styles page</Link> (your saved styles and templates).</p>
+        <ReportPanel doc={doc} />
+        <h3 className="h4">Rebuild a built-in style as a pack (no model call)</h3>
+        <StylePicker key={resetKey} rebuildOnly format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => undefined} onPick={() => undefined} />
+        <h3 className="h4">Designed slides, pictures and photos</h3>
+        <DesignedCard doc={doc} />
+        <ImageRequestsPanel doc={doc} apply={apply} />
+        <PhotosStrip pictures={pictures} supported={hasPhotoStyle} styleTitle={style?.spec.title ?? 'This style'} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onCutout={makeCutout} editableCutouts={cutouts.ids} onEditCutout={(id) => void editCutout(id)} usedOn={usedOn} storageProblem={currentStorageProblem()} lowRoom={lowRoom} />
+        {editing && <CutoutEditor record={editing} onSave={(r) => void saveEdited(r)} onClose={() => setEditing(null)} />}
+      </section>
+      <label className="cr-dev-toggle small muted">
+        <input type="checkbox" checked={devTools} onChange={(e) => toggleDev(e.target.checked)} /> Developer tools
+      </label>
         </div>
       </div>
 

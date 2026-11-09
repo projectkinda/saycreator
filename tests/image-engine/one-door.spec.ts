@@ -1,6 +1,7 @@
 // One door for a new style: the "New style" card in the style list opens a box inline under the list (a reference tab and a description tab). No second "add a reference" link.
 // Reading a reference saves a Mine style, selects it, and closes the box. Fake reader: no model calls.
 import { expect, test, type Page } from '@playwright/test';
+import { toStep } from './ui';
 import { fakeReader, labelsAnswer, makeReference, readAnswer, refineAnswer } from './reference-helpers';
 
 test.setTimeout(180_000);
@@ -9,18 +10,19 @@ test.use({ viewport: { width: 1300, height: 1000 } });
 const usual = (kind: string, n: number, prompt = '') => (kind === 'read' || kind === 'retry' ? (prompt.includes('describe the scene') || /r\d+T\d+/.test(prompt) ? labelsAnswer(prompt, { seen: ['cover'] }) : readAnswer({ seen: ['cover'] })) : n === 0 ? refineAnswer({ patches: [], score: 70, stop: true }) : refineAnswer({ patches: [], stop: true }));
 const card = (page: Page) => page.getByRole('button', { name: /^New style/ });
 const styleList = (page: Page) => page.getByRole('list', { name: 'Styles' }).first();
-/** File inputs for references that are on the page outside the Advanced fold. */
+/** File inputs for references that are on the page outside the Developer tools section. */
 const outsideAdvanced = (page: Page) =>
-  page.evaluate(() => [...document.querySelectorAll('input[type=file]')].filter((i) => /reference/i.test(i.getAttribute('aria-label') ?? '') && !i.closest('details.cr-advanced')).length);
+  page.evaluate(() => [...document.querySelectorAll('input[type=file]')].filter((i) => /reference/i.test(i.getAttribute('aria-label') ?? '') && !i.closest('[data-testid="dev-tools"]')).length);
 
 test('there is one door: no "Add a reference" link, one New style card, one reference control once it is opened', async ({ page }) => {
   await fakeReader(page, usual);
   await page.goto('/images/carousel');
+  await toStep(page, 3);
   await expect(styleList(page)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('button', { name: 'Not what you want? Add a reference.' })).toHaveCount(0);
   await expect(page.getByText('Not what you want?')).toHaveCount(0);
   await expect(card(page)).toHaveCount(1);
-  expect(await outsideAdvanced(page), 'closed: no reference control outside Advanced').toBe(0);
+  expect(await outsideAdvanced(page), 'closed: no reference control outside Developer tools').toBe(0);
   await card(page).click();
   await expect(page.getByTestId('new-style')).toBeVisible();
   expect(await outsideAdvanced(page), 'open: exactly one').toBe(1);
@@ -32,6 +34,7 @@ test('pressing New style opens the box inline under the style list, with a refer
   await fakeReader(page, usual);
   await page.goto('/images/carousel');
   const url = page.url();
+  await toStep(page, 3);
   await expect(styleList(page)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('new-style')).toHaveCount(0);
   await card(page).click();
@@ -41,7 +44,7 @@ test('pressing New style opens the box inline under the style list, with a refer
   const y = await page.evaluate(() => {
     const top = (el: Element | null) => (el ? el.getBoundingClientRect().top + window.scrollY : -1);
     const list = document.querySelector('ul[aria-label="Styles"]')!;
-    return { listBottom: list.getBoundingClientRect().bottom + window.scrollY, box: top(document.querySelector('[data-testid="new-style"]')), gen: top([...document.querySelectorAll('h3')].find((h) => h.textContent?.trim() === 'Generate') ?? null) };
+    return { listBottom: list.getBoundingClientRect().bottom + window.scrollY, box: top(document.querySelector('[data-testid="new-style"]')), gen: top([...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Make carousel') ?? null) };
   });
   expect(y.box).toBeGreaterThanOrEqual(y.listBottom - 2);
   expect(y.box).toBeLessThan(y.gen);
@@ -58,6 +61,7 @@ test('pressing New style opens the box inline under the style list, with a refer
 test('reading a reference adds a Mine style to the list, selects it, and closes the box', async ({ page }) => {
   await fakeReader(page, usual);
   await page.goto('/images/carousel');
+  await toStep(page, 3);
   await expect(styleList(page).getByRole('listitem').first()).toBeVisible({ timeout: 30_000 });
   await expect(styleList(page).getByRole('button').filter({ hasText: 'Mine' })).toHaveCount(0);
   await card(page).click();

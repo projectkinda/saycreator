@@ -1,4 +1,5 @@
 // Step 17b item 7: pack problems found in 17c. Long lists stay readable, blocks of empty slots are hidden, every design needs text slots (one retry), and packs can be renamed, exported and imported.
+import { toStep } from './ui';
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -123,6 +124,7 @@ test('a pack can be renamed, exported, deleted and imported again, and it shows 
   expect(r.mine).toBe(true);
   expect(r.newName, 'an imported copy never collides with a style already here').toBe(true);
   await page.reload();
+  await toStep(page, 3);
   const picker = page.getByRole('list', { name: 'Styles' });
   await expect(picker.getByText('Renamed pack', { exact: true })).toBeVisible();
   await expect(picker.getByRole('listitem').filter({ hasText: 'Renamed pack' }).getByText('Mine', { exact: true })).toBeVisible();

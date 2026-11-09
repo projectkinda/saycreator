@@ -5,6 +5,7 @@
 //   - screenshots of the gallery for slide 1 and slide 3 of the hot-flat fixture: out/picker/
 import { expect, test, type Page, type Route } from '@playwright/test';
 import fs from 'node:fs';
+import { deckDrawn, openEdit, toStep } from './ui';
 
 test.setTimeout(300_000);
 test.use({ viewport: { width: 1280, height: 900 } });
@@ -34,11 +35,14 @@ async function deck(page: Page) {
   const f = await fake(page);
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel', exact: true })).toBeVisible();
-  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat/ }).first().click();
   await page.getByLabel('Your text or topic').fill(TEXT);
+  await toStep(page, 3);
+  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat/ }).first().click();
   await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
-  await expect(page.locator('.cr-pic img').first()).toBeVisible({ timeout: 120_000 });
-  await expect(page.locator('[data-signature]')).toHaveCount(SPECS.length, { timeout: 60_000 });
+  await deckDrawn(page, SPECS.length);
+  // The layout gallery lives in the Edit slides view, one slide at a time.
+  await openEdit(page, 1);
+  await expect(page.locator('.cr-card .cr-pic img').first()).toBeVisible({ timeout: 120_000 });
   return f;
 }
 
@@ -136,17 +140,19 @@ test('screenshots of the gallery for slide 1 and slide 3 of the hot-flat fixture
   fs.mkdirSync('out/picker', { recursive: true });
   // the time to open the gallery of every slide (cold cache): drawing + rasterising every enabled tile
   for (let i = 0; i < SPECS.length; i++) {
+    await openEdit(page, i + 1);
     const g = page.getByTestId(`gallery-${i}`);
     await g.scrollIntoViewIfNeeded();
     await expect(g).toHaveAttribute('data-ready-ms', /\d+/, { timeout: 120_000 });
     console.log('GALLERY_ALL slide', i + 1, SPECS[i].layout, await g.getAttribute('data-ready-ms'), 'ms,', await g.locator('img').count(), 'thumbnails');
   }
   for (const i of [0, 2]) {
+    await openEdit(page, i + 1);
     const g = page.getByTestId(`gallery-${i}`);
     await g.scrollIntoViewIfNeeded();
     await expect(g).toHaveAttribute('data-ready-ms', /\d+/, { timeout: 120_000 });
     console.log('GALLERY_MS slide', i + 1, await g.getAttribute('data-ready-ms'), 'ms,', await g.locator('img').count(), 'thumbnails');
-    const card = page.locator('li.cr-card').nth(i);
+    const card = page.locator('li.cr-card').first();
     await card.screenshot({ path: `out/picker/slide${i + 1}-card.png` });
     await g.locator('[role="list"]').evaluate((el) => { (el as HTMLElement).style.maxHeight = 'none'; });
     await g.screenshot({ path: `out/picker/slide${i + 1}-gallery.png` });

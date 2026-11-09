@@ -1,5 +1,6 @@
 // Presets in the app (FAKE writer, zero real model calls): a built-in preset is drawn by the layout library; the toggles and the layout picker work on it with no model call and
 // one undo step; the saved reference cache is never read; "Pick for me" lands on the library; the template route stays behind creator.templateRoute.
+import { deckDrawn, openEdit, openFineTune, toStep } from './ui';
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { exampleScript } from '../../src/carousel/script';
 
@@ -46,11 +47,16 @@ const project = (page: Page) => page.evaluate(() => {
   const d = (JSON.parse(localStorage.getItem('creator.carousel.project.v1') ?? '{}') as { project?: { doc?: any } }).project?.doc;
   return d ? { style: d.style, route: d.route?.route ?? null, reason: d.route?.reason ?? '', designed: !!d.designed, lib: d.designed?.library ? { source: d.designed.library.source, layouts: d.designed.library.layouts, cuts: d.designed.library.cuts, devices: d.designed.library.style?.devices, rhythm: (d.designed.library.style?.rhythm ?? []).length, caseStyle: d.designed.library.style?.caseStyle ?? null, calls: d.designed.library.calls, grounds: d.designed.library.grounds } : null } : null;
 });
-const pickStyle = (page: Page, re: RegExp) => page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: re }).first().click();
+const pickStyle = async (page: Page, re: RegExp) => {
+  await toStep(page, 3);
+  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: re }).first().click();
+};
 const make = async (page: Page, n: number) => {
+  await toStep(page, 1);
   await page.getByLabel('Your text or topic').fill(TEXT);
+  await toStep(page, 3);
   await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
-  await expect(page.locator('.cr-pic img')).toHaveCount(n, { timeout: 120_000 });
+  await deckDrawn(page, n);
 };
 
 test('chooseRoute: a preset goes to the library; quick, square cards and the flag keep the templates; a reference is unchanged', async ({ page }) => {
@@ -99,9 +105,10 @@ test('hot-flat through the library: 1 writer call, the flavour line in the promp
   expect(p0!.lib!.devices.marker).toBe(true);
   expect(p0!.lib!.grounds).toHaveLength(8);
   // the style panel shows the preset's devices; flipping one redraws with no model call
+  await openFineTune(page, 1);
   const panel = page.getByTestId('detected-style');
   await expect(panel).toBeVisible();
-  const imgs = () => page.locator('.cr-pic img').evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src));
+  const imgs = () => page.locator('.cr-film img').evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src));
   const before = await imgs();
   await panel.getByRole('checkbox', { name: 'Underline' }).click();
   await expect(page.getByText(/^Style devices changed/).first()).toBeVisible({ timeout: 60_000 });
@@ -114,6 +121,7 @@ test('hot-flat through the library: 1 writer call, the flavour line in the promp
   await expect.poll(async () => (await project(page))?.lib?.devices.underline, { timeout: 30_000 }).toBe(false);
   expect(f.calls.length).toBe(1);
   // the layout picker on slide 3: a pick redraws that one slide with no call
+  await openEdit(page, 3);
   const picker = page.getByTestId('gallery-2');
   await picker.scrollIntoViewIfNeeded();
   const tile = picker.locator('[data-current="false"][data-enabled="true"] button:not([disabled])').first();
@@ -136,6 +144,7 @@ test('the preset toggles are kept under "preset:<name>" and used by the next car
   await open(page);
   await pickStyle(page, /editorial/i);
   await make(page, 8);
+  await openFineTune(page, 1);
   const panel = page.getByTestId('detected-style');
   await panel.getByRole('radio', { name: 'Shapes: bold' }).click();
   await expect(page.getByText(/^Style devices changed/).first()).toBeVisible({ timeout: 60_000 });
@@ -151,6 +160,7 @@ test('the preset toggles are kept under "preset:<name>" and used by the next car
 test('"Pick for me" now lands on the library (the preset is chosen before the call)', async ({ page }) => {
   const f = await fake(page, () => LIB);
   await open(page);
+  await toStep(page, 3);
   await expect(page.getByRole('button', { name: /^Pick for me/ })).toHaveAttribute('aria-pressed', 'true');
   await make(page, 8);
   const p = await project(page);
@@ -166,9 +176,11 @@ test('the template route stays behind creator.templateRoute=1', async ({ page })
   const f = await fake(page, () => SCRIPT7);
   await open(page);
   await pickStyle(page, /Hot flat/);
+  await toStep(page, 1);
   await page.getByLabel('Your text or topic').fill(TEXT);
+  await toStep(page, 3);
   await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
-  await expect(page.locator('.cr-pic img').first()).toBeVisible({ timeout: 120_000 });
+  await expect(page.locator('.cr-film img').first()).toBeVisible({ timeout: 120_000 });
   const p = await project(page);
   expect(p).toMatchObject({ style: 'hot-flat', route: 'pack' });
   expect(p!.lib).toBeNull();

@@ -80,7 +80,10 @@ export async function runDesign(req: WriteRequest, look: { pack?: import('../ref
   }
 }
 
-export function MakeIt({ images, doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onUseQuick, onCancel, provider, providers, styles, referenceBox, styleExtra, styleReady = true, part = 'main' }: {
+export type MakeItPart = 'content' | 'format' | 'style';
+
+/** The three input steps of the page. Each part is one step; the page decides which is shown and owns Back / Next. Every control keeps what it did. */
+export function MakeIt({ images, scriptBox, scriptMode, onScriptMode, doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onUseQuick, onCancel, provider, providers, styles, referenceBox, styleReady = true, part }: {
   doc: Doc;
   options: GenerateOptions;
   setTopic: (t: string) => void;
@@ -95,17 +98,18 @@ export function MakeIt({ images, doc, options, setTopic, setOptions, onFormat, o
   onCancel: () => void;
   provider: WriteProvider | null;
   providers: WriteProvider[] | null;
-  styles: React.ReactNode;
-  /** Under the style list: the link that opens the reference box. */
+  styles?: React.ReactNode;
+  /** Under the style list: the box that opens with "New style". */
   referenceBox?: React.ReactNode;
-  /** Under the reference box: the detected style devices as toggles. */
-  styleExtra?: React.ReactNode;
   /** A style is chosen (or "Pick for me" is on): the button needs one. */
   styleReady?: boolean;
   /** Under the text input: the optional "Add images" area. */
   images?: React.ReactNode;
-  /** "main": the text, the styles and the one button. "options": format, count, platform, handle and tone (they live under Advanced). */
-  part?: 'main' | 'options';
+  /** "I already have a script": the paste box, "Copy prompt for Claude" and "Try an example script". */
+  scriptBox?: React.ReactNode;
+  scriptMode?: 'write' | 'own';
+  onScriptMode?: (m: 'write' | 'own') => void;
+  part: MakeItPart;
 }) {
   const n = doc.topic.length;
   const problem = useMemo(() => textProblem(doc.topic), [doc.topic]);
@@ -116,7 +120,7 @@ export function MakeIt({ images, doc, options, setTopic, setOptions, onFormat, o
   // With a reference style active, Designed is the default route (one design call); Quick fills the style's templates.
   const viaDesigned = !ready && doc.style === ACTIVE_STYLE && !!activeReference()?.pack && options.mode !== 'quick';
   const cost = ready ? '0 design calls, 0 writing calls: your slide text is used as it is.' : viaDesigned ? designEstimate(Math.min(hi, Math.max(lo, options.slides))).text : '0 design calls, 1 small writing call.';
-  const why = !provider && !ready ? (providers === null ? 'Looking for a writer…' : 'No writer is available on this server yet. Use Advanced below to copy a prompt for Claude and paste the answer.') : null;
+  const why = !provider && !ready ? (providers === null ? 'Looking for a writer…' : 'No writer is available on this server yet. Choose "I already have a script" in step 1 to copy a prompt for Claude and paste the answer.') : null;
   const disabled = busy || !!why || !!problem || !styleReady;
   const label = (doc.format === 'quote' ? 'Cards' : 'Slides');
   const platform = isPlatform(options.platform) ? options.platform : null;
@@ -137,34 +141,95 @@ export function MakeIt({ images, doc, options, setTopic, setOptions, onFormat, o
       setCap('');
     }
   };
-  const optionsBlock = (
-    <>
-        <div className="cr-options">
-          <div role="group" aria-label="Format" className="chip-group">
+
+  if (part === 'content')
+    return (
+      <section className="card ws-card cr-step-card" aria-labelledby="cr-s1-h" data-testid="step-content">
+        <h2 id="cr-s1-h" className="h3">Your content</h2>
+        <div className="create-form">
+          <label className="field">
+            <span className="field-label">Your text or topic</span>
+            <textarea className="cr-source" rows={8} value={doc.topic} onChange={(e) => setTopic(e.target.value)} disabled={busy} aria-describedby="cr-count" placeholder="Paste a paragraph, a rough idea or a whole article. Only what is in it will be used: no facts are added." />
+          </label>
+          <p id="cr-count" className={`small ${n > MAX_CHARS ? 'cr-problem' : 'muted'}`} role={n > MAX_CHARS ? 'alert' : undefined}>
+            {n.toLocaleString('en')} of {MAX_CHARS.toLocaleString('en')} characters{problem ? `. ${problem}` : ''}
+          </p>
+          <div className="cr-script-choice chip-group" role="group" aria-label="Who writes the script">
+            <button type="button" className="chip-btn" aria-pressed={scriptMode !== 'own'} onClick={() => onScriptMode?.('write')}>Write my script for me</button>
+            <button type="button" className="chip-btn" aria-pressed={scriptMode === 'own'} onClick={() => onScriptMode?.('own')}>I already have a script</button>
+          </div>
+          {scriptMode === 'own' ? scriptBox : <p className="small muted">The writer turns your text into slides when you press the make button in step 3. Nothing is sent before that.</p>}
+          {images}
+        </div>
+      </section>
+    );
+
+  if (part === 'format')
+    return (
+      <section className="card ws-card cr-step-card" aria-labelledby="cr-s2-h" data-testid="options">
+        <h2 id="cr-s2-h" className="h3">Format</h2>
+        <div className="create-form">
+          <div role="group" aria-label="Format" className="cr-format-cards">
             {FORMATS.map((f) => (
-              <button key={f.id} type="button" className="chip-btn" aria-pressed={doc.format === f.id} disabled={busy} onClick={() => onFormat(f.id)}>
-                {f.label} <span className="small">({f.id === 'carousel' ? '4:5' : '1:1'})</span>
+              <button key={f.id} type="button" className="card cr-format-card" aria-pressed={doc.format === f.id} aria-label={`${f.label} (${f.ratio})`} disabled={busy} onClick={() => onFormat(f.id)}>
+                <strong className="cr-format-title">{f.label} <span className="small">({f.ratio})</span></strong>
+                <span className="small">{f.id === 'carousel' ? 'A swipeable set of slides. Best for teaching, lists and stories.' : 'One square image with a single line. Best for a quick, punchy post.'}</span>
               </button>
             ))}
           </div>
-          <label className="cr-inline">
-            <span className="field-label">{label}</span>
-            <select className="plain-select cr-select" value={asked} disabled={busy} onChange={(e) => {
-              const n = Number(e.target.value);
-              setOptions({ slides: Math.min(n, ceiling) });
-              setCap(plat && n > plat.max ? `Capped at ${plat.max} for ${plat.label}` : '');
-            }}>
-              {counts.filter((c) => c <= ceiling).map((c) => (
-                <option key={c} value={c}>{c}{c === DEFAULT_OPTIONS.slides && doc.format === 'carousel' ? ' (usual)' : ''}</option>
-              ))}
-            </select>
-          </label>
+          <div className="cr-options">
+            <label className="cr-inline">
+              <span className="field-label">{label}</span>
+              <select className="plain-select cr-select" value={asked} disabled={busy} onChange={(e) => {
+                const k = Number(e.target.value);
+                setOptions({ slides: Math.min(k, ceiling) });
+                setCap(plat && k > plat.max ? `Capped at ${plat.max} for ${plat.label}` : '');
+              }}>
+                {counts.filter((c) => c <= ceiling).map((c) => (
+                  <option key={c} value={c}>{c}{c === DEFAULT_OPTIONS.slides && doc.format === 'carousel' ? ' (usual)' : ''}</option>
+                ))}
+              </select>
+            </label>
+            <div className="cr-inline">
+              <span className="field-label" id="cr-platform-l">Platform</span>
+              <div role="group" aria-labelledby="cr-platform-l" className="chip-group">
+                {PLATFORMS.map((p) => (
+                  <button key={p.id} type="button" className="chip-btn" aria-pressed={platform === p.id} disabled={busy} title={`At most ${p.max} slides. Press again to clear.`} onClick={() => choosePlatform(p.id)}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {plat && (
+            <p className="small muted" role="status" data-testid="platform-cap">
+              {cap ? <strong>{cap}. </strong> : null}
+              {plat.label} allows up to {plat.max} slides in a post.
+            </p>
+          )}
+          {platformNote && (
+            <p className="small cr-problem" role="status" data-testid="platform-warning">
+              {platformNote}
+            </p>
+          )}
+        </div>
+      </section>
+    );
+
+  return (
+    <section className="card ws-card cr-step-card" aria-labelledby="cr-s3-h" data-testid="step-style">
+      <h2 id="cr-s3-h" className="h3">Style</h2>
+      <div className="create-form">
+        <p className="small muted cr-hint">Built-in styles and your own saved ones. Pick how the slides look, or let the page pick.</p>
+        {styles}
+        {referenceBox}
+        <div className="cr-options">
           <div className="cr-inline">
-            <span className="field-label" id="cr-platform-l">Platform</span>
-            <div role="group" aria-labelledby="cr-platform-l" className="chip-group">
-              {PLATFORMS.map((p) => (
-                <button key={p.id} type="button" className="chip-btn" aria-pressed={platform === p.id} disabled={busy} title={`At most ${p.max} slides. Press again to clear.`} onClick={() => choosePlatform(p.id)}>
-                  {p.label}
+            <span className="field-label" id="cr-tone-l">Tone</span>
+            <div role="group" aria-labelledby="cr-tone-l" className="chip-group">
+              {TONES.map((t) => (
+                <button key={t.id} type="button" className="chip-btn" aria-pressed={options.tone === t.id} disabled={busy} title={t.how} onClick={() => setOptions({ tone: t.id })}>
+                  {t.label}
                 </button>
               ))}
             </div>
@@ -182,57 +247,7 @@ export function MakeIt({ images, doc, options, setTopic, setOptions, onFormat, o
               </div>
             </div>
           )}
-          <div className="cr-inline">
-            <span className="field-label" id="cr-tone-l">Tone</span>
-            <div role="group" aria-labelledby="cr-tone-l" className="chip-group">
-              {TONES.map((t) => (
-                <button key={t.id} type="button" className="chip-btn" aria-pressed={options.tone === t.id} disabled={busy} title={t.how} onClick={() => setOptions({ tone: t.id })}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
-
-        {plat && (
-          <p className="small muted" role="status" data-testid="platform-cap">
-            {cap ? <strong>{cap}. </strong> : null}
-            {plat.label} allows up to {plat.max} slides in a post.
-          </p>
-        )}
-        {platformNote && (
-          <p className="small cr-problem" role="status" data-testid="platform-warning">
-            {platformNote}
-          </p>
-        )}
-
-    </>
-  );
-  if (part === 'options') return <div className="create-form" data-testid="options">{optionsBlock}</div>;
-  return (
-    <section className="card ws-card" aria-labelledby="cr-make-h">
-      <h2 id="cr-make-h" className="h3">Make a carousel in three steps</h2>
-      <ol className="cr-steps create-form">
-        <li aria-label="Step 1: your text">
-        <h3 className="h4">Your text</h3>
-        <label className="field">
-          <span className="field-label">Your text or topic</span>
-          <textarea className="cr-source" rows={8} value={doc.topic} onChange={(e) => setTopic(e.target.value)} disabled={busy} aria-describedby="cr-count" placeholder="Paste a paragraph, a rough idea or a whole article. Only what is in it will be used: no facts are added." />
-        </label>
-        <p id="cr-count" className={`small ${n > MAX_CHARS ? 'cr-problem' : 'muted'}`} role={n > MAX_CHARS ? 'alert' : undefined}>
-          {n.toLocaleString('en')} of {MAX_CHARS.toLocaleString('en')} characters{problem ? `. ${problem}` : ''}
-        </p>
-        {images}
-
-        </li>
-        <li aria-label="Step 2: pick a style">
-          <h3 className="h4">Pick a style</h3>
-          <p className="small muted cr-hint">Built-in styles and your own saved ones. Pick how the slides look.</p>
-          {styles}
-          {referenceBox}{styleExtra}
-        </li>
-        <li aria-label="Step 3: generate">
-        <h3 className="h4">Generate</h3>
         <div className="row-actions cr-go">
           {!busy && (
             <button type="button" className="btn btn-dark btn-lg cr-make-btn" disabled={disabled} aria-describedby="cr-why" onClick={onGenerate}>
@@ -244,7 +259,7 @@ export function MakeIt({ images, doc, options, setTopic, setOptions, onFormat, o
               Cancel
             </button>
           )}
-          <span id="cr-why" className="small muted">{!busy ? (why ?? (problem ? 'Add your text above to turn this button on.' : !styleReady ? 'Pick a style to turn this button on.' : '')) : ''}</span>
+          <span id="cr-why" className="small muted">{!busy ? (why ?? (problem ? 'Add your text in step 1 to turn this button on.' : !styleReady ? 'Pick a style to turn this button on.' : '')) : ''}</span>
         </div>
         <p className="small cr-cost" data-testid="cost-line">{cost}</p>
         <p className="small" role="status" aria-live="polite" data-testid="progress">
@@ -275,8 +290,7 @@ export function MakeIt({ images, doc, options, setTopic, setOptions, onFormat, o
             Writer (dev label): {provider ? provider.label : providers === null ? 'checking…' : 'none available'}
           </p>
         )}
-        </li>
-      </ol>
+      </div>
     </section>
   );
 }

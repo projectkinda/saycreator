@@ -1,6 +1,7 @@
 // Bug fix: a highlighted word with punctuation ("5,000", "$5,000", "99.9%", "3.5x", "50%", "e-mail", "it's") must be found in the
 // slide's text, the same way in the validator, the layout and the marker. And a highlight that is genuinely not in the text must
 // never fail a slide: it is drawn without the highlight and the slide card says so.
+import { openEdit } from './ui';
 import { expect, test, type Page } from '@playwright/test';
 import { validatePlan } from '../../src/image-engine/validate';
 import { findHighlight, missingHighlightNote, wordKey, wordKeys } from '../../src/image-engine/draw/words';
@@ -149,20 +150,24 @@ test.describe('on the slide card (the app)', () => {
     await page.goto('/images/carousel');
     await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
     await page.reload();
-    await page.getByText('Advanced: write the script yourself').click();
+    await page.getByRole('button', { name: 'I already have a script' }).click();
     await page.getByLabel('Paste the script Claude wrote (JSON)').fill(JSON.stringify(script));
     // The checker only warns about the highlight, it does not refuse the script.
     await expect(page.getByText('This script looks good: 3 slides')).toBeVisible();
     await expect(page.getByText(/highlights "banana"/)).toBeVisible();
     await page.getByRole('button', { name: 'Use this script' }).click();
-    await expect(page.locator('.cr-card .cr-pic img')).toHaveCount(3, { timeout: 30_000 });
-    const card = (n: number) => page.getByRole('listitem', { name: new RegExp(`^Slide ${n} of`) });
-    await expect(card(2).getByText("Highlight 'banana' not found; drawn without it.")).toBeVisible();
-    await expect(card(1).getByText(/not found/)).toHaveCount(0);
-    await expect(card(3).getByText(/not found/)).toHaveCount(0);
-    await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(3, { timeout: 30_000 });
+    await expect(page.locator('.cr-film img')).toHaveCount(3, { timeout: 30_000 });
+    // One slide at a time in the Edit slides view.
+    const card = page.locator('.cr-card');
+    await openEdit(page, 1);
+    await expect(card.getByText(/^Phone check:/)).toHaveCount(1, { timeout: 30_000 });
+    await expect(card.getByText(/not found/)).toHaveCount(0);
+    await openEdit(page, 3);
+    await expect(card.getByText(/not found/)).toHaveCount(0);
+    await openEdit(page, 2);
+    await expect(card.getByText("Highlight 'banana' not found; drawn without it.")).toBeVisible();
     // Fixing the highlight in the editor removes the warning.
-    await card(2).getByLabel('Highlighted words (optional)').fill('Launch');
-    await expect(card(2).getByText(/not found/)).toHaveCount(0, { timeout: 15_000 });
+    await card.getByLabel('Highlighted words (optional)').fill('Launch');
+    await expect(card.getByText(/not found/)).toHaveCount(0, { timeout: 15_000 });
   });
 });
