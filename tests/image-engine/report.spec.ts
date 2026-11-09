@@ -5,6 +5,7 @@ import fs from 'node:fs';
 test.setTimeout(120_000);
 
 async function seed(page: Page) {
+  await page.addInitScript(() => localStorage.setItem('creator.devtools', '1')); // the Report panel is a developer tool since round 1
   await page.goto('/images/carousel');
   await page.evaluate(async () => {
     const Dc = await import('/src/carousel/doc.ts');
@@ -25,7 +26,7 @@ async function withReference(page: Page) {
     g.fillRect(0, 0, 400, 500);
     const blob = await c.convertToBlob({ type: 'image/jpeg' });
     const url = await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(blob); });
-    A.setActiveReference({ spec: B.blankStyle(), thumb: '', learn: 'everything', target: 'carousel', ratioNote: null, photoRegion: null, report: { files: [{ name: 'ref-one.jpg', bytes: 54321, width: 400, height: 500 }, { name: 'ref-two.jpg', bytes: 4321, width: 400, height: 500 }], thumbs: [url, url] } });
+    A.setActiveReference({ source: 'recreate', /* the screen's own reader clears a reference of its own source when it holds no pictures; this one is set by the test */ spec: B.blankStyle(), thumb: '', learn: 'everything', target: 'carousel', ratioNote: null, photoRegion: null, report: { files: [{ name: 'ref-one.jpg', bytes: 54321, width: 400, height: 500 }, { name: 'ref-two.jpg', bytes: 4321, width: 400, height: 500 }], thumbs: [url, url] } });
   });
 }
 const dims = (page: Page, file: string) =>
@@ -37,7 +38,6 @@ const dims = (page: Page, file: string) =>
 test('the carousel page downloads report.json and compare.jpg, with verdicts, the note and the reference files', async ({ page }, info) => {
   await seed(page);
   await withReference(page);
-  await page.getByRole('checkbox', { name: 'Developer tools' }).check(); // the Report panel is a developer tool since round 1
   const panel = page.getByRole('region', { name: 'Report' });
   await expect(panel.getByRole('button', { name: 'Download report' })).toBeVisible();
   await panel.getByRole('group', { name: 'Verdict for slide 1' }).getByRole('button', { name: 'good' }).click();

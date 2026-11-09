@@ -120,7 +120,8 @@ test('a missing style: the page opens with the default style and a note, the pic
 // Old expectation: the description made ONE design call of kind "draw" whose answer was a script plus SVG designs. Since then the description's one call is the layout library's writer call
 // (prompt tagged [carousel:library], kind "write", answered with a list of layouts), so the fake answers that. Unchanged: nothing runs until the person confirms, exactly 1 call, the style
 // is saved, selected and used by code.
-const LIBRARY_ANSWER = JSON.stringify({ title: 'Habits', slides: JSON.parse(fs.readFileSync('tests/image-engine/fixtures/hot-flat-app-library.json', 'utf8')).library.plan.specs.map((x: any) => ({ layout: x.layout, fields: x.fields, accents: x.accents })) });
+const LIBRARY_ANSWER = JSON.stringify({ title: 'Habits', slides: JSON.parse(fs.readFileSync('tests/image-engine/fixtures/hot-flat-app-library.json', 'utf8')).library.plan.specs.map((x: any, i: number, all: any[]) => ({ layout: x.layout, // the text has no call to action, so the closing must carry one of the three generic labels (a closing with any other button is sent back for ONE targeted retry, a second call, by design)
+    fields: i === all.length - 1 && x.fields.button ? { ...x.fields, button: 'Save this for later' } : x.fields, accents: x.accents })) });
 test('New style from a description: nothing runs until the person confirms, then exactly 1 writer call; the style is saved, selected, and used by code', async ({ page }) => {
   const calls = await fake(page, () => LIBRARY_ANSWER);
   await open(page);
