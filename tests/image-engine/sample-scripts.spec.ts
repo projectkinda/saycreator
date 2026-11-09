@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openEdit, toStep } from './ui';
+import { openEdit, stylesDrawn, toStep } from './ui';
 import { validateScriptText } from '../../src/carousel/script';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -35,8 +35,8 @@ test('each sample script loads in the app and draws in every style; phone-check 
     await page.getByLabel('Paste the script Claude wrote (JSON)').fill(fs.readFileSync(path.join(DIR, f), 'utf8'));
     await page.getByRole('button', { name: 'Use this script' }).click();
     await toStep(page, 3);
-    const real = page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasNotText: 'Pick for me' }).getByRole('button');
-    await expect(page.getByRole('list', { name: 'Styles' }).getByText('Drawing…')).toHaveCount(0, { timeout: 60_000 });
+    const real = page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasNotText: 'Pick for me' }).locator('button.cr-style');
+    await stylesDrawn(page);
     const names = await real.evaluateAll((els) => els.map((e) => e.querySelector('strong')?.textContent ?? ''));
     expect(names.length).toBeGreaterThanOrEqual(4);
     for (let i = 0; i < names.length; i++) {

@@ -129,7 +129,7 @@ test('tone, slide count and style choice reach the writer; "Pick for me" uses th
   // The writer's style was applied, and the Pick for me tile still says it is in charge.
   await expect(page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasText: 'hot-flat' }).getByText('In use')).toBeVisible();
   // A style chosen by hand is not asked for and is kept.
-  await page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasText: 'Quiet dark minimal' }).getByRole('button', { name: /^(?!Rebuild)/ }).click();
+  await page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasText: 'Quiet dark minimal' }).getByRole('button', { name: /^(?!Rebuild|Preview$)/ }).click();
   await page.getByRole('button', { name: 'Friendly', exact: true }).click();
   await generate(page).click();
   await allDrawn(page, 5);

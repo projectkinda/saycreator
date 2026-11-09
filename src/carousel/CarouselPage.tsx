@@ -111,6 +111,20 @@ const keepPreview = async (k: string, blob: Blob) => {
 function StylePreviewPanel({ name, title, onUse, onClose }: { name: string; title: string; onUse: () => void; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [slides, setSlides] = useState<(string | null)[]>(() => Array(PREVIEW_COUNT).fill(null));
+  const [cur, setCur] = useState(0);
+  // which slide is at the left edge of the strip (the "1 of 7" counter)
+  const onScroll = (e: React.UIEvent<HTMLOListElement>) => {
+    const strip = e.currentTarget;
+    const left = strip.getBoundingClientRect().left;
+    let best = 0;
+    let d = Infinity;
+    Array.from(strip.children).forEach((c, i) => {
+      const x = Math.abs((c as HTMLElement).getBoundingClientRect().left - left);
+      if (x < d) { d = x; best = i; }
+    });
+    if (strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 2) best = PREVIEW_COUNT - 1;
+    setCur(best);
+  };
   useEffect(() => {
     const d = ref.current;
     if (d && !d.open) d.showModal();
@@ -148,9 +162,10 @@ function StylePreviewPanel({ name, title, onUse, onClose }: { name: string; titl
     <dialog ref={ref} className="cr-dialog cr-style-preview" aria-label={`Preview of the ${title} style`} data-testid="style-preview" onClose={onClose}>
       <div className="cr-sp-head">
         <h2 className="h3">{title}</h2>
+        <span className="small muted" data-testid="style-preview-count" aria-live="polite">{cur + 1} of {PREVIEW_COUNT}</span>
         <button type="button" className="btn btn-outline btn-sm" onClick={() => ref.current?.close()}>Close</button>
       </div>
-      <ol className="cr-sp-strip" aria-label="Sample slides in this style">
+      <ol className="cr-sp-strip" aria-label="Sample slides in this style" onScroll={onScroll}>
         {slides.map((u, i) => (
           <li key={i} data-testid={`style-preview-slide-${i + 1}`}>
             {u && u !== 'none' ? <img src={u} alt={`Sample slide ${i + 1} in the ${title} style`} /> : <span className="small muted" role="status">{u === 'none' ? 'No preview' : 'Drawing…'}</span>}
@@ -184,7 +199,8 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
     setPackNote(`Saved “${name}” (Mine): ${Object.keys(pack.designs).length} designs${check.ok ? ', each with its own composition' : `, but ${check.alike.length} pair(s) look alike`}. The ${st.spec.title} style is unchanged.`);
   };
   // The cards draw when they come into view (a card that is far off screen waits), four at a time; one that fails shows "No preview" and does not stop the rest.
-  const [seen, setSeen] = useState<Set<string>>(() => new Set());
+  // The first card always draws (as the old eager drawing did, even when the Style step is not open): it also warms the drawing code before the first deck is made.
+  const [seen, setSeen] = useState<Set<string>>(() => new Set(styles.slice(0, 1).map((x) => x.spec.name)));
   const [previewing, setPreviewing] = useState<string | null>(null);
   const previewsRef = useRef(previews);
   previewsRef.current = previews;

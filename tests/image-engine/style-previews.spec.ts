@@ -20,39 +20,75 @@ const allDrawn = async (page: Page) => {
   await list.scrollIntoViewIfNeeded();
   for (let y = 0; y < 10; y++) { await page.mouse.wheel(0, 700); await page.waitForTimeout(250); }
   await expect(list.getByText('Drawing…')).toHaveCount(0, { timeout: 60_000 });
+  // the small slides come after each cover
+  await expect(list.locator('.cr-style-small img')).toHaveCount(30, { timeout: 60_000 });
 };
 
-test('no two styles show the same pair of small slides; the layouts are ones the style likes, none of them a cover layout; the list covers all 15', async ({ page }) => {
+test('card pairs: only body layouts the style likes, no two styles alike, no layout on more than 3 styles, a dark style shows a dark slide and a light style a light one, same sample words as the panel', async ({ page }) => {
   const f = await counting(page);
   await page.goto('/images/carousel');
   const r = await page.evaluate(async () => {
     const S: any = await import('/src/carousel/stylePreview.ts');
     const PR: any = await import('/src/carousel/presets.ts');
     const D: any = await import('/src/carousel/designLibrary.ts');
+    const F: any = await import('/src/reference/faithful.ts');
     const names: string[] = S.presetNames();
-    const pairs: Record<string, [string, string]> = S.cardPairs(names);
-    const prefer = Object.fromEntries(names.map((n) => [n, (D.styleFromPack(PR.presetPackFor(n, false)).style.flavour?.prefer ?? []) as string[]]));
-    return { names, pairs, prefer };
+    const tone = async (svg: string) => {
+      const bm = await createImageBitmap(await F.svgToPng(svg, 60));
+      const c = new OffscreenCanvas(bm.width, bm.height); const g = c.getContext('2d')!; g.drawImage(bm, 0, 0);
+      const px = g.getImageData(0, 0, bm.width, bm.height).data; let t = 0; for (let i = 0; i < px.length; i += 4) t += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+      return Math.round(t / (px.length / 4));
+    };
+    const out: any[] = [];
+    for (const n of names) {
+      const { style } = D.styleFromPack(PR.presetPackFor(n, false));
+      const picks = S.cardPicks(n);
+      const svgs: (string | null)[] = await S.cardSlides(n);
+      out.push({
+        n, picks, prefer: style.flavour?.prefer ?? [], avoid: style.flavour?.avoid ?? [],
+        cover: await tone((await PR.presetThumbSvg(n)) as string),
+        tones: await Promise.all(svgs.map(async (x) => (x ? await tone(x) : null))),
+        fast: svgs.map((x) => (x ? S.slideTone(x) : null)),
+        words: svgs.map((x) => (x ? (x.match(/>([^<]+)</g) ?? []).join(' ') : '')),
+      });
+    }
+    return { names, out, body: [...S.BODY_LAYOUTS], habit: Object.keys(S.HABIT_FIELDS) };
   });
   expect(r.names.length, 'every built-in style').toBe(15);
-  const keys = new Set<string>();
-  const covers = new Set(['statement', 'statement-stacked', 'statement-card', 'statement-pill', 'lead-statement', 'big-question', 'statement-question', 'photo-led', 'photo-cover', 'cover-art']);
-  for (const n of r.names) {
-    const p = r.pairs[n];
-    expect(p, `${n} has a pair`).toHaveLength(2);
-    expect(p[0]).not.toBe(p[1]);
-    for (const l of p) {
-      expect(r.prefer[n], `${n} likes ${l}`).toContain(l);
-      expect(covers.has(l), `${l} is not a cover layout`).toBe(false);
+  expect(r.habit.sort(), 'the sample words exist for every body layout').toEqual([...r.body].sort());
+  const keys = new Map<string, string>();
+  const usage: Record<string, string[]> = {};
+  const report: Record<string, unknown> = {};
+  // style 5 likes only two body layouts, the same two as style 1; its second slide is the one allowed layout that is not on its likes list
+  const NOT_LIKED_OK: Record<string, string[]> = { 'style-5': ['headline-card'] };
+  for (const o of r.out) {
+    const layouts = o.picks.map((x: any) => x.layout);
+    expect(o.picks, `${o.n} has two slides`).toHaveLength(2);
+    expect(layouts[0]).not.toBe(layouts[1]);
+    for (const l of layouts) {
+      expect(r.body, `${o.n}: ${l} is a body layout`).toContain(l);
+      expect(/^(prose|cta-|contact-closing|statement|lead-statement|big-question|photo|cover-art)/.test(l), `${o.n}: ${l} is never a card layout`).toBe(false);
+      expect(o.prefer.includes(l) || (NOT_LIKED_OK[o.n] ?? []).includes(l), `${o.n} likes ${l}`).toBe(true);
+      expect(o.avoid, `${o.n} does not avoid ${l}`).not.toContain(l);
+      (usage[l] ??= []).push(o.n);
     }
-    const k = [...p].sort().join('+');
-    expect(keys.has(k), `${n} repeats the pair ${k}`).toBe(false);
-    keys.add(k);
+    const k = [...layouts].sort().join('+');
+    expect(keys.has(k), `${o.n} repeats the pair ${k} of ${keys.get(k)}`).toBe(false);
+    keys.set(k, o.n);
+    // light and dark: the drawn slides, measured
+    expect(o.tones.every((t: number | null) => t !== null), `${o.n}: both slides drawn`).toBe(true);
+    if (o.cover < 100) expect(o.tones.some((t: number) => t < 110), `${o.n} is a dark style (cover ${o.cover}) and shows a dark slide: ${o.tones}`).toBe(true);
+    if (o.cover > 160) expect(o.tones.some((t: number) => t > 160), `${o.n} is a light style (cover ${o.cover}) and shows a light slide: ${o.tones}`).toBe(true);
+    // the quick tone read from the svg agrees with the real picture (so the app and this check cannot drift)
+    o.fast.forEach((t: number | null, i: number) => { if (t !== null) expect(Math.abs(t - o.tones[i]), `${o.n}: slideTone ${t} vs picture ${o.tones[i]}`).toBeLessThan(60); });
+    // the same sample words as the panel's script
+    const words = o.words.join(' ').toLowerCase();
+    expect(/habit|tiny|myth|willpower|step|repeatedly|66|friend|streak|time/.test(words), `${o.n}: the cards use the habit sample words`).toBe(true);
+    report[o.n] = { pair: layouts, tones: o.tones, cover: o.cover };
   }
-  // variety: the 15 pairs use many different layouts
-  expect(new Set(Object.values(r.pairs).flat()).size).toBeGreaterThanOrEqual(12);
+  for (const [l, who] of Object.entries(usage)) expect(who.length, `${l} is on ${who.length} styles: ${who.join(', ')}`).toBeLessThanOrEqual(3);
   fs.mkdirSync(OUT, { recursive: true });
-  fs.writeFileSync(`${OUT}/pairs.json`, JSON.stringify(r.pairs, null, 2));
+  fs.writeFileSync(`${OUT}/pairs.json`, JSON.stringify(report, null, 2));
   expect(f.calls).toBe(0);
 });
 
@@ -77,8 +113,8 @@ test('the preview slides use the same code as a real deck: small slides are draw
     const n0 = names[0];
     const pack = PR.presetPackFor(n0, false);
     const { style } = D.styleFromPack(pack);
-    const pair = S.cardPairs()[n0];
-    const direct = await D.drawOne({ layout: pair[0], fields: L.layoutDef(pair[0]).samples.normal, accents: [] }, ((style.flavour?.variants ?? {})[pair[0]] === 1 ? 1 : 0), style, { handle: '', index: 1, total: 7, cut: 'plain', invert: false, density: 'normal' });
+    const pk = S.cardPicks(n0)[0];
+    const direct = await D.drawOne({ layout: pk.layout, fields: S.HABIT_FIELDS[pk.layout], accents: [] }, ((style.flavour?.variants ?? {})[pk.layout] === 1 ? 1 : 0), style, { handle: '', index: 1, total: 7, cut: 'plain', invert: pk.invert ?? false, density: 'normal' });
     const viaCard = (await S.cardSlides(n0))[0];
     const script = Sc.validateScriptText(JSON.stringify(S.PREVIEW_SCRIPT), 'carousel').script;
     const made = await FS.libraryDeckFromScript(script, { pack, brief: '', hasPhoto: false, images: [], site: '' }, '');
@@ -112,10 +148,15 @@ test('step 3 on a desktop: every built-in card has a cover, two small slides and
   expect(await list.locator('.cr-style-small img').count(), 'two small slides on each of the 15 cards').toBe(30);
   expect(await list.getByRole('button', { name: 'Preview', exact: true }).count()).toBe(15);
   fs.mkdirSync(OUT, { recursive: true });
-  await list.scrollIntoViewIfNeeded();
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await toStep(page, 3);
+  // scrolled so the cards (with their small slides) fill the screen: at least six are fully visible
+  await page.setViewportSize({ width: 1280, height: 1100 });
+  await list.locator('li').first().evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await page.evaluate(() => window.scrollBy(0, -20));
+  await page.waitForTimeout(400);
+  const seen = await list.locator('li:has(.cr-style-smalls)').evaluateAll((els) => els.filter((e) => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }).length);
+  expect(seen, 'six or more cards with small slides fully on screen').toBeGreaterThanOrEqual(6);
   await page.screenshot({ path: `${OUT}/desktop-step3.png` });
+  await page.setViewportSize({ width: 1280, height: 900 });
   // the panel of three clearly different styles
   for (const [title, file] of [['Bold orange', 'orange'], ['Pink serif stickers', 'pink'], ['Black holographic', 'holographic']] as const) {
     const c = card(page, title);
@@ -124,6 +165,11 @@ test('step 3 on a desktop: every built-in card has a cover, two small slides and
     await expect(panel).toBeVisible();
     await expect(panel.locator('img')).toHaveCount(7, { timeout: 60_000 });
     expect(await panel.locator('img').evaluateAll((els) => els.every((e) => (e as HTMLImageElement).naturalWidth > 0))).toBe(true);
+    await expect(panel.getByTestId('style-preview-count')).toHaveText('1 of 7');
+    await panel.getByRole('list', { name: 'Sample slides in this style' }).evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+    await expect(panel.getByTestId('style-preview-count')).toHaveText('7 of 7');
+    await panel.getByRole('list', { name: 'Sample slides in this style' }).evaluate((el) => { el.scrollLeft = 0; });
+    await expect(panel.getByTestId('style-preview-count')).toHaveText('1 of 7');
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${OUT}/desktop-panel-${file}.png` });
     await panel.getByRole('button', { name: 'Close' }).click();

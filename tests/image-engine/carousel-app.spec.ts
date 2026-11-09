@@ -1,7 +1,7 @@
 // Step 8: the carousel editor inside the real app (Images > Make a carousel), used like a person would use it.
 // Screenshots of each state go to out/image-engine/app-flow/ and are shown on the Results screen (Step 8).
 import { showAllSteps } from './flat';
-import { toStep } from './ui';
+import { stylesDrawn, toStep } from './ui';
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -114,9 +114,10 @@ test('the Images screen has a Make a carousel action that opens the editor, with
   const styles = page.getByRole('list', { name: 'Styles' }).getByRole('listitem');
   expect(await styles.count()).toBeGreaterThanOrEqual(5); // "Pick for me" and every stored style
   await expect(page.getByRole('button', { name: /^Pick for me/ })).toHaveAttribute('aria-pressed', 'true');
+  await stylesDrawn(page); // the cards draw when they scroll into view
   // "Pick for me" has an icon; "New style" has none; every other card has a picture that drew
-  await expect(page.getByRole('list', { name: 'Styles' }).locator('img')).toHaveCount((await styles.count()) - 2, { timeout: 30_000 });
-  const ok = await page.getByRole('list', { name: 'Styles' }).locator('img').evaluateAll((els) => els.every((e) => (e as HTMLImageElement).naturalWidth > 0));
+  await expect(page.getByRole('list', { name: 'Styles' }).locator('.cr-style-pic img')).toHaveCount((await styles.count()) - 2, { timeout: 30_000 });
+  const ok = await page.getByRole('list', { name: 'Styles' }).locator('.cr-style-pic img').evaluateAll((els) => els.every((e) => (e as HTMLImageElement).naturalWidth > 0));
   expect(ok).toBe(true);
   await shot(page, 'start', 'Start: format, style, script', 'Pick a format, pick a style (each has a small preview), then get a script.');
 });
@@ -250,7 +251,7 @@ test('changing the style restyles the same script; undo goes back', async ({ pag
   await allDrawn(page);
   const beforeHash = await pixels(page);
   const picker = page.getByRole('list', { name: 'Styles' });
-  const buttons = picker.getByRole('button', { name: /^(?!Rebuild)/ });
+  const buttons = picker.getByRole('button', { name: /^(?!Rebuild|Preview$)/ });
   const pressed = await buttons.evaluateAll((els) => els.findIndex((e) => e.getAttribute('aria-pressed') === 'true'));
   const current = buttons.nth(pressed);
   const currentName = await current.innerText();
@@ -455,7 +456,7 @@ test('keyboard and screen readers: the whole flow works without a mouse, and con
   await expect(page.getByRole('button', { name: /^Quote card/ })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('combobox', { name: /^Slides/ })).toBeFocused();
-  const firstStyle = page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasNotText: 'Pick for me' }).first().getByRole('button', { name: /^(?!Rebuild)/ });
+  const firstStyle = page.getByRole('list', { name: 'Styles' }).getByRole('listitem').filter({ hasNotText: 'Pick for me' }).first().getByRole('button', { name: /^(?!Rebuild|Preview$)/ });
   await firstStyle.focus();
   await page.keyboard.press('Enter');
   await expect(firstStyle).toHaveAttribute('aria-pressed', 'true');
