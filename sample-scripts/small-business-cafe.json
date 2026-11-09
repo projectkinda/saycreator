@@ -1,6 +1,5 @@
 {
   "title": "Fix these before you change the menu",
-  "brand": { "handle": "@yourcafe" },
   "slides": [
     { "type": "cover", "kicker": "For small cafes", "headline": "Fix these three things before changing your menu", "sub": "Most regulars leave over small friction, not the food.", "highlight": "three things", "element_tags": ["work", "warning"] },
     { "type": "content", "headline": "Your queue is the first impression", "body": "If the line is slow, nobody tastes the coffee. Time one busy hour and count the steps per order.", "highlight": "queue", "element_tags": ["time", "people"] },

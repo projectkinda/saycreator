@@ -41,9 +41,9 @@
       "bg": "#CC2B6E",
       "text": "#FFFFFF",
       "muted": "#FFF0F6",
-      "accent": "#FFE9A8",
+      "accent": "#FFF6DB",
       "onAccent": "#CC2B6E",
-      "marker": "#FFE9A8",
+      "marker": "#FFF6DB",
       "onMarker": "#CC2B6E",
       "surface": "#FFFFFF",
       "onSurface": "#2A2A2A",
@@ -57,7 +57,7 @@
       "onAccent": "#FFFFFF",
       "marker": "#CC2B6E",
       "onMarker": "#FFFFFF",
-      "surface": "#FBE9F1",
+      "surface": "#FDF4F8",
       "onSurface": "#2A2A2A",
       "line": "#2A2A2A"
     }

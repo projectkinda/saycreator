@@ -59,7 +59,7 @@ const TABS: { id: EditTab; label: string }[] = [
 ];
 
 /** The editor of ONE slide, as four tabs: Layout | Text | Pictures | Fine-tune. There is no second preview here: the big preview and the thumbnail strip stay on the left. */
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, ownNote, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, ownNote, onSplit, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -98,6 +98,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   /** The picture slot whose controls are open (a tap on the preview opens it too). */
   openSlot: string | null;
   onOpenSlot: (field: string | null) => void;
+  /** A slide with too many words: cuts it in two at a sentence end (every word kept); says what happened. */
+  onSplit?: () => Promise<string>;
   /** A pasted script: a line about this slide (it uses the simple layout, or its text is too long for any layout). */
   ownNote?: { kind: 'info' | 'warn'; text: string };
   /** 'none': the project has no pictures; 'free': there are unused ones; 'used': all are on other slides. */
@@ -113,6 +115,9 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   deckLabel: string;
 }) {
   const [elementsOpen, setElementsOpen] = useState(false);
+  const [splitMsg, setSplitMsg] = useState('');
+  const [splitBusy, setSplitBusy] = useState(false);
+  const tooManyWords = !!view?.rendered?.lint.some((l) => l.id === 'words' && !l.pass);
   const [addMsg, setAddMsg] = useState('');
   const [addBusy, setAddBusy] = useState(false);
   const [problem, setProblem] = useState('');
@@ -259,6 +264,13 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
               {n}
             </p>
           ))}
+        {tooManyWords && onSplit && (
+          <div className="cr-split" data-testid="split-box">
+            <button type="button" className="btn btn-dark btn-sm" disabled={splitBusy} data-testid="split-slide" onClick={async () => { setSplitBusy(true); setSplitMsg(''); setSplitMsg(await onSplit()); setSplitBusy(false); }}>{splitBusy ? 'Splitting…' : 'Split into two slides'}</button>
+            <span className="small muted"> Cuts this slide in two at a sentence end. Every word is kept, in order.</span>
+          </div>
+        )}
+        {splitMsg && <p className="small" role="status" data-testid="split-msg">{splitMsg}</p>}
         {ownNote && <p className={`small ${ownNote.kind === 'warn' ? 'cr-warn' : 'muted'}`} role="status" data-testid="own-note">{ownNote.kind === 'warn' && <span aria-hidden="true">⚠ </span>}{ownNote.text}</p>}
         {view?.error && <p className="small cr-problem" role="alert">{view.error}</p>}
       </div>

@@ -879,6 +879,14 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
           style = 'marker';
           notes.push('The accent colour has under 3:1 contrast against the background as text, so the phrase is set on a marker.');
         }
+        // A tint that cannot be told from the text colour (a sand accent on cream text: under 1.8:1) marks nothing the eye can see at phone size: the phrase goes on a marker bar instead.
+        if (style === 'text') {
+          const tc = typeof filled.style.color === 'string' ? (filled.style.color.startsWith('$') ? (rec.palette as Record<string, string | undefined>)[filled.style.color.slice(1)] : filled.style.color) : rec.palette.text;
+          if (tc && /^#[0-9a-f]{6}$/i.test(tc) && /^#[0-9a-f]{6}$/i.test(runColour) && contrastOf(runColour, tc) < 1.8) {
+            style = 'marker';
+            notes.push('The accent colour is too close to the text colour to show as a tint, so the phrase is set on a marker.');
+          }
+        }
         if (style === 'marker') {
           const ink = markerInk(rec.palette, accentColour);
           const pad = Math.round(filled.style.size * 0.16);

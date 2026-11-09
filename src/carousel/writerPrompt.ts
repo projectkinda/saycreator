@@ -49,7 +49,7 @@ export function buildWritePrompt(req: WriteRequest): string {
     '',
     'Reply with ONE JSON object and nothing else (no code fence, no explanation). Format:',
     '',
-    JSON.stringify(quote ? EXAMPLE_QUOTE : EXAMPLE, null, 2),
+    JSON.stringify(quote ? { ...EXAMPLE_QUOTE, brand: undefined } : { ...EXAMPLE, brand: undefined }, null, 2),
     '',
     'Rules:',
     '- Facts: use only facts, claims and numbers that are in the text. Never invent statistics, names, quotes, dates or results. If a slide would want a number the text does not give, leave that slide out. A "stat" slide\'s "value" must be a real figure taken from the text (for example "6 hours" or "3x"), never "X", "?" or empty: if the text has no figure to show, write a "content" slide instead of a stat slide.',

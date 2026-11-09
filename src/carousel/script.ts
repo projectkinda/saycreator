@@ -195,9 +195,10 @@ export const issuesFor = (issues: Issue[], prefix: string) => issues.filter((i) 
 
 // ---- the prompt people copy into a Claude chat ----
 
+/** The shape shown to the writer. `brand` is an empty object (the code reads it) and is never printed in a prompt: no sample handle is ever shown. */
 export const EXAMPLE = {
   title: 'Short name of this carousel',
-  brand: { handle: '@yourname' },
+  brand: { handle: '' },
   slides: [
     { type: 'cover', kicker: 'Small line above', headline: 'The big promise in under ten words', sub: 'One line that makes people swipe.', highlight: 'big promise', element_tags: ['idea', 'launch'] },
     { type: 'step', number: 1, headline: 'First thing to do', body: 'One or two short sentences.', highlight: 'First', element_tags: ['write', 'time'] },
@@ -208,7 +209,7 @@ export const EXAMPLE = {
     { type: 'closing', headline: 'Save this for later', cta: 'Follow for more', element_tags: ['launch', 'love'] },
   ],
 };
-export const EXAMPLE_QUOTE = { title: 'Short name of this set', brand: { handle: '@yourname' }, slides: [{ type: 'quote', quote: 'One sentence worth remembering.', by: 'Who said it', highlight: 'worth remembering', element_tags: ['idea', 'write'] }] };
+export const EXAMPLE_QUOTE = { title: 'Short name of this set', brand: { handle: '' }, slides: [{ type: 'quote', quote: 'One sentence worth remembering.', by: 'Who said it', highlight: 'worth remembering', element_tags: ['idea', 'write'] }] };
 
 export function scriptPrompt(topic: string, format: Format): string {
   const t = topic.trim() || '(write your topic here)';
@@ -220,7 +221,7 @@ export function scriptPrompt(topic: string, format: Format): string {
     '',
     'Reply with ONE JSON object in a single code block, nothing else. It must follow this format exactly:',
     '',
-    JSON.stringify(quote ? EXAMPLE_QUOTE : EXAMPLE, null, 2),
+    JSON.stringify(quote ? { ...EXAMPLE_QUOTE, brand: undefined } : { ...EXAMPLE, brand: undefined }, null, 2),
     '',
     'Rules:',
     quote ? '- 1 to 5 slides, every one of type "quote". Each quote is one sentence of at most 20 words.' : '- Exactly 7 slides. The first is "cover", the last is "closing". The slide types you can use are: cover, content, step, checklist, stat, beforeafter, quote, closing. Use each type only when it helps; you do not have to use them all.',
@@ -242,7 +243,6 @@ export function exampleScript(format: Format): string {
     return JSON.stringify(
       {
         title: 'Three lines worth keeping',
-        brand: { handle: '@yourname' },
         slides: [
           { type: 'quote', quote: 'Ship the small thing today and the big thing will follow.', by: 'Someone who did', highlight: 'small thing', element_tags: ['launch', 'idea'] },
           { type: 'quote', quote: 'Clear beats clever, every single time.', by: 'An editor', highlight: 'Clear', element_tags: ['write', 'target'] },
@@ -256,7 +256,6 @@ export function exampleScript(format: Format): string {
   return JSON.stringify(
     {
       title: 'Fix your profile in 15 minutes',
-      brand: { handle: '@yourname' },
       slides: [
         { type: 'cover', kicker: 'Profile, fixed', headline: 'Fix your profile in 15 minutes', sub: 'Three edits that make people stop scrolling and start replying.', highlight: '15 minutes', element_tags: ['profile', 'time'] },
         { type: 'step', number: 1, headline: 'Rewrite your headline', body: 'Skip the job title. Say who you help and how.', element_tags: ['profile', 'write'] },

@@ -37,14 +37,14 @@
   },
   "palettes": {
     "orange": {
-      "bg": "#F76718",
+      "bg": "#C84B07",
       "text": "#FFFFFF",
       "muted": "#FFFFFF",
       "accent": "#FFFFFF",
-      "onAccent": "#F76718",
+      "onAccent": "#C84B07",
       "marker": "#FFFFFF",
-      "onMarker": "#F76718",
-      "surface": "#FF8238",
+      "onMarker": "#C84B07",
+      "surface": "#A83F05",
       "onSurface": "#FFFFFF",
       "line": "#FFFFFF"
     },
@@ -56,7 +56,7 @@
       "onAccent": "#C2410C",
       "marker": "#FFFFFF",
       "onMarker": "#C2410C",
-      "surface": "#D6571E",
+      "surface": "#C24F1B",
       "onSurface": "#FFFFFF",
       "line": "#FFFFFF"
     },
@@ -65,7 +65,7 @@
       "text": "#FFFFFF",
       "muted": "#F2CDB8",
       "accent": "#F76718",
-      "onAccent": "#FFFFFF",
+      "onAccent": "#2B1308",
       "marker": "#F76718",
       "onMarker": "#2B1308",
       "surface": "#3F2111",

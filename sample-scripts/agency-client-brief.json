@@ -1,6 +1,5 @@
 {
   "title": "What a good client brief contains",
-  "brand": { "handle": "@youragency" },
   "slides": [
     { "type": "cover", "kicker": "For agencies", "headline": "The client brief that saves two rounds of revisions", "sub": "Six answers to get before any work starts.", "highlight": "saves two rounds", "element_tags": ["work", "proof"] },
     { "type": "step", "number": 1, "headline": "Ask what success looks like", "body": "Get one sentence the client would be happy to read in three months. If they cannot write it, the brief is not ready.", "highlight": "success", "element_tags": ["target", "message"] },

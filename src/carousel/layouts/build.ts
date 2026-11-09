@@ -154,6 +154,8 @@ export function caseFields(f: Fields, mode: LayoutStyle['caseStyle'], ex: { cano
   else if (typeof f.accent === 'string') out.accent = t(f.accent);
   return out;
 }
+/** The drawing the engine returns has lost the root tag's attributes: the layout id goes back on it, because the phone check reads it (a prose slide is held to its own 70-word limit, not the 50 of the other slides). */
+const withLayoutTag = (svg: string, layoutId: string): string => (/<svg\b[^>]*data-layout=/.test(svg.slice(0, 600)) ? svg : svg.replace(/<svg\b/, () => `<svg data-layout="${layoutId}"`));
 export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fields, st00: LayoutStyle, o0: BuildOpts): Promise<Built> {
   const o: BuildOpts = { ...o0, handle: drawnHandle(o0.handle) }; // the @yourname placeholder is never drawn
   const st0 = groundOf(st00, o.index, o.ground);
@@ -374,5 +376,5 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       return plain;
     }
   }
-  return { ...(pics.length ? { images: pics } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: done, layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
+  return { ...(pics.length ? { images: pics } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: withLayoutTag(done, layoutId), layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
 }

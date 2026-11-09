@@ -3,6 +3,21 @@ import type { SlideScript } from '../carousel/types';
 import { arrowRight, button, buildText, divider, ellipse, icon, inkWidth, pathLayer, quoteMarks, rect } from '../carousel/toolbox';
 import { add, bg, body, head, num, type LCtx } from './kit';
 import { labelText, outlinePill, rule } from './tools';
+import { contrastRgb, parseColor } from '../lint/color';
+
+/** The accent colour used as ink on a ground or a card: the accent itself when it reads there (4.6:1), else the palette's own ground colour, else its text colours. Never a colour from outside the palette. */
+function accentOn(pal: { accent: string; bg: unknown; text: string; onSurface?: string }, ground: unknown): string {
+  if (typeof ground !== 'string') return pal.accent; // a gradient ground: the accent as it is (the engine's own check still runs)
+  const reads = (c: unknown) => {
+    if (typeof c !== 'string') return false;
+    try {
+      return contrastRgb(parseColor(c).rgb, parseColor(ground).rgb) >= 4.6;
+    } catch {
+      return true;
+    }
+  };
+  return [pal.accent, pal.bg, pal.text, pal.onSurface ?? pal.text].find(reads) as string ?? pal.onSurface ?? pal.text;
+}
 
 type S<T extends SlideScript['type']> = Extract<SlideScript, { type: T }>;
 const words = (h?: string) => h?.split(/\s+/).filter(Boolean);
@@ -16,7 +31,7 @@ export function statGiant(c: LCtx, s: S<'stat'>) {
   const gap = t.spacing.gap;
   const sec = t.spacing.section;
   const kick = s.kicker ? labelText(t, c.pal, 'kicker', M, 0, s.kicker, { width: cw }) : null;
-  const val = buildText({ id: 'value', x: M, y: 0, width: cw, text: s.value, font: t.fonts.headline, weight: t.fonts.headlineWeight, size: t.type.stat, minSize: 140, maxHeight: t.type.stat * 1.3, color: c.pal.accent, lineHeight: 1, balance: false });
+  const val = buildText({ id: 'value', x: M, y: 0, width: cw, text: s.value, font: t.fonts.headline, weight: t.fonts.headlineWeight, size: t.type.stat, minSize: 140, maxHeight: t.type.stat * 1.3, color: accentOn(c.pal, c.pal.bg), lineHeight: 1, balance: false });
   const lab = head(c, 'label', s.label, { region: [0, 360], size: 66, min: 48, asWritten: true, dry: true });
   const note = s.note ? body(c, 'note', s.note, { y: 0, size: t.type.note ?? t.type.body - 4, min: 32, maxH: 220, color: c.pal.muted, dry: true }) : null;
   const pill = c.params.pill ? 86 : 0;
@@ -54,7 +69,7 @@ export function statCard(c: LCtx, s: S<'stat'>) {
   const sec = t.spacing.section;
   const pad = 56;
   const iw = cw - 2 * pad;
-  const val = buildText({ id: 'value', x: M + pad, y: 0, width: iw, text: s.value, font: t.fonts.headline, weight: t.fonts.headlineWeight, size: t.type.stat * 0.9, minSize: 120, maxHeight: t.type.stat * 1.2, color: c.pal.accent, lineHeight: 1, balance: false });
+  const val = buildText({ id: 'value', x: M + pad, y: 0, width: iw, text: s.value, font: t.fonts.headline, weight: t.fonts.headlineWeight, size: t.type.stat * 0.9, minSize: 120, maxHeight: t.type.stat * 1.2, color: accentOn(c.pal, c.pal.surface), lineHeight: 1, balance: false });
   const lab = head(c, 'label', s.label, { region: [0, 300], x: M + pad, width: iw, size: 60, min: 44, asWritten: true, pal: c.pal, color: c.pal.onSurface, dry: true });
   const note = s.note ? body(c, 'note', s.note, { y: 0, size: t.type.note ?? t.type.body - 4, min: 32, maxH: 220, color: c.pal.muted, dry: true }) : null;
   const cardH = pad + val.height + gap + lab.height + pad;
@@ -140,7 +155,8 @@ export function baSplit(c: LCtx, s: S<'beforeafter'>) {
   const seam = 124;
   bg(c);
   add(c, rect('bg-after', 'decor', 0, half, W, H - half, bot.bg));
-  c.chromePal = bot;
+  // the page chrome sits where the style puts it: a strip at the TOP is on the top half's ground, the bottom row on the bottom half's
+  c.chromePal = c.style.chrome === 'strip' ? top : bot;
   const l1 = outlinePill(t, top, 'before-label', M, c.top, s.beforeLabel);
   add(c, ...l1.layers);
   const y1 = c.top + l1.height + gap;

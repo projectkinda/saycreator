@@ -15,8 +15,9 @@ import { libraryDeckFromScript, scriptText } from './libraryFromScript';
 import type { CarouselScript } from '../image-engine/carousel/types';
 import { clearPageState } from './resetState';
 import { DetectedStyleBox } from './DetectedStyle';
-import { DRAW_VERSION, legacySvgRoute, redrawLibraryDeck, scriptSlideOf, styleFromPack, templateRoute } from './designLibrary';
+import { DRAW_VERSION, legacySvgRoute, redrawLibraryDeck, scriptSlideOf, slideProblems, styleFromPack, templateRoute } from './designLibrary';
 import { flavourPass } from './flavour';
+import { canSplitLayout, splitSpec } from './splitSlide';
 import { presetKey, presetPackFor, presetThumbSvg } from './presets';
 import { svgToPng } from '../reference/faithful';
 import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
@@ -397,7 +398,7 @@ export default function CarouselPage() {
       const presetUsed = !refPack && presetPack ? presetName : null;
       const look = { pack: refPack ?? (presetUsed ? presetPack : null), brief: '', hasPhoto: pictures.length > 0, images: photoInfos, site: profileWebsite() };
       try {
-        const out = await libraryDeckFromScript(withHandle, look, options.handle.trim());
+        const out = await libraryDeckFromScript(withHandle, look, handle); // the script's own handle is drawn as written (the @yourname placeholder never is)
         if (out.ok) {
           const designedOut = out.designed.library ? { ...out.designed, library: { ...out.designed.library, source: presetUsed ?? 'reference' } } : out.designed;
           const gp = patches.generate(out.script, presetUsed, 'Use your script');
@@ -895,6 +896,47 @@ export default function CarouselPage() {
       setNotice('The style could not be changed: ' + (e as Error).message);
     }
   };
+  /**
+   * "Split into two slides": a slide whose text is too long becomes two, cut at the sentence end nearest the middle (every word kept, in order; the second slide has no headline).
+   * The deck is drawn again from its plan by code (no model call) and the whole thing is ONE undo step: the plan, the script and the per-slide choices move together.
+   */
+  const splitSlideAt = async (i: number): Promise<string> => {
+    const d = docRef.current;
+    const lib = d.designed?.library;
+    const spec = lib?.plan?.specs[i];
+    if (!d.script || !d.designed || !lib?.plan || !spec) return 'This deck has no stored plan to draw from.';
+    const src = lib.source ?? 'reference';
+    const pack = src === 'reference' ? (activeReference()?.pack ?? null) : presetPackFor(src);
+    if (!pack) return 'The style of this deck is not available, so the slide cannot be split.';
+    const look = { pack, hasPhoto: pictures.length > 0, images: photoInfos, site: profileWebsite() };
+    const [, hi] = SLIDE_RANGE[d.format];
+    if (lib.plan.specs.length + 1 > hi) return `A ${d.format === 'quote' ? 'quote set' : 'carousel'} can have at most ${hi} slides, so this slide cannot be split.`;
+    const sp = splitSpec(spec, (s) => slideProblems(s, look).length === 0);
+    if (!sp.ok) return sp.reason;
+    const specs = [...lib.plan.specs.slice(0, i), sp.a, sp.b, ...lib.plan.specs.slice(i + 1)];
+    const old = d.script.slides[i] as unknown as Record<string, unknown>;
+    const tags = Array.isArray(old?.element_tags) ? { element_tags: old.element_tags } : {};
+    const slides = [...d.script.slides.slice(0, i), { ...scriptSlideOf(sp.a.layout, sp.a.fields), ...tags }, { ...scriptSlideOf(sp.b.layout, sp.b.fields), ...tags }, ...d.script.slides.slice(i + 1)];
+    const checked = validateScriptText(JSON.stringify({ ...d.script, slides }), d.format);
+    if (!checked.script) return 'The two slides could not be used as a script: ' + (checked.errors[0]?.message ?? 'unknown problem');
+    const script = { ...checked.script, brand: { ...checked.script.brand, handle: d.script.brand.handle } };
+    const ins = <T,>(a: T[] | undefined, v: T): T[] | undefined => (a ? [...a.slice(0, i + 1), v, ...a.slice(i + 1)] : a);
+    const lib2 = { ...lib, plan: { ...lib.plan, specs }, ...(lib.ownMarks ? { ownMarks: ins(lib.ownMarks, null) } : {}) };
+    try {
+      const out = await redrawLibraryDeck(lib2, look, pickHandle());
+      // the per-slide choices (pictures, swaps ...) of the slides after the split move up by one; the split slide's own choices stay with the first half
+      const choices: typeof d.choices = {};
+      for (const [k, v] of Object.entries(d.choices)) choices[String(Number(k) > i ? Number(k) + 1 : Number(k))] = v;
+      const designedOut = { ...d.designed, slides: out.slides, layouts: out.layouts, fallbacks: {}, library: { ...out.library, ...(lib.ownMarks ? { ownMarks: lib2.ownMarks } : {}) } };
+      const done = apply({ label: `Split slide ${i + 1} into two`, ops: [{ path: ['script'], value: script }, { path: ['choices'], value: choices }, { path: ['designed'], value: designedOut }] });
+      if (!done.ok) return done.reasons[0];
+      // the line in step 4 says the new number of slides (this does not leave the Edit view)
+      setGen((g) => (g.phase === 'done' && g.message ? { ...g, message: g.message.replace(/Your \d+ (slides|cards)/, `Your ${script.slides.length} $1`) } : g));
+      return `Split slide ${i + 1} into two slides (${i + 1} and ${i + 2}). Every word is kept. Undo takes it back.`;
+    } catch (e) {
+      return 'The slide could not be split: ' + (e as Error).message;
+    }
+  };
   /** Pictures tab, a slide with no picture slot: the slide moves to the first picture layout that fits what it says (the layout gallery's own rule), and one unused picture goes in. No model call. */
   const addPictureTo = async (i: number): Promise<string> => {
     const lib = docRef.current.designed?.library;
@@ -1042,6 +1084,7 @@ export default function CarouselPage() {
         openSlot={slotOpen}
         onOpenSlot={setSlotOpen}
         picturesState={picturesState}
+        onSplit={doc.designed?.library?.plan?.specs[i] && canSplitLayout(doc.designed.library.plan.specs[i].layout) ? () => splitSlideAt(i) : undefined}
         ownNote={(() => {
           const lib = doc.designed?.library;
           const mark = lib?.ownMarks?.[i];
