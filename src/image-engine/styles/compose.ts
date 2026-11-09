@@ -17,6 +17,7 @@ import { boxesToAvoid, placeObject } from '../photo/objectPlace';
 import type { Treatment } from '../types';
 import { placeElements, type TestAsset } from './elements';
 import { labelText, pageNumber } from './tools';
+import { drawnHandle } from '../../carousel/handle';
 import { drawMarks } from './marks';
 import { freeMarks, freeSlide } from './layouts-free';
 
@@ -206,7 +207,7 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
     const area = chromeArea(chrome, M, H);
     const c: LCtx = {
       style, theme: asTheme(style, pal), assets: loaded.assets, pal, palName, W, H, M, top: area.top, bottom: area.bottom, index: i, count: script.slides.length,
-      occurrence: seen[s.type], handle: script.brand.handle, layers: [], notes: [], keepClear: [],
+      occurrence: seen[s.type], handle: drawnHandle(script.brand.handle), layers: [], notes: [], keepClear: [],
       params: { ...(rule.params ?? {}), ...(ov?.photo?.frame ? { frame: ov.photo.frame } : {}), ...(ov?.photo?.shape ? { shape: ov.photo.shape } : {}) },
       photoPool: pool, photoPick: typeof ov?.photo?.id === 'string' ? ov.photo.id : s.photo, photoHint: s.photo_hint, slots: [],
       ...(ov?.photo && (ov.photo.treatments || ov.photo.focal) ? { photoOverride: { treatments: ov.photo.treatments, focal: ov.photo.focal } } : {}),
@@ -270,8 +271,8 @@ export function composeStyled(script: Pick<CarouselScript, 'id' | 'slides' | 'br
       if (i < script.slides.length - 1) layers.push(...swipeCue(theme, cp, 'swipe', W - M, mid));
     } else if (chrome === 'page-number') layers.push(...pageNumber(theme, cp, 'page', W - M, H - M - 36, i, script.slides.length));
     else if (chrome === 'strip') {
-      const t = labelText(theme, cp, 'strip-handle', M, M, script.brand.handle, { upper: false, width: W - 2 * M - 300 });
-      layers.push(t.layer, ...pageNumber(theme, cp, 'page', W - M, M, i, script.slides.length));
+      if (drawnHandle(script.brand.handle)) layers.push(labelText(theme, cp, 'strip-handle', M, M, drawnHandle(script.brand.handle), { upper: false, width: W - 2 * M - 300 }).layer);
+      layers.push(...pageNumber(theme, cp, 'page', W - M, M, i, script.slides.length));
     }
     add(c, ...layers);
     let elementsUsed: string[] = [];

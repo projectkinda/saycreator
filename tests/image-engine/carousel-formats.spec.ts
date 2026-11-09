@@ -112,7 +112,7 @@ test('quote cards: three square cards from a text', async ({ page }) => {
   expect(r.sizes).toEqual(['1080x1080']);
   expect(calls[0]).toContain('a set of 3 quote cards');
   expect(calls[0]).toMatch(/every one of type "quote"/);
-  await expect(page.getByTestId('progress')).toContainText('Done: 3 cards');
+  await expect(page.getByTestId('progress')).toContainText('Your 3 cards are ready');
   expect(r.failures, JSON.stringify(r.failures)).toEqual([]);
 });
 
@@ -125,7 +125,7 @@ test('a 3-slide carousel', async ({ page }) => {
   const r = await collect(page, 'carousel-3', 3);
   expect(r.sizes).toEqual(['1080x1350']);
   expect(calls[0]).toContain('3-slide carousel');
-  await expect(page.getByTestId('progress')).toContainText('Done: 3 slides');
+  await expect(page.getByTestId('progress')).toContainText('Your 3 slides are ready');
   expect(r.failures, JSON.stringify(r.failures)).toEqual([]);
 });
 
@@ -139,7 +139,7 @@ test('a 10-slide carousel', async ({ page }) => {
   const r = await collect(page, 'carousel-10', 10);
   expect(r.sizes).toEqual(['1080x1350']);
   expect(calls[0]).toContain('10-slide carousel');
-  await expect(page.getByTestId('progress')).toContainText('Done: 10 slides');
+  await expect(page.getByTestId('progress')).toContainText('Your 10 slides are ready');
   // The page numbers count to 10.
   expect(r.failures, JSON.stringify(r.failures)).toEqual([]);
 });

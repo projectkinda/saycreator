@@ -31,10 +31,17 @@ export const deckDrawn = async (page: Page, n = 7) => {
   await expect(page.locator('.cr-film img')).toHaveCount(n, { timeout: 60_000 });
 };
 
-/** Open the Edit slides view and the Fine-tune fold (the Detected-style toggles live there). */
-export const openFineTune = async (page: Page, n = 1) => {
+/** Open a tab of the Edit slides view: Layout | Text | Pictures | Fine-tune (slide n, 1-based). */
+export type EditTabName = 'Layout' | 'Text' | 'Pictures' | 'Fine-tune';
+export const openTab = async (page: Page, tab: EditTabName, n = 1) => {
   await openEdit(page, n);
-  const fold = page.locator('details.cr-fine');
-  if (!(await fold.evaluate((el) => (el as HTMLDetailsElement).open))) await fold.locator('summary').click();
+  const t = page.getByRole('tab', { name: tab, exact: true });
+  if ((await t.getAttribute('aria-selected')) !== 'true') await t.click();
+  await expect(t).toHaveAttribute('aria-selected', 'true');
+};
+
+/** The Edit slides view on the Fine-tune tab (the Detected-style toggles live there). */
+export const openFineTune = async (page: Page, n = 1) => {
+  await openTab(page, 'Fine-tune', n);
   await expect(page.getByTestId('detected-style')).toBeVisible();
 };

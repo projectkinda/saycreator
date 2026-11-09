@@ -43,7 +43,7 @@ test('the steps are in order, and the reference box is closed until New style is
   await fakeReader(page, usual);
   await page.goto('/images/carousel');
   const names = page.locator('.cr-wiz-steps .cr-wiz-name');
-  await expect(names).toHaveText(['Your content', 'Format', 'Style', 'Your slides'], { timeout: 30_000 });
+  await expect(names).toHaveText(['Content', 'Format', 'Style', 'Slides'], { timeout: 30_000 });
   await expect(page.getByLabel('Your text or topic')).toBeVisible();
   await toStep(page, 3);
   // in step 3 the style list comes first, the New style card is in it, and the make button is last

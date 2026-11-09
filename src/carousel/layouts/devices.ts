@@ -295,14 +295,14 @@ export function overDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box
     svg += `<rect x="48" y="${y - 1.5}" width="${cx - 22 - 48}" height="3" fill="${x.c.text}"/><circle cx="${cx}" cy="${y}" r="22" fill="none" stroke="${x.c.text}" stroke-width="3"/><path d="M ${cx - 9} ${y} H ${cx + 9} M ${cx + 2} ${y - 7} L ${cx + 10} ${y} L ${cx + 2} ${y + 7}" fill="none" stroke="${x.c.text}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
     placed.push({ id: 'arrow-header', kind: 'chrome', box: { x: 48, y: y - 22, w: 984, h: 44 }, ink: x.c.text });
   }
-  if (d.sideLabel) {
-    const label = x.handle || '@yourname';
+  if (d.sideLabel && x.handle) {
+    const label = x.handle;
     const wText = measureWidth(label, x.fonts.body, 500, 36);
     const cx = 1054, cy = 690;
     svg += `<text transform="translate(${cx} ${cy}) rotate(-90)" text-anchor="middle" font-family="${x.fonts.body}" font-size="36" font-weight="500" fill="${ink}">${label.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>`;
     placed.push({ id: 'side-label', kind: 'chrome', box: { x: cx - 27, y: cy - wText / 2, w: 34, h: wText }, ink });
   }
-  if (d.footerRow || (d.contactClosing && last)) {
+  if ((d.footerRow || (d.contactClosing && last)) && x.handle) {
     const brand = brandOf(x.handle);
     const wB = measureWidth(brand, x.fonts.body, 600, 36);
     const sx = 1032 - Math.max(wB, brand.length * 36 * 0.58) - 24 - 32;
@@ -320,7 +320,7 @@ export function overDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box
   // stickers: one emoji glyph in an empty corner. It keeps a clear gap from every text (at least one line height of that text, and from the headline's whole box), 24 px from shapes and pictures
   // Stickers are rare: at most one on every third slide (never two in a row), never on a slide whose accent word is ringed (ring > sticker > art), and never within 24 px of a picture, card, pill or button.
   if (d.stickers && x.index % STICKER_EVERY === 1 && !taken.some((p) => p.id === 'pen-circle' || p.id === 'pen-underline')) {
-    const seed = hash(x.handle + x.index);
+    const seed = hash((x.handle || '@yourname') + x.index);
     const glyph = STICKERS[(seed + x.index * 5) % STICKERS.length];
     const S = 118;
     const busy: Box[] = [...x.textBoxes.map((b) => ({ ...b, gap: Math.max(b.gap ?? 0, 24) })), ...shapeBoxes.map((b) => ({ ...b, gap: 24 })), ...(x.pictureBoxes ?? []).map((b) => ({ ...b, gap: 24 })), ...taken.filter((p) => p.id !== 'glow' && p.id !== 'rule' && p.id !== 'scallop' && p.id !== 'inset-card').map((p) => ({ ...p.box, gap: 24 })), ...(photo ? [{ ...photo, gap: 24 }] : [])];

@@ -47,8 +47,9 @@ import { cutoutPicture, useCutoutIds } from './cutoutAction';
 import { listCutouts, putCutout, type CutoutRecord } from '../image-engine/cutout/cutoutStore';
 import type { AddFiles } from './PhotoControls';
 import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, useLibraryVersion, type PictureMeta } from './photoLibrary';
-import { SlideCard, type SlideView } from './SlideCard';
-import { PreviewStage, useGroups } from './Studio';
+import { SlideCard, type EditTab, type SlideView } from './SlideCard';
+import type { TextDelta } from './TextTab';
+import { PreviewStage } from './Studio';
 import { packFor, packFromStyle, distinctCheck } from '../reference/pack';
 import { packPicture } from '../reference/packRender';
 import { ImageRequestsPanel } from '../images/ImageRequestsPanel';
@@ -67,15 +68,37 @@ import '../styles/carousel.css';
 const DEFAULT_STYLE = 'editorial-collage';
 /** The four steps of the page. The Edit slides view is not a step: it opens from step 4. */
 const STEPS = [
-  { n: 1 as const, name: 'Your content' },
+  { n: 1 as const, name: 'Content' },
   { n: 2 as const, name: 'Format' },
   { n: 3 as const, name: 'Style' },
-  { n: 4 as const, name: 'Your slides' },
+  { n: 4 as const, name: 'Slides' },
 ];
 /** Designed slides come only from "New style" and "Redesign this slide", never from Make carousel. */
 const noDesign = (): Designed | undefined => undefined;
 
 // ---------- style picker with a small preview of each style ----------
+
+const PREVIEW_CACHE_KEY = 'creator.stylePreviews.v1';
+const readPreviewCache = (): Record<string, string> => {
+  try {
+    return JSON.parse(sessionStorage.getItem(PREVIEW_CACHE_KEY) ?? '{}') as Record<string, string>;
+  } catch {
+    return {};
+  }
+};
+const keepPreview = async (k: string, blob: Blob) => {
+  try {
+    const url: string = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result));
+      r.onerror = () => rej(r.error);
+      r.readAsDataURL(blob);
+    });
+    sessionStorage.setItem(PREVIEW_CACHE_KEY, JSON.stringify({ ...readPreviewCache(), [k]: url }));
+  } catch {
+    /* not kept: the card is drawn again next time */
+  }
+};
 
 function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyleOpen, rebuildOnly }: { format: Format; value: string; auto: boolean; onAuto: () => void; onPick: (name: string, title: string) => void; onNewStyle?: () => void; newStyleOpen?: boolean; rebuildOnly?: boolean }) {
   useTemplatesVersion();
@@ -100,40 +123,50 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
     if (rebuildOnly) return;
     let live = true;
     const f = formatOf(format);
-    (async () => {
-      for (const st of styles) {
-        const key = `${format}:${st.spec.name}`;
-        if (previews[key]) continue;
+    // Each card draws on its own: four at a time, and one that fails shows "No preview" instead of stopping the rest.
+    const one = async (st: (typeof styles)[number]) => {
+      const key = `${format}:${st.spec.name}`;
+      if (previews[key]) return;
+      // A built-in style's card picture is kept in this browser (by drawing version), so the next visit shows every card at once.
+      const ck = !isUserStyle(st.spec.name) && !packFor(st.spec.name) ? `${key}:${DRAW_VERSION}` : null;
+      const kept = ck ? readPreviewCache()[ck] : undefined;
+      if (kept) {
+        if (live) setPreviews((p) => ({ ...p, [key]: kept }));
+        return;
+      }
+      try {
+        let blob: Blob | null = null;
         // A pack is previewed with its own cover design, not the plain style under it.
         const pk = packFor(st.spec.name);
-        if (pk) {
-          const blob = await packPicture(pk, 'cover', { type: 'cover', kicker: 'Example', headline: 'A headline that makes people stop', sub: 'And a line that makes them read on' }, 216);
-          if (!live) return;
-          setPreviews((p) => ({ ...p, [key]: URL.createObjectURL(blob) }));
-          continue;
-        }
+        if (pk) blob = await packPicture(pk, 'cover', { type: 'cover', kicker: 'Example', headline: 'A headline that makes people stop', sub: 'And a line that makes them read on' }, 216);
         // A built-in preset is previewed by the layout library (the route the deck is drawn with), not by the old templates.
-        if (format !== 'quote') {
+        if (!blob && format !== 'quote') {
           try {
             const svg = await presetThumbSvg(st.spec.name);
-            if (svg) {
-              const blob = await svgToPng(svg, 216);
-              if (!live) return;
-              setPreviews((p) => ({ ...p, [key]: URL.createObjectURL(blob) }));
-              continue;
-            }
+            if (svg) blob = await svgToPng(svg, 216);
           } catch { /* fall back to the old preview */ }
         }
-        const sample =
-          format === 'quote'
-            ? { id: 'preview', brand: { handle: '@yourname' }, slides: [{ type: 'quote' as const, quote: 'Clear beats clever, every single time.', by: 'An editor', highlight: 'Clear' }] }
-            : { id: 'preview', brand: { handle: '@yourname' }, slides: [{ type: 'cover' as const, kicker: 'Example', headline: 'A headline that makes people stop', sub: 'And a line that makes them swipe.', highlight: 'stop' }] };
-        const slide = composeStyled(sample, st, { width: f.width, height: f.height, chrome: format === 'quote' ? 'none' : undefined }, true)[0];
-        const blob = await renderer.preview(slide.plan, 0.2);
+        if (!blob) {
+          const sample =
+            format === 'quote'
+              ? { id: 'preview', brand: { handle: '@yourname' }, slides: [{ type: 'quote' as const, quote: 'Clear beats clever, every single time.', by: 'An editor', highlight: 'Clear' }] }
+              : { id: 'preview', brand: { handle: '@yourname' }, slides: [{ type: 'cover' as const, kicker: 'Example', headline: 'A headline that makes people stop', sub: 'And a line that makes them swipe.', highlight: 'stop' }] };
+          const slide = composeStyled(sample, st, { width: f.width, height: f.height, chrome: format === 'quote' ? 'none' : undefined }, true)[0];
+          blob = await renderer.preview(slide.plan, 0.2);
+        }
         if (!live) return;
-        setPreviews((p) => ({ ...p, [key]: URL.createObjectURL(blob) }));
+        const url = URL.createObjectURL(blob);
+        setPreviews((p) => ({ ...p, [key]: url }));
+        if (ck) void keepPreview(ck, blob);
+      } catch {
+        if (live) setPreviews((p) => ({ ...p, [key]: 'none' }));
       }
-    })().catch(() => undefined);
+    };
+    let next = 0;
+    const worker = async () => {
+      while (live && next < styles.length) await one(styles[next++]);
+    };
+    void Promise.all([worker(), worker(), worker(), worker()]);
     return () => {
       live = false;
     };
@@ -157,6 +190,9 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
       <ul className="grid cr-styles" aria-label="Styles">
         <li>
           <button type="button" className="card start-opt cr-style cr-auto" aria-pressed={auto} onClick={onAuto}>
+            <span className={`cr-style-pic cr-auto-pic r${format === 'quote' ? '1-1' : '4-5'}`} aria-hidden="true">
+              <svg viewBox="0 0 48 48" width="44" height="44" fill="currentColor"><path d="M24 4l4.2 11.8L40 20l-11.8 4.2L24 36l-4.2-11.8L8 20l11.8-4.2z" /><path d="M38 30l1.8 5.2L45 37l-5.2 1.8L38 44l-1.8-5.2L31 37l5.2-1.8z" opacity=".7" /></svg>
+            </span>
             <strong>Pick for me</strong>
             <span className="small muted">The writer chooses the style that suits your text and tone.</span>
           </button>
@@ -166,7 +202,7 @@ function StylePicker({ format, value, auto, onAuto, onPick, onNewStyle, newStyle
           return (
             <li key={st.spec.name}>
               <button type="button" className="card start-opt cr-style" aria-pressed={!auto && value === st.spec.name} onClick={() => onPick(st.spec.name, st.spec.title)}>
-                <span className={`cr-style-pic r${format === 'quote' ? '1-1' : '4-5'}`}>{img ? <img src={img} alt={`Preview of the ${st.spec.title} style`} /> : <span className="small muted" role="status">Drawing…</span>}</span>
+                <span className={`cr-style-pic r${format === 'quote' ? '1-1' : '4-5'}`}>{img && img !== 'none' ? <img src={img} alt={`Preview of the ${st.spec.title} style`} /> : <span className="small muted" role="status">{img === 'none' ? 'No preview' : 'Drawing…'}</span>}</span>
                 <strong>{st.spec.title}</strong>
                 <span className="small muted">{isUserStyle(st.spec.name) ? 'Made from your references' : st.spec.name}</span>
                 {isUserStyle(st.spec.name) && <span className="chip chip-tag">Mine</span>}
@@ -358,7 +394,6 @@ export default function CarouselPage() {
 
   // ---------- compose and draw ----------
   const [views, setViews] = useState<Record<number, SlideView>>({});
-  const g = useGroups();
   const [sel, setSel] = useState(0);
   const [slides, setSlides] = useState<StyledSlide[]>([]);
   const [margin, setMargin] = useState(80);
@@ -672,7 +707,10 @@ export default function CarouselPage() {
     return lib?.plan ? drawGalleryTile(lib, pickLook, pickHandle(), i, layout, variant) : Promise.resolve(null);
   };
   /** Puts a redrawn slide into the deck as ONE undo step (the script form of the slide too when its layout or text changed). */
+  const docRef = useRef(doc);
+  docRef.current = doc;
   const putSlide = (i: number, r: Extract<Awaited<ReturnType<typeof redrawLibrarySlide>>, { ok: true }>, label: string, extraCalls = 0, usage?: { input: number; output: number }): string | null => {
+    const doc = docRef.current; // the latest deck (a text edit can follow another before the page has redrawn)
     const d0 = doc.designed;
     if (!d0 || !doc.script) return 'There is no deck to change.';
     const sc = scriptWithSlide(doc.script, i, r.scriptSlide, doc.format);
@@ -758,6 +796,27 @@ export default function CarouselPage() {
       return `Could not rewrite slide ${i + 1}: ${(e as Error).message}`;
     }
   };
+  /** Text tab: one change to a slide's text (or its highlighted words). Changes run one after the other, each on the latest plan; the slide is drawn again from the plan (no model call) and Undo takes the change back. */
+  const textQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const textCommit = (i: number) => (delta: TextDelta): Promise<string> => {
+    const job = textQueue.current.then(async () => {
+      const lib = docRef.current.designed?.library;
+      const spec = lib?.plan?.specs[i];
+      if (!lib?.plan || !spec) return 'This deck has no stored plan to draw from.';
+      const fields = { ...spec.fields } as Fields;
+      for (const [k, v] of Object.entries(delta.fields ?? {})) {
+        if (v === null) delete fields[k];
+        else fields[k] = v as never;
+      }
+      const r = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, { fields, ...(delta.accents ? { accents: delta.accents } : {}) });
+      if (!r.ok) return `Could not redraw slide ${i + 1}: ${r.reasons[0]} The slide is unchanged.`;
+      const bad = putSlide(i, r, `Edit the text of slide ${i + 1}`);
+      await new Promise((res) => setTimeout(res, 80)); // let the page take the new deck before the next change reads it
+      return bad ?? '';
+    });
+    textQueue.current = job.catch(() => undefined);
+    return job;
+  };
   /** Reset page: cancels what is running, then the page is as after a fresh load. Saved templates and Mine styles are not touched. */
   const resetPage = async () => {
     if (!window.confirm('Start over? This clears the reference, the text and the slides on this page. Your saved styles stay.')) return;
@@ -812,8 +871,10 @@ export default function CarouselPage() {
       const note = gen.note ? ` Note from the writer: ${gen.note}` : '';
       const retry = gen.attempts === 2 ? ' It needed a second try.' : '';
       const why = gen.styleWhy ? ` Style: ${gen.styleWhy}` : '';
-      const handle = options.handle.trim() ? '' : ' The last slide shows the placeholder @yourname: type your handle in step 3 (Style) to replace it.';
-      setGen((g) => ({ ...g, phase: 'done', message: `Done: ${slides.length} ${doc.format === 'quote' ? 'cards' : 'slides'} in ${((gen.ms ?? 0) / 1000).toFixed(0)} s of writing.${retry}${why}${note}${gen.extra ?? ''}${handle} Edit anything below.` }));
+      const unit = doc.format === 'quote' ? 'cards' : 'slides';
+      // Plain words for the person; the writing time, the style reason and the designed-mode numbers show only with Developer tools.
+      const message = devTools ? `Done: ${slides.length} ${unit} in ${((gen.ms ?? 0) / 1000).toFixed(0)} s of writing.${retry}${why}${note}${gen.extra ?? ''} Edit anything below.` : `Your ${slides.length} ${unit} are ready.${retry}${note}`;
+      setGen((g) => ({ ...g, phase: 'done', message }));
     } else setGen((g) => (g.phase === 'drawing' ? { ...g, message: `Drawing slide ${drawnCount + 1} of ${slides.length}…` } : g));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawnCount, slides.length, gen.phase]);
@@ -834,6 +895,11 @@ export default function CarouselPage() {
       return false;
     }
   });
+  // The Live view chip is for developers: it is kept as a screen-reader-only status unless Developer tools is on.
+  useEffect(() => {
+    document.body.dataset.devtools = devTools ? '1' : '';
+    return () => { delete document.body.dataset.devtools; };
+  }, [devTools]);
   const toggleDev = (b: boolean) => {
     setDevTools(b);
     try {
@@ -852,6 +918,7 @@ export default function CarouselPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gen.phase]);
   const editOn = editView && !!doc.script && slides.length > 0;
+  const [editTab, setEditTab] = useState<EditTab | null>(null);
   const si = Math.min(sel, Math.max(0, slides.length - 1));
 
   /** The card of one slide: its picture with the picture slots, the layout gallery and the older editors. Shown only in the Edit slides view. */
@@ -874,7 +941,9 @@ export default function CarouselPage() {
           apply(patches.shuffle(i, salt));
           return true;
         }}
-        onOpen={() => setOpen(i)}
+        tab={editTab ?? (doc.designed?.library?.plan ? 'layout' : 'text')}
+        onTab={setEditTab}
+        devTools={devTools}
         onDownload={() => downloadOne(i)}
         deckLabel={deck}
         photo={doc.choices[String(i)]?.photo}
@@ -899,7 +968,12 @@ export default function CarouselPage() {
         pictureSlots={pictureSlotsOf(i)}
         onSlotChange={(field, change) => slotChange(i, field, change)}
         picturesUsedElsewhere={usedElsewhereOf(i)}
-        gallery={doc.designed?.library?.plan ? <LayoutGallery index={i} model={pickModel(i)} draw={pickDraw(i)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
+        layoutTab={doc.designed?.library?.plan ? <LayoutGallery index={i} model={pickModel(i)} draw={pickDraw(i)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
+        rewriteBox={doc.designed?.library?.plan ? <LayoutGallery section="rewrite" index={i} model={pickModel(i)} draw={pickDraw(i)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
+        libraryText={doc.designed?.library?.plan?.specs[i] ? { layout: doc.designed?.library?.plan?.specs[i]!.layout, fields: doc.designed?.library?.plan?.specs[i]!.fields, accents: doc.designed?.library?.plan?.specs[i]!.accents } : undefined}
+        onTextCommit={textCommit(i)}
+        unusedBox={unusedList.length > 0 ? <UnusedPictures unused={unusedList} slots={slotChoices} onPut={(id, slide, field) => slotChange(slide, field, { picture: id })} /> : undefined}
+        fineTuneBox={<DetectedStyleBox pack={presetPackFor(doc.style)} onChange={(ov) => void handleOverrides(ov)} hasDeck={!!doc.designed?.library?.plan} />}
         onImageText={(text) => {
           const r = requestFromText(text, i, packFor(doc.style)?.palette ?? {});
           if (!r) return 'Say what the picture should show.';
@@ -981,6 +1055,7 @@ export default function CarouselPage() {
     gen,
     onGenerate: () => void generate(),
     onUseQuick: () => void generate({ quickAfterFail: gen.designFailed ?? 'Designed mode failed' }),
+    devTools,
     onCancel: cancel,
     provider,
     providers,
@@ -1022,19 +1097,20 @@ export default function CarouselPage() {
       <p className="visually-hidden" role="status" aria-live="polite">{notice}</p>
 
       <div className="cr-grid">
-        <aside className="cr-preview" aria-label="Preview">
+        <aside className={`cr-preview${hasWork ? ' has-work' : ''}`} aria-label="Preview">
           <section aria-labelledby="cr-slides-h" className="cr-slides-sec">
         <div className="cr-toolbar">
-          <h2 id="cr-slides-h" className="h3">{hasWork ? `Your ${doc.format === 'quote' ? 'cards' : 'slides'}` : '4. Your slides'}</h2>
-          <div className="row-actions" role="toolbar" aria-label="Project actions">
-            <button type="button" className="btn btn-outline btn-sm cr-quiet" onClick={undo} disabled={past.length === 0} title="Ctrl+Z (when no text field is focused)">
-              Undo{lastLabel ? `: ${lastLabel}` : ''}
+          <h2 id="cr-slides-h" className="h3">{`Your ${doc.format === 'quote' ? 'cards' : 'slides'}`}</h2>
+          <div className="row-actions cr-toolbar-row" role="toolbar" aria-label="Project actions">
+            <button type="button" className="btn btn-outline btn-sm cr-quiet" onClick={undo} disabled={past.length === 0} title={`Ctrl+Z (when no text field is focused)${lastLabel ? `. Undoes: ${lastLabel}` : ''}`} aria-label={`Undo${lastLabel ? `: ${lastLabel}` : ''}`}>
+              Undo
             </button>
-            <button type="button" className="btn btn-outline btn-sm cr-quiet" onClick={redo} disabled={future.length === 0} title="Shift+Ctrl+Z">
-              Redo{nextLabel ? `: ${nextLabel}` : ''}
+            <button type="button" className="btn btn-outline btn-sm cr-quiet" onClick={redo} disabled={future.length === 0} title={`Shift+Ctrl+Z${nextLabel ? `. Redoes: ${nextLabel}` : ''}`} aria-label={`Redo${nextLabel ? `: ${nextLabel}` : ''}`}>
+              Redo
             </button>
-            <details className="cr-more" open={g.all}>
+            <details className="cr-more">
               <summary className="btn btn-outline btn-sm cr-quiet">More</summary>
+            <div className="cr-more-menu">
             <button
               type="button"
               className="btn btn-outline btn-sm"
@@ -1056,6 +1132,7 @@ export default function CarouselPage() {
             >
               Start over
             </button>
+            </div>
             </details>
           </div>
         </div>
@@ -1154,14 +1231,9 @@ export default function CarouselPage() {
             <button type="button" className="btn btn-dark" onClick={() => setEditView(false)}>Done</button>
           </div>
           <p className="small muted">Pick a slide in the strip on the left to edit it. Undo and Redo are above the preview.</p>
-          {unusedList.length > 0 && <UnusedPictures unused={unusedList} slots={slotChoices} onPut={(id, slide, field) => slotChange(slide, field, { picture: id })} />}
           <ol className="cr-list" aria-label={`Slide ${si + 1} of ${slides.length}`}>
             {slideCardFor(si)}
           </ol>
-          <details className="cr-fine">
-            <summary className="h4">Fine-tune</summary>
-            <DetectedStyleBox pack={presetPackFor(doc.style)} onChange={(ov) => void handleOverrides(ov)} hasDeck={!!doc.designed?.library?.plan} />
-          </details>
         </section>
       )}
 

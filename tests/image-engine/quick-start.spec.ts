@@ -40,7 +40,7 @@ const storedStyle = (page: Page) =>
 test('the page has the steps, the reference box is behind a link, and the other tools are under Developer tools and nothing was deleted', async ({ page }) => {
   await fakeReader(page, usual);
   await page.goto('/images/carousel');
-  await expect(page.locator('.cr-wiz-steps .cr-wiz-name')).toHaveText(['Your content', 'Format', 'Style', 'Your slides']);
+  await expect(page.locator('.cr-wiz-steps .cr-wiz-name')).toHaveText(['Content', 'Format', 'Style', 'Slides']);
   await expect(page.getByLabel('Your text or topic')).toBeVisible();
   await toStep(page, 3);
   await expect(page.getByRole('button', { name: 'Make carousel' })).toBeVisible();

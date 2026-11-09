@@ -1,6 +1,7 @@
 // Drawing in the browser with the real image engine: compose the plans from the doc, draw each one, check it at phone size.
 // Fabric cannot run in a Web Worker (it needs a document), so drawing stays on the main thread, one slide at a time, with a
 // pause between slides so the page keeps answering. Nothing is sent anywhere.
+import { drawnHandle } from './handle';
 import { FabricAdapter } from '../image-engine/fabric-adapter';
 import { loadFonts } from '../image-engine/fonts';
 import { checkWithRepair } from '../image-engine/photo/repair';
@@ -107,7 +108,7 @@ function composeBase(doc0: Doc): { slides: StyledSlide[]; margin: number } {
     }),
   );
   const pictures = doc.photos ?? [];
-  const slides = composeStyled(doc.script, style, { width: f.width, height: f.height, chrome: doc.format === 'quote' ? 'none' : undefined, handle: doc.script.brand.handle, elements: 'shippable', overrides, photos: photoInputs(pictures), objects: objectInputs(pictures) }, true);
+  const slides = composeStyled(doc.script, style, { width: f.width, height: f.height, chrome: doc.format === 'quote' ? 'none' : undefined, handle: drawnHandle(doc.script.brand.handle), elements: 'shippable', overrides, photos: photoInputs(pictures), objects: objectInputs(pictures) }, true);
   // A recreated look: its layers carry each slide's own words (the photo slots of the ordinary layouts are not part of it).
   const pack = packFor(doc.style);
   if (pack) {
@@ -117,7 +118,7 @@ function composeBase(doc0: Doc): { slides: StyledSlide[]; margin: number } {
       // The 2nd, 3rd... slide of the same type get code-side variants (mirrored, colours swapped): no model call.
       const key = designKey(String(sc.type ?? s.type));
       const nth = doc.script!.slides.slice(0, i).filter((o) => designKey(String((o as unknown as { type?: unknown }).type ?? '')) === key).length;
-      const r = packSlide(pack, String(sc.type ?? s.type), sc, doc.script!.brand.handle, { square: doc.format === 'quote', images: doc.imageRequests, slide: i, nth });
+      const r = packSlide(pack, String(sc.type ?? s.type), sc, drawnHandle(doc.script!.brand.handle), { square: doc.format === 'quote', images: doc.imageRequests, slide: i, nth });
       const editable = !!doc.choices[String(i)]?.editable;
       const used = designUsed(pack, String(sc.type ?? s.type));
       const more = editable && used ? [`Made editable: this slide now draws from layers. ${pack.notes.filter((n) => n.startsWith(`${used}:`)).slice(0, 3).join(' ') || 'Gradients, patterns and fine drawing parts can look a little different from the original drawing.'}`] : [];
@@ -129,7 +130,7 @@ function composeBase(doc0: Doc): { slides: StyledSlide[]; margin: number } {
   const rec = recreateFor(doc.style);
   if (rec) {
     const filled = slides.map((s, i) => {
-      const r = fillRecreate(rec, textsOf((doc.script!.slides[i] ?? {}) as unknown as Record<string, unknown>, doc.script!.brand.handle));
+      const r = fillRecreate(rec, textsOf((doc.script!.slides[i] ?? {}) as unknown as Record<string, unknown>, drawnHandle(doc.script!.brand.handle)));
       // The photo regions take the slide's pictures from the image requests (an empty one keeps its placeholder block).
       const layers = rec.slots?.length ? applyPhotoSlots(r.layers, rec.slots, fillsFor(doc.imageRequests, i, rec.slots, rec.palette)) : r.layers;
       return { ...s, plan: { ...s.plan, layers }, notes: [...((s as { notes?: string[] }).notes ?? []), ...r.notes] };

@@ -42,7 +42,7 @@ async function deck(page: Page) {
   await deckDrawn(page, SPECS.length);
   // The layout gallery lives in the Edit slides view, one slide at a time.
   await openEdit(page, 1);
-  await expect(page.locator('.cr-card .cr-pic img').first()).toBeVisible({ timeout: 120_000 });
+  await expect(page.locator('.cr-stage-pic img')).toBeVisible({ timeout: 120_000 });
   return f;
 }
 

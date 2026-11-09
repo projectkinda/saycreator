@@ -237,6 +237,7 @@ export function quoteCentre(c: LCtx, s: S<'quote'>) {
 }
 
 function handleRow(c: LCtx, y: number, x = c.M) {
+  if (!c.handle) return; // no handle set: nothing is drawn (never the @yourname placeholder)
   const t = c.theme;
   const ic = 56;
   add(c, icon('chat', 'handle-icon', x, y + 4, ic, c.pal.accent, t.shape.stroke));

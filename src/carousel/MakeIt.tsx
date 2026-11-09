@@ -83,7 +83,8 @@ export async function runDesign(req: WriteRequest, look: { pack?: import('../ref
 export type MakeItPart = 'content' | 'format' | 'style';
 
 /** The three input steps of the page. Each part is one step; the page decides which is shown and owns Back / Next. Every control keeps what it did. */
-export function MakeIt({ images, scriptBox, scriptMode, onScriptMode, doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onUseQuick, onCancel, provider, providers, styles, referenceBox, styleReady = true, part }: {
+/** `devTools`: the developer wording (the writer label) shows only when Developer tools is on. */
+export function MakeIt({ images, scriptBox, scriptMode, onScriptMode, doc, options, setTopic, setOptions, onFormat, onHandle, busy, gen, onGenerate, onUseQuick, onCancel, provider, providers, styles, referenceBox, styleReady = true, part, devTools = false }: {
   doc: Doc;
   options: GenerateOptions;
   setTopic: (t: string) => void;
@@ -103,6 +104,7 @@ export function MakeIt({ images, scriptBox, scriptMode, onScriptMode, doc, optio
   referenceBox?: React.ReactNode;
   /** A style is chosen (or "Pick for me" is on): the button needs one. */
   styleReady?: boolean;
+  devTools?: boolean;
   /** Under the text input: the optional "Add images" area. */
   images?: React.ReactNode;
   /** "I already have a script": the paste box, "Copy prompt for Claude" and "Try an example script". */
@@ -237,6 +239,7 @@ export function MakeIt({ images, scriptBox, scriptMode, onScriptMode, doc, optio
           <label className="cr-inline">
             <span className="field-label">Your handle (optional)</span>
             <input type="text" className="cr-input cr-handle" value={options.handle} placeholder="@yourname" maxLength={40} onChange={(e) => onHandle(e.target.value)} />
+            {!options.handle.trim() && <span className="small muted" data-testid="handle-hint">Add your handle to show it on slides. Without one, slides show no handle.</span>}
           </label>
           {doc.style === ACTIVE_STYLE && !!activeReference()?.pack && (
             <div className="cr-inline">
@@ -285,7 +288,7 @@ export function MakeIt({ images, scriptBox, scriptMode, onScriptMode, doc, optio
             )}
           </div>
         )}
-        {import.meta.env.DEV && (
+        {devTools && (
           <p className="small muted" data-testid="writer-label">
             Writer (dev label): {provider ? provider.label : providers === null ? 'checking…' : 'none available'}
           </p>

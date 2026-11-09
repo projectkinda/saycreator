@@ -1,6 +1,6 @@
 // Presets in the app (FAKE writer, zero real model calls): a built-in preset is drawn by the layout library; the toggles and the layout picker work on it with no model call and
 // one undo step; the saved reference cache is never read; "Pick for me" lands on the library; the template route stays behind creator.templateRoute.
-import { deckDrawn, openEdit, openFineTune, toStep } from './ui';
+import { deckDrawn, openFineTune, openTab, toStep } from './ui';
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { exampleScript } from '../../src/carousel/script';
 
@@ -121,7 +121,7 @@ test('hot-flat through the library: 1 writer call, the flavour line in the promp
   await expect.poll(async () => (await project(page))?.lib?.devices.underline, { timeout: 30_000 }).toBe(false);
   expect(f.calls.length).toBe(1);
   // the layout picker on slide 3: a pick redraws that one slide with no call
-  await openEdit(page, 3);
+  await openTab(page, 'Layout', 3);
   const picker = page.getByTestId('gallery-2');
   await picker.scrollIntoViewIfNeeded();
   const tile = picker.locator('[data-current="false"][data-enabled="true"] button:not([disabled])').first();

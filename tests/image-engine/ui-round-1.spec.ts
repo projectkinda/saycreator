@@ -39,7 +39,7 @@ async function makeDeck(page: Page) {
   await page.getByRole('button', { name: 'Next: Style' }).click();
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat/ }).first().click();
   await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
-  await expect(step(page, 'Your slides')).toHaveAttribute('aria-current', 'step', { timeout: 60_000 });
+  await expect(step(page, 'Slides')).toHaveAttribute('aria-current', 'step', { timeout: 60_000 });
   await expect(page.locator('.cr-film img')).toHaveCount(SPECS.length, { timeout: 120_000 });
 }
 
@@ -48,9 +48,9 @@ test('four steps: the content step holds the text, the images and the script cho
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel', exact: true })).toBeVisible();
   // the progress indicator names the four steps; step 1 is the current one
-  for (const n of ['Your content', 'Format', 'Style', 'Your slides']) await expect(step(page, n)).toBeVisible();
-  await expect(step(page, 'Your content')).toHaveAttribute('aria-current', 'step');
-  await expect(step(page, 'Your slides')).toBeDisabled();
+  for (const n of ['Content', 'Format', 'Style', 'Slides']) await expect(step(page, n)).toBeVisible();
+  await expect(step(page, 'Content')).toHaveAttribute('aria-current', 'step');
+  await expect(step(page, 'Slides')).toBeDisabled();
   // the text box, the images area and the script choice are on step 1, the choice right under the text box
   const box = page.getByLabel('Your text or topic');
   await expect(box).toBeVisible();
@@ -120,19 +120,17 @@ test('make: lands on step 4; Edit slides sits under the strip; the Edit view fol
   await expect(page.getByTestId('gallery-2')).toBeVisible();
   await expect(page.getByTestId('gallery-0')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: /Edit slide 3 of/ })).toBeVisible();
-  // Fine-tune holds the detected-style toggles
-  const fine = page.locator('details.cr-fine');
-  await expect(fine).toBeVisible();
-  await fine.locator('summary').click();
-  await expect(fine.getByText(/Detected style|devices/i).first()).toBeVisible();
+  // Fine-tune is a tab and holds the detected-style toggles
+  await page.getByRole('tab', { name: 'Fine-tune' }).click();
+  await expect(page.getByTestId('detected-style')).toBeVisible();
   // Done returns to step 4; the deck is untouched and no model call was made
   await page.getByRole('button', { name: 'Done', exact: true }).first().click();
   await expect(page.getByTestId('edit-view')).toHaveCount(0);
-  await expect(step(page, 'Your slides')).toHaveAttribute('aria-current', 'step');
+  await expect(step(page, 'Slides')).toHaveAttribute('aria-current', 'step');
   expect(await lib(page)).toEqual(before);
   expect(f.calls).toBe(1);
   // an earlier step keeps its content
-  await step(page, 'Your content').click();
+  await step(page, 'Content').click();
   await expect(page.getByLabel('Your text or topic')).toHaveValue(TEXT);
 });
 
@@ -207,7 +205,7 @@ for (const [name, vp] of [['phone', { width: 390, height: 844 }], ['desktop', { 
     await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat/ }).first().click();
     await shot('3-style');
     await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
-    await expect(step(page, 'Your slides')).toHaveAttribute('aria-current', 'step', { timeout: 60_000 });
+    await expect(step(page, 'Slides')).toHaveAttribute('aria-current', 'step', { timeout: 60_000 });
     await expect(page.locator('.cr-film img')).toHaveCount(SPECS.length, { timeout: 120_000 });
     await shot('4-slides');
     await page.getByRole('button', { name: 'Edit slides' }).click();

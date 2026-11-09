@@ -17,7 +17,8 @@ import type { ObjectChoice } from '../image-engine/photo/objects';
 import { PhotoControls, type AddFiles } from './PhotoControls';
 import type { PhotoChoice } from './photoChoices';
 import type { PictureMeta } from './photoLibrary';
-import { SlotOverlay, SlotPanel, type OnSlotChange, type SlotView } from './PictureSlots';
+import { SlotPanel, type OnSlotChange, type SlotView } from './PictureSlots';
+import { LibraryText, type OnTextCommit, type TextSpec } from './TextTab';
 
 export interface SlideView {
   status: 'drawing' | 'ready' | 'error';
@@ -49,7 +50,16 @@ function Alternatives({ slide, info, used, onPick }: { slide: StyledSlide; info:
   );
 }
 
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, gallery, pictureSlots, onSlotChange, picturesUsedElsewhere, onOpen, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export type EditTab = 'layout' | 'text' | 'pictures' | 'fine';
+const TABS: { id: EditTab; label: string }[] = [
+  { id: 'layout', label: 'Layout' },
+  { id: 'text', label: 'Text' },
+  { id: 'pictures', label: 'Pictures' },
+  { id: 'fine', label: 'Fine-tune' },
+];
+
+/** The editor of ONE slide, as four tabs: Layout | Text | Pictures | Fine-tune. There is no second preview here: the big preview and the thumbnail strip stay on the left. */
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, fineTuneBox, tab, onTab, devTools, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -68,16 +78,28 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   onShuffle: () => boolean;
   /** "put X as the background here": makes an image request for this slide and says what it did. */
   onImageText?: (text: string) => string;
-  /** Designed decks: a small model call for this slide's design; says what happened. */
+  /** Designed decks (older route): a small model call for this slide's design; says what happened. */
   onRedesign?: (words: string) => Promise<string>;
-  /** Library decks: the layout gallery (under the picture, replaces the old Layout dropdown) with the plane/colour controls and Rewrite text. */
-  gallery?: React.ReactNode;
+  /** Library decks: the layout choices with the Variations (plane, colours). */
+  layoutTab?: React.ReactNode;
+  /** Library decks: the Rewrite text button (the one small model call). */
+  rewriteBox?: React.ReactNode;
+  /** Library decks: this slide's plan text, edited in the Text tab. */
+  libraryText?: TextSpec;
+  onTextCommit?: OnTextCommit;
+  /** The unused-pictures tray (library decks). */
+  unusedBox?: React.ReactNode;
+  /** The Detected style toggles for the whole deck. */
+  fineTuneBox?: React.ReactNode;
+  tab: EditTab;
+  onTab: (t: EditTab) => void;
+  /** Developer tools are on: the older tools show even on a library deck. */
+  devTools: boolean;
   /** Library slides with pictures: the picture slots (tap one to replace, remove, move or zoom it). */
   pictureSlots?: SlotView[];
   onSlotChange?: OnSlotChange;
   /** The ids of the project pictures other slides use (they are not offered as a replacement here). */
   picturesUsedElsewhere?: Set<string>;
-  onOpen: () => void;
   onDownload: () => void;
   deckLabel: string;
 }) {
@@ -93,110 +115,147 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   const [rdBusy, setRdBusy] = useState(false);
   const used = slide.elementsUsed;
   const rec = script as unknown as Record<string, unknown>;
-  // Picture spots nothing fills are not drawn (not in the picture, not in the export); here, in the editor, they show as a dashed outline.
-  const empties = (slide as unknown as { emptySlots?: { id: string; x: number; y: number; w: number; h: number }[] }).emptySlots ?? [];
-  const fa = faithfulOf(slide);
-  const cw = fa ? fa.canvas.w : slide.plan.canvas.width;
-  const ch = fa ? fa.canvas.h : slide.plan.canvas.height;
-  const emptyOverlay = empties.length ? (
-    <span aria-hidden="true" data-testid="empty-slot-overlay" style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 1 }}>
-      {empties.map((e) => <span key={e.id} style={{ position: "absolute", left: (e.x / cw * 100) + "%", top: (e.y / ch * 100) + "%", width: (e.w / cw * 100) + "%", height: (e.h / ch * 100) + "%", border: "2px dashed #888", borderRadius: 6, boxSizing: "border-box" }} />)}
-    </span>
-  ) : null;
+  const isLibrary = !!layoutTab;
+  const oldTools = devTools || !isLibrary;
+  const open = pictureSlots?.find((s) => s.field === openSlot);
 
-  const pic = (
-    <div className="cr-pic">
-        <div style={{ position: 'relative' }}>
-        <button type="button" className="cr-pic-btn" style={{ position: "relative" }} onClick={onOpen} disabled={!view?.url} aria-label={`Open ${deckLabel} slide ${index + 1} full size`}>
-          {emptyOverlay}{view?.url ? <img src={view.url} alt={`${deckLabel}, slide ${index + 1}: ${slide.type}, ${slide.layout} layout`} width={216} height={216 * (slide.plan.canvas.height / slide.plan.canvas.width)} /> : <span className="cr-pic-wait small muted" role="status">{view?.status === 'error' ? 'Could not draw this slide' : 'Drawing…'}</span>}
-        </button>
-        {pictureSlots?.length && onSlotChange ? <SlotOverlay index={index} slots={pictureSlots} open={openSlot} onOpen={setOpenSlot} onChange={onSlotChange} /> : null}
+  const layout = (
+    <>
+      {layoutTab}
+      {!isLibrary && (
+        <label className="cr-inline">
+          <span className="field-label">Layout</span>
+          <select className="plain-select cr-select" value={slide.layout} onChange={(e) => run(apply(patches.layout(index, e.target.value)))}>
+            {slide.layoutChoices.map((l) => (
+              <option key={l} value={l}>{l}</option>
+            ))}
+          </select>
+        </label>
+      )}
+    </>
+  );
+  const text = (
+    <>
+      {libraryText && onTextCommit ? <LibraryText index={index} spec={libraryText} onCommit={onTextCommit} /> : FIELDS[script.type].map((f) => <FieldEditor key={f.key} index={index} def={f} value={rec[f.key]} apply={apply} />)}
+      {rewriteBox}
+    </>
+  );
+  const picturesTab = (
+    <>
+      {pictureSlots?.length && onSlotChange ? (
+        <div className="tn-field">
+          <span className="field-label">Picture slots on this slide</span>
+          <div className="row-actions" role="group" aria-label={`Picture slots of slide ${index + 1}`}>
+            {pictureSlots.map((sl) => (
+              <button key={sl.field} type="button" className="btn btn-outline btn-sm" data-testid={`slot-${index}-${sl.n}`} aria-label={`Edit picture ${sl.n} on slide ${index + 1}`} aria-expanded={openSlot === sl.field} onClick={() => setOpenSlot(openSlot === sl.field ? null : sl.field)}>
+                Picture {sl.n}
+              </button>
+            ))}
+          </div>
+          {open && onSlotChange ? <SlotPanel index={index} slot={open} pictures={pictures} usedElsewhere={picturesUsedElsewhere ?? new Set()} onChange={onSlotChange} onClose={() => setOpenSlot(null)} /> : null}
         </div>
-        {pictureSlots?.length && onSlotChange && openSlot && pictureSlots.find((s) => s.field === openSlot) ? <SlotPanel index={index} slot={pictureSlots.find((s) => s.field === openSlot)!} pictures={pictures} usedElsewhere={picturesUsedElsewhere ?? new Set()} onChange={onSlotChange} onClose={() => setOpenSlot(null)} /> : null}
+      ) : (
+        isLibrary && <p className="small muted">This layout has no picture slot. Pick a layout with pictures in the Layout tab, or add pictures in step 1.</p>
+      )}
+      {unusedBox}
+      {onImageText && (
+        <label className="tn-field">
+          <span className="field-label">Put a picture here</span>
+          <input className="cr-input cr-wide" value={imgText} placeholder="put a sunrise as the background here" aria-label={`Picture for slide ${index + 1}`} onChange={(e) => setImgText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setImgMsg(onImageText(imgText)); setImgText(''); } }} />
+          {imgMsg && <span className="small" role="status">{imgMsg}</span>}
+        </label>
+      )}
+      <TagEditor index={index} tags={script.element_tags ?? []} apply={apply} />
+      <PhotoControls index={index} slide={slide} script={script} choice={photo} object={object} pictures={pictures} palette={palette} hasPhotoStyle={hasPhotoStyle} apply={apply} addFiles={addFiles} />
+    </>
+  );
+  const fine = (
+    <>
+      {fineTuneBox}
+      {oldTools && (
+        <div className="cr-oldtools" data-testid="old-tools">
+          <h4 className="h4">{isLibrary ? 'Developer tools for this slide' : 'More tools for this slide'}</h4>
+          <div className="cr-actions">
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setProblem(onShuffle() ? '' : 'No other pictures fit this slide.')}>Shuffle elements</button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => run(apply(patches.regenerate(index)))}>Regenerate from the plan</button>
+            {faithfulOf(slide) && <button type="button" className="btn btn-outline btn-sm" onClick={() => run(apply(patches.makeEditable(index)))} title="This slide is drawn exactly as the pack's design was written. Making it editable turns it into layers; fine details may change.">Make editable</button>}
+            <ReplayButton plan={slide.plan} label={`Slide ${index + 1}`} />
+            <WhyPopover slide={slide} lint={view?.rendered?.lint} repairs={view?.rendered?.repairs} />
+          </div>
+          {faithfulOf(slide) && devTools && <p className="small muted" data-testid="faithful-note">Drawn as the pack's design was written. Checks that cannot run on it: {view?.rendered?.warnings?.length ? 'contrast over art, graphics crossing text, picture overlap' : 'see Make editable'}.</p>}
+          {onRedesign && (
+            <div className="tn-field" data-testid={`redesign-${index}`}>
+              <span className="field-label">Redesign this slide: 1 Sonnet call, about 30 seconds (runs only when you press the button)</span>
+              <input className="cr-input cr-wide" value={rdWords} disabled={rdBusy} placeholder="optional: bolder, with a clock icon" aria-label={`Words for redesigning slide ${index + 1}`} onChange={(e) => setRdWords(e.target.value)} />
+              <button type="button" className="btn btn-outline btn-sm" disabled={rdBusy} onClick={async () => { setRdBusy(true); setRdMsg(''); setRdMsg(await onRedesign(rdWords)); setRdBusy(false); }}>
+                {rdBusy ? 'Redesigning…' : 'Redesign this slide'}
+              </button>
+              {rdMsg && <span className="small" role="status">{rdMsg}</span>}
+            </div>
+          )}
+          <details className="cr-els" onToggle={(e) => setElementsOpen((e.target as HTMLDetailsElement).open)}>
+            <summary className="small">Elements on this slide ({used.length})</summary>
+            {used.length === 0 && <p className="small muted">None were placed here. {slide.notes.find((n) => /links to this slide|No free space/.test(n)) ?? ''}</p>}
+            {elementsOpen && (
+              <ul className="cr-el-list">
+                {used.map((id) => {
+                  const info = elementById(id);
+                  const link = slide.elementLinks?.find((l) => l.id === id);
+                  return (
+                    <li key={id}>
+                      <span className="small">
+                        <strong>{info?.name ?? id}</strong> <span className="muted">({id}; {link?.related === true ? 'matches the tags' : link?.related === false ? 'does not match the tags' : 'decoration'})</span>
+                      </span>
+                      {info && <Alternatives slide={slide} info={info} used={used} onPick={(to) => run(apply(patches.swap(index, Object.entries(swaps ?? {}).find(([, v]) => v === id)?.[0] ?? id, to)))} />}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </details>
+        </div>
+      )}
+    </>
+  );
+  const panels: Record<EditTab, React.ReactNode> = { layout, text, pictures: picturesTab, fine };
+
+  return (
+    <li className="card cr-card cr-card-tabs" aria-label={title} data-status={view?.status ?? 'drawing'}>
+      <div className="cr-card-head">
+        <h3 className="h4 cr-title">
+          <span className="chip">{index + 1}</span> {TYPE_LABEL[script.type]}
+        </h3>
         <LintBadges lint={view?.rendered?.lint} />
         {slide.notes
-          .filter((n) => n.startsWith("Highlight '") || n.startsWith("This slide fell back"))
+          .filter((n) => n.startsWith("Highlight '") || n.startsWith('This slide fell back'))
           .map((n) => (
             <p key={n} className="small cr-warn" role="status">
               <span aria-hidden="true">⚠ </span>
               {n}
             </p>
           ))}
-        {faithfulOf(slide) && <p className="small muted" data-testid="faithful-note">Drawn as the pack's design was written. Checks that cannot run on it: {view?.rendered?.warnings?.length ? 'contrast over art, graphics crossing text, picture overlap' : 'see Make editable'}.</p>}
-        {onImageText && (
-          <label className="tn-field">
-            <span className="field-label">Put a picture here</span>
-            <input className="input" value={imgText} placeholder="put a sunrise as the background here" aria-label={`Picture for slide ${index + 1}`} onChange={(e) => setImgText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setImgMsg(onImageText(imgText)); setImgText(''); } }} />
-            {imgMsg && <span className="small" role="status">{imgMsg}</span>}
-          </label>
-        )}
-        {onRedesign && (
-          <div className="tn-field" data-testid={`redesign-${index}`}>
-            <span className="field-label">Redesign this slide: 1 Sonnet call, about 30 seconds (runs only when you press the button)</span>
-            <input className="input" value={rdWords} disabled={rdBusy} placeholder="optional: bolder, with a clock icon" aria-label={`Words for redesigning slide ${index + 1}`} onChange={(e) => setRdWords(e.target.value)} />
-            <button type="button" className="btn btn-outline btn-sm" disabled={rdBusy} onClick={async () => { setRdBusy(true); setRdMsg(''); setRdMsg(await onRedesign(rdWords)); setRdBusy(false); }}>
-              {rdBusy ? 'Redesigning…' : 'Redesign this slide'}
-            </button>
-            {rdMsg && <span className="small" role="status">{rdMsg}</span>}
-          </div>
-        )}
         {view?.error && <p className="small cr-problem" role="alert">{view.error}</p>}
-    </div>
-  );
-
-  return (
-    <li className={`card cr-card${gallery ? ' cr-card-gallery' : ''}`} aria-label={title} data-status={view?.status ?? "drawing"}>
-      {gallery ? <div className="cr-left">{pic}{gallery}</div> : pic}
-      <div className="cr-edit">
-        <h3 className="h4 cr-title">
-          <span className="chip">{index + 1}</span> {TYPE_LABEL[script.type]}
-        </h3>
-        {FIELDS[script.type].map((f) => (
-          <FieldEditor key={f.key} index={index} def={f} value={rec[f.key]} apply={apply} />
-        ))}
-        <TagEditor index={index} tags={script.element_tags ?? []} apply={apply} />
-        <PhotoControls index={index} slide={slide} script={script} choice={photo} object={object} pictures={pictures} palette={palette} hasPhotoStyle={hasPhotoStyle} apply={apply} addFiles={addFiles} />
-        <div className="cr-actions">
-          {!gallery && (
-            <label className="cr-inline">
-              <span className="field-label">Layout</span>
-              <select className="plain-select cr-select" value={slide.layout} onChange={(e) => run(apply(patches.layout(index, e.target.value)))}>
-                {slide.layoutChoices.map((l) => (
-                  <option key={l} value={l}>{l}</option>
-                ))}
-              </select>
-            </label>
-          )}
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => setProblem(onShuffle() ? '' : 'No other pictures fit this slide.')}>Shuffle elements</button>
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => run(apply(patches.regenerate(index)))}>Regenerate from the plan</button>
-          {faithfulOf(slide) && <button type="button" className="btn btn-outline btn-sm" onClick={() => run(apply(patches.makeEditable(index)))} title="This slide is drawn exactly as the pack's design was written. Making it editable turns it into layers; fine details may change.">Make editable</button>}
-          <ReplayButton plan={slide.plan} label={`Slide ${index + 1}`} />
-          <WhyPopover slide={slide} lint={view?.rendered?.lint} repairs={view?.rendered?.repairs} />
-          <button type="button" className="btn btn-outline btn-sm" onClick={onDownload} disabled={!view?.rendered}>
-            <Icon name="upload" size={14} /> Download PNG
+      </div>
+      <div className="cr-tabs" role="tablist" aria-label={`Edit slide ${index + 1}`}>
+        {TABS.map((t) => (
+          <button key={t.id} type="button" role="tab" id={`cr-tab-${t.id}`} className="cr-tab" aria-selected={tab === t.id} aria-controls="cr-tabpanel" tabIndex={tab === t.id ? 0 : -1} data-testid={`tab-${t.id}`} onClick={() => onTab(t.id)}
+            onKeyDown={(e) => {
+              const at = TABS.findIndex((x) => x.id === tab);
+              if (e.key === 'ArrowRight') onTab(TABS[(at + 1) % TABS.length].id);
+              if (e.key === 'ArrowLeft') onTab(TABS[(at + TABS.length - 1) % TABS.length].id);
+            }}>
+            {t.label}
           </button>
-        </div>
-        <details className="cr-els" onToggle={(e) => setElementsOpen((e.target as HTMLDetailsElement).open)}>
-          <summary className="small">Elements on this slide ({used.length})</summary>
-          {used.length === 0 && <p className="small muted">None were placed here. {slide.notes.find((n) => /links to this slide|No free space/.test(n)) ?? ''}</p>}
-          {elementsOpen && (
-            <ul className="cr-el-list">
-              {used.map((id) => {
-                const info = elementById(id);
-                const link = slide.elementLinks?.find((l) => l.id === id);
-                return (
-                  <li key={id}>
-                    <span className="small">
-                      <strong>{info?.name ?? id}</strong> <span className="muted">({id}; {link?.related === true ? 'matches the tags' : link?.related === false ? 'does not match the tags' : 'decoration'})</span>
-                    </span>
-                    {info && <Alternatives slide={slide} info={info} used={used} onPick={(to) => run(apply(patches.swap(index, Object.entries(swaps ?? {}).find(([, v]) => v === id)?.[0] ?? id, to)))} />}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </details>
+        ))}
+      </div>
+      <div className="cr-edit cr-tabpanel" role="tabpanel" id="cr-tabpanel" aria-labelledby={`cr-tab-${tab}`}>
+        {panels[tab]}
         {problem && <p className="small cr-problem" role="alert">{problem}</p>}
+      </div>
+      <div className="cr-actions">
+        <button type="button" className="btn btn-outline btn-sm" onClick={onDownload} disabled={!view?.rendered} aria-label={`Download PNG of ${deckLabel} slide ${index + 1}`}>
+          <Icon name="upload" size={14} /> Download PNG
+        </button>
       </div>
     </li>
   );

@@ -26,8 +26,10 @@ export const galleryCacheSize = () => CACHE.size;
 const THUMB_W = 220;
 const key = (sig: string, layout: string, v: number) => `${sig}:${layout}:${v}`;
 
-export function LayoutGallery({ index, model, draw, onChoose, onRewrite }: {
+export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section = 'layout' }: {
   index: number;
+  /** 'layout': the layout choices and the Variations (plane, colours). 'rewrite': the Rewrite text button and its optional hint (used in the Text tab). */
+  section?: 'layout' | 'rewrite';
   model: GalleryModel | null;
   /** Draws one tile (no model call): the SVG of the layout in the variant with this slide's text. */
   draw: (layout: LayoutId, variant: 0 | 1) => Promise<string | null>;
@@ -94,6 +96,15 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite }: {
     setBusy(false);
   };
   if (!model) return null;
+  if (section === 'rewrite')
+    return (
+      <div className="tn-field" data-testid={`rewrite-${index}`}>
+        <span className="field-label">Rewrite text: 1 small model call for this slide only, same layout</span>
+        <input className="cr-input cr-wide" value={words} disabled={busy} placeholder="optional hint: shorter, punchier" aria-label={`Words for rewriting slide ${index + 1}`} onChange={(e) => setWords(e.target.value)} />
+        <div className="row-actions"><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={async () => { setBusy(true); setMsg(''); setMsg(await onRewrite(words)); setBusy(false); }}>{busy ? 'Working…' : 'Rewrite text'}</button></div>
+        {msg && <span className="small" role="status">{msg}</span>}
+      </div>
+    );
   const tile = (e: GalleryEntry, v: 0 | 1) => {
     const now = e.current && model.variant === v;
     const url = urls[key(sig, e.layout, v)];
@@ -107,16 +118,9 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite }: {
   };
   return (
     <div ref={root} className="tn-field" data-testid={`gallery-${index}`} data-ready-ms={done ?? ''} data-signature={sig}>
-      <span className="field-label">Layout: click one to redraw this slide (drawn by the code, no model call)</span>
-      <div className="cr-actions" data-testid={`gallery-controls-${index}`} style={{ gap: 6 }}>
-        <span className="small muted">Plane</span>
-        {model.cuts.map((c) => (
-          <button key={c.id} type="button" className="btn btn-outline btn-sm" disabled={busy || c.current} aria-pressed={c.current} data-testid={`gal-cut-${c.id}`} onClick={() => void choose({ cut: c.id })} style={{ padding: '2px 8px', fontSize: 12, outline: c.current ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{c.label}</button>
-        ))}
-        <span className="small muted" style={{ marginLeft: 6 }}>Colours</span>
-        <button type="button" className="btn btn-outline btn-sm" disabled={busy} aria-pressed={!!model.invert} data-testid="gal-invert" onClick={() => void choose({ invert: model.invert ? false : 'full' })} style={{ padding: '2px 8px', fontSize: 12, outline: model.invert ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{model.invert ? 'Inverted (click for normal)' : 'Invert'}</button>
-      </div>
-      <div role="list" aria-label={`Layouts for slide ${index + 1}`} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 640, overflowY: 'auto', padding: '2px 2px 6px' }}>
+      <h4 className="h4">Layouts</h4>
+      <span className="small muted">Click one to redraw this slide (drawn by the code, no model call).</span>
+      <div role="list" aria-label={`Layouts for slide ${index + 1}`} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 520, overflowY: 'auto', padding: '2px 2px 6px' }}>
         {model.entries.map((e) => (
           <div key={e.layout} role="listitem" data-testid={`gal-item-${e.layout}`} data-enabled={e.enabled} data-current={e.current} style={{ opacity: e.enabled ? 1 : 0.55 }}>
             {e.enabled ? (
@@ -134,10 +138,14 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite }: {
           </div>
         ))}
       </div>
-      <div className="tn-field" data-testid={`rewrite-${index}`}>
-        <span className="field-label">Rewrite text: 1 small model call for this slide only, same layout</span>
-        <input className="input" value={words} disabled={busy} placeholder="optional: shorter, punchier" aria-label={`Words for rewriting slide ${index + 1}`} onChange={(e) => setWords(e.target.value)} />
-        <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={async () => { setBusy(true); setMsg(''); setMsg(await onRewrite(words)); setBusy(false); }}>{busy ? 'Working…' : 'Rewrite text'}</button>
+      <h4 className="h4">Variations</h4>
+      <div className="cr-actions" data-testid={`gallery-controls-${index}`} style={{ gap: 6 }}>
+        <span className="small muted">Plane</span>
+        {model.cuts.map((c) => (
+          <button key={c.id} type="button" className="btn btn-outline btn-sm" disabled={busy || c.current} aria-pressed={c.current} data-testid={`gal-cut-${c.id}`} onClick={() => void choose({ cut: c.id })} style={{ padding: '2px 8px', fontSize: 12, outline: c.current ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{c.label}</button>
+        ))}
+        <span className="small muted" style={{ marginLeft: 6 }}>Colours</span>
+        <button type="button" className="btn btn-outline btn-sm" disabled={busy} aria-pressed={!!model.invert} data-testid="gal-invert" onClick={() => void choose({ invert: model.invert ? false : 'full' })} style={{ padding: '2px 8px', fontSize: 12, outline: model.invert ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{model.invert ? 'Inverted (click for normal)' : 'Invert'}</button>
       </div>
       {msg && <span className="small" role="status">{msg}</span>}
     </div>

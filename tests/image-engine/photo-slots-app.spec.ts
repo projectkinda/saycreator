@@ -1,6 +1,6 @@
 // Picture slots in the real app (flat generated test pictures; ONE fake writer answer makes the deck, every later edit is code only, zero model calls):
 // add images (right and wrong files, huge, tiny), orientation labels, reorder, remove; the writer is sent metadata only; placement; slot editing; reload; export.
-import { deckDrawn, openEdit, toStep } from './ui';
+import { deckDrawn, openEdit, openTab, toStep } from './ui';
 import { expect, test, type Page, type Route } from '@playwright/test';
 
 test.setTimeout(300_000);
@@ -109,8 +109,8 @@ test('a deck with pictures: one writer call with metadata only, placement by cod
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat/ }).first().click();
   await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
   await deckDrawn(page, 3);
-  await openEdit(page, 1);
-  await expect(page.locator('.cr-card .cr-pic img').first()).toBeVisible({ timeout: 120_000 });
+  await expect(page.locator('.cr-stage-pic img')).toBeVisible({ timeout: 120_000 });
+  await openTab(page, 'Pictures', 1);
   expect(f.calls, 'one writer call').toBe(1);
   const body = f.bodies[0];
   expect(body, 'no pixels reach the writer').not.toMatch(/data:image|base64|\/9j\//);
@@ -152,7 +152,7 @@ test('a deck with pictures: one writer call with metadata only, placement by cod
   await page.getByRole('button', { name: /^Undo/ }).first().click();
   await expect.poll(async () => refs((await project(page)).specs)[0].length, { timeout: 30_000 }).toBe(1);
   // the gallery greys a picture layout that has too few pictures, with the reason
-  await openEdit(page, 3);
+  await openTab(page, 'Layout', 3);
   const g = page.getByTestId('gallery-2');
   await g.scrollIntoViewIfNeeded();
   await expect(g.locator('[data-state="off"]').first()).toBeVisible({ timeout: 60_000 });
@@ -163,7 +163,7 @@ test('a deck with pictures: one writer call with metadata only, placement by cod
   const p1 = await project(page);
   expect(refs(p1.specs)).toEqual(refs((await project(page)).specs));
   expect(refs(p1.specs).flat().length).toBeGreaterThanOrEqual(2);
-  const redCount = () => page.locator('.cr-pic img').first().evaluate(async (el: HTMLImageElement) => {
+  const redCount = () => page.locator('.cr-stage-pic img').first().evaluate(async (el: HTMLImageElement) => {
     await el.decode().catch(() => undefined);
     const c = document.createElement('canvas'); c.width = el.naturalWidth; c.height = el.naturalHeight;
     const g = c.getContext('2d')!; g.drawImage(el, 0, 0);
@@ -172,8 +172,8 @@ test('a deck with pictures: one writer call with metadata only, placement by cod
     for (let i = 0; i < d.length; i += 4 * 37) if (d[i] > 160 && d[i + 1] < 90 && d[i + 2] < 80) red++;
     return red;
   });
-  await expect(page.locator('li.cr-card').first().getByText('Drawing…')).toHaveCount(0, { timeout: 90_000 });
-  await page.locator('li.cr-card').first().screenshot({ path: 'out/photo-slots/after-reload.png' });
+  await expect(page.locator('.cr-stage-pic img')).toBeVisible({ timeout: 90_000 });
+  await page.locator('.cr-stage-pic').screenshot({ path: 'out/photo-slots/after-reload.png' });
   await expect.poll(redCount, { timeout: 30_000, message: 'after a reload the cover shows its (flat red) picture' }).toBeGreaterThan(50);
   // export: Download PNG carries the picture
   const dl = page.waitForEvent('download', { timeout: 120_000 });
@@ -207,7 +207,7 @@ test('unused pictures: "N pictures weren\'t used" after the deck is made, and on
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat/ }).first().click();
   await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
   await deckDrawn(page, 3);
-  await openEdit(page, 1);
+  await openTab(page, 'Pictures', 1);
   await expect.poll(async () => (await project(page)).specs.length, { timeout: 30_000 }).toBe(3);
   const p0 = await project(page);
   const ids = p0.photos.map((p) => p.id);

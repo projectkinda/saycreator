@@ -84,7 +84,7 @@ test('paste text, press Generate: progress is shown, then the full editable caro
   await shot(page, 'writing');
   await expect(progress(page)).toContainText(/Drawing slide \d of 7/, { timeout: 15_000 });
   await allDrawn(page);
-  await expect(progress(page)).toContainText('Done: 7 slides');
+  await expect(progress(page)).toContainText('Your 7 slides are ready');
   await shot(page, 'done');
   // The prompt carries the person's text, the rules, the tone, the slide count and the tag vocabulary.
   const p = f.calls[0].prompt;
@@ -219,7 +219,7 @@ test('a thin text: the writer makes fewer slides and says so, and the note is sh
   await source(page).fill(TEXT);
   await generate(page).click();
   await allDrawn(page, 4);
-  await expect(progress(page)).toContainText('Done: 4 slides');
+  await expect(progress(page)).toContainText('Your 4 slides are ready');
   await expect(progress(page)).toContainText('only supports four different ideas');
 });
 

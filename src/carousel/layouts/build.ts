@@ -1,6 +1,7 @@
 // Turns a layout plan into a finished slide by running the EXISTING pipeline: parsePack (the same sanitiser), clampSlots, fitSlots (type scale and floors),
 // balanceVertical, resolveCollisions, finalGuards, packSlide (accent phrases with the contrast guard, marker) and stepperSvg. Nothing here re-implements fit, collision,
 // balance or accent. New here: the cut (a plane the layout composes around, carrying part B of the layout), invert, density, the profile chrome.
+import { drawnHandle } from '../handle';
 import { loadFonts } from '../../image-engine/fonts';
 import { layoutText } from '../../image-engine/draw/text';
 import type { Layer } from '../../image-engine/types';
@@ -153,7 +154,8 @@ export function caseFields(f: Fields, mode: LayoutStyle['caseStyle'], ex: { cano
   else if (typeof f.accent === 'string') out.accent = t(f.accent);
   return out;
 }
-export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fields, st00: LayoutStyle, o: BuildOpts): Promise<Built> {
+export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fields, st00: LayoutStyle, o0: BuildOpts): Promise<Built> {
+  const o: BuildOpts = { ...o0, handle: drawnHandle(o0.handle) }; // the @yourname placeholder is never drawn
   const st0 = groundOf(st00, o.index, o.ground);
   const fields = caseFields(fields0, st0.caseStyle, { canon: st0.caseExceptions, written: handleWords(o.handle ?? '') });
   const cut = o.cut ?? 'plain';
@@ -338,7 +340,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     const top = Math.min(1350, ...[...contentBoxes, ...shapeBoxes].map((b) => b.y));
     const ruleY = st.deco.rule === 'lower-two-thirds' && cut === 'plain' ? Math.max(140, Math.min(420, Math.round(top - 44))) : 140;
     const deco = { ...st.deco };
-    const cx: DeviceCtx = { deco, index: o.index, total: o.total, handle: o.handle || '@yourname', c: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface }, textBoxes: [...contentBoxes, ...recLayers.map(boxOf)], shapeBoxes, site: siteText(st.site), hasAccent: (Array.isArray(fields0.accent) ? fields0.accent.length : fields0.accent ? 1 : 0) > 0, pictureBoxes: (plan.images ?? []).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })), ...(tl ? { title: boxOf(tl) } : {}), marker: !!st.devices.marker, fonts: st.fonts, ruleY };
+    const cx: DeviceCtx = { deco, index: o.index, total: o.total, handle: o.handle, c: { bg: F.bg, text: F.text, muted: F.muted, accent: F.accent, surface: F.surface }, textBoxes: [...contentBoxes, ...recLayers.map(boxOf)], shapeBoxes, site: siteText(st.site), hasAccent: (Array.isArray(fields0.accent) ? fields0.accent.length : fields0.accent ? 1 : 0) > 0, pictureBoxes: (plan.images ?? []).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })), ...(tl ? { title: boxOf(tl) } : {}), marker: !!st.devices.marker, fonts: st.fonts, ruleY };
     const bd = behindDevices(cx);
     done = done.replace(/(<rect id="bg"[^>]*\/>)/, (m) => m + bd.svg);
     const ig = insetGround(done, deco, F.bg);
