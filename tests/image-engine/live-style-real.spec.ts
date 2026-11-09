@@ -9,7 +9,7 @@ import { loopDone, openStyleFromReferences, refInput, ROOT } from './reference-h
 const OUT = path.join(ROOT, 'out/image-engine/live-style-real');
 const REF = path.join(ROOT, 'Reference carousels likes', '1503c1de8dded2a7cbe333f061c7131a.jpg');
 const PHOTOS = ['baruk-granda-FKf0FU7OuPM-unsplash.jpg', 'bruno-bd-6sRXFQszA74-unsplash.jpg', 'emanuel-haas-aatG4lqAeGQ-unsplash.jpg'].map((f) => path.join(ROOT, 'test-images', f));
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1500, height: 1000 } });
 test.skip(process.env.REAL_LIVE !== '1', 'Real runs are opt-in (REAL_LIVE=1): they use model time.');
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));

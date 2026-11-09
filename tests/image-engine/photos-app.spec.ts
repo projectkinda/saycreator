@@ -8,7 +8,7 @@ import { allDrawn, card, dragOnto, dropFiles, makePic, openEditor, photoScript, 
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const OUT = path.join(ROOT, 'out/image-engine/photos-app');
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1300, height: 1000 } });
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 

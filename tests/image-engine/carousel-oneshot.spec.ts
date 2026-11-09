@@ -1,5 +1,6 @@
 // Step 9: one-shot Generate, tested with a FAKE writer. The page's requests to the writer endpoints are answered by the test,
 // so no real call is made (the real dev server's endpoints are never reached).
+import { showAllSteps } from './flat';
 import { expect, test, type Page, type Route } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,7 +9,7 @@ import { exampleScript } from '../../src/carousel/script';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'out/image-engine/oneshot');
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1280, height: 900 } });
 test.beforeAll(() => {
   fs.rmSync(OUT, { recursive: true, force: true });
@@ -46,21 +47,26 @@ async function fake(page: Page, answer: (n: number, prompt: string) => { text: s
   return f;
 }
 
-/** Opens the Advanced fold if it is closed (the options, the script tools and the rest live in it). */
+/** The script tools (copy prompt, paste JSON, the example) are behind "I already have a script" in step 1 since UI Round 1 (the Advanced fold is gone). */
 const openAdv = async (page: Page) => {
-  if (!(await page.locator('details.cr-advanced').evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByText('Advanced: write the script yourself').click();
+  const own = page.getByRole('button', { name: 'I already have a script' });
+  if ((await own.getAttribute('aria-pressed')) !== 'true') await own.click();
 };
 const open = async (page: Page) => {
+  await showAllSteps(page);
+  // these tests are about the script writer and its template route (a built-in style now goes to the layout library unless this flag is set)
+  await page.addInitScript(() => localStorage.setItem('creator.templateRoute', '1'));
+  await page.addInitScript(() => localStorage.setItem('creator.devtools', '1')); // the writer label is developer wording: shown with Developer tools on
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
-  // The options (slides, tone, handle) live under Advanced.
-  if (!(await page.locator('details.cr-advanced').evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByText('Advanced: write the script yourself').click();
 };
 const source = (page: Page) => page.getByLabel('Your text or topic');
 const generate = (page: Page) => page.getByRole('button', { name: 'Make carousel', exact: true });
+/** Every slide is drawn and checked: a thumbnail for each (the cards of all slides are gone since the Edit slides view), and the phone-check line above the preview has its answer. */
 const allDrawn = async (page: Page, count = 7) => {
-  await expect(page.locator('.cr-card')).toHaveCount(count, { timeout: 30_000 });
-  await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(count, { timeout: 30_000 });
+  await expect(page.locator('.cr-film li')).toHaveCount(count, { timeout: 30_000 });
+  await expect(page.locator('.cr-film img')).toHaveCount(count, { timeout: 30_000 });
+  await expect(page.locator('p[role="status"]').filter({ hasText: /slides? pass|something to fix/ }).first()).toBeVisible({ timeout: 30_000 });
 };
 const progress = (page: Page) => page.getByTestId('progress');
 let shots = 0;
@@ -84,7 +90,7 @@ test('paste text, press Generate: progress is shown, then the full editable caro
   await shot(page, 'writing');
   await expect(progress(page)).toContainText(/Drawing slide \d of 7/, { timeout: 15_000 });
   await allDrawn(page);
-  await expect(progress(page)).toContainText('Your 7 slides are ready');
+  await expect(progress(page)).toContainText('Done: 7 slides');
   await shot(page, 'done');
   // The prompt carries the person's text, the rules, the tone, the slide count and the tag vocabulary.
   const p = f.calls[0].prompt;
@@ -95,7 +101,9 @@ test('paste text, press Generate: progress is shown, then the full editable caro
   expect(p).toMatch(/money, growth, warning, idea/);
   expect(p).toContain('element_tags');
   // It is the normal editor: edit a headline, tags are chips, undo takes back the whole generation in one step.
-  const card = page.getByRole('listitem', { name: /^Slide 2 of/ });
+  await page.getByTestId('edit-slides').click();
+  await page.getByRole('button', { name: 'Show slide 2', exact: true }).click();
+  const card = page.locator('.cr-card');
   await expect(card.getByLabel('Headline')).toHaveValue('Rewrite your headline');
   await expect(page.getByRole('button', { name: /^Undo: Generate from your text/ })).toBeVisible();
   await page.getByRole('button', { name: /^Undo: Generate from your text/ }).click();
@@ -219,7 +227,7 @@ test('a thin text: the writer makes fewer slides and says so, and the note is sh
   await source(page).fill(TEXT);
   await generate(page).click();
   await allDrawn(page, 4);
-  await expect(progress(page)).toContainText('Your 4 slides are ready');
+  await expect(progress(page)).toContainText('Done: 4 slides');
   await expect(progress(page)).toContainText('only supports four different ideas');
 });
 
@@ -231,7 +239,9 @@ test('refresh and recover: the text, the options, the slides and the history are
   await page.getByRole('combobox', { name: /^Slides/ }).selectOption('7');
   await generate(page).click();
   await allDrawn(page);
-  await page.getByRole('listitem', { name: /^Slide 2 of/ }).getByLabel('Headline').fill('Edited after generating');
+  await page.getByTestId('edit-slides').click();
+  await page.getByRole('button', { name: 'Show slide 2', exact: true }).click();
+  await page.locator('.cr-card').getByLabel('Headline').fill('Edited after generating');
   await expect(page.getByRole('button', { name: /^Undo: Edit headline/ })).toBeVisible();
   await expect(page.getByText(/Saved in this browser/)).toBeVisible();
   await page.reload();
@@ -239,9 +249,11 @@ test('refresh and recover: the text, the options, the slides and the history are
   await expect(source(page)).toHaveValue(TEXT);
   await openAdv(page);
   await expect(page.getByRole('button', { name: 'Expert', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('listitem', { name: /^Slide 2 of/ }).getByLabel('Headline')).toHaveValue('Edited after generating');
+  await page.getByTestId('edit-slides').click();
+  await page.getByRole('button', { name: 'Show slide 2', exact: true }).click();
+  await expect(page.locator('.cr-card').getByLabel('Headline')).toHaveValue('Edited after generating');
   await page.getByRole('button', { name: /^Undo/ }).click();
-  await expect(page.getByRole('listitem', { name: /^Slide 2 of/ }).getByLabel('Headline')).toHaveValue('Rewrite your headline');
+  await expect(page.locator('.cr-card').getByLabel('Headline')).toHaveValue('Rewrite your headline');
   await shot(page, 'recovered');
 });
 

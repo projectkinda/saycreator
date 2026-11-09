@@ -9,7 +9,7 @@ import { ROOT } from './reference-helpers';
 
 const OUT = path.join(ROOT, 'out/image-engine/pack-draw-real');
 const DIR = path.join(ROOT, 'Reference carousels likes');
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.skip(process.env.REAL_LAYOUT !== '1', 'Real runs are opt-in (REAL_LAYOUT=1): they use model time.');
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 

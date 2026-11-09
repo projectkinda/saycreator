@@ -5,7 +5,7 @@ import path from 'node:path';
 import { openResults } from './lab-nav';
 import { fakeReader, labelsAnswer, makeReference, openStyleFromReferences, readAnswer, refineAnswer, refInput, REF_OUT, ROOT } from './reference-helpers';
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1300, height: 1000 } });
 const OUT = path.join(ROOT, 'out/image-engine/live');
 test.beforeAll(() => {

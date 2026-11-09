@@ -40,7 +40,7 @@ const call = <T>(page: Page, fn: string, ...args: unknown[]) =>
   page.evaluate(([f, a]) => (window as unknown as { __ie: Record<string, (...x: unknown[]) => unknown> }).__ie[f as string](...(a as unknown[])), [fn, args] as const) as Promise<T>;
 
 const report: Record<string, unknown> = {};
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.beforeAll(() => {
   expect(IMAGES.length, 'no pictures in test-images/').toBeGreaterThan(0);
   fs.mkdirSync(OUT, { recursive: true });

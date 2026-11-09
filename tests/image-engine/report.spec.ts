@@ -37,6 +37,7 @@ const dims = (page: Page, file: string) =>
 test('the carousel page downloads report.json and compare.jpg, with verdicts, the note and the reference files', async ({ page }, info) => {
   await seed(page);
   await withReference(page);
+  await page.getByRole('checkbox', { name: 'Developer tools' }).check(); // the Report panel is a developer tool since round 1
   const panel = page.getByRole('region', { name: 'Report' });
   await expect(panel.getByRole('button', { name: 'Download report' })).toBeVisible();
   await panel.getByRole('group', { name: 'Verdict for slide 1' }).getByRole('button', { name: 'good' }).click();

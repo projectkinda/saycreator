@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exampleScript } from '../../src/carousel/script';
-import { deckDrawn, openEdit, toStep } from './ui';
+import { deckDrawn, openEdit, openTab, toStep } from './ui';
 
 test.setTimeout(240_000);
 test.use({ viewport: { width: 1280, height: 900 } });
@@ -74,6 +74,8 @@ test('the page: a text box, the styles with "New style" last, one button with it
 });
 
 test('an existing style: 0 design calls and 1 writer call (the cheap model\'s kind); code fills the slides', async ({ page }) => {
+  // the script writer and its template route (a built-in style now goes to the layout library unless this flag is set)
+  await page.addInitScript(() => localStorage.setItem('creator.templateRoute', '1'));
   const calls = await fake(page);
   await open(page);
   await toStep(page, 3);
@@ -100,35 +102,42 @@ test('pasted slide text (blocks split by blank lines): 0 calls of any kind', asy
   await expect(page.locator('.cr-card').getByLabel('Headline')).toHaveValue('Before you hit save');
 });
 
-test('a missing style: an error and the picker, and no call', async ({ page }) => {
+// Old expectation: pressing Make with a style that no longer exists showed "is missing or broken" and made no call. Since then a project that names a missing style opens with the default
+// style and a note (quick-start.spec checks the note too), so there is nothing to fail at the make button. Checked now: the note, the picker with the default style selected, no call.
+test('a missing style: the page opens with the default style and a note, the picker is there, and no call', async ({ page }) => {
   const calls = await fake(page);
   await page.addInitScript(() => {
     localStorage.setItem('creator.carousel.project.v1', JSON.stringify({ project: { doc: { version: 1, format: 'carousel', style: 'mine-gone-style', topic: '', options: { slides: 7, tone: 'clear', autoStyle: false, handle: '', platform: null }, script: null, choices: {} }, past: [], future: [] } }));
   });
   await open(page);
+  await expect(page.getByText(/no longer available, so it opens with the default style/).first()).toBeVisible({ timeout: 30_000 });
   await toStep(page, 3);
-  await make(page).click();
-  await expect(page.getByText(/is missing or broken/)).toBeVisible();
   await expect(styles(page)).toBeVisible();
+  await expect(styles(page).getByRole('button', { name: /Warm editorial collage/ })).toHaveAttribute('aria-pressed', 'true');
   expect(calls.length).toBe(0);
 });
 
-test('New style from a description: nothing runs until the person confirms, then exactly 1 design call; the style is saved, selected, and used by code', async ({ page }) => {
-  const calls = await fake(page);
+// Old expectation: the description made ONE design call of kind "draw" whose answer was a script plus SVG designs. Since then the description's one call is the layout library's writer call
+// (prompt tagged [carousel:library], kind "write", answered with a list of layouts), so the fake answers that. Unchanged: nothing runs until the person confirms, exactly 1 call, the style
+// is saved, selected and used by code.
+const LIBRARY_ANSWER = JSON.stringify({ title: 'Habits', slides: JSON.parse(fs.readFileSync('tests/image-engine/fixtures/hot-flat-app-library.json', 'utf8')).library.plan.specs.map((x: any) => ({ layout: x.layout, fields: x.fields, accents: x.accents })) });
+test('New style from a description: nothing runs until the person confirms, then exactly 1 writer call; the style is saved, selected, and used by code', async ({ page }) => {
+  const calls = await fake(page, () => LIBRARY_ANSWER);
   await open(page);
   await toStep(page, 3);
   await styles(page).getByRole('button', { name: /New style/ }).click();
   const flow = page.getByTestId('new-style');
+  await flow.getByRole('button', { name: 'From a description' }).click();
   await flow.getByLabel('Describe the look').fill('warm paper big serif');
   await expect(page.getByTestId('new-style-cost')).toContainText('1 Sonnet call, about 1 minute');
   await flow.getByRole('button', { name: 'Make the style' }).click();
   await expect(flow.getByRole('alertdialog')).toContainText('1 Sonnet call, about 1 minute');
   expect(calls.length, 'asking is not running').toBe(0);
   await flow.getByRole('button', { name: 'Confirm and make the style' }).click();
-  await expect(page.getByText('Made the style warm paper big serif and selected it.')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText('Made the style warm paper big serif and selected it.').first()).toBeVisible({ timeout: 60_000 });
   await drawn(page);
   expect(calls.length).toBe(1);
-  expect(calls[0].kind).toBe('draw');
+  expect(calls[0].prompt).toContain('[carousel:library]');
   // saved as a style, listed first (Mine), selected; the slides were filled by code from it
   await toStep(page, 3);
   const mine = styles(page).getByRole('listitem').nth(1);
@@ -139,13 +148,16 @@ test('New style from a description: nothing runs until the person confirms, then
 });
 
 test('Redesign this slide: shows its cost, and runs 1 design call only when pressed', async ({ page }) => {
+  // the script writer and its template route (a built-in style now goes to the layout library unless this flag is set)
+  await page.addInitScript(() => localStorage.setItem('creator.templateRoute', '1'));
+  await page.addInitScript(() => { localStorage.setItem('creator.legacySvgRoute', '1'); localStorage.setItem('creator.devtools', '1'); });
   const calls = await fake(page, (c) => (c.kind === 'draw' ? svgFor(1, script.slides[1]) : SCRIPT));
   await open(page);
   await toStep(page, 3);
   await styles(page).getByRole('button', { name: /Quiet dark minimal/ }).click();
   await make(page).click();
   await drawn(page);
-  await openEdit(page, 2);
+  await openTab(page, 'Fine-tune', 2); // the redesign box is with the older tools of the slide
   const second = page.locator('.cr-card').first();
   await expect(second.getByText(/1 Sonnet call, about 30 seconds/)).toBeVisible();
   expect(calls.length, 'only the writer so far').toBe(1);
@@ -158,6 +170,8 @@ test('Redesign this slide: shows its cost, and runs 1 design call only when pres
 });
 
 test('script notes ("Placeholder: ...", "Note: ...", "TODO", [brackets]) are never drawn, and are flagged to edit', async ({ page }) => {
+  // the script writer and its template route (a built-in style now goes to the layout library unless this flag is set)
+  await page.addInitScript(() => localStorage.setItem('creator.templateRoute', '1'));
   const dirty = JSON.parse(SCRIPT) as { slides: Record<string, unknown>[] };
   const stat = dirty.slides.find((s) => s.type === 'stat')!;
   stat.note = 'Placeholder: use your own number';
@@ -180,7 +194,7 @@ test('script notes ("Placeholder: ...", "Note: ...", "TODO", [brackets]) are nev
   // and none of it is in what is drawn
   const drawnText = await page.evaluate(async (s) => {
     const R = await import('/src/carousel/render.ts');
-    const doc = { version: 1 as const, format: 'carousel' as const, style: 'dark-quiet', topic: '', script: JSON.parse(s), choices: {} };
+    const doc = { version: 1 as const, format: 'carousel' as const, style: 'dark-quiet', topic: '', script: { brand: { handle: '@yourname' }, ...JSON.parse(s) }, choices: {} }; // (the example script has no brand since round 4)
     return JSON.stringify(R.composeDoc(doc).slides.map((x) => x.plan.layers));
   }, JSON.stringify(dirty));
   expect(drawnText).not.toMatch(/Placeholder|TODO|add one sentence here/);

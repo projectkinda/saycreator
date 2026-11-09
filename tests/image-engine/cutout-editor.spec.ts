@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { makePic } from './photos-app-helpers';
 import { allDrawn, openThumb, optionCards, photoInput, srcs, titleInput } from './thumbnail-app-helpers';
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 
 async function stub(page: Page) {
   await page.route('**/__cutout/status', (r) => r.fulfill({ json: { available: true, model: 'stub' } }));

@@ -1,4 +1,5 @@
 // Words per slide (a check with a warning and a failing limit) and the platform choice (a ceiling on the slide count).
+import { toStep } from './ui';
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,7 +20,7 @@ interface Slide { id: string; type: string; lint: Lint[] }
 const call = <T>(page: Page, fn: string, ...args: unknown[]) =>
   page.evaluate(([f, a]) => (window as unknown as { __ie: Record<string, (...x: unknown[]) => unknown> }).__ie[f as string](...(a as unknown[])), [fn, args] as const) as Promise<T>;
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 
 test('platform: the ceilings are 20, 20, 10 and 4, and a script or a request over it gets a plain warning', () => {
@@ -127,6 +128,7 @@ test.describe('platform chip (the page)', () => {
   const open = async (page: Page) => {
     await page.goto('/images/carousel');
     await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
+    await toStep(page, 2); // the format, the slide count and the platform are step 2 since the stepped page
   };
   const chip = (page: Page, name: string) => page.getByRole('group', { name: 'Platform' }).getByRole('button', { name, exact: true });
 
@@ -167,6 +169,7 @@ test.describe('platform chip (the page)', () => {
     await expect(page.getByText(/Saved in this browser/)).toBeVisible();
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
+    await toStep(page, 2);
     await expect(chip(page, 'Facebook')).toHaveAttribute('aria-pressed', 'true');
     await expect(chip(page, 'X')).toHaveAttribute('aria-pressed', 'false');
     // 7 slides is fine on Facebook (10), so no warning; the choice does not change the slide count.

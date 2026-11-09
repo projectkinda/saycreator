@@ -94,6 +94,7 @@ test('photo slots survive: kept with the result, a placeholder block in the laye
 
 test('Make editable: when the layers cannot be drawn, the reason is said in the panel and the picture as drawn stays on screen', async ({ page }) => {
   await fakeReader(page, (kind: string) => (kind === 'refine' ? refineAnswer() : EXAMPLE));
+  await page.addInitScript(() => localStorage.setItem('creator.devtools', '1')); // Match a reference is a developer tool since round 1
   await page.goto('/images/carousel');
   await page.getByText('Match a reference', { exact: true }).click();
   await page.getByLabel('Choose a picture to recreate').setInputFiles(await makeReference(page, { name: 'slide.jpg', kind: 'slide' }));

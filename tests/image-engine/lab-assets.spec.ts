@@ -8,7 +8,7 @@ import { openResults } from './lab-nav';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'out/image-engine/results-screen');
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1500, height: 1000 } });
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 

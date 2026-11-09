@@ -10,7 +10,8 @@ export default defineConfig({
   workers: 1,
   timeout: 60_000,
   reporter: [['list']],
-  use: { baseURL: `http://localhost:${PORT}`, channel: 'chrome', viewport: { width: 900, height: 700 }, storageState: { cookies: [], origins: [{ origin: `http://localhost:${PORT}`, localStorage: [{ name: 'creator.groups', value: 'all' }] }] } },
+  // actionTimeout: a click or fill on a control that is not there fails after 20 s, not after the whole test timeout (some tests allow 5 minutes): a stale locator no longer burns minutes.
+  use: { actionTimeout: 20_000, baseURL: `http://localhost:${PORT}`, channel: 'chrome', viewport: { width: 900, height: 700 }, storageState: { cookies: [], origins: [{ origin: `http://localhost:${PORT}`, localStorage: [{ name: 'creator.groups', value: 'all' }] }] } },
   webServer: {
     command: `npx vite --port ${PORT} --strictPort`,
     cwd: '../..',

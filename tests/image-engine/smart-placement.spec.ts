@@ -28,7 +28,7 @@ const IMG = /\.(png|jpe?g|webp|svg|gif)$/i;
 const realTestAssets = () => (fs.existsSync(TEST_DIR) ? fs.readdirSync(TEST_DIR).filter((f) => IMG.test(f)) : []);
 const tagsOf = (name: string) => name.toLowerCase().replace(/\.[^.]+$/, '').split(/[^a-z]+/).filter((w) => w.length > 1);
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 
 test.describe('tags and planner (no browser)', () => {
   test('every sample slide has 2 to 4 valid element_tags, all from the planner vocabulary', async () => {

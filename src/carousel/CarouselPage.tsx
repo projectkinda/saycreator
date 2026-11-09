@@ -1394,7 +1394,7 @@ export default function CarouselPage() {
       <section className="card ws-card cr-dev" hidden={!devTools} aria-label="Developer tools" data-testid="dev-tools">
         <h2 className="h3">Developer tools</h2>
         <h3 className="h4">Recreate and Match mode (from a reference)</h3>
-        <MatchPanel skipReader target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { if (justSaved.current && (activeReference()?.source ?? 'reference') === 'reference') return; setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} />
+        <MatchPanel skipReader target="carousel" title={doc.script?.title} photo={doc.photos?.[0] && urlOfPic(doc.photos[0].id) && sizeOfPic(doc.photos[0].id) ? { url: urlOfPic(doc.photos[0].id)!, name: doc.photos[0].name, ...sizeOfPic(doc.photos[0].id)! } : null} current={doc.style} onUse={() => { if (justSaved.current) return; /* a style just saved and selected is not replaced by the in-memory reference it came from, whatever route read it */ setOptions({ autoStyle: false }); apply(patches.style(ACTIVE_STYLE, 'Reference')); }} onRemove={() => setOptions({ autoStyle: true })} />
         <details className="tn-more" aria-label="Reference reader">
           <summary className="small">Reference reader (match mode: the full reader that the New style box uses)</summary>
           <Suspense fallback={<p className="small muted" role="status">Loading…</p>}>

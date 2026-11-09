@@ -65,7 +65,7 @@ test('the checks: extra words and edge-hugging slots are refused in plain words;
       out.push(D.checkDesign(slide, handle, 7, blocks[i], null, []));
     }
     return out;
-  }, { text: answer([svgFor(0, script.slides[0], { extra: 'zebra unicorn' }), svgFor(1, script.slides[1]), svgFor(2, script.slides[2])]), handle: script.brand.handle });
+  }, { text: answer([svgFor(0, script.slides[0], { extra: 'zebra unicorn' }), svgFor(1, script.slides[1]), svgFor(2, script.slides[2])]), handle: script.brand?.handle ?? '@yourname' });
   expect(r[0][0]).toMatch(/not in this slide's script: .*zebra/);
   expect(r[1]).toEqual([]);
   expect(r[2]).toEqual([]);

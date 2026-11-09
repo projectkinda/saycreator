@@ -9,7 +9,7 @@ import { openThumb, photoInput, titleInput, allDrawn } from './thumbnail-app-hel
 
 const OUT = path.join(ROOT, 'out/image-engine/live-real');
 const CAROUSELS = path.join(ROOT, 'Reference carousels likes');
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1400, height: 1000 } });
 test.skip(process.env.REAL_LIVE !== '1', 'Real timings are opt-in (REAL_LIVE=1): they use model time.');
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));

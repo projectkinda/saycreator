@@ -30,7 +30,7 @@ const RUNS: RealRun[] = [
 ];
 const only = process.env.REAL_ONLY;
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1400, height: 1000 } });
 test.skip(process.env.REAL_REFERENCE !== '1', 'The real reader is opt-in (REAL_REFERENCE=1): each run takes minutes and uses model time.');
 test.beforeAll(() => fs.mkdirSync(REAL_OUT, { recursive: true }));

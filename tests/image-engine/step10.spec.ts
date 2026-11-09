@@ -30,7 +30,7 @@ const box = (l: Layer) => {
   return { x: l.x + l.width / 2 - w / 2, y: l.y + l.height / 2 - h / 2, width: w, height: h };
 };
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (e) => console.log('[pageerror]', e.message.slice(0, 300)));

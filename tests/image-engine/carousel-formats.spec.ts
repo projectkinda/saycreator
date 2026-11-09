@@ -1,5 +1,6 @@
 // Step 10: other formats and sizes through Generate, with a FAKE writer (no real call): quote cards, a 3-slide and a 10-slide
 // carousel, and a text right under the 12,000-character limit. Every slide is saved as its own file for the Results screen.
+import { showAllSteps } from './flat';
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'out/image-engine/step10/formats');
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1280, height: 900 } });
 test.beforeAll(() => {
   fs.rmSync(OUT, { recursive: true, force: true });
@@ -68,19 +69,30 @@ async function fake(page: Page, answer: (prompt: string) => string) {
   return calls;
 }
 const open = async (page: Page) => {
+  await showAllSteps(page);
+  // the script writer and its template route (a built-in style now goes to the layout library unless this flag is set); the writer label is developer wording
+  await page.addInitScript(() => { localStorage.setItem('creator.templateRoute', '1'); localStorage.setItem('creator.devtools', '1'); });
   await page.goto('/images/carousel');
-  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); });
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.groups', 'all'); localStorage.setItem('creator.templateRoute', '1'); localStorage.setItem('creator.devtools', '1'); });
   await page.reload();
   await expect(page.getByTestId('writer-label')).toContainText('Claude Code');
 };
 const source = (page: Page) => page.getByLabel('Your text or topic');
 
-/** Waits for every slide, saves each as its own PNG, and returns the phone-check failures and the picture sizes. */
+/**
+ * Waits for every slide, saves each as its own PNG, and returns the phone-check failures and the picture sizes. Since the stepped page there is no card per slide: the pictures are read from
+ * the big preview, one slide at a time (click the thumbnail), and the phone-check answer is the line above the preview.
+ */
 async function collect(page: Page, name: string, count: number) {
-  await expect(page.locator('.cr-card')).toHaveCount(count, { timeout: 30_000 });
-  await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(count, { timeout: 60_000 });
-  const imgs = await page.locator('.cr-card .cr-pic img').evaluateAll(async (els) =>
-    Promise.all(els.map(async (e) => {
+  await expect(page.locator('.cr-film li')).toHaveCount(count, { timeout: 30_000 });
+  await expect(page.locator('.cr-film img')).toHaveCount(count, { timeout: 60_000 });
+  const line = page.locator('p[role="status"]').filter({ hasText: /slides? pass|something to fix/ }).first();
+  await expect(line).toBeVisible({ timeout: 60_000 });
+  const imgs: { b64: string; w: number; h: number }[] = [];
+  for (let i = 1; i <= count; i++) {
+    await page.getByRole('button', { name: `Show slide ${i}`, exact: true }).click();
+    await expect(page.locator('.cr-stage-n')).toContainText(`${i} /`);
+    imgs.push(await page.locator('.cr-stage-pic img').evaluate(async (e) => {
       const blob = await (await fetch((e as HTMLImageElement).src)).blob();
       const b64 = await new Promise<string>((res) => {
         const fr = new FileReader();
@@ -88,14 +100,15 @@ async function collect(page: Page, name: string, count: number) {
         fr.readAsDataURL(blob);
       });
       return { b64, w: (e as HTMLImageElement).naturalWidth, h: (e as HTMLImageElement).naturalHeight };
-    })),
-  );
+    }));
+  }
   const files = imgs.map((im, i) => {
     const f = path.join(OUT, `${name}-${String(i + 1).padStart(2, '0')}.png`);
     fs.writeFileSync(f, Buffer.from(im.b64, 'base64'));
     return path.relative(ROOT, f).split(path.sep).join('/');
   });
-  const failures = await page.locator('.cr-card').evaluateAll((cards) => cards.flatMap((c, n) => [...c.querySelectorAll('.cr-lint-fail li')].map((x) => `Slide ${n + 1}: ${x.textContent}`)));
+  const text = await line.innerText();
+  const failures = /something to fix/.test(text) ? [text.trim()] : [];
   const result = { name, count, sizes: [...new Set(imgs.map((i) => `${i.w}x${i.h}`))], failures, files };
   fs.writeFileSync(path.join(OUT, `${name}.json`), JSON.stringify(result, null, 2));
   return result;
@@ -112,7 +125,7 @@ test('quote cards: three square cards from a text', async ({ page }) => {
   expect(r.sizes).toEqual(['1080x1080']);
   expect(calls[0]).toContain('a set of 3 quote cards');
   expect(calls[0]).toMatch(/every one of type "quote"/);
-  await expect(page.getByTestId('progress')).toContainText('Your 3 cards are ready');
+  await expect(page.getByTestId('progress')).toContainText('Done: 3 cards');
   expect(r.failures, JSON.stringify(r.failures)).toEqual([]);
 });
 
@@ -125,7 +138,7 @@ test('a 3-slide carousel', async ({ page }) => {
   const r = await collect(page, 'carousel-3', 3);
   expect(r.sizes).toEqual(['1080x1350']);
   expect(calls[0]).toContain('3-slide carousel');
-  await expect(page.getByTestId('progress')).toContainText('Your 3 slides are ready');
+  await expect(page.getByTestId('progress')).toContainText('Done: 3 slides');
   expect(r.failures, JSON.stringify(r.failures)).toEqual([]);
 });
 
@@ -139,7 +152,7 @@ test('a 10-slide carousel', async ({ page }) => {
   const r = await collect(page, 'carousel-10', 10);
   expect(r.sizes).toEqual(['1080x1350']);
   expect(calls[0]).toContain('10-slide carousel');
-  await expect(page.getByTestId('progress')).toContainText('Your 10 slides are ready');
+  await expect(page.getByTestId('progress')).toContainText('Done: 10 slides');
   // The page numbers count to 10.
   expect(r.failures, JSON.stringify(r.failures)).toEqual([]);
 });

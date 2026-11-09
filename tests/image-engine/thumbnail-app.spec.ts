@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { makePic } from './photos-app-helpers';
 import { APP_OUT, allDrawn, dragPointer, fakeWriter, layouts, openThumb, optionCards, photoInput, realPhoto, savedProject, srcs, titleInput, whenSaved } from './thumbnail-app-helpers';
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1300, height: 1000 } });
 test.beforeAll(() => {
   fs.rmSync(APP_OUT, { recursive: true, force: true });

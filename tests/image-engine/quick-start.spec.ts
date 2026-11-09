@@ -2,12 +2,12 @@
 // that no longer exists opens with the default style and a note. A fake reader stands in for the model: no model calls.
 import { expect, test, type Page } from '@playwright/test';
 import { toStep } from './ui';
-import { fakeReader, labelsAnswer, readAnswer, refineAnswer, storedTemplates } from './reference-helpers';
+import { fakeReader, labelsAnswer, readAnswer, refineAnswer, storedTemplates, wholeSlideAnswer } from './reference-helpers';
 
 test.setTimeout(180_000);
 test.use({ viewport: { width: 1300, height: 1000 } });
 
-const usual = (kind: string, n: number, prompt = '') => (kind === 'read' || kind === 'retry' ? (prompt.includes('describe the scene') || /r\d+T\d+/.test(prompt) ? labelsAnswer(prompt, { seen: ['cover'] }) : readAnswer({ seen: ['cover'] })) : n === 0 ? refineAnswer({ patches: [], score: 70, stop: true }) : refineAnswer({ patches: [], stop: true }));
+const usual = (kind: string, n: number, prompt = '') => prompt.includes('[whole-slide:new]') ? wholeSlideAnswer() : (kind === 'read' || kind === 'retry' ? (prompt.includes('describe the scene') || /r\d+T\d+/.test(prompt) ? labelsAnswer(prompt, { seen: ['cover'] }) : readAnswer({ seen: ['cover'] })) : n === 0 ? refineAnswer({ patches: [], score: 70, stop: true }) : refineAnswer({ patches: [], stop: true }));
 
 /** A small two-page PDF (no xref table: the reader rebuilds it). */
 function twoPagePdf(): Buffer {

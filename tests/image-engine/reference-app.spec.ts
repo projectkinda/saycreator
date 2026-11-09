@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import { fakeReader, loopDone, makeReference, openStyleFromReferences, readAnswer, refInput, refineAnswer, REF_OUT, saveShot, storedTemplates } from './reference-helpers';
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1300, height: 1000 } });
 test.beforeAll(() => {
   fs.rmSync(REF_OUT, { recursive: true, force: true });

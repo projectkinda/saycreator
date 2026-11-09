@@ -1,12 +1,12 @@
 // "Reset page" on the carousel page: after confirming, the page looks like a fresh load, saved styles stay, and a running job is cancelled. A fake reader stands in for the model.
 import { expect, test, type Page } from '@playwright/test';
 import { toStep } from './ui';
-import { fakeReader, labelsAnswer, makeReference, readAnswer, refineAnswer, storedTemplates } from './reference-helpers';
+import { fakeReader, labelsAnswer, makeReference, readAnswer, refineAnswer, storedTemplates, wholeSlideAnswer } from './reference-helpers';
 
 test.setTimeout(180_000);
 test.use({ viewport: { width: 1300, height: 1000 } });
 
-const usual = (kind: string, n: number, prompt = '') => (kind === 'read' || kind === 'retry' ? (prompt.includes('describe the scene') || /r\d+T\d+/.test(prompt) ? labelsAnswer(prompt, { seen: ['cover'] }) : readAnswer({ seen: ['cover'] })) : n === 0 ? refineAnswer({ patches: [], score: 70, stop: true }) : refineAnswer({ patches: [], stop: true }));
+const usual = (kind: string, n: number, prompt = '') => prompt.includes('[whole-slide:new]') ? wholeSlideAnswer() : (kind === 'read' || kind === 'retry' ? (prompt.includes('describe the scene') || /r\d+T\d+/.test(prompt) ? labelsAnswer(prompt, { seen: ['cover'] }) : readAnswer({ seen: ['cover'] })) : n === 0 ? refineAnswer({ patches: [], score: 70, stop: true }) : refineAnswer({ patches: [], stop: true }));
 
 /** A project with a script and some text, plus one saved template (a Mine style), then a reload. */
 async function seed(page: Page) {

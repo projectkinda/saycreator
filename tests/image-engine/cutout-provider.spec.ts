@@ -3,7 +3,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { makePic, openEditor, photoScript, useScriptInStyle } from './photos-app-helpers';
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 
 async function addPhoto(page: Page, name = 'subject.jpg') {
   await openEditor(page);

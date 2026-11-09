@@ -13,7 +13,7 @@ const OBJECT_FILE = path.join(ROOT, 'out/image-engine/step11/synthetic-object.pn
 const call = <T>(page: Page, fn: string, ...args: unknown[]) =>
   page.evaluate(([f, a]) => (window as unknown as { __ie: Record<string, (...x: unknown[]) => unknown> }).__ie[f as string](...(a as unknown[])), [fn, args] as const) as Promise<T>;
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 
 test('treatment gallery: every treatment, mask, frame, background and object effect renders, each as its own plan and picture', async ({ page }) => {
   test.skip(!fs.existsSync(path.join(ROOT, 'test-assets', GALLERY_PHOTO)), 'The gallery photo is not in test-assets/.');

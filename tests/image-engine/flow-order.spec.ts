@@ -1,12 +1,12 @@
 // The carousel page flow: 1 Your text, 2 Pick a style (the reference box is behind a link under the list), 3 Generate. Fake reader and fake writer: no model calls.
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { deckDrawn, toStep } from './ui';
-import { fakeReader, labelsAnswer, makeReference, readAnswer, refineAnswer } from './reference-helpers';
+import { fakeReader, labelsAnswer, makeReference, readAnswer, refineAnswer, wholeSlideAnswer } from './reference-helpers';
 
 test.setTimeout(180_000);
 test.use({ viewport: { width: 1300, height: 1000 } });
 
-const usual = (kind: string, n: number, prompt = '') => (kind === 'read' || kind === 'retry' ? (prompt.includes('describe the scene') || /rd+Td+/.test(prompt) ? labelsAnswer(prompt, { seen: ['cover'] }) : readAnswer({ seen: ['cover'] })) : n === 0 ? refineAnswer({ patches: [], score: 70, stop: true }) : refineAnswer({ patches: [], stop: true }));
+const usual = (kind: string, n: number, prompt = '') => prompt.includes('[whole-slide:new]') ? wholeSlideAnswer() : (kind === 'read' || kind === 'retry' ? (prompt.includes('describe the scene') || /rd+Td+/.test(prompt) ? labelsAnswer(prompt, { seen: ['cover'] }) : readAnswer({ seen: ['cover'] })) : n === 0 ? refineAnswer({ patches: [], score: 70, stop: true }) : refineAnswer({ patches: [], stop: true }));
 const TEXT = 'Small habits make a profile easier to trust. Say who you help in one clear headline. Pin one post that proves it. Keep your contact line up to date. Then ask people to follow for weekly posts.';
 const LINK = /^New style/;
 

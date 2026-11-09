@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 test.skip(!process.env.REAL_VARIETY, 'real model run only when REAL_VARIETY=1');
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.setTimeout(8 * 60_000);
 const OUT = path.resolve(process.cwd(), process.env.REAL_OUT ?? 'out/real-run');
 

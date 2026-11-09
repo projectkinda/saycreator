@@ -38,7 +38,7 @@ const save = (rel: string, b64: string) => {
 
 const summary: Record<string, unknown>[] = [];
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.beforeAll(() => {
   expect(present.length, 'no test images found in test-images/').toBeGreaterThan(0);
   fs.rmSync(OUT, { recursive: true, force: true });

@@ -171,3 +171,10 @@ export const saveShot = async (page: Page, name: string, full = true) => {
   fs.mkdirSync(REF_OUT, { recursive: true });
   await page.screenshot({ path: path.join(REF_OUT, name), fullPage: full });
 };
+
+/**
+ * A valid answer of the whole-slide reader ("Read references": one call per slide, prompt tagged [whole-slide:new]): the inventory line, then one <svg> design with a title and a body slot.
+ * The old fake answers (a style as JSON) were for the reader this one replaced; a fake reader that still sends those gets "The answer has no <svg> designs".
+ */
+export const wholeSlideAnswer = (type = 'cover', accent = '#D62828') =>
+  `<devices>marker=no underline=no profile=no shapes=no</devices><inventory>title, shapes</inventory><svg viewBox="0 0 1080 1350" data-type="${type}" data-palette='{"bg":"#FFFFFF","text":"#111111","accent":"${accent}","muted":"#888888"}'><rect x="0" y="0" width="1080" height="1350" fill="$bg"/><rect x="60" y="1100" width="300" height="24" fill="$accent"/><text data-role="title" data-min-size="48" data-max-lines="3" x="60" y="360" font-family="Schibsted Grotesk" font-size="90" fill="$text">Title words</text><text data-role="body" data-min-size="32" data-max-lines="4" x="60" y="900" font-family="Instrument Sans" font-size="40" fill="$text">Body words</text></svg>`;

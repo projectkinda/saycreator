@@ -10,7 +10,7 @@ import { ALL_CHECKS, OUT, STYLES, presentCases, run, save, slug, url } from './t
 const summary: Record<string, unknown>[] = [];
 const present = presentCases();
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.beforeAll(() => {
   expect(present.length, 'no test photos found in test-images/').toBeGreaterThan(0);
   // Only what this spec writes is cleared: the bad variants and the pointer pictures belong to the checks spec.

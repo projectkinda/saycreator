@@ -15,7 +15,7 @@ interface L { id: string; kind: string; x: number; y: number; width: number; hei
 const plan = (layers: L[]) => ({ schema: 1 as const, revision: 1, canvas: { width: 400, height: 300, background: '#FFFFFF' }, layers });
 const element = (o: Partial<L> & { element: string }): L => ({ id: 'e', kind: 'element', x: 50, y: 50, width: 100, height: 100, rotation: 0, opacity: 1, ...o });
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (e) => console.log('[pageerror]', e.message.slice(0, 300)));

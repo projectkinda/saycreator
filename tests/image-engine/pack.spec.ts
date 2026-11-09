@@ -63,6 +63,7 @@ test('a pack answer is parsed into designs with slot limits and palette names; a
 test('Rebuild as pack on a stored style: 7 designs with different compositions, the style stays, and the pack fits a 5-slide carousel with no model call', async ({ page }) => {
   const readerCalls: string[] = [];
   page.on('request', (q) => /\/__[a-z-]+\//.test(q.url()) && q.method() === 'POST' && readerCalls.push(q.url()));
+  await page.addInitScript(() => localStorage.setItem('creator.devtools', '1')); // the Rebuild buttons are developer tools since round 1
   await page.goto('/images/carousel');
   await page.getByRole('button', { name: /^Rebuild the .* style as a pack$/ }).first().click();
   await expect(page.getByTestId('pack-note')).toContainText('each with its own composition');
@@ -109,6 +110,7 @@ test('Rebuild as pack on a stored style: 7 designs with different compositions, 
 
 test('Make the rest of the set (Quick) from a recreated slide: the estimate comes first, one call, a sheet of designs, saved as a template with the Mine tag; a description makes a full pack', async ({ page }) => {
   const rec = await fakeReader(page, answer);
+  await page.addInitScript(() => localStorage.setItem('creator.devtools', '1')); // Match a reference is a developer tool since round 1
   await page.goto('/images/carousel');
   await page.getByText('Match a reference', { exact: true }).click();
   await page.getByLabel('Choose a picture to recreate').setInputFiles(await makeReference(page, { name: 'slide.jpg', kind: 'slide' }));

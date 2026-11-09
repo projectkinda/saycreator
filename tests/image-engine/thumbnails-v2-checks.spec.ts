@@ -9,7 +9,7 @@ import { NEW_CHECKS, OUT, STYLES, call, run, save, url, type RunOption } from '.
 const RIDER = 'GCKR3575.JPG';
 const BAD = 'bad-variants';
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.beforeEach(async ({ page }) => {
   await page.goto('/tests/image-engine/harness/index.html');
   await page.waitForFunction(() => (window as unknown as { __ie?: { ready: boolean } }).__ie?.ready === true);

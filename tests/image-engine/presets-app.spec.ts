@@ -6,7 +6,7 @@ import { exampleScript } from '../../src/carousel/script';
 
 test.setTimeout(240_000);
 test.use({ viewport: { width: 1280, height: 900 } });
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 
 const TEXT = 'Quick Flip is a hoodie that flips into a backpack in 10 seconds. Slide the zip and bite the clasp. The shell is waterproof and fits a 16-inch laptop. Early backers save 30%. Back it today on Kickstarter before it closes.';
 const LIB = JSON.stringify({ title: 'Quick Flip', slides: [

@@ -77,6 +77,7 @@ test('a design with no text slots is asked for once more; the answer is merged, 
     }
     return EXAMPLE;
   });
+  await page.addInitScript(() => localStorage.setItem('creator.devtools', '1')); // Match a reference is a developer tool since round 1
   await page.goto('/images/carousel');
   await page.getByText('Match a reference', { exact: true }).click();
   await page.getByLabel('Choose a picture to recreate').setInputFiles(await makeReference(page, { name: 'slide.jpg', kind: 'slide' }));

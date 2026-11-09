@@ -6,7 +6,7 @@ import path from 'node:path';
 import { ROOT } from './reference-helpers';
 
 const OUT = path.join(ROOT, 'out/image-engine/marks');
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.beforeAll(() => {
   fs.rmSync(OUT, { recursive: true, force: true });
   fs.mkdirSync(OUT, { recursive: true });

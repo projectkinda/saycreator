@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fakeReader, labelsAnswer, makeReference, openStyleFromReferences, readAnswer, refineAnswer, refInput, ROOT, storedTemplates } from './reference-helpers';
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1400, height: 1000 } });
 const OUT = path.join(ROOT, 'out/image-engine/live-style');
 test.beforeAll(() => {

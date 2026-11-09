@@ -16,7 +16,7 @@ const INPUTS = [
   { id: 'small-business', title: 'A small business (a cafe)', file: 'small-business.txt', handle: '@corner.cafe' },
   { id: 'agency', title: 'An agency (client briefs)', file: 'agency.txt', handle: '@studio.brief' },
 ];
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1280, height: 900 } });
 
 interface Run {

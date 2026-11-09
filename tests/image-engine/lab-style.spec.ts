@@ -22,7 +22,7 @@ const readClusters = (): any => {
   throw new Error('clusters.json could not be read');
 };
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1500, height: 1000 } });
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 

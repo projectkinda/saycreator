@@ -8,7 +8,7 @@ import { ROOT } from './reference-helpers';
 const OUT = path.join(ROOT, 'out/image-engine/recreate');
 const DIR = path.join(ROOT, 'Reference carousels likes');
 test.skip(process.env.REAL_RECREATE !== '1', 'Real runs are opt-in (REAL_RECREATE=1): they use model time.');
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 
 // RECREATE_FILE=<path>: one full-size picture (for example from the private test-assets folder) in place of the three sheets.

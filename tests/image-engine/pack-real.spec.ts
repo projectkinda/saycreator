@@ -7,7 +7,7 @@ import { ROOT } from './reference-helpers';
 
 const OUT = path.join(ROOT, 'out/image-engine/pack');
 test.skip(process.env.REAL_PACK !== '1', 'Real runs are opt-in (REAL_PACK=1): they use model time.');
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 
 const FILE = path.join(ROOT, 'test-assets', 'WhatsApp Image 2026-10-27 at 11.30.42 AM (2).jpeg');

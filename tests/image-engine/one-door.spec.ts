@@ -2,12 +2,12 @@
 // Reading a reference saves a Mine style, selects it, and closes the box. Fake reader: no model calls.
 import { expect, test, type Page } from '@playwright/test';
 import { toStep } from './ui';
-import { fakeReader, labelsAnswer, makeReference, readAnswer, refineAnswer } from './reference-helpers';
+import { fakeReader, labelsAnswer, makeReference, readAnswer, refineAnswer, wholeSlideAnswer } from './reference-helpers';
 
 test.setTimeout(180_000);
 test.use({ viewport: { width: 1300, height: 1000 } });
 
-const usual = (kind: string, n: number, prompt = '') => (kind === 'read' || kind === 'retry' ? (prompt.includes('describe the scene') || /r\d+T\d+/.test(prompt) ? labelsAnswer(prompt, { seen: ['cover'] }) : readAnswer({ seen: ['cover'] })) : n === 0 ? refineAnswer({ patches: [], score: 70, stop: true }) : refineAnswer({ patches: [], stop: true }));
+const usual = (kind: string, n: number, prompt = '') => prompt.includes('[whole-slide:new]') ? wholeSlideAnswer() : (kind === 'read' || kind === 'retry' ? (prompt.includes('describe the scene') || /r\d+T\d+/.test(prompt) ? labelsAnswer(prompt, { seen: ['cover'] }) : readAnswer({ seen: ['cover'] })) : n === 0 ? refineAnswer({ patches: [], score: 70, stop: true }) : refineAnswer({ patches: [], stop: true }));
 const card = (page: Page) => page.getByRole('button', { name: /^New style/ });
 const styleList = (page: Page) => page.getByRole('list', { name: 'Styles' }).first();
 /** File inputs for references that are on the page outside the Developer tools section. */

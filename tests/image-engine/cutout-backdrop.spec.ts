@@ -6,7 +6,7 @@ import { allDrawn, openThumb, photoInput, titleInput } from './thumbnail-app-hel
 // The pictures of the cutout options only: the others do not depend on the background.
 const srcs = (page: Page) => page.locator('li.tn-card[data-layout^="cutout-"] img, li.tn-card[data-layout="object-title"] img').evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src));
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.setTimeout(240_000);
 
 async function withCutout(page: Page) {

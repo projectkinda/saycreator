@@ -1,5 +1,7 @@
 // Step 8: the carousel editor inside the real app (Images > Make a carousel), used like a person would use it.
 // Screenshots of each state go to out/image-engine/app-flow/ and are shown on the Results screen (Step 8).
+import { showAllSteps } from './flat';
+import { toStep } from './ui';
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,7 +15,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const OUT = path.join(ROOT, 'out/image-engine/app-flow');
 const SHOTS: { file: string; title: string; note: string }[] = [];
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1280, height: 900 } });
 test.beforeAll(() => {
   fs.rmSync(OUT, { recursive: true, force: true });
@@ -29,32 +31,42 @@ const shot = async (page: Page, name: string, title: string, note: string) => {
 };
 
 const EXAMPLE = exampleScript('carousel');
+// Updated for the stepped page (UI Round 1 to 4): the controls these tests use are spread over the steps, so every step is shown at once (see flat.ts); the script tools are behind
+// "I already have a script"; a built-in style goes to the layout library unless the template-route flag is set (these tests are about the template route); one slide is edited at a time
+// in the Edit slides view (editSlide); "drawn" means a thumbnail for each slide.
 const open = async (page: Page) => {
+  await showAllSteps(page);
+  await page.addInitScript(() => { localStorage.setItem('creator.templateRoute', '1'); localStorage.setItem('creator.devtools', '1'); });
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
-  // The format, count, handle and tone options live under Advanced.
-  if (!(await page.locator('details.cr-advanced').evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByText('Advanced: write the script yourself').click();
 };
-/** The copy-prompt, paste and example tools live in the Advanced fold since Step 9. */
+/** The script tools live behind "I already have a script" in step 1 since UI Round 1. */
 const openAdvanced = async (page: Page) => {
-  const d = page.locator('details.cr-advanced');
-  if (!(await d.evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByText('Advanced: write the script yourself').click();
+  const own = page.getByRole('button', { name: 'I already have a script' });
+  if ((await own.getAttribute('aria-pressed')) !== 'true') await own.click();
 };
 const paste = async (page: Page, text: string) => {
   await openAdvanced(page);
   const box = page.getByLabel('Paste the script Claude wrote (JSON)');
   await box.fill(text);
 };
-const slideCard = (page: Page, n: number) => page.getByRole('listitem', { name: new RegExp(`^Slide ${n} of`) });
-/** Every slide has been drawn and checked. */
-const allDrawn = async (page: Page, count = 7) => {
-  await expect(page.locator('.cr-card')).toHaveCount(count);
-  await expect(page.locator('.cr-card .cr-pic img')).toHaveCount(count, { timeout: 30_000 });
-  await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(count, { timeout: 30_000 });
+/** The Edit slides view on slide n (one slide at a time: there is no card per slide any more). */
+const editSlide = async (page: Page, n: number) => {
+  const view = page.getByTestId('edit-view');
+  if (!(await view.isVisible())) await page.getByTestId('edit-slides').click();
+  await page.getByRole('button', { name: `Show slide ${n}`, exact: true }).click();
+  await expect(page.getByRole('heading', { name: new RegExp(`^Edit slide ${n} of`) })).toBeVisible();
 };
-const srcs = (page: Page) => page.locator('.cr-card .cr-pic img').evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src));
+const slideCard = (page: Page, _n: number) => page.locator('.cr-card');
+/** Every slide has been drawn and checked: a thumbnail for each, and the phone-check line above the preview has its answer. */
+const allDrawn = async (page: Page, count = 7) => {
+  await expect(page.locator('.cr-film li')).toHaveCount(count);
+  await expect(page.locator('.cr-film img')).toHaveCount(count, { timeout: 30_000 });
+  await expect(page.locator('p[role="status"]').filter({ hasText: /slides? pass|something to fix/ }).first()).toBeVisible({ timeout: 30_000 });
+};
+const srcs = (page: Page) => page.locator('.cr-film img').evaluateAll((els) => els.map((e) => (e as HTMLImageElement).src));
 /** A fingerprint of the first slide's picture itself (a redrawn slide gets a new blob address, so addresses are not compared after Undo). */
-const pixels = (page: Page) => page.locator('.cr-card .cr-pic img').first().evaluate(async (e) => {
+const pixels = (page: Page) => page.locator('.cr-film img').first().evaluate(async (e) => {
   const buf = await (await fetch((e as HTMLImageElement).src)).arrayBuffer();
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-1', buf))).map((b) => b.toString(16)).join('');
 });
@@ -87,22 +99,23 @@ test('the Images screen has a Make a carousel action that opens the editor, with
   await shot(page, 'images-screen', 'The Images screen', 'A new "Make a carousel" button sits beside "Create image". Nothing else on the screen changed.');
   await page.getByRole('link', { name: 'Make a carousel' }).click();
   await expect(page).toHaveURL(/\/images\/carousel$/);
-  await expect(page.getByRole('heading', { name: 'Make it from your text' })).toBeVisible();
+  // (Updated for the stepped page: the old text asserted the heading "Make it from your text", the format options under an Advanced fold, a heading "Style" and "No script yet".
+  // The same facts in the new words: the text box and the way to start are on step 1, the format is step 2, the styles are step 3.)
+  await expect(page.getByRole('heading', { name: 'Make a carousel', exact: true })).toBeVisible();
   await expect(page.getByLabel('Your text or topic')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Make carousel', exact: true })).toBeVisible();
-  // The format options are under Advanced (closed to start with).
-  await expect(page.locator('details.cr-advanced')).toHaveJSProperty('open', false);
-  await page.getByText('Advanced: write the script yourself').click();
+  await expect(page.getByRole('button', { name: 'I already have a script' })).toBeVisible();
+  await toStep(page, 2);
   await expect(page.getByRole('button', { name: /^Carousel/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: /^Quote card/ })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByRole('heading', { name: 'Style', exact: true })).toBeVisible();
-  await expect(page.getByText('Advanced: write the script yourself')).toBeVisible();
-  await expect(page.getByText('No script yet')).toBeVisible();
+  await toStep(page, 3);
+  await expect(page.getByRole('button', { name: 'Make carousel', exact: true })).toBeVisible();
+  await expect(page.getByText('Your slides appear here')).toBeVisible();
   // Every stored style is in the picker with a small preview that really drew.
   const styles = page.getByRole('list', { name: 'Styles' }).getByRole('listitem');
   expect(await styles.count()).toBeGreaterThanOrEqual(5); // "Pick for me" and every stored style
   await expect(page.getByRole('button', { name: /^Pick for me/ })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('list', { name: 'Styles' }).locator('img')).toHaveCount((await styles.count()) - 2, { timeout: 30_000 }); // not "Pick for me" and not "New style"
+  // "Pick for me" has an icon; "New style" has none; every other card has a picture that drew
+  await expect(page.getByRole('list', { name: 'Styles' }).locator('img')).toHaveCount((await styles.count()) - 2, { timeout: 30_000 });
   const ok = await page.getByRole('list', { name: 'Styles' }).locator('img').evaluateAll((els) => els.every((e) => (e as HTMLImageElement).naturalWidth > 0));
   expect(ok).toBe(true);
   await shot(page, 'start', 'Start: format, style, script', 'Pick a format, pick a style (each has a small preview), then get a script.');
@@ -172,6 +185,7 @@ test('pasting a good script (even inside a chat code block) loads it: seven slid
   await allDrawn(page);
   await expect(page.getByText(/Script loaded: 7 slides/)).toBeAttached();
   await expect(page.getByLabel('Paste the script Claude wrote (JSON)')).toBeHidden(); // the Advanced fold closes once a script is in use
+  await editSlide(page, 1);
   const first = slideCard(page, 1);
   await expect(first.getByLabel('Headline')).toHaveValue('Fix your profile in 15 minutes');
   await expect(first.getByRole('list', { name: 'Picture tags (2 to 4)' }).getByText('profile')).toBeVisible();
@@ -180,6 +194,7 @@ test('pasting a good script (even inside a chat code block) loads it: seven slid
   expect([...new Set(dims)]).toEqual(['1080x1350']);
   await page.getByRole('heading', { name: 'Your slides' }).scrollIntoViewIfNeeded();
   await shot(page, 'slides', 'The script loaded: seven slides', 'Each slide is a card: its own picture with phone-size check badges, every field editable, tag chips and per-slide actions.');
+  await editSlide(page, 5);
   await slideCard(page, 5).scrollIntoViewIfNeeded();
   await shot(page, 'slide-card', 'One slide card', 'Type, fields, tags, layout, shuffle, regenerate, download, and the elements on the slide.');
 });
@@ -187,6 +202,7 @@ test('pasting a good script (even inside a chat code block) loads it: seven slid
 test('editing a headline redraws only that slide; undo and redo bring the old and new text back', async ({ page }) => {
   await loadExample(page);
   const before = await srcs(page);
+  await editSlide(page, 2);
   const card = slideCard(page, 2);
   await card.getByLabel('Headline').fill('Say who you help');
   await expect.poll(async () => (await srcs(page))[1], { timeout: 20_000 }).not.toBe(before[1]);
@@ -212,6 +228,7 @@ test('editing a headline redraws only that slide; undo and redo bring the old an
 
 test('tags are chips: removing below two or adding above four is refused with a reason; adding a good tag works and can be undone', async ({ page }) => {
   await loadExample(page);
+  await editSlide(page, 3);
   const card = slideCard(page, 3);
   const tags = card.getByRole('list', { name: 'Picture tags (2 to 4)' });
   await expect(tags.getByRole('listitem')).toHaveCount(2);
@@ -254,6 +271,7 @@ test('changing the style restyles the same script; undo goes back', async ({ pag
 
 test('per-slide actions are patches: layout, shuffle, swap an element, regenerate, and undo each', async ({ page }) => {
   await loadExample(page);
+  await editSlide(page, 2);
   const card = slideCard(page, 2);
   const start = (await srcs(page))[1];
   // layout
@@ -296,6 +314,7 @@ test('per-slide actions are patches: layout, shuffle, swap an element, regenerat
 test('Shuffle elements changes the picture every time it is pressed (20 presses)', async ({ page }) => {
   test.setTimeout(240_000);
   await loadExample(page);
+  await editSlide(page, 2);
   const card = slideCard(page, 2);
   let last = (await srcs(page))[1];
   for (let n = 1; n <= 20; n++) {
@@ -312,6 +331,7 @@ test('Shuffle elements says so, and changes nothing, when no other choice fits t
     Math.random = () => 0.123456;
   });
   await loadExample(page);
+  await editSlide(page, 2);
   const card = slideCard(page, 2);
   await card.getByRole('button', { name: 'Shuffle elements' }).click();
   await page.waitForTimeout(1500);
@@ -373,6 +393,7 @@ test('export: one slide as a PNG, all slides as a zip of individual files named 
 
 test('refresh and recover: the script, the edits, the style and the undo history survive a reload', async ({ page }) => {
   await loadExample(page);
+  await editSlide(page, 2);
   const card = slideCard(page, 2);
   await card.getByLabel('Headline').fill('Say who you help');
   await expect(undoBtn(page)).toContainText('Edit headline on slide 2');
@@ -443,6 +464,7 @@ test('keyboard and screen readers: the whole flow works without a mouse, and con
   await page.getByRole('button', { name: 'Try an example script' }).focus();
   await page.keyboard.press('Enter');
   await allDrawn(page);
+  await editSlide(page, 6);
   const card = slideCard(page, 6);
   await expect(card.getByLabel('Big number')).toBeVisible();
   await expect(card.getByLabel('What the number means')).toBeVisible();
@@ -499,6 +521,7 @@ test('on a phone-width screen nothing runs off the side and the controls stay us
   await loadExample(page);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+  await editSlide(page, 2);
   await slideCard(page, 2).scrollIntoViewIfNeeded();
   await shot(page, 'phone-width', 'On a phone-width screen', 'The card stacks: picture, then fields. Tested at 390 px wide in Chrome only, not on a real phone.');
 });

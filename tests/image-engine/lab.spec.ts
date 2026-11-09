@@ -14,7 +14,7 @@ const IMAGES = fs.readdirSync(path.join(ROOT, 'test-images')).filter((f) => /\.(
 const PRIVATE = path.join(ROOT, 'test-assets');
 const PRIVATE_COUNT = fs.existsSync(PRIVATE) ? fs.readdirSync(PRIVATE).filter((f) => /\.(png|jpe?g|webp|gif|svg)$/i.test(f)).length : 0;
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1500, height: 1000 } });
 test.beforeAll(() => fs.mkdirSync(OUT, { recursive: true }));
 

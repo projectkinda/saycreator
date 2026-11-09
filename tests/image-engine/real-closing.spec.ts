@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 test.skip(!process.env.REAL_CLOSING, 'real model run only when REAL_CLOSING=1');
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.setTimeout(8 * 60_000);
 const OUT = path.resolve(process.cwd(), 'out/cta-fix');
 const CRITIQUE = fs.readFileSync('tests/image-engine/fixtures/prose-critique.txt', 'utf8');

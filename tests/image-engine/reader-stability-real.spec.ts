@@ -7,7 +7,7 @@ import { storedTemplates } from './reference-helpers';
 
 test.skip(!process.env.REAL_STABILITY || !process.env.REF_LIGHT_DIR, 'set REAL_STABILITY=1 and REF_LIGHT_DIR to re-read the light set');
 test.setTimeout(20 * 60_000);
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1300, height: 1000 } });
 const OUT = path.resolve(process.cwd(), 'out/designed-library-real');
 const FILE = path.join(OUT, 'stability-light.json');
