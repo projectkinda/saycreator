@@ -78,3 +78,20 @@ test('the palettes of styles 2, 4, 7 and 8: every text-on-ground pair the layout
   }
   expect(bad).toEqual([]);
 });
+
+test('style 2 (Bold orange) keeps its original bright oranges, with a near-black warm ink on them', () => {
+  const j = JSON.parse(fs.readFileSync('src/image-engine/styles/style-2/style.json', 'utf8'));
+  const up = (x: string) => x.toUpperCase();
+  // the original values: the ground, the card and the deep card
+  expect(up(j.palettes.orange.bg)).toBe('#F76718');
+  expect(up(j.palettes.orange.surface)).toBe('#FF8238');
+  expect(up(j.palettes.deep.surface)).toBe('#D6571E');
+  // the text, the chrome and the card text on the orange grounds and cards are the dark ink, not white
+  for (const k of ['text', 'muted', 'accent', 'onMarker', 'onSurface', 'line']) expect(up(j.palettes.orange[k]), `orange.${k}`).toBe('#1A0B04');
+  expect(up(j.palettes.deep.onSurface)).toBe('#1A0B04');
+  // the highlight bar is not the colour of the ground
+  expect(up(j.palettes.orange.marker)).not.toBe(up(j.palettes.orange.bg));
+  // the dark brown palette keeps its light text and orange accent
+  expect(up(j.palettes.ink.text)).toBe('#FFFFFF');
+  expect(up(j.palettes.ink.accent)).toBe('#F76718');
+});

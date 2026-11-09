@@ -37,16 +37,16 @@
   },
   "palettes": {
     "orange": {
-      "bg": "#C84B07",
-      "text": "#FFFFFF",
-      "muted": "#FFFFFF",
-      "accent": "#FFFFFF",
-      "onAccent": "#C84B07",
-      "marker": "#FFFFFF",
-      "onMarker": "#C84B07",
-      "surface": "#A83F05",
-      "onSurface": "#FFFFFF",
-      "line": "#FFFFFF"
+      "bg": "#F76718",
+      "text": "#1A0B04",
+      "muted": "#1A0B04",
+      "accent": "#1A0B04",
+      "onAccent": "#FFF3E8",
+      "marker": "#FFF3E8",
+      "onMarker": "#1A0B04",
+      "surface": "#FF8238",
+      "onSurface": "#1A0B04",
+      "line": "#1A0B04"
     },
     "deep": {
       "bg": "#C2410C",
@@ -56,8 +56,8 @@
       "onAccent": "#C2410C",
       "marker": "#FFFFFF",
       "onMarker": "#C2410C",
-      "surface": "#C24F1B",
-      "onSurface": "#FFFFFF",
+      "surface": "#D6571E",
+      "onSurface": "#1A0B04",
       "line": "#FFFFFF"
     },
     "ink": {
