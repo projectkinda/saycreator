@@ -105,7 +105,7 @@ function ownCandidates(s: SlideScript): SlideSpec[] {
       ];
     }
     case 'step':
-      return [mk('step-numeral', compact({ step: String(Math.round(Number(r.number)) || 1), title: str(r.headline), body: str(r.body) })), ...((paragraphs(str(r.body)) && [mk('prose', compact({ heading: str(r.headline), num: String(Math.round(Number(r.number)) || 1), p1: str(r.body) }))]) || [])];
+      return [mk('step-numeral', compact({ step: String(Math.round(Number(r.number)) || 1), title: str(r.headline), body: str(r.body) }))];
     case 'stat':
       // the stat layouts have no small line above the number: a stat that has one goes to the prose layout, so no word is lost
       if (str(r.kicker)) return [];
@@ -139,16 +139,20 @@ function ownCandidates(s: SlideScript): SlideSpec[] {
   }
 }
 
-/** One script slide as the plan of a library slide, or why it cannot be (said in plain words). */
-export function specFromSlide(s: SlideScript, i: number, look: Look, ctx: CtaCtx): { ok: true; spec: SlideSpec } | { ok: false; reason: string } {
+/**
+ * One script slide as the plan of a library slide. Never fails: the nearest layout that fits (the simple "prose" layout for a long text) or, when none fits, the slide's natural layout with
+ * its words kept exactly as written (`keepAsWritten`): the code never trims or rewrites the person's words.
+ */
+export function specFromSlide(s: SlideScript, _i: number, look: Look, ctx: CtaCtx): { spec: SlideSpec; mark: 'simple' | 'kept' | null; why: string } {
   const list = candidates(s);
-  let first: string[] | null = null;
-  for (const spec of list) {
+  let first = '';
+  for (const [k, spec] of list.entries()) {
     const problems = slideProblems(spec, look, ctx);
-    if (!problems.length) return { ok: true, spec };
-    first ??= problems;
+    if (!problems.length) return { spec, mark: spec.layout === 'prose' && k > 0 ? 'simple' : null, why: '' };
+    first ||= problems[0];
   }
-  return { ok: false, reason: `Slide ${i + 1} (${TYPE_LABEL[s.type]}) has more or longer text than the library layouts can show${first?.[0] ? `: ${first[0].replace(/^"?[\w-]+"?:?\s*/, '')}` : ''}` };
+  const natural: SlideSpec = list[0] ?? { layout: 'statement', fields: { headline: scriptText({ slides: [s] } as unknown as CarouselScript).slice(0, 4000) } as Fields, accents: [] };
+  return { spec: { ...natural, keepAsWritten: true }, mark: 'kept', why: `Slide ${_i + 1} (${TYPE_LABEL[s.type]}) has more or longer text than the library layouts can show${first ? `: ${first}` : ''}` };
 }
 
 /** The words of a script, for the style pick. */
@@ -164,12 +168,13 @@ export async function libraryDeckFromScript(script: CarouselScript, look: Look, 
   const text = scriptText(script);
   const ctx: CtaCtx = { handle, text };
   const specs: SlideSpec[] = [];
+  const marks: ('simple' | 'kept' | null)[] = [];
   for (const [i, s] of script.slides.entries()) {
     const r = specFromSlide(s, i, look, ctx);
-    if (!r.ok) return r;
     specs.push(r.spec);
+    marks.push(r.mark);
   }
-  const own: OwnScript = { title: script.title, specs, script };
+  const own: OwnScript = { title: script.title, specs, script, marks };
   try {
     const req = { text, slides: script.slides.length, tone: 'clear', format: 'carousel', styleChoice: 'auto', styles: [] } as never;
     const out = await designLibraryDeck(req, look, handle, STUB, new AbortController().signal, () => undefined, own);

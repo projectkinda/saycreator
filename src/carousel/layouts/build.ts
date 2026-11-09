@@ -16,7 +16,7 @@ import { centreButtons } from './buttons';
 import { accentDevices, behindDevices, insetGround, overDevices, shapeBoxesOf, siteText, type Box, type DeviceCtx, type PlacedDevice } from './devices';
 import { CUT_RATIO, RAKE, coloursFor, geometry, type Geometry, type Roles } from './cuts';
 import { contrast, esc, setWeights } from './draw';
-import { cutsOf, layoutDef } from './library';
+import { cutsOf, layoutDef, withAccent } from './library';
 import { validateSlideContent } from './pick';
 import type { Cut, Cx, Fields, Gradient, LayoutStyle, Plan, PlaneTone, PlanImage, Slot } from './types';
 
@@ -221,6 +221,9 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   // Rows (several body slots) take the slide's items in reading order.
   const bodySlots = slots.filter((s) => s.role === 'body');
   const slide: Record<string, unknown> = { ...plan.slide };
+  // A highlight the person (or the writer) chose is carried to the drawing by EVERY layout, not only the ones that read it themselves: the engine marks it on the slide's title text.
+  // (Without a chosen phrase nothing is added here: the layouts that default to the last word of the headline keep doing so.)
+  if (!slide.accent && (Array.isArray(fields.accent) ? fields.accent.length > 0 : typeof fields.accent === 'string' && fields.accent.trim())) Object.assign(slide, withAccent(slide, '', fields, st));
   if (bodySlots.length >= 2) slide.items = bodySlots.map((s) => s.text);
   // The surface the headline sits on decides the engine's palette (accent phrases are guarded against it); the other surface's tokens point at its own roles.
   const S: 'f' | 'p' = slots.find((s) => s.role === 'title')?.plane ? 'p' : 'f';

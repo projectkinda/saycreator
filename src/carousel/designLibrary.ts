@@ -459,6 +459,8 @@ export interface SlideSpec {
   density?: 'statement';
   cut?: Cut;
   invert?: boolean;
+  /** A slide of the person's own script whose text is longer than the layout can show: its words are kept exactly as written and the code never trims them (it is drawn with the style's template until the text is shortened). */
+  keepAsWritten?: boolean;
   /** What the person chose for this slide in the layout picker: the deck rotation and the style toggles keep it. */
   pin?: { variant?: 0 | 1; cut?: Cut; invert?: false | 'full' | 'tint' };
 }
@@ -857,6 +859,8 @@ export interface LibraryReport {
   styleNotes: string[];
   /** The final slides (layout, fields, accents, suggestions): the deck can be drawn again from this with no model call (the style toggles do). */
   plan?: { title: string; specs: SlideSpec[] };
+  /** A pasted script: which slides use a simple layout because their text is long ('simple'), and which keep their words with no library layout ('kept'). */
+  ownMarks?: ('simple' | 'kept' | null)[];
   /** How many times the deck was drawn again from the plan. */
   redraws?: number;
   /** Optional texts the code trimmed at a word boundary instead of asking the writer again. */
@@ -993,7 +997,7 @@ function buildRetry(first: string, specs: SlideSpec[], why: Map<number, string[]
 }
 
 /** The person's own script, already turned into a plan by code (see libraryFromScript.ts): the deck is drawn from it with NO model call and none of the writer-only rules (generic closing, text trims). */
-export interface OwnScript { title: string; specs: SlideSpec[]; script: CarouselScript }
+export interface OwnScript { title: string; specs: SlideSpec[]; script: CarouselScript; /** Per slide: 'simple' = the simple (prose) layout because the text is long; 'kept' = no layout fits, the words are kept and the slide is drawn with the style's template. */ marks?: ('simple' | 'kept' | null)[] }
 export async function designLibraryDeck(req: WriteRequest, look: Look, handle: string, p: WriteProvider, signal: AbortSignal, onPhase: (ph: 'writing' | 'retrying') => void = () => undefined, own?: OwnScript): Promise<GenerateResult & { designed: Designed }> {
   const t0 = performance.now();
   const { style: style0, notes: styleNotes } = styleFromPack(look.pack);
@@ -1146,6 +1150,12 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   for (const [i, why] of failing()) {
     const sp = specs[i];
     const reason = why.join(' | ').slice(0, 300);
+    if (own) {
+      // the person's own words are never trimmed: the slide keeps its text and is drawn by the style's template (a warning on the slide says so)
+      specs = specs.map((s, k) => (k === i ? { ...s, keepAsWritten: true } : s));
+      fallbacks.push({ slide: i + 1, layout: sp.layout, level: 'kept as written (no library layout fits the text)', reason });
+      continue;
+    }
     let done: Drawn | null = null;
     let level = 'plain version of the same layout';
     const fixed = layoutDef(sp.layout) && !(sp.layout === 'photo-led' && !look.hasPhoto) ? repairFields(sp.layout, fieldsOf(sp)) : null;
@@ -1205,6 +1215,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     grounds: rot.cuts.map((c) => c.ground ?? null),
     ...(fp ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : {}),
     ...(pictureSwaps.length ? { pictureSwaps } : {}),
+    ...(own?.marks?.some(Boolean) ? { ownMarks: own.marks } : {}),
     ...(tr.trims.length ? { trims: tr.trims } : {}),
   };
   designed.library = report;
@@ -1262,6 +1273,10 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
   const adjustments: string[] = [];
   for (let i = 0; i < specs.length; i++) {
     const o = { handle, index: i, total: specs.length };
+    if (specs[i].keepAsWritten && slideProblems(specs[i], look).length) {
+      drawn.push({ built: null, cut: 'plain', invert: false, density: 'normal', adjustments: [], problems: slideProblems(specs[i], look) } as Drawn);
+      continue;
+    }
     let d = slideProblems(specs[i], look).length ? null : await drawOne(specs[i], variants[i], style, { ...o, cut: rc[i].cut, invert: rc[i].invert, density: specs[i].density ?? 'normal', ground: rc[i].ground });
     if (!d?.built) {
       const f = await plainSameLayout(specs[i], variants[i], style, o, !!look.hasPhoto);

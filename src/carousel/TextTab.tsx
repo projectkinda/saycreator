@@ -6,7 +6,7 @@ import { layoutDef } from './layouts/library';
 import type { Fields } from './layouts/types';
 import { parseRef } from './layouts/images';
 
-export interface TextSpec { layout: string; fields: Fields; accents: string[] }
+export interface TextSpec { layout: string; fields: Fields; accents: string[]; /** Highlighted words were chosen but nothing is marked in the drawing of this slide. */ unmarked?: boolean }
 /** A change to the slide's text: some fields (null removes an optional one) and/or the highlighted words. The page merges it into the latest plan, draws the slide again and says what happened ('' = fine). */
 export interface TextDelta { fields?: Record<string, string | string[] | null>; accents?: string[] }
 export type OnTextCommit = (delta: TextDelta) => Promise<string>;
@@ -73,6 +73,7 @@ export function LibraryText({ index, spec, onCommit }: { index: number; spec: Te
       })}
       <Field id={`${base}-accents`} label="Highlighted words (optional)" value={spec.accents.join(', ')} multi={false} onCommit={async (text) => onCommit({ accents: text.split(',').map((x) => x.trim()).filter(Boolean) })} />
       <span className="small muted">Words to highlight, separated by commas. They must appear in the text above.</span>
+      {spec.unmarked && <span className="small muted" data-testid="no-mark">This layout does not mark highlighted words.</span>}
     </div>
   );
 }

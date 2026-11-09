@@ -15,7 +15,8 @@ import { libraryDeckFromScript, scriptText } from './libraryFromScript';
 import type { CarouselScript } from '../image-engine/carousel/types';
 import { clearPageState } from './resetState';
 import { DetectedStyleBox } from './DetectedStyle';
-import { DRAW_VERSION, legacySvgRoute, redrawLibraryDeck, templateRoute } from './designLibrary';
+import { DRAW_VERSION, legacySvgRoute, redrawLibraryDeck, scriptSlideOf, styleFromPack, templateRoute } from './designLibrary';
+import { flavourPass } from './flavour';
 import { presetKey, presetPackFor, presetThumbSvg } from './presets';
 import { svgToPng } from '../reference/faithful';
 import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
@@ -558,6 +559,8 @@ export default function CarouselPage() {
   const deck = doc.script?.title ?? 'carousel';
   const ready = slides.length > 0 && slides.every((_, i) => views[i]?.rendered && views[i].status === 'ready');
   const failing = slides.filter((_, i) => views[i]?.rendered?.lint.some((l) => !l.pass)).length;
+  // a warning is not a failure: a slide with only warnings still passes the phone-size check
+  const warned = slides.filter((_, i) => { const lint = views[i]?.rendered?.lint ?? []; return lint.every((l) => l.pass) && lint.some((l) => l.warn); }).length;
 
   const downloadOne = async (i: number) => {
     const r = await renderer.render(slides[i], margin);
@@ -862,6 +865,36 @@ export default function CarouselPage() {
     textQueue.current = job.catch(() => undefined);
     return job;
   };
+  /**
+   * Step 3, a deck already exists and another style is picked: the WHOLE deck is drawn again in the new style from its stored plan. Text, pictures, crops and the layouts the person chose
+   * stay; a layout the new style avoids is moved by the style's flavour swap inside its meaning (a code rule, the same one a new deck gets). No model call; one undo step.
+   */
+  const switchStyle = async (name: string, title: string) => {
+    setOptions({ autoStyle: false });
+    const d = docRef.current;
+    const lib = d.designed?.library;
+    const pack = name === ACTIVE_STYLE ? (activeReference()?.pack ?? null) : presetPackFor(name);
+    if (!d.script || !d.designed || !lib?.plan || !pack || name === d.style) return void apply(patches.style(name, title));
+    try {
+      const look = { pack, hasPhoto: pictures.length > 0, images: photoInfos, site: profileWebsite() };
+      const style = styleFromPack(pack).style;
+      const fp = pack.look?.flavour ? flavourPass(lib.plan.specs, style, look, pack.name.replace(/ pack$/, '')) : { specs: lib.plan.specs, swaps: [], kept: [] };
+      const out = await redrawLibraryDeck({ ...lib, plan: { ...lib.plan, specs: fp.specs } }, look, pickHandle());
+      // a slide whose layout changed gets the script form of its new layout (the words are the same ones)
+      let script = d.script;
+      for (const [i, spec] of out.library.plan!.specs.entries()) {
+        if (spec.layout === lib.plan.specs[i]?.layout) continue;
+        const sc = scriptWithSlide(script, i, scriptSlideOf(spec.layout, spec.fields), d.format);
+        if (sc.ok) script = sc.script;
+      }
+      const designedOut = { ...d.designed, slides: out.slides, layouts: out.layouts, library: { ...out.library, source: name === ACTIVE_STYLE ? 'reference' : name, ...(fp.swaps.length || fp.kept.length ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : { flavour: undefined }) } };
+      const done = apply({ label: `Change style to ${title}`, ops: [{ path: ['style'], value: name }, { path: ['designed'], value: designedOut }, ...(script !== d.script ? [{ path: ['script'], value: script }] : [])] });
+      if (done.ok) setNotice('Style changed. Slides redrawn, no model call.');
+      else setNotice(done.reasons[0]);
+    } catch (e) {
+      setNotice('The style could not be changed: ' + (e as Error).message);
+    }
+  };
   /** Pictures tab, a slide with no picture slot: the slide moves to the first picture layout that fits what it says (the layout gallery's own rule), and one unused picture goes in. No model call. */
   const addPictureTo = async (i: number): Promise<string> => {
     const lib = docRef.current.designed?.library;
@@ -1009,6 +1042,13 @@ export default function CarouselPage() {
         openSlot={slotOpen}
         onOpenSlot={setSlotOpen}
         picturesState={picturesState}
+        ownNote={(() => {
+          const lib = doc.designed?.library;
+          const mark = lib?.ownMarks?.[i];
+          if (mark === 'kept' && !doc.designed?.slides?.[String(i)]?.built) return { kind: 'warn' as const, text: "The text of this slide is longer than any layout can show, so it is drawn with the style's own template. Your words are all kept. Shorten the text to use a library layout." };
+          if (mark === 'simple' && lib?.plan?.specs[i]?.layout === 'prose') return { kind: 'info' as const, text: 'This slide uses a simple layout because the text is long.' };
+          return undefined;
+        })()}
         onAddPicture={doc.designed?.library?.plan ? () => addPictureTo(i) : undefined}
         devTools={devTools}
         onDownload={() => downloadOne(i)}
@@ -1037,7 +1077,7 @@ export default function CarouselPage() {
         picturesUsedElsewhere={usedElsewhereOf(i)}
         layoutTab={doc.designed?.library?.plan ? <LayoutGallery index={i} model={pickModel(i)} draw={pickDraw(i)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
         rewriteBox={doc.designed?.library?.plan ? <LayoutGallery section="rewrite" index={i} model={pickModel(i)} draw={pickDraw(i)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
-        libraryText={doc.designed?.library?.plan?.specs[i] ? { layout: doc.designed?.library?.plan?.specs[i]!.layout, fields: doc.designed?.library?.plan?.specs[i]!.fields, accents: doc.designed?.library?.plan?.specs[i]!.accents } : undefined}
+        libraryText={doc.designed?.library?.plan?.specs[i] ? { layout: doc.designed.library.plan.specs[i].layout, fields: doc.designed.library.plan.specs[i].fields, accents: doc.designed.library.plan.specs[i].accents, unmarked: doc.designed.library.plan.specs[i].accents.length > 0 && !((doc.designed.slides?.[String(i)]?.built?.layers ?? []) as { kind?: string; highlight?: unknown; runs?: unknown[] }[]).some((l) => l.kind === 'text' && (l.highlight || (l.runs && l.runs.length))) } : undefined}
         onTextCommit={textCommit(i)}
         unusedBox={unusedList.length > 0 ? <UnusedPictures unused={unusedList} slots={slotChoices} onPut={(id, slide, field) => slotChange(slide, field, { picture: id })} /> : undefined}
         fineTuneBox={<DetectedStyleBox pack={presetPackFor(doc.style)} onChange={(ov) => void handleOverrides(ov)} hasDeck={!!doc.designed?.library?.plan} />}
@@ -1205,7 +1245,8 @@ export default function CarouselPage() {
         </div>
         <p className="small muted" role="status" aria-live="polite">
           {exporting || (proj.saveFailed ? 'This browser would not save the project. Download your slides before you leave.' : proj.saved)}
-          {hasWork && ready && !exporting && ` ${failing === 0 ? 'Every slide passes the phone-size check.' : `${failing} of ${slides.length} slides have something to fix at phone size.`}`}
+          {hasWork && ready && !exporting && failing === 0 && ` ${warned === 0 ? 'All slides pass the phone-size check.' : `${slides.length - warned} slide${slides.length - warned === 1 ? '' : 's'} pass, ${warned} ${warned === 1 ? 'has' : 'have'} a warning.`}`}
+          {hasWork && ready && !exporting && failing > 0 && <span className="cr-problem"> {failing} of {slides.length} slides have something to fix at phone size.</span>}
         </p>
 
             <PreviewStage overlay={previewSlots && previewSlots.length ? <SlotOverlay index={si} slots={previewSlots} open={slotOpen} onOpen={(field) => { setSlotOpen(field); if (field) { setEditTab('pictures'); setStep(4); setEditView(true); } }} onChange={(field, change) => slotChange(si, field, change)} /> : undefined} count={hasWork ? slides.length : 0} items={slides.map((_, i) => views[i] ?? { status: 'drawing' })} selected={sel} onSelect={setSel} onOpen={setOpen} />
@@ -1254,7 +1295,7 @@ export default function CarouselPage() {
         </div>
         <div hidden={step !== 3} data-step="3">
           <MakeIt part="style" {...makeProps} styles={<>
-            <StylePicker showIds={devTools} key={resetKey} format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => { setOptions({ autoStyle: false }); apply(patches.style(name, title)); }} onNewStyle={() => setNewStyleOpen((v) => !v)} newStyleOpen={newStyleOpen} />
+            <StylePicker showIds={devTools} key={resetKey} format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => void switchStyle(name, title)} onNewStyle={() => setNewStyleOpen((v) => !v)} newStyleOpen={newStyleOpen} />
             {targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}
           </>} referenceBox={newStyleBox} styleReady={options.autoStyle || !!styleByName(doc.style)} />
           <div className="row-actions cr-wiz-nav">
@@ -1283,7 +1324,7 @@ export default function CarouselPage() {
                     <Icon name="upload" size={14} /> Download slide {Math.min(sel, slides.length - 1) + 1} (PNG)
                   </button>
                 </div>
-                <p className="small muted">Pick a slide in the strip on the left to see it large. Press "Edit slides" under the strip to change a layout, a picture or the style devices.</p>
+                <p className="small muted">Pick a slide in the strip to see it large. Press "Edit slides" under the strip to change a layout, a picture or the style devices.</p>
               </>
             )}
           </section>
@@ -1294,10 +1335,12 @@ export default function CarouselPage() {
       {editOn && style && (
         <section className="card ws-card cr-step-card cr-edit-view" aria-labelledby="cr-edit-h" data-testid="edit-view">
           <div className="cr-edit-bar">
+            {/* A phone (480 px or less): a small live copy of the slide stays at the top while you edit, and follows every redraw */}
+            {views[si]?.url && <img className="cr-edit-mini" src={views[si].url} alt="" aria-hidden="true" data-testid="edit-mini" />}
             <h2 id="cr-edit-h" className="h3">Edit slide {si + 1} of {slides.length}</h2>
             <button type="button" className="btn btn-dark" onClick={() => setEditView(false)}>Done</button>
           </div>
-          <p className="small muted">Pick a slide in the strip on the left to edit it. Undo and Redo are above the preview.</p>
+          <p className="small muted">Pick a slide in the strip to edit it. Undo and Redo are above the preview.</p>
           <ol className="cr-list" aria-label={`Slide ${si + 1} of ${slides.length}`}>
             {slideCardFor(si)}
           </ol>

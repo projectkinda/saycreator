@@ -66,6 +66,8 @@ export function SlotOverlay({ index, slots, open, onOpen, onChange }: { index: n
 export function SlotPanel({ index, slot, pictures, usedElsewhere, onChange, onClose }: { index: number; slot: SlotView; pictures: PictureMeta[]; usedElsewhere: Set<string>; onChange: OnSlotChange; onClose: () => void }) {
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
   const ref = parseRef(slot.ref);
   const cur = ref?.id ?? '';
   const run = async (c: SlotChange) => {
@@ -92,10 +94,11 @@ export function SlotPanel({ index, slot, pictures, usedElsewhere, onChange, onCl
           ))}
         </select>
       </label>
-      <label className="small">
-        or a new file{' '}
-        <input type="file" accept="image/*" disabled={busy} aria-label={`Choose a new file for picture ${slot.n}`} data-testid={`slot-file-${index}`} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void run({ file: f }); }} />
-      </label>
+      <div className="row-actions" style={{ alignItems: 'center', gap: 8 }}>
+        <input ref={fileInput} type="file" accept="image/*" className="visually-hidden" tabIndex={-1} disabled={busy} aria-label={`Choose a new file for picture ${slot.n}`} data-testid={`slot-file-${index}`} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { setFileName(f.name); void run({ file: f }); } }} />
+        <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => fileInput.current?.click()}>Upload a new picture</button>
+        {fileName && <span className="small muted" data-testid={`slot-file-name-${index}`}>{fileName}</span>}
+      </div>
       <div className="row-actions" style={{ flexWrap: 'wrap', gap: 4 }} role="group" aria-label="Move and zoom the crop">
         <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => void run({ fx: Math.max(0, fx - step) })}>Show more of the left</button>
         <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => void run({ fx: Math.min(1, fx + step) })}>Show more of the right</button>

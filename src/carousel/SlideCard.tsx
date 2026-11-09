@@ -59,7 +59,7 @@ const TABS: { id: EditTab; label: string }[] = [
 ];
 
 /** The editor of ONE slide, as four tabs: Layout | Text | Pictures | Fine-tune. There is no second preview here: the big preview and the thumbnail strip stay on the left. */
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, ownNote, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -98,6 +98,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   /** The picture slot whose controls are open (a tap on the preview opens it too). */
   openSlot: string | null;
   onOpenSlot: (field: string | null) => void;
+  /** A pasted script: a line about this slide (it uses the simple layout, or its text is too long for any layout). */
+  ownNote?: { kind: 'info' | 'warn'; text: string };
   /** 'none': the project has no pictures; 'free': there are unused ones; 'used': all are on other slides. */
   picturesState: 'none' | 'free' | 'used';
   /** Library slide without a picture slot: moves it to a picture layout of its own meaning and puts an unused picture in; says what happened. */
@@ -257,6 +259,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
               {n}
             </p>
           ))}
+        {ownNote && <p className={`small ${ownNote.kind === 'warn' ? 'cr-warn' : 'muted'}`} role="status" data-testid="own-note">{ownNote.kind === 'warn' && <span aria-hidden="true">⚠ </span>}{ownNote.text}</p>}
         {view?.error && <p className="small cr-problem" role="alert">{view.error}</p>}
       </div>
       <div className="cr-tabs" role="tablist" aria-label={`Edit slide ${index + 1}`}>

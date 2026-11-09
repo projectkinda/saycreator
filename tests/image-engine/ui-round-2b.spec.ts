@@ -115,7 +115,7 @@ test('bad JSON gives a plain error that says where; nothing is drawn and no call
   expect(f.calls).toBe(0);
 });
 
-test('a script the library cannot show falls back to the older templates, with a plain note and no model call', async ({ page }) => {
+test('a slide the library cannot show (round 3: only that slide falls back to the template, its words kept) with a plain note and no model call', async ({ page }) => {
   const f = await counting(page);
   const long = JSON.parse(sample(0));
   // six items: more than any library list layout takes, still fine for the older templates
@@ -124,8 +124,10 @@ test('a script the library cannot show falls back to the older templates, with a
   await expect(page.getByRole('status').filter({ hasText: 'Script loaded' }).first()).toContainText('0 model calls', { timeout: 60_000 });
   await deckDrawn(page, long.slides.length);
   const p = await proj(page);
-  expect(p.hasLibrary).toBe(false);
-  expect(p.route?.reason).toContain('older templates');
+  // round 3: the deck stays on the library route; only the six-item slide keeps its words and is drawn by the style's template
+  expect(p.hasLibrary).toBe(true);
+  expect(p.route?.route).toBe('designed');
+  expect(JSON.stringify(p.script.slides[2].items)).toContain('Share it');
   expect(f.calls).toBe(0);
 });
 
@@ -188,6 +190,7 @@ test('screenshots: a pasted-script deck (step 1, step 4, the edit tabs) and the 
     await deckDrawn(page, JSON.parse(sample(0)).slides.length);
     await shot('4-slides');
     await openTab(page, 'Layout', 2);
+    await page.getByTestId('gallery-1').scrollIntoViewIfNeeded(); // the thumbnails are drawn when the gallery is on screen
     await expect(page.getByTestId('gallery-1')).toHaveAttribute('data-ready-ms', /\d+/, { timeout: 120_000 });
     await page.getByTestId('edit-view').scrollIntoViewIfNeeded();
     await shot('5-tab-layout');
