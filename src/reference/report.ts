@@ -47,6 +47,13 @@ export function textSizesOf(layers: unknown[]): { role: string; size: number; wo
     });
 }
 
+/** The library layout slide i was drawn with, when the layout library drew that slide (else null: the old route's own layout and rule are reported). */
+export function libraryLayoutOf(doc: Doc, i: number): string | null {
+  const d = doc.designed;
+  if (!d?.library || !d.slides?.[String(i)]) return null;
+  return d.library.layouts?.[i] ?? d.layouts?.[String(i)] ?? null;
+}
+
 export async function buildReport(o: ReportOptions): Promise<{ json: string; compare: Blob | null; slides: number }> {
   const composed = composeDoc(o.doc);
   const rendered: Rendered[] = [];
@@ -74,10 +81,10 @@ export async function buildReport(o: ReportOptions): Promise<{ json: string; com
     slides: composed.slides.map((s, i) => ({
       number: i + 1,
       type: s.type,
-      layout: s.layout,
-      rule: s.rule,
-      palette: s.palette,
-      because: s.because,
+      // a deck the layout library drew: the library layout each slide really uses, and none of the old route's rule / because / palette lines (they describe a drawing that did not happen)
+      ...(libraryLayoutOf(o.doc, i)
+        ? { layout: libraryLayoutOf(o.doc, i), drawnBy: 'layout library' }
+        : { layout: s.layout, rule: s.rule, palette: s.palette, because: s.because }),
       notes: ((s as unknown as { notes?: string[] }).notes ?? []).slice(0, 6),
       checks: rendered[i].lint.map((l) => ({ id: l.id, label: l.label, pass: l.pass, ...(l.warn ? { warn: true } : {}), reason: l.reason, ...(l.measured !== undefined ? { measured: l.measured, limit: l.limit } : {}) })),
       failedChecks: rendered[i].lint.filter((l) => !l.pass).map((l) => l.id),

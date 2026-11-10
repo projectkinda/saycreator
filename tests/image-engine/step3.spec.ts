@@ -37,6 +37,7 @@ test('marker bars stop before trailing punctuation and keep 12 px clear of the w
       ['statement', { headline: 'Say it, then show it. Then repeat', kicker: 'A rule' }, ['show it.']],
       ['lead-statement', { lead: 'Here is the thing:', headline: 'Fix your headline first, then the rest' }, ['headline first,']],
       ['big-question', { question: 'Would you wear it, or carry it?', line: 'Pick one.' }, ['wear it,']],
+      ['statement', { headline: 'Back it today, and save big', caption: 'Open to all.' }, ['today,']],
       ['cta-button', { headline: 'Back it today: save 30%', button: 'Back it', sub: 'Open to 20 backers.' }, ['today:']],
       ['split-text', { headline: 'Why we built it, and why now', paragraph: 'We sewed the bag into the hood, so one layer does both jobs.' }, ['built it,']],
     ];
@@ -67,9 +68,9 @@ test('marker bars stop before trailing punctuation and keep 12 px clear of the w
     }
     return { bad, marks, checkedGaps };
   }, PACKS);
+  expect(r.bad).toEqual([]);
   expect(r.marks).toBeGreaterThan(5);
   expect(r.checkedGaps).toBeGreaterThan(5);
-  expect(r.bad).toEqual([]);
 });
 
 test('accent phrases lose a leading article; the name is Title Case', async ({ page }) => {

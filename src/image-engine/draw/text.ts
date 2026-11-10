@@ -199,12 +199,27 @@ function pillGap(layer: TextLayer, marked: Set<string>, a: Tok, b: Tok, spaceW: 
   return Math.max(0, layer.highlight!.paddingX + MARKER_GAP - spaceW);
 }
 
+/**
+ * A marker bar keeps equal padding at both ends, so the punctuation that ends a marked word (, . ; : ! ?) is set clear of the bar and never under it. Returns the extra space that takes (0 when the
+ * token has no ending punctuation, is not marked, is followed on its line by another marked token (the bar runs on over the comma), or the punctuation sits inside a coloured run).
+ */
+function trailGap(layer: TextLayer, marked: Set<string>, t: Tok, next?: Tok): number {
+  const hl = layer.highlight;
+  if (!hl || !(hl.paddingX > 0) || !markedTok(layer, marked, t)) return 0;
+  if (next && markedTok(layer, marked, next)) return 0;
+  const text = t.text.replace(/ /g, ' ');
+  const m = TRAIL.exec(text);
+  if (!m || m[0].length >= text.length) return 0;
+  if (layer.runs?.some((r) => r.start < t.start + text.length && r.end > t.start + text.length - m[0].length)) return 0;
+  return hl.paddingX + 4;
+}
+
 function wrapStyled(layer: TextLayer, maxWidth: number, size: number): { lines: Tok[][]; wordTooWide: boolean } {
   const lines: Tok[][] = [];
   let wordTooWide = false;
   const spaceW = measureWidth(' ', layer.style.font, layer.style.weight, size) + (layer.style.letterSpacing ?? 0);
-  const tokW = (t: Tok) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size);
   const marked = new Set((layer.highlight?.words ?? []).map(wordKey).filter(Boolean));
+  const tokW = (t: Tok) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size) + trailGap(layer, marked, t);
   let offset = 0;
   for (const para of layer.text.split('\n')) {
     // Only ordinary white space breaks a line: a no-break space keeps two words together.
@@ -251,7 +266,8 @@ function glueRuns(layer: TextLayer): string {
 function balanceLines(layer: TextLayer, lines: Tok[][], size: number): Tok[][] {
   const n = lines.length;
   if (n < 2) return lines;
-  let lo = Math.max(...lines.flat().map((t) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size)));
+  const markedAll = new Set((layer.highlight?.words ?? []).map(wordKey).filter(Boolean));
+  let lo = Math.max(...lines.flat().map((t) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size) + trailGap(layer, markedAll, t)));
   let hi = layer.width;
   for (let k = 0; k < 14 && hi - lo > 1; k++) {
     const mid = (lo + hi) / 2;
@@ -262,7 +278,7 @@ function balanceLines(layer: TextLayer, lines: Tok[][], size: number): Tok[][] {
   if (out.length !== n) out = lines;
   const spaceW = measureWidth(' ', layer.style.font, layer.style.weight, size) + (layer.style.letterSpacing ?? 0);
   const markedSet = new Set((layer.highlight?.words ?? []).map(wordKey).filter(Boolean));
-  const widthOf = (ts: Tok[]) => ts.reduce((a, t, i) => a + piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size) + (i > 0 ? spaceW + pillGap(layer, markedSet, ts[i - 1], t, spaceW) : 0), 0);
+  const widthOf = (ts: Tok[]) => ts.reduce((a, t, i) => a + piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size) + trailGap(layer, markedSet, t, ts[i + 1]) + (i > 0 ? spaceW + pillGap(layer, markedSet, ts[i - 1], t, spaceW) : 0), 0);
   const last = out[out.length - 1];
   const prev = out[out.length - 2];
   const wordsIn = (ts: Tok[]) => ts.reduce((a, t) => a + t.text.split(/[\s ]+/).filter(Boolean).length, 0);
@@ -303,7 +319,9 @@ function layoutStyled(layer0: TextLayer): TextBlock {
   const top = s.valign === 'middle' ? (layer.height - fit.height) / 2 : s.valign === 'bottom' ? layer.height - fit.height : 0;
   const spaceW = measureWidth(' ', s.font, s.weight, fit.size) + ls;
   const lines: LaidLine[] = fit.w.lines.map((toks, i) => {
-    const tw = toks.map((t) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, fit.size));
+    // the punctuation that ends a marked word is set clear of its bar (trailGap)
+    const gaps = toks.map((t, k) => trailGap(layer, marked, t, toks[k + 1]));
+    const tw = toks.map((t, k) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, fit.size) + gaps[k]);
     const gapAt = (k: number) => (k > 0 ? spaceW + pillGap(layer, marked, toks[k - 1], toks[k], spaceW) : 0);
     const width = Math.max(0, tw.reduce((a, b) => a + b, 0) + toks.reduce((a, _t, k) => a + gapAt(k), 0) - (ls > 0 ? ls : 0));
     const x0 = s.align === 'center' ? (layer.width - width) / 2 : s.align === 'right' ? layer.width - width : 0;
@@ -319,16 +337,23 @@ function layoutStyled(layer0: TextLayer): TextBlock {
       words.push({ text: t.text, start: t.start, x: cx, width: tw[k], highlighted: wholeLines.has(i) || hit });
       let px = cx;
       let firstPiece = true;
-      for (const p of piecesOf(layer, t.start, t.start + t.text.length)) {
-        const pw = piecesWidth([p], layer, fit.size);
-        const before = segments[segments.length - 1];
-        // Neighbouring words with the same weight and colour are one piece (one text run per style change, not per word).
-        if (firstPiece && k > 0 && before && before.weight === p.weight && before.color === p.color && gapAt(k) === spaceW) {
-          before.text += ' ' + p.text;
-          before.width = px + pw - before.x;
-        } else segments.push({ text: p.text, x: px, width: pw, weight: p.weight, ...(p.color ? { color: p.color } : {}) });
-        px += pw;
-        firstPiece = false;
+      // a word whose ending punctuation is set clear of its bar is drawn in two parts: the word, then (after the gap) the punctuation
+      const trailLen = gaps[k] > 0 ? (TRAIL.exec(t.text.replace(/ /g, ' '))?.[0].length ?? 0) : 0;
+      const end = t.start + t.text.length;
+      const parts = trailLen ? [{ from: t.start, to: end - trailLen, shift: 0 }, { from: end - trailLen, to: end, shift: gaps[k] }] : [{ from: t.start, to: end, shift: 0 }];
+      for (const part of parts) {
+        px += part.shift;
+        for (const p of piecesOf(layer, part.from, part.to)) {
+          const pw = piecesWidth([p], layer, fit.size);
+          const before = segments[segments.length - 1];
+          // Neighbouring words with the same weight and colour are one piece (one text run per style change, not per word).
+          if (firstPiece && k > 0 && before && before.weight === p.weight && before.color === p.color && gapAt(k) === spaceW) {
+            before.text += ' ' + p.text;
+            before.width = px + pw - before.x;
+          } else segments.push({ text: p.text, x: px, width: pw, weight: p.weight, ...(p.color ? { color: p.color } : {}) });
+          px += pw;
+          firstPiece = false;
+        }
       }
       cx += tw[k] + spaceW;
     });
@@ -338,7 +363,7 @@ function layoutStyled(layer0: TextLayer): TextBlock {
       const prev = marks[marks.length - 1];
       const lastWord = words[words.indexOf(w) - 1];
       // A bar never covers the punctuation that ends the marked words (, . ; : ! ?).
-      const wEnd = w.x + w.width - trailWidth(w, layer, fit.size);
+      const wEnd = w.x + w.width - trailWidth(w, layer, fit.size) - gaps[words.indexOf(w)];
       if (prev && lastWord?.highlighted) prev.width = wEnd - prev.x;
       else marks.push({ x: w.x, width: wEnd - w.x });
     }

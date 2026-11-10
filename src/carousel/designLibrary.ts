@@ -20,6 +20,7 @@ import { placeImages } from './imagePlace';
 import { flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { picturePass, type PictureSwap } from './picturePass';
 import { TONES } from './writerPrompt';
+import { inSource, labelFromSource, sourceAction } from './closingAction';
 
 /** The old route, where the model draws every slide as SVG, stays available behind this flag (off by default): localStorage "creator.legacySvgRoute" = "1" or VITE_LEGACY_SVG_ROUTE=1. */
 export const legacySvgRoute = (): boolean => {
@@ -427,12 +428,14 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     'Rules:',
     `- Write ${n} slides. Slide 1 is a strong hook (statement, statement-stacked, statement-card, statement-pill, statement-question, big-question or lead-statement; at most 8 words). In between choose the layout that suits THAT slide's content.`,
     '- The closing (last slide) depends on the TEXT, not on habit. If the text contains a real next action for the reader (book, buy, sign up, download, visit, reply, join): "cta-button" with that action; "cta-pair" when it gives TWO different actions; "contact-closing" when the text itself contains contact details such as a handle, site, phone or email (never invent any). These always win over a generic call to action.',
+    '- A real action also includes: comment (a quoted or capitalised keyword too), DM or message me, reply, send me, link in bio or below, subscribe, follow, save, share, click, tap, try it. The button label uses the action\'s own words from the text ("Comment brain", "DM me GUIDE", "Download the guide"), at most 24 characters. The line under the closing headline ("sub") may only use words that are in the text; when it would need other words, leave the sub line out. Never invent an offer, link, number or promise.',
     `- If the text has NO real action, the closing is STILL a "cta-button", with ONE generic label picked to fit the content: how-to, list, tips or steps: "${GENERIC_CTA_OF.save}"; opinion, story, critique or insight: ${isSetHandle(handle) ? `"Follow ${handle!.trim()}" (the brand handle) or "${GENERIC_CTA_OF.follow}"` : `"${GENERIC_CTA_OF.follow}" (no @, no handle)`}; relatable, funny or common-pain posts: "${GENERIC_CTA_OF.friend}". Use only these labels; do not invent another action. Its headline is a real takeaway sentence from the text, never "Thanks for reading" or other filler. Never invent a link, "link in bio", website, email, offer or number${isSetHandle(handle) ? '' : ', and never a handle'}. A closing that is a plain statement with no button counts as a miss and is asked for again.`,
     '- Every other button label is an ACTION PHRASE: verb first, 2 to 4 words, at most 20 characters, no question mark, comma or full stop ("Book a call", "Get the checklist", "Join the list"). Never a question, a slogan or a topic ("Which fits you?", "Sleep well"). The three generic labels above are the only exceptions to the length.',
     '- Prose: "prose" is the ONLY layout that takes whole paragraphs. Aim for 35 to 50 words in all (the heading and the pull line included); use up to 70 only when the source text truly needs it. 70 is a hard limit (the handle and the page number are not counted; 300 characters per paragraph at most), and the code cuts anything past it. Prefer ONE short paragraph plus a bold one-line takeaway (the "pull" field) to three paragraphs. Use prose for a slide that needs explaining in sentences; its heading is optional and, when present, reads on its own as a full title. Every other layout stays short: never put a paragraph into a statement, list or card layout.',
     '- Long passages: if the text for ONE slide would run past 70 words, split it across two slides, a prose slide and then a statement, bullet-list or numbered-list slide for the rest, instead of cramming it into one. The number of slides is fixed (see above): split only when another slide of your plan can be spared for it (a slide that would only repeat or pad); when every slide is needed, tighten the prose to 70 words or fewer instead.',
     ...(look.images?.length ? imageRules(look.images) : []),
     '- Forms: "statement-stacked" is 2 to 4 words (one per line); "statement-pill" needs a short caption (at most 40 characters) that is set in a pill; "statement-question" is one question or thought; "numbered-stagger" is 2 or 3 sentences; "bullet-list" and "pill-stagger" are short lines (at most 46 and 36 characters); "headline-card" has ONE key paragraph (the card) under a headline; "cta-pair" has two buttons with a short line each.',
+    '- Use "step-numeral" only when at least two slides in the deck are steps of one sequence (step 1, step 2 ...); with a single step, use "split-text" or "statement" instead.',
     '- Variety: no two consecutive slides use the same layout, and no layout is used more than twice. Use "stepper" for 2 to 5 ordered steps, "stat-bar" or "big-stat" for a figure, "checklist" for benefits, "comparison" for two things set against each other, "quote" only for words that are in the text.',
     '- Stats: the "label" of big-stat and stat-bar is the continuation of the number, so "number label" reads as one phrase: "30%" + "off for early backers" (never a label that starts a new sentence, such as "Early backers save" under a 30%). split-text: the paragraph is ONE idea in at most 14 words.',
     '- Facts: use only facts, claims and numbers that are in the text. Never invent statistics, names, quotes, dates or results. If a slide would want a figure the text does not give, use a layout without one. A big-stat or stat-bar number must be a real figure from the text.',
@@ -650,6 +653,8 @@ export function textHasAction(text: string): boolean {
   if (/\b(?:sign ?up|subscribe|download|register|pre-?order|rsvp|link in bio|dm me|message me|email me|call me|text me)\b/i.test(t)) return true;
   if (/\b(?:book|reserve|schedule) (?:a|an|your|the|now|today|me|us|it)\b/i.test(t)) return true;
   if (/\b(?:buy|order|get|grab|claim|try|join|visit|shop|back|pledge|donate|follow|reply|comment)\b[^.!?\n]{0,40}\b(?:now|today|here|below|free|link|waitlist|newsletter|checklist|course|store|offer|list|us|me)\b/i.test(t)) return true;
+  // an action the person asks for in words: comment (a quoted or capitalised keyword too), DM me, reply, send me, link in bio, sign up, subscribe, save, share, download, book a call, join, click, tap, try it ...
+  if (sourceAction(t)) return true;
   return false;
 }
 /** Which generic label fits the content: how-to, list, tips or steps save; relatable or funny posts are sent to a friend; opinion, story, critique and insight follow. */
@@ -700,7 +705,64 @@ export function ensureGenericClosing(specs: SlideSpec[], text: string, handle: s
     const sub = [s.fields.caption, s.fields.sub, s.fields.line].find((x) => typeof x === 'string' && x.trim()) as string | undefined;
     next = { layout: 'cta-button', fields: { headline: clip60(head || String(s.fields.lead ?? s.fields.question ?? '')), button: label, ...(sub ? { sub: clip60(sub) } : {}) } as Fields, accents: s.accents };
   }
-  return { specs: specs.map((x, k) => (k === i ? next : x)), trims: [{ slide: i + 1, field: 'closing cta', from: s.layout === 'cta-button' ? String(s.fields.button ?? '') : s.layout, to: `${label} (${next.layout})`, max: 20 }] };
+  // the report line says what happened to the closing; it is not a length trim, so there is no limit to quote (max 0) and the label stands alone
+  return { specs: specs.map((x, k) => (k === i ? next : x)), trims: [{ slide: i + 1, field: 'closing cta', from: s.layout === 'cta-button' ? String(s.fields.button ?? '') : '', to: label, max: 0 }] };
+}
+/** The closing fields that carry a line under the headline. */
+const SUB_FIELDS: Record<string, string[]> = { 'cta-button': ['sub'], 'contact-closing': ['line'], 'cta-pair': ['line1', 'line2'] };
+/**
+ * The closing, settled against the SOURCE text (after the writer, the retry and the generic rule):
+ *  - a text that asks for a real action ("Comment "brain""): a cta-button whose label is not that action, or is only a generic label, takes the label built from the action's own words; a label that is
+ *    already a real action from the text is kept as it is;
+ *  - a line under the headline (sub line) may only use words that are in the text (small function words allowed), otherwise it is dropped: an offer, link, number or promise is never invented.
+ */
+export function settleClosing(specs: SlideSpec[], text: string): { specs: SlideSpec[]; trims: Trim[] } {
+  const i = specs.length - 1;
+  if (i < 1) return { specs, trims: [] };
+  let s = specs[i];
+  const trims: Trim[] = [];
+  const act = sourceAction(text);
+  if (act && s.layout === 'cta-button') {
+    const label = String(s.fields.button ?? '').trim();
+    const real = !!label && !isGenericCta(label, undefined) && !buttonProblem(label, { text }) && labelFromSource(label, text);
+    if (!real) {
+      s = { ...s, fields: { ...s.fields, button: act.label } as Fields };
+      trims.push({ slide: i + 1, field: 'closing cta', from: label, to: act.label, max: 0 });
+    }
+  }
+  for (const k of SUB_FIELDS[s.layout] ?? []) {
+    const v = s.fields[k];
+    if (typeof v !== 'string' || !v.trim() || inSource(v, text)) continue;
+    s = { ...s, fields: Object.fromEntries(Object.entries(s.fields).filter(([n]) => n !== k)) as Fields };
+    trims.push({ slide: i + 1, field: 'closing sub line', from: v, to: '(not in the text)', max: 0 });
+  }
+  return trims.length ? { specs: specs.map((x, k) => (k === i ? s : x)), trims } : { specs, trims };
+}
+/**
+ * "step-numeral" is for two or more steps of one sequence. A deck with exactly ONE step-numeral slide has no sequence: that slide becomes "split-text" with the same words (the step's title as the
+ * headline, its body as the paragraph; the step number is a counter, not a word). It stays as it is when the words would not fit split-text.
+ */
+export function swapLoneStep(specs: SlideSpec[]): { specs: SlideSpec[]; trims: Trim[] } {
+  const at = specs.flatMap((s, i) => (s.layout === 'step-numeral' ? [i] : []));
+  if (at.length !== 1) return { specs, trims: [] };
+  const i = at[0];
+  const s = specs[i];
+  const title = String(s.fields.title ?? '').trim();
+  const body = String(s.fields.body ?? '').trim();
+  if (!title) return { specs, trims: [] };
+  const fields = { headline: title, ...(body ? { paragraph: body } : {}) } as Fields;
+  if (validateSlideContent('split-text', { ...fields, ...(s.accents.length ? { accent: s.accents } : {}) }).errors.length) return { specs, trims: [] };
+  const next: SlideSpec = { ...s, layout: 'split-text', fields };
+  return { specs: specs.map((x, k) => (k === i ? next : x)), trims: [{ slide: i + 1, field: 'step swap', from: 'step-numeral', to: 'split-text', max: 0 }] };
+}
+/** One line of the report for a trim the code made. */
+export function trimNote(t: Trim): string {
+  if (t.field === 'step swap') return `slide ${t.slide}: only one slide in the deck is a step, so the code drew it as split-text with the same words (step-numeral is for two or more steps of one sequence).`;
+  if (t.field === 'closing cta') return t.from ? `slide ${t.slide}: the closing button "${t.from}" was not the call to action the text asks for, so the code used "${t.to}".` : `slide ${t.slide}: the closing had no call to action, so the code made it "${t.to}".`;
+  if (t.field === 'closing sub line') return `slide ${t.slide}: the line under the closing headline, "${t.from}", uses words that are not in the text, so the code left it out (an offer or promise is never invented).`;
+  if (t.to.startsWith('(removed')) return `slide ${t.slide}: ${t.field} "${t.from}" repeats the headline, so the code left it out.`;
+  if (t.field === 'button') return `slide ${t.slide}: the button "${t.from}" is not an action phrase (verb first, 2 to 4 words), so the code left it out: ${t.to}.`;
+  return `slide ${t.slide}: ${t.field} "${t.from}" is ${t.from.length} characters, over its limit of ${t.max}: trimmed to "${t.to}" at a word boundary by the code (no retry call).`;
 }
 export const ACTION_VERBS = new Set([
   'book', 'get', 'join', 'sign', 'start', 'try', 'download', 'click', 'read', 'save', 'share', 'follow', 'subscribe', 'buy', 'order', 'reserve', 'grab', 'claim', 'watch', 'learn', 'see', 'visit', 'contact', 'call', 'email', 'message', 'reply', 'comment',
@@ -718,6 +780,8 @@ export function buttonProblem(label: string, ctx?: CtaCtx): string | null {
   // the three generic closing calls to action (a closing with no real action in the text), and "Follow @handle" with the handle that is set: always fine
   if (GENERIC_CTAS.some((g) => g.toLowerCase() === t.toLowerCase())) return null;
   if (ctx ? isSetHandle(ctx.handle) && t.toLowerCase() === `follow ${ctx.handle!.trim()}`.toLowerCase() : /^follow @[\w.]{2,30}$/i.test(t)) return null;
+  // the action the text itself asks for ("Comment brain", "Download the guide"), built from its own words, is always a fine label
+  if (ctx?.text !== undefined && sourceAction(ctx.text)?.label.toLowerCase() === t.toLowerCase()) return null;
   // a link, a handle, a "link in bio", an offer or a number in a label must come from the text (checked when the text is known)
   if (ctx?.text !== undefined) {
     const src = ctx.text.toLowerCase();
@@ -1040,6 +1104,12 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     specs = pw.specs;
     tr.trims.push(...pw.trims);
   }
+  // one step-numeral slide alone in a deck is not a sequence: it is drawn as split-text with the same words (for the person's own script too)
+  {
+    const ls = swapLoneStep(specs);
+    specs = ls.specs;
+    tr.trims.push(...ls.trims);
+  }
   const suggested = { cut: specs.map((s) => s.cut ?? null), invert: specs.map((s) => !!s.invert), density: specs.map((s) => s.density ?? null) };
   // A preset's flavour: layouts it avoids move to ones it prefers where the slide's text fits (deterministic, no model call; references have no flavour).
   const fp = look.pack?.look?.flavour ? flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, '')) : null;
@@ -1144,6 +1214,15 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
       ({ out: drawn, rot } = await drawAll());
     }
   }
+  // The closing against the source text: the action the text asks for as the label, and a sub line only with words from the text.
+  {
+    const sc = settleClosing(specs, req.text);
+    if (sc.trims.length) {
+      specs = sc.specs;
+      tr.trims.push(...sc.trims);
+      ({ out: drawn, rot } = await drawAll());
+    }
+  }
   // Slides still failing: a plain version of the SAME layout (fields trimmed to their budgets), never the old template look.
   const fallbacks: LibraryReport['fallbacks'] = [];
   const adjustments: string[] = [];
@@ -1219,7 +1298,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     ...(tr.trims.length ? { trims: tr.trims } : {}),
   };
   designed.library = report;
-  report.codeAdjustments.unshift(...tr.trims.map((t) => t.to.startsWith('(removed') ? `slide ${t.slide}: ${t.field} "${t.from}" repeats the headline, so the code left it out.` : t.field === 'button' ? `slide ${t.slide}: the button "${t.from}" is not an action phrase (verb first, 2 to 4 words), so the code left it out: ${t.to}.` : `slide ${t.slide}: ${t.field} "${t.from}" is ${t.from.length} characters, over its limit of ${t.max}: trimmed to "${t.to}" at a word boundary by the code (no retry call).`));
+  report.codeAdjustments.unshift(...tr.trims.map(trimNote));
   designed.notes.push(...pictureSwaps.map((w) => `Pictures: slide ${w.slide} ${w.from} -> ${w.to} (${w.why})`));
   if (fp) designed.notes.push(...fp.swaps.map((w) => `Flavour: slide ${w.slide} ${w.from} -> ${w.to} (${w.why})${w.droppedOptional.length ? '; leaves out ' + w.droppedOptional.map((t) => '"' + t.slice(0, 24) + '"').join(', ') : ''}.`));
   designed.notes.push(...retries.map((r) => `Retry for slide ${r.slide}: ${r.reasons.join('; ')}`), ...fallbacks.map((f) => `Slide ${f.slide} fell back to a ${f.level}: ${f.reason}`), ...adjustments);
