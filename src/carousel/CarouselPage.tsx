@@ -35,7 +35,7 @@ import { setActiveReference as setActiveRef } from '../reference/active';
 import { saveOverrides } from '../reference/overrides';
 import { templates as savedTemplates, updateTemplatePack } from '../reference/templates';
 import type { StyleOverrides, StylePack } from '../reference/pack';
-import { chooseRoute, designFailureMessage, inspirationImages, lastRequestBytes, redesignSlide, type Designed } from './designed';
+import { chooseRoute, withStyleId, designFailureMessage, inspirationImages, lastRequestBytes, redesignSlide, type Designed } from './designed';
 import { pickStyle } from './pickStyle';
 import { type WriteRequest } from './writerPrompt';
 import { downloadBlob, exportAllAsZip, slideFileName, zipFileName } from './export';
@@ -842,7 +842,7 @@ export default function CarouselPage() {
     const style = routeNote.route === 'designed' ? presetUsed : pick ? pick.name : null;
     const withHandle = { ...result.script, brand: { ...result.script.brand, handle: options.handle.trim() || result.script.brand.handle } };
     const gp = patches.generate(withHandle, style, GEN_LABEL);
-    const done = apply({ ...gp, ops: [...gp.ops, { path: ['designed'], value: designedOut }, { path: ['route'], value: routeNote }] });
+    const done = apply({ ...gp, ops: [...gp.ops, { path: ['designed'], value: designedOut }, { path: ['route'], value: { ...routeNote, reason: withStyleId(routeNote.reason, designedOut?.library?.source ?? style) } }] });
     if (!done.ok) {
       job.fail('apply', done.reasons[0]);
       job.finish('failed', done.reasons[0]);

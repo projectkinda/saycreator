@@ -55,6 +55,8 @@ export interface Designed {
  * slide from the style brief and the inspiration pictures. The template fill ("pack") is for Quick, for ready-made slide text (no model), for a style that is not the
  * active reference, and as the fallback when Designed fails. `reason` says in words which and why, and goes into report.json.
  */
+/** The route reason with the style id the deck was really drawn with (the id quoted in a built-in style reason is replaced). */
+export const withStyleId = (reason: string, id: string | null | undefined): string => (id ? reason.replace(/("[^"]*")/, () => `("${id}")`) : reason);
 export function chooseRoute(o: { style: string; activeStyle: string; pack: StylePack | null; mode?: 'designed' | 'quick'; slideText?: boolean; /** The library pack of a built-in preset (null when the style is not a preset, or the template route flag is on). */ presetPack?: StylePack | null; format?: 'carousel' | 'quote' }): { route: 'designed' | 'pack'; reason: string } {
   if (o.slideText) return { route: 'pack', reason: 'Ready-made slide text was used as it is: no model was called.' };
   if (o.style !== o.activeStyle && o.presetPack) {

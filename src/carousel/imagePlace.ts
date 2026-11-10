@@ -13,6 +13,8 @@ export interface PlaceableSpec {
 const cost = (p: PicInfo, aspect: number, accepts: string[], orientation: string) => Math.abs(Math.log(picAspect(p) / aspect)) + (accepts.includes(picOrientation(p)) ? 0 : 5) + (picOrientation(p) === orientation ? 0 : 0.15);
 /** How far a picture's shape may be from its slot's before the cover crop is called bad: ln(ratio) 0.6 keeps at least 55% of the picture. */
 export const CROP_OK = 0.6;
+/** A picture this tall (aspect 0.5 or less, like a phone screenshot) shows its top and goes to a one-picture layout. */
+export const TALL = 0.5;
 const acceptable = (p: PicInfo, s: { aspect: number; accepts: string[] }) => s.accepts.includes(picOrientation(p)) && Math.abs(Math.log(picAspect(p) / s.aspect)) <= CROP_OK;
 
 /** The fields of a slide without its picture fields. */
@@ -26,9 +28,11 @@ export const usedIds = (f: Fields): string[] => (IMAGE_KEYS as readonly string[]
  * A slide with several slots prefers pictures of ONE orientation (a pair of portraits, a row of three landscapes) when such a set exists. Null when fewer than the layout needs fit
  * (the slide then has no picture field).
  */
-export function placeOne(layout: string, variant: 0 | 1, free: PicInfo[]): Fields | null {
+export function placeOne(layout: string, variant: 0 | 1, free0: PicInfo[]): Fields | null {
   const slots = imageSlotsOf(layout, variant);
   if (!slots.length) return null;
+  // a very tall picture (a phone screenshot) is never cut into one of several small slots: it goes to a one-picture layout (a split panel)
+  const free = slots.length >= 2 ? free0.filter((p) => picAspect(p) > TALL) : free0;
   const need = imagesNeeded(layout);
   const fill = (pool: PicInfo[]): { picked: string[]; fields: Fields } => {
     const left = [...pool];
@@ -42,7 +46,8 @@ export function placeOne(layout: string, variant: 0 | 1, free: PicInfo[]): Field
       }
       if (!best) break;
       left.splice(left.indexOf(best), 1);
-      fields[s.field] = makeRef({ id: best.id, w: best.width, h: best.height });
+      // a very tall picture shows its TOP (the focus is near the top), never its middle
+      fields[s.field] = makeRef({ id: best.id, w: best.width, h: best.height, ...(picAspect(best) <= TALL ? { fy: 0.1 } : {}) });
       picked.push(best.id);
     }
     return { picked, fields };
@@ -63,14 +68,21 @@ export function placeOne(layout: string, variant: 0 | 1, free: PicInfo[]): Field
 /** Assigns pictures to every picture slide of the deck, in slide order; slides that cannot get enough pictures keep none. Returns new specs. */
 export function placeImages<T extends PlaceableSpec>(specs: T[], variants: (0 | 1)[], pics: PicInfo[]): T[] {
   const used = new Set<string>();
-  return specs.map((sp, i) => {
+  const out = specs.map((sp) => sp);
+  // slide order, as before; only the slides the code upgraded to a picture layout (pictureUpgrade) come last
+  // (the layouts the writer chose come before the slides the code upgraded to a picture layout)
+  const up = (i: number) => ((specs[i] as { pictureUpgrade?: boolean }).pictureUpgrade ? 1 : 0);
+  const order = specs.map((_, i) => i).sort((a, b) => up(a) - up(b) || a - b);
+  for (const i of order) {
+    const sp = specs[i];
     const base = withoutImages(sp.fields);
-    if (!imageSlotsOf(sp.layout).length) return sp;
+    if (!imageSlotsOf(sp.layout).length) continue;
     const got = placeOne(sp.layout, variants[i] ?? 0, pics.filter((p) => !used.has(p.id)));
-    if (!got) return { ...sp, fields: base };
+    if (!got) { out[i] = { ...sp, fields: base }; continue; }
     usedIds(got).forEach((id) => used.add(id));
-    return { ...sp, fields: { ...base, ...got } };
-  });
+    out[i] = { ...sp, fields: { ...base, ...got } };
+  }
+  return out;
 }
 
 /** The pictures no slide of the deck uses (candidates for a replacement), in the order they were added. */

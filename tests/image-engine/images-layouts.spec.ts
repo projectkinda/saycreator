@@ -70,7 +70,9 @@ test('each image layout draws with and without a picture: no empty box, no text 
         }
         // the pictures: inside the margins, not on each other, and NO text over a picture (so no scrim is needed)
         for (const p of pics) {
-          if (p.x < 47 || p.x + p.w > 1033 || p.y < 100 || p.y + p.h > 1250) bad.push(`${tag}: a picture leaves the free field (${Math.round(p.x)},${Math.round(p.y)},${Math.round(p.w)}x${Math.round(p.h)})`);
+          // the hero band (the whole width) is the one deliberate edge-to-edge picture: it still stays between the handle at the top (y 109) and the page counter at the foot (y 1258)
+          const bleed = p.x === 0 && p.w === 1080 && p.y >= 112 && p.y + p.h <= 1250;
+          if (!bleed && (p.x < 47 || p.x + p.w > 1033 || p.y < 100 || p.y + p.h > 1250)) bad.push(`${tag}: a picture leaves the free field (${Math.round(p.x)},${Math.round(p.y)},${Math.round(p.w)}x${Math.round(p.h)})`);
           for (const t of texts) if (hit(p, t, -2)) bad.push(`${tag}: "${t.text.slice(0, 16)}" is over a picture`);
         }
         for (let i = 0; i < pics.length; i++) for (let j = i + 1; j < pics.length; j++) if (hit(pics[i], pics[j], -1)) bad.push(`${tag}: two pictures overlap`);

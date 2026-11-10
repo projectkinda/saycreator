@@ -11,6 +11,7 @@ import type { Designed, DesignedSlide, Look } from './designed';
 import { LAYOUT_IDS, buildSlide, cutsOf, layoutDef, rotateCuts, rotateVariants, validateSlideContent, type Built, type Cut, type Fields, type LayoutId, type LayoutStyle } from './layouts';
 import { coloursFor, fromHsl, inkOn, lightenForText, quietOn, readableInk, toHsl } from './layouts/cuts';
 import { contrast } from './layouts/draw';
+import { sourceBrands } from './layouts/build';
 import { withoutSwitches } from '../reference/deco';
 import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
@@ -18,7 +19,7 @@ import type { WriteRequest } from './writerPrompt';
 import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
 import { placeImages } from './imagePlace';
 import { flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
-import { picturePass, type PictureSwap } from './picturePass';
+import { heroPass, picturePass, separatePictureRuns, type PictureSwap } from './picturePass';
 import { TONES } from './writerPrompt';
 import { inSource, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
 
@@ -331,12 +332,13 @@ const FIELD_NOTE: Record<string, string> = {
   callouts: 'exactly 3',
 };
 /** The writer's picture rules: metadata only (id, orientation, shape, pixel size), never pixels. */
-export function imageRules(images: { id: string; width: number; height: number }[]): string[] {
+export function imageRules(images: { id: string; width: number; height: number }[], slides = 7): string[] {
   const ratio = (p: { width: number; height: number }) => (p.width >= p.height ? `${(p.width / p.height).toFixed(2)}:1` : `1:${(p.height / p.width).toFixed(2)}`);
   const list = images.map((p, i) => `image ${i + 1}: ${picOrientation(p)}, ${ratio(p)}, ${p.width}x${p.height} px`);
   const nl = (IMAGE_LAYOUT_IDS as readonly string[]).filter((id) => hasEnoughPictures(id, images));
   return [
     `- Pictures available (metadata only, you never see them and never write a picture field): ${list.join('; ')}.`,
+    `- PICTURE SLIDES: use at least ${Math.max(1, Math.min(images.length, Math.floor(slides / 2)))} picture slide${Math.max(1, Math.min(images.length, Math.floor(slides / 2))) === 1 ? '' : 's'} (the smaller of the number of pictures and half the slides), a DIFFERENT picture layout each time, never the same one on two slides in a row. Match the picture's shape: a portrait or tall picture (a phone screenshot) takes a split layout ("headline-body-image", "photo-cover", "art-side-text" or "cover-art" set it beside the text); a landscape or wide picture takes a full-width layout ("photo-cover", "headline-body-image" or the wide "cover-art"); a square picture takes "cover-art" (a circle) or a card layout. If there are no more pictures than slides, use every picture exactly once.`,
     '- Pictures were supplied: USE THEM. Choose a picture layout for at least one slide for every group of pictures that fits one (a single picture can head a text slide or the cover, two can be a comparison, three or more can be a row or thumbnails); a deck that ignores the pictures is wrong. The code places them.',
     '- Choose a layout with picture slots ONLY if there are enough pictures for its slots (the menu lists the slots and how many pictures each needs); every picture is used at most once in the deck, so the slots of all your picture layouts together must not exceed the pictures available. Prefer a layout whose slot orientation matches the pictures (landscape slots for landscape pictures, tall slots for portrait pictures). The code places the pictures.',
     nl.includes('do-dont') ? '- Two-sided content (a do and do-not pair, before and after, myth and fact): use "do-dont" when two pictures are available; with fewer pictures use "comparison".' : '- Two-sided content (a do and do-not pair, before and after, myth and fact): use "comparison" (not enough pictures for "do-dont").',
@@ -433,7 +435,7 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     '- Every other button label is an ACTION PHRASE: verb first, 2 to 4 words, at most 20 characters, no question mark, comma or full stop ("Book a call", "Get the checklist", "Join the list"). Never a question, a slogan or a topic ("Which fits you?", "Sleep well"). The three generic labels above are the only exceptions to the length.',
     '- Prose: "prose" is the ONLY layout that takes whole paragraphs. Aim for 35 to 50 words in all (the heading and the pull line included); use up to 70 only when the source text truly needs it. 70 is a hard limit (the handle and the page number are not counted; 300 characters per paragraph at most), and the code cuts anything past it. Prefer ONE short paragraph plus a bold one-line takeaway (the "pull" field) to three paragraphs. Use prose for a slide that needs explaining in sentences; its heading is optional and, when present, reads on its own as a full title. Every other layout stays short: never put a paragraph into a statement, list or card layout.',
     '- Long passages: if the text for ONE slide would run past 70 words, split it across two slides, a prose slide and then a statement, bullet-list or numbered-list slide for the rest, instead of cramming it into one. The number of slides is fixed (see above): split only when another slide of your plan can be spared for it (a slide that would only repeat or pad); when every slide is needed, tighten the prose to 70 words or fewer instead.',
-    ...(look.images?.length ? imageRules(look.images) : []),
+    ...(look.images?.length ? imageRules(look.images, n) : []),
     '- Forms: "statement-stacked" is 2 to 4 words (one per line); "statement-pill" needs a short caption (at most 40 characters) that is set in a pill; "statement-question" is one question or thought; "numbered-stagger" is 2 or 3 sentences; "bullet-list" and "pill-stagger" are short lines (at most 46 and 36 characters); "headline-card" has ONE key paragraph (the card) under a headline; "cta-pair" has two buttons with a short line each.',
     '- Use "step-numeral" only when at least two slides in the deck are steps of one sequence (step 1, step 2 ...); with a single step, use "split-text" or "statement" instead.',
     '- Variety: no two consecutive slides use the same layout, and no layout is used more than twice. Use "stepper" for 2 to 5 ordered steps, "stat-bar" or "big-stat" for a figure, "checklist" for benefits, "comparison" for two things set against each other, "quote" only for words that are in the text.',
@@ -466,6 +468,8 @@ export interface SlideSpec {
   keepAsWritten?: boolean;
   /** What the person chose for this slide in the layout picker: the deck rotation and the style toggles keep it. */
   pin?: { variant?: 0 | 1; cut?: Cut; invert?: false | 'full' | 'tint' };
+  /** A text slide the code turned into a picture layout because a picture was left unused: the pictures the writer's own picture layouts need are placed first. */
+  pictureUpgrade?: boolean;
 }
 export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 export function toSpec(raw: unknown): SlideSpec | null {
@@ -1093,7 +1097,9 @@ export interface OwnScript { title: string; specs: SlideSpec[]; script: Carousel
 export async function designLibraryDeck(req: WriteRequest, look: Look, handle: string, p: WriteProvider, signal: AbortSignal, onPhase: (ph: 'writing' | 'retrying') => void = () => undefined, own?: OwnScript): Promise<GenerateResult & { designed: Designed }> {
   const t0 = performance.now();
   const { style: style0, notes: styleNotes } = styleFromPack(look.pack);
-  const style: LayoutStyle = look.site?.trim() ? { ...style0, site: look.site.trim() } : style0;
+  const style1: LayoutStyle = look.site?.trim() ? { ...style0, site: look.site.trim() } : style0;
+  // a lower-case style keeps the capitals of the brand names and acronyms the text writes (ChatGPT, Claude, AI, PDF)
+  const style: LayoutStyle = !own && style1.caseStyle === 'lower' ? { ...style1, caseExceptions: [...new Set([...(style1.caseExceptions ?? []), ...sourceBrands(req.text)])] } : style1;
   const brief = look.pack ? look.pack.brief ?? styleBriefOf(look.pack) : look.brief?.trim() || 'a clean, confident look';
   const [lo, hi] = SLIDE_RANGE[req.format];
   const n = Math.min(hi, Math.max(lo, req.slides));
@@ -1154,6 +1160,13 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     const pp = picturePass(specs, look);
     specs = pp.specs;
     pictureSwaps = pp.swaps;
+    // never the same picture layout twice in a row; and a hero: one picture over more than half of the slide
+    const sr = separatePictureRuns(specs, look);
+    specs = sr.specs;
+    pictureSwaps.push(...sr.swaps);
+    const hp = heroPass(specs, look);
+    specs = hp.specs;
+    pictureSwaps.push(...hp.swaps);
   }
 
   /** The deck's rotation: variants and cuts over the whole deck. A layout the rotation would change (repeated or over-used) is a problem for the retry. */

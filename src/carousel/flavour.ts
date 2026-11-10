@@ -159,9 +159,9 @@ export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look,
   // the other slides (the closing call to action is left alone unless the preset avoids it)
   for (let i = 1; i < n; i++) {
     const cur = specs[i].layout;
-    const bad = avoid.includes(cur);
-    // a layout with picture slots that the project's pictures can fill was chosen on purpose (the writer was told the pictures): the flavour keeps it
+    // a layout with picture slots that the project's pictures can fill was chosen on purpose (the writer was told the pictures): the flavour never swaps it out, even a layout the style avoids
     const pictured = picturedLayout(cur);
+    const bad = avoid.includes(cur) && !pictured;
     const notPreferred = !prefer.includes(cur) && !pictured;
     if (i === n - 1 && !bad) continue;
     if (!(bad || (notPreferred && preferredCount() < want))) continue;

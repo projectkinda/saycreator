@@ -129,6 +129,8 @@ export function restoreBrands(orig: string, out: string, mode: 'upper' | 'lower'
     for (const m of orig.matchAll(new RegExp('(?<![\\p{L}\\p{N}])' + reEsc(w) + '(?![\\p{L}\\p{N}])', 'giu'))) put(m.index ?? 0, w);
   }
   if (mode === 'lower') {
+    // the pronoun "I" and its contractions (I'm, I'll, I'd, I've) are always capitals
+    for (const m of orig.matchAll(/(?<![\p{L}\p{N}'’])I(?:['’](?:m|ll|d|ve|re))?(?![\p{L}\p{N}])/gu)) put(m.index ?? 0, m[0]);
     const set = new Set(written.map((w) => w.toLowerCase()));
     for (const w of written)
       for (const m of orig.matchAll(new RegExp('(?<![\\p{L}\\p{N}])' + reEsc(w) + '(?![\\p{L}\\p{N}])', 'giu'))) {
@@ -141,6 +143,25 @@ export function restoreBrands(orig: string, out: string, mode: 'upper' | 'lower'
       }
   }
   return res;
+}
+/**
+ * The brand and product names and acronyms the person's text writes with capitals in the middle of a sentence (ChatGPT, Claude, AI, PDF, SEO, ROI, iPhone): a lower-case style keeps their capitals.
+ * A capital at the start of a sentence or a line is not a mark. The pronoun "I" is handled apart.
+ */
+export function sourceBrands(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)) {
+    const w = m[0];
+    if (w === 'I' || /^I['’]/.test(w)) continue;
+    const at = m.index ?? 0;
+    const before = text.slice(0, at);
+    const start = at === 0 || /[.!?]["”')\]]*\s*$/.test(before) || /\n\s*$/.test(before);
+    const letters = w.replace(/[^\p{L}]/gu, '');
+    if (letters.length >= 2 && letters === letters.toUpperCase() && letters !== letters.toLowerCase()) out.add(w);
+    else if (letters.length >= 2 && mixedCase(w)) out.add(w);
+    else if (!start && /^\p{Lu}/u.test(w) && letters.length >= 3) out.add(w);
+  }
+  return [...out];
 }
 /** The words of a handle ("@quick.flip" -> quick, flip) that can be a brand name (3 letters or more). */
 export const handleWords = (handle: string): string[] => handle.replace(/^@/, '').split(/[._\-\s]+/).filter((w) => w.length >= 3);

@@ -3,6 +3,7 @@
 // cropped to its slot (cover fit, corners rounded like the preset's cards); WITHOUT one the layout draws its own text-only form (a prose page, a statement, number discs, a comparison with
 // tick and cross badges ...): never an empty box. The writer is only offered these layouts when the deck has a picture. No text is ever drawn over a picture, so no scrim is needed.
 import { CARD_PAD, Draw, measure, nearestWeight, S } from './draw';
+import { measureWidth } from '../../image-engine/draw/text';
 import { arr, layoutDef, mk, place, str } from './library';
 import type { Cx, ImageSlotDef, LayoutDef, LayoutStyle, Orientation, PlanImage } from './types';
 
@@ -97,6 +98,53 @@ const heightOf = (d: Draw, fn: (t: Draw) => void): number => {
 };
 /** The height a picture may have: what is left of the free height after `used` (the other blocks and gaps), between its minimum and maximum. */
 const room = (d: Draw, used: number, min: number, max: number): number => Math.max(min, Math.min(max, Math.floor((d.fy1 - d.fy0) * 0.97 - used)));
+/** The shape of a picture from its reference (null for a picture with no known size: it is treated as a landscape photo). */
+export type PicShape = 'tall' | 'portrait' | 'square' | 'landscape' | 'wide';
+export const shapeOfAspect = (a: number): PicShape => (a <= 0.5 ? 'tall' : a < 0.87 ? 'portrait' : a <= 1.15 ? 'square' : a >= 2.2 ? 'wide' : 'landscape');
+export const shapeOf = (src: string): { aspect: number; kind: PicShape } | null => {
+  const r = parseRef(src);
+  return r?.w && r.h ? { aspect: r.w / r.h, kind: shapeOfAspect(r.w / r.h) } : null;
+};
+/** A round or circle crop only suits a picture that is nearly square (aspect 0.7 to 1.4). */
+export const nearSquare = (a: number): boolean => a >= 0.7 && a <= 1.4;
+/** A tall or portrait picture (a phone screenshot, a portrait photo) is shown in a half-and-half split, edge to edge. */
+const panelShape = (src: string): boolean => { const k = shapeOf(src)?.kind; return k === 'tall' || k === 'portrait'; };
+const SLIDE_W = 1080;
+/** The picture panel of a split: 61% of the width. */
+export const PANEL_W = 655;
+/** The panel and the hero band sit between the handle / number at the top of the slide (y 62 to 109) and the page counter at the foot (from y 1258), so no text of the page chrome is ever over a picture. */
+export const PANEL_Y = 116;
+/** Its height: 655 x 1114 is 50.04% of the slide. */
+export const PANEL_H = 1114;
+/** The top band of a hero: the whole width, 50% of the slide. */
+export const HERO_BAND_H = 676;
+export const HERO_BAND_Y = 116;
+/**
+ * Half-and-half split: the picture runs edge to edge over MORE than half of the slide (a tall or portrait picture; the crop shows its top), the text sits in the other half, centred in the free height.
+ */
+function splitPanel(d: Draw, img: string, v: 0 | 1, texts: (t: Draw, x: number, w: number) => void): void {
+  const left = v === 1;
+  const x = left ? 0 : SLIDE_W - PANEL_W;
+  const tx = left ? PANEL_W + 40 : d.x0;
+  const tw = left ? SLIDE_W - tx - 48 - 6 : SLIDE_W - PANEL_W - 40 - d.x0 - 6;
+  const th = heightOf(d, (t) => texts(t, tx, tw));
+  d.y = d.fy0 + Math.max(0, Math.round((d.fy1 - d.fy0 - th) / 2));
+  texts(d, tx, tw);
+  d.image(img, x, PANEL_Y, PANEL_W, PANEL_H, { rx: 0 });
+}
+/** Hero band: the picture across the whole width at the top, edge to edge, over more than half of the slide; the text sits below it. */
+function heroBand(d: Draw, img: string, texts: (t: Draw) => void): void {
+  d.image(img, 0, HERO_BAND_Y, SLIDE_W, HERO_BAND_H, { rx: 0 });
+  const top = HERO_BAND_Y + HERO_BAND_H + 30;
+  d.y = top + Math.max(0, Math.round((d.fy1 - top - heightOf(d, texts)) / 2));
+  texts(d);
+}
+/** Whether a headline fits the narrow text column of a split (6 lines at the 72 px floor of a content headline, no word wider than the column). A longer one takes the hero band instead. */
+const columnFits = (st: LayoutStyle, text: string): boolean => {
+  const w = SLIDE_W - PANEL_W - 40 - 48 - 6;
+  const wt = nearestWeight(st.fonts.headline, 800);
+  return text.split(/\s+/).filter(Boolean).every((x) => measureWidth(x, st.fonts.headline, wt, 72) <= w * 0.98) && measure(text, st.fonts.headline, wt, 72, w, 1.05).n <= 6;
+};
 const IMG = (name: string, note: string) => ({ name, required: false as const, max: 12_000_000, image: true as const, note });
 
 export const IMAGE_LAYOUTS: LayoutDef[] = [
@@ -119,10 +167,27 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         t.text('title', head, { size: 96, max: 130, weight: 800, font: 'h', lines: 3, min: 72, gap: 28 });
         t.text('body', str(f, 'body'), { size: 56, max: 64, lines: 4, min: 44, lh: 1.3, gap: v === 0 ? 40 : 0 });
       };
+      // a tall or portrait picture: a half-and-half split (the picture edge to edge on one side)
+      if (panelShape(img) && columnFits(st, head)) {
+        const d = place(st, cx, 'top', (d) => splitPanel(d, img, v, (t, x, w) => {
+          t.text('title', head, { x, w, size: 72, max: 96, weight: 800, font: 'h', lines: 6, min: 56, gap: 28 });
+          t.text('body', str(f, 'body'), { x, w, size: 44, max: 48, lines: 12, min: 44, lh: 1.3 });
+        }));
+        return mk(d, { noBalance: true, type: slideType(d), fitAs: 'headline-body-image', slide: rowsSlide(d, head) });
+      }
+      // "picture above" (or a tall or portrait picture with a headline too long for the split column): the hero band, edge to edge over more than half of the slide
+      if (v === 1 || panelShape(img)) {
+        const d = place(st, cx, 'top', (d) => {
+          heroBand(d, img, (t) => {
+            t.text('title', head, { size: 76, max: 88, weight: 800, font: 'h', lines: 2, min: 56, gap: 24 });
+            t.text('body', str(f, 'body'), { size: 44, max: 48, lines: 3, min: 44, lh: 1.3 });
+          });
+        });
+        return mk(d, { noBalance: true, type: slideType(d), fitAs: 'headline-body-image', slide: rowsSlide(d, head) });
+      }
       const d = place(st, cx, 'center', (d) => {
-        const ih = room(d, heightOf(d, texts) + (v === 1 ? 40 : 0), PIC_MIN['headline-body-image'], 700);
+        const ih = room(d, heightOf(d, texts), PIC_MIN['headline-body-image'], 700);
         const pic = () => { d.image(img, d.x0, d.y, d.w, ih, { rx: rad(st) }); d.y += ih; };
-        if (v === 1) { pic(); d.gap(40); }
         texts(d);
         if (v === 0) pic();
       });
@@ -216,10 +281,15 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         t.text('title', str(f, 'headline'), { size: 112, max: 150, weight: 800, font: 'h', lines: 3, min: 72, lh: 1.02, gap: sub ? 24 : 44 });
         if (sub) t.text('body', sub, { size: 52, max: 56, fill: '$muted', lines: 1, min: 44, gap: 44 });
       };
+      const sh = shapeOf(img);
+      // a tall or portrait picture is never cropped into a circle: a half-and-half split shows it (its top)
+      if (panelShape(img)) return layoutDef('headline-body-image')!.plan({ headline: str(f, 'headline'), ...(sub ? { body: sub } : { body: '' }), image: img }, v, st, cx);
+      // a circle only for a nearly square picture (aspect 0.7 to 1.4); any other shape takes the wide block
+      const round = v === 0 && (!sh || nearSquare(sh.aspect));
       const d = place(st, cx, 'center', (d) => {
         texts(d);
         // the art takes the rest of the page: a circle as large as the width allows, or a wide block
-        if (v === 0) { const D = Math.min(d.w, room(d, heightOf(d, texts), PIC_MIN['cover-art-circle'], 880)); d.image(img, d.cx - D / 2, d.y, D, D, { rx: 0, circle: true }); d.y += D; }
+        if (round) { const D = Math.min(d.w, room(d, heightOf(d, texts), PIC_MIN['cover-art-circle'], 880)); d.image(img, d.cx - D / 2, d.y, D, D, { rx: 0, circle: true }); d.y += D; }
         else { const ih = room(d, heightOf(d, texts), PIC_MIN['cover-art-wide'], 700); d.image(img, d.x0, d.y, d.w, ih, { rx: rad(st) }); d.y += ih; }
       });
       return mk(d, { noBalance: true, type: slideType(d), fitAs: 'cover-art', slide: rowsSlide(d, str(f, 'headline')) });
@@ -242,10 +312,20 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         t.text('title', str(f, 'headline'), { size: 104, max: 150, weight: 800, font: 'h', lines: 3, min: 72, lh: 1.02, gap: 28 });
         t.text('body', str(f, 'intro'), { size: 56, max: 64, lines: 3, min: 44, lh: 1.3, gap: v === 0 ? 40 : 0 });
       };
+      // (the split is the headline-body-image split: the same words in the same two columns)
+      if (panelShape(img)) return layoutDef('headline-body-image')!.plan({ headline: str(f, 'headline'), body: str(f, 'intro'), image: img }, v, st, cx);
+      if (v === 1) {
+        const d = place(st, cx, 'top', (d) => {
+          heroBand(d, img, (t) => {
+            t.text('title', str(f, 'headline'), { size: 76, max: 88, weight: 800, font: 'h', lines: 2, min: 56, lh: 1.02, gap: 24 });
+            t.text('body', str(f, 'intro'), { size: 44, max: 48, lines: 3, min: 44, lh: 1.3 });
+          });
+        });
+        return mk(d, { noBalance: true, type: slideType(d), fitAs: 'photo-cover', slide: rowsSlide(d, str(f, 'headline')) });
+      }
       const d = place(st, cx, 'center', (d) => {
-        const ih = room(d, heightOf(d, texts) + (v === 1 ? 40 : 0), PIC_MIN['photo-cover'], 640);
+        const ih = room(d, heightOf(d, texts), PIC_MIN['photo-cover'], 640);
         const pic = () => { d.image(img, d.x0, d.y, d.w, ih, { rx: rad(st) }); d.y += ih; };
-        if (v === 1) { pic(); d.gap(40); }
         texts(d);
         if (v === 0) pic();
       });
@@ -312,8 +392,15 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
     },
     plan(f, v, st, cx) {
       const img = imageOf(f.image);
+      if (img && panelShape(img) && columnFits(st, str(f, 'heading'))) {
+        const d = place(st, cx, 'top', (d) => splitPanel(d, img, v, (t, x, w) => {
+          t.text('title', str(f, 'heading'), { x, w, size: 72, max: 96, weight: 800, font: 'h', lines: 6, min: 56, gap: 28 });
+          t.text('body', str(f, 'paragraph'), { x, w, size: 44, max: 48, lines: 12, min: 44, lh: 1.3 });
+        }));
+        return mk(d, { noBalance: true, type: 'content', fitAs: 'art-side-text', slide: { type: 'content', headline: str(f, 'heading'), body: str(f, 'paragraph') } });
+      }
       const fh = cx.field.y1 - cx.field.y0;
-      const ih = Math.round(fh * 0.4);
+      const ih = Math.round(fh * 0.46);
       const d = place(st, cx, 'center', (d) => {
         // the text sits in the right 64% of the width, with a hand-drawn arrow at its left pointing at the art
         const cw = Math.round(d.w * 0.64);
@@ -422,13 +509,13 @@ const PORT: Orientation[] = ['portrait', 'square'];
 const ANY: Orientation[] = ['landscape', 'square', 'portrait'];
 const slot = (field: string, aspect: number, accepts: Orientation[], orientation: Orientation = orientationOf(aspect, 1)): ImageSlotDef => ({ field, aspect: Math.round(aspect * 1000) / 1000, orientation, accepts });
 const SLOTS: Record<string, { min: number; slots: (v: 0 | 1) => ImageSlotDef[] }> = {
-  'headline-body-image': { min: 1, slots: () => [slot('image', 978 / 520, LAND)] },
+  'headline-body-image': { min: 1, slots: () => [slot('image', 978 / 520, ANY)] },
   'image-row': { min: 3, slots: (v) => ['image', 'image2', 'image3'].map((f) => slot(f, 310 / (v === 1 ? 500 : 400), PORT)) },
   'thumb-rows': { min: 3, slots: () => ['image', 'image2', 'image3', 'image4'].map((f) => slot(f, 230 / 160, LAND)) },
   'cover-art': { min: 1, slots: (v) => [v === 0 ? slot('image', 1, ANY) : slot('image', 978 / 400, LAND)] },
-  'photo-cover': { min: 1, slots: () => [slot('image', 978 / 420, LAND)] },
+  'photo-cover': { min: 1, slots: () => [slot('image', 978 / 420, ANY)] },
   'portrait-closing': { min: 1, slots: () => [slot('image', 0.7, PORT, 'portrait')] },
-  'art-side-text': { min: 1, slots: () => [slot('image', 978 / 400, LAND)] },
+  'art-side-text': { min: 1, slots: () => [slot('image', 978 / 400, ANY)] },
   'do-dont': { min: 2, slots: (v) => [slot('image', v === 0 ? 475 / 400 : 340 / 250, ANY), slot('image2', v === 0 ? 475 / 400 : 340 / 250, ANY)] },
 };
 IMAGE_LAYOUTS.forEach((l) => { const s = SLOTS[l.id]; l.imageSlots = s.slots; l.minImages = s.min; });
