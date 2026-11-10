@@ -213,7 +213,7 @@ test('D: the closing report says what happened in words: no "over its limit of 2
 });
 
 // ----- E: the call count -----
-test('E: a source with a real action and a writer that follows the closing rule: exactly 1 writer call, in two styles; a writer that breaks the rule still gets its one retry', async ({ page }) => {
+test('E: a source with a real action and a writer that follows the closing rule: exactly 1 writer call, in three styles; a writer that breaks the rule gets no second call either (the code settles the closing)', async ({ page }) => {
   for (const preset of ['film-paper', 'hot-flat', 'style-6']) {
     const r = await run(page, { preset, text: BRAIN_SOURCE, closing: { layout: 'cta-button', fields: { headline: 'Build a second brain', button: 'Comment brain', sub: "I'll send you the document." }, accents: [] } });
     expect(r.calls, `${preset}: one call`).toBe(1);
@@ -221,9 +221,9 @@ test('E: a source with a real action and a writer that follows the closing rule:
   }
   // no action in the source, the writer closes on a plain statement: asked once more (by design), the answer is used
   const retried = await run(page, { preset: 'film-paper', text: NO_ACTION_SOURCE, closing: { layout: 'statement', fields: { headline: 'Build a second brain' }, accents: [] }, second: { layout: 'cta-button', fields: { headline: 'Build a second brain', button: 'Save this for later' }, accents: [] } });
-  expect(retried.calls).toBe(2);
-  expect(retried.retries).toEqual([7]);
-  expect(retried.last.fields.button).toBe('Save this for later');
+  expect(retried.calls).toBe(1);
+  expect(retried.retries).toEqual([]);
+  expect(GENERIC).toContain(retried.last.fields.button);
 });
 
 // ----- F1: a highlight box never covers the punctuation after the marked word -----

@@ -75,6 +75,8 @@ export async function buildReport(o: ReportOptions): Promise<{ json: string; com
       ? { job: job.title, calls: job.cost?.calls ?? null, pictures: job.cost?.images ?? null, seconds: Math.round((((job.endedAt ?? job.startedAt) - job.startedAt) / 1000) * 10) / 10, stages: timingTable(job).map((r) => ({ stage: r.stage, seconds: r.seconds })), fromCache: !!job.cached }
       : { calls: null, seconds: null, note: 'No job has been run in this browser yet.' },
     route: o.doc.route?.route ?? (o.doc.designed ? 'designed' : 'pack'),
+    /** The text the person typed, as the writer received it. */
+    sourceText: o.doc.topic ?? '',
     routeReason: o.doc.route?.reason ?? (o.doc.designed ? 'Designed slides are present (the route was not recorded).' : 'No route was recorded for this project: the style templates are assumed to have filled the slides.'),
     designedCalls: o.doc.designed?.calls ?? null,
     designed: o.doc.designed ? { calls: o.doc.designed.calls, tokens: o.doc.designed.tokens ?? null, layouts: o.doc.designed.layouts ?? null, fallbacks: o.doc.designed.fallbacks, notes: o.doc.designed.notes, requestBytes: o.doc.designed.requestBytes ?? null, library: o.doc.designed.library ?? null, model: 'DRAW_MODEL, else CAROUSEL_MODEL, else sonnet (server setting)' } : o.doc.route?.error ? { failed: true, error: o.doc.route.error, requestBytes: o.doc.route.requestBytes ?? null } : null,

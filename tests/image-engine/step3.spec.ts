@@ -175,7 +175,7 @@ test('layout picker: options map the text without inventing any; a pick redraws 
   expect(r.pick.pin.variant).not.toBeUndefined();
   expect(r.pick.scriptType).toBe('cover');
   expect(r.pick.fields).toEqual({ question: 'Flip your hoodie', line: 'One piece. Two jobs.' });
-  expect(r.pick.accents, 'an accent that still stands in the text is kept').toEqual(['the hoodie'].filter((a) => 'flip your hoodie'.includes(a)));
+  expect(r.pick.accents, 'an accent that still stands in the text is kept (the writer gave "the hoodie", clamped to its last word: a highlight is at most half of a 3-word headline)').toEqual(['hoodie'].filter((a) => 'flip your hoodie'.includes(a)));
   expect(r.cut.cut).toBe('angle');
   expect(r.cut.changed).toBe(true);
   expect(r.cut.layout).toBe('stepper');

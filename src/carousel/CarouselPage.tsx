@@ -784,7 +784,7 @@ export default function CarouselPage() {
     };
     setGen({ phase: 'writing' });
     setNotice('');
-    const job = startJob('one-shot-carousel', `Carousel from ${doc.topic.trim().split(/s+/).length} words of text, ${options.slides} slides`, [{ id: 'write', label: 'Ask the writer for the script' }, { id: 'apply', label: 'Check the script and pick a style' }, { id: 'draw', label: 'Draw the slides' }]);
+    const job = startJob('one-shot-carousel', `Carousel from ${doc.topic.trim().split(/\s+/).filter(Boolean).length} words of text, ${options.slides} slides`, [{ id: 'write', label: 'Ask the writer for the script' }, { id: 'apply', label: 'Check the script and pick a style' }, { id: 'draw', label: 'Draw the slides' }]);
     genJob.current = job;
     onCancel(job.id, () => ctl.abort());
     job.begin('write');

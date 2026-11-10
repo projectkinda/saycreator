@@ -20,7 +20,7 @@ import { placeImages } from './imagePlace';
 import { flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { picturePass, type PictureSwap } from './picturePass';
 import { TONES } from './writerPrompt';
-import { inSource, labelFromSource, sourceAction } from './closingAction';
+import { inSource, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
 
 /** The old route, where the model draws every slide as SVG, stays available behind this flag (off by default): localStorage "creator.legacySvgRoute" = "1" or VITE_LEGACY_SVG_ROUTE=1. */
 export const legacySvgRoute = (): boolean => {
@@ -439,7 +439,7 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     '- Variety: no two consecutive slides use the same layout, and no layout is used more than twice. Use "stepper" for 2 to 5 ordered steps, "stat-bar" or "big-stat" for a figure, "checklist" for benefits, "comparison" for two things set against each other, "quote" only for words that are in the text.',
     '- Stats: the "label" of big-stat and stat-bar is the continuation of the number, so "number label" reads as one phrase: "30%" + "off for early backers" (never a label that starts a new sentence, such as "Early backers save" under a 30%). split-text: the paragraph is ONE idea in at most 14 words.',
     '- Facts: use only facts, claims and numbers that are in the text. Never invent statistics, names, quotes, dates or results. If a slide would want a figure the text does not give, use a layout without one. A big-stat or stat-bar number must be a real figure from the text.',
-    `- "accents": up to 3 phrases (1 to 3 words each) copied EXACTLY from the slide's headline, question or quote text, the words that carry the meaning (never filler such as the, a, and, of, to). The code sets them in the accent colour or on a marker bar.`,
+    `- "accents": up to 3 phrases copied EXACTLY from the slide's headline, question or quote text, the words that carry the meaning (never filler such as the, a, and, of, to). Highlight 1 or 2 words, the ones that carry the point (never more than half of the headline). The code sets them in the accent colour or on a marker bar.`,
     '- "density": "statement" is optional and ONLY for a statement, big-question or cta-button whose headline is 4 words or fewer: the code then drops the secondary copy and sets the headline huge. Otherwise leave it out.',
     style.devices.planes ? '- "cut": optional suggestion, one of plain, edge-h, angle, curve (a colour plane the slide is cut by). "invert": optional suggestion (true swaps field and plane colours). The code may override both to keep the deck varied.' : '- This style is flat (no colour planes): "cut" and "invert" are not needed.',
     '- "variant" is optional (1 or 2) and only a suggestion: the code alternates variants.',
@@ -573,6 +573,7 @@ const LINE_FIELDS = ['caption', 'sub', 'subline', 'line', 'subtitle', 'kicker'];
 /** A prose slide holds at most this many words of slide text in all (heading, paragraphs, bullets and pull line; not the handle or the page number): the app's phone check holds a prose slide to 70 (every other content slide to 50). */
 export const PROSE_WORDS = 70;
 const wordsIn = (t: unknown) => String(t ?? '').split(/\s+/).filter(Boolean).length;
+const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v : undefined);
 /** Sentences of a paragraph, each kept with its end mark. */
 const sentencesOf = (t: string) => t.match(/[^.!?]+[.!?]*\s*/g)?.map((x) => x.trim()).filter(Boolean) ?? [t];
 /**
@@ -673,6 +674,8 @@ const CLOSING_FILLER = /^(?:thanks?(?: you)?(?: for (?:reading|watching|stopping
  */
 export function closingProblems(s: SlideSpec, text: string, handle?: string): string[] {
   if (textHasAction(text)) return [];
+  // a closing button taken straight from the text ("Comment brain" for "... comment brain, and ...") is faithful to the source: never a problem
+  if (s.layout === 'cta-button' && labelIsSourcePhrase(String(s.fields.button ?? ''), text)) return [];
   const labels = genericLabels(handle);
   const say = `the text has no real action, so the closing is a "cta-button" with ONE generic label: ${labels.join(' / ')} ("${GENERIC_CTA_OF.save}" for how-to, list, tips or steps; "${isSetHandle(handle) ? `Follow ${handle!.trim()}` : GENERIC_CTA_OF.follow}" for an opinion, story, critique or insight; "${GENERIC_CTA_OF.friend}" for relatable, funny or common-pain posts). Keep the headline a real takeaway sentence from the text. Never invent a link, website, email, offer or number`;
   const f = s.fields;
@@ -724,7 +727,7 @@ export function settleClosing(specs: SlideSpec[], text: string): { specs: SlideS
   const act = sourceAction(text);
   if (act && s.layout === 'cta-button') {
     const label = String(s.fields.button ?? '').trim();
-    const real = !!label && !isGenericCta(label, undefined) && !buttonProblem(label, { text }) && labelFromSource(label, text);
+    const real = !!label && !isGenericCta(label, undefined) && (labelIsSourcePhrase(label, text) || (!buttonProblem(label, { text }) && labelFromSource(label, text)));
     if (!real) {
       s = { ...s, fields: { ...s.fields, button: act.label } as Fields };
       trims.push({ slide: i + 1, field: 'closing cta', from: label, to: act.label, max: 0 });
@@ -755,8 +758,31 @@ export function swapLoneStep(specs: SlideSpec[]): { specs: SlideSpec[]; trims: T
   const next: SlideSpec = { ...s, layout: 'split-text', fields };
   return { specs: specs.map((x, k) => (k === i ? next : x)), trims: [{ slide: i + 1, field: 'step swap', from: 'step-numeral', to: 'split-text', max: 0 }] };
 }
+const HIGHLIGHT_HEAD = ['headline', 'title', 'question', 'quote', 'heading', 'lead', 'statement'];
+/**
+ * A highlight carries the point, so it is short: at most 2 words (3 when the headline has 8 or more words), and never more than half of the headline's words. A longer one the writer gave keeps
+ * its LAST words ("keeps things running" in "Your brain keeps things running" becomes "things running"). Only for a written deck: a highlight the person typed is never changed.
+ */
+export function clampAccents(specs: SlideSpec[]): { specs: SlideSpec[]; trims: Trim[] } {
+  const trims: Trim[] = [];
+  const out = specs.map((s, i) => {
+    if (!s.accents.length) return s;
+    const hk = HIGHLIGHT_HEAD.find((k) => typeof s.fields[k] === 'string' && String(s.fields[k]).trim());
+    const n = hk ? wordsIn(s.fields[hk]) : 0;
+    const max = n ? Math.max(1, Math.min(n >= 8 ? 3 : 2, Math.floor(n / 2))) : 2;
+    const next = s.accents.map((a) => {
+      const w = a.trim().split(/\s+/);
+      return w.length > max ? w.slice(-max).join(' ') : a;
+    });
+    if (next.every((a, k) => a === s.accents[k])) return s;
+    trims.push({ slide: i + 1, field: 'highlight', from: s.accents.join(' | '), to: next.join(' | '), max });
+    return { ...s, accents: next };
+  });
+  return { specs: out, trims };
+}
 /** One line of the report for a trim the code made. */
 export function trimNote(t: Trim): string {
+  if (t.field === 'highlight') return `slide ${t.slide}: the highlight "${t.from}" was longer than ${t.max} word${t.max === 1 ? '' : 's'}, so the code kept the last words: "${t.to}".`;
   if (t.field === 'step swap') return `slide ${t.slide}: only one slide in the deck is a step, so the code drew it as split-text with the same words (step-numeral is for two or more steps of one sequence).`;
   if (t.field === 'closing cta') return t.from ? `slide ${t.slide}: the closing button "${t.from}" was not the call to action the text asks for, so the code used "${t.to}".` : `slide ${t.slide}: the closing had no call to action, so the code made it "${t.to}".`;
   if (t.field === 'closing sub line') return `slide ${t.slide}: the line under the closing headline, "${t.from}", uses words that are not in the text, so the code left it out (an offer or promise is never invented).`;
@@ -927,6 +953,8 @@ export interface LibraryReport {
   ownMarks?: ('simple' | 'kept' | null)[];
   /** How many times the deck was drawn again from the plan. */
   redraws?: number;
+  /** The closing as the writer gave it (layout, headline, button, sub line), before the code changed anything. */
+  writerClosing?: { layout: string; headline?: string; button?: string; sub?: string };
   /** Optional texts the code trimmed at a word boundary instead of asking the writer again. */
   trims?: { slide: number; field: string; from: string; to: string; max: number }[];
   /** The preset flavour pass: layouts moved to a preferred one (slide, from, to, why) and the slides that stayed with the reason. Presets only. */
@@ -1090,6 +1118,8 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   }
   if (!own && (parsed.errors.length || parsed.slides.length < lo)) throw new WriterError('invalid', 'The writer answered twice, but neither answer could be used as a slide list.', parsed.errors.map((message) => ({ severity: 'error' as const, path: '', message })));
   let specs = own ? parsed.slides : parsed.slides.slice(0, hi);
+  // the closing exactly as the writer gave it, before the code changed anything (the downloadable report shows it)
+  const writerClosing = !own && specs.length ? { layout: specs[specs.length - 1].layout, headline: str(specs[specs.length - 1].fields.headline), button: str(specs[specs.length - 1].fields.button ?? specs[specs.length - 1].fields.caption), sub: str(specs[specs.length - 1].fields.sub ?? specs[specs.length - 1].fields.line) } : undefined;
   // optional one-line texts a little over their limit are trimmed by the code (no retry call for a kicker one character long)
   const tr = own ? { specs, trims: [] as ReturnType<typeof trimOptionalFields>['trims'] } : trimOptionalFields(specs);
   specs = tr.specs;
@@ -1103,6 +1133,10 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     const pw = trimProse(specs);
     specs = pw.specs;
     tr.trims.push(...pw.trims);
+    // a highlight is 1 or 2 words (3 on a long headline), never half the headline
+    const ca = clampAccents(specs);
+    specs = ca.specs;
+    tr.trims.push(...ca.trims);
   }
   // one step-numeral slide alone in a deck is not a sequence: it is drawn as split-text with the same words (for the person's own script too)
   {
@@ -1140,7 +1174,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     return { variants, repeats, cuts: rc };
   };
   const ctaCtx: CtaCtx = { handle, text: req.text };
-  let closingOpen = !own; // the closing rules (a generic call to action when the text has no action) are for written decks; the person's own closing stays as written
+  // The closing is never a reason for a second writer call: a closing that breaks the rule (no real action in the text, so a generic label) is settled by the code below (ensureGenericClosing, settleClosing).
   const drawAll = async (only?: Set<number>, prev?: Map<number, Drawn>) => {
     const rot = rotate();
     // the project's pictures go into the picture slots by code (best fit, each at most once); a layout that cannot get enough keeps its text-only form
@@ -1149,8 +1183,6 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     for (let i = 0; i < specs.length; i++) {
       if (only && !only.has(i)) continue;
       const pr = slideProblems(specs[i], look, ctaCtx);
-      // the last slide of a text with no real action must close on a generic call to action (checked until the retry has been used)
-      if (closingOpen && i === specs.length - 1) pr.push(...closingProblems(specs[i], req.text, handle));
       if (pr.length) {
         out.set(i, { built: null, cut: 'plain', invert: false, density: 'normal', adjustments: [], problems: pr });
         continue;
@@ -1188,14 +1220,11 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
         changed.add(i);
       }
     }
-    // the closing check had its one retry: from here on the code settles it (below)
-    closingOpen = false;
     // a preset that closes on a card moves the new closing onto it again (the preset's flavour)
     if (style.closingLayout && look.pack?.look?.flavour) specs = flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, '')).specs;
     // the layouts changed, so the rotation changes: redraw the whole deck (no model call)
     ({ out: drawn, rot } = await drawAll());
   }
-  closingOpen = false;
   // A closing whose button is still not an action phrase after the retry: the button goes (the closing becomes a statement card with no button): a trim, never a failure.
   {
     const db = dropBadButtons(specs, ctaCtx);
@@ -1296,6 +1325,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     ...(pictureSwaps.length ? { pictureSwaps } : {}),
     ...(own?.marks?.some(Boolean) ? { ownMarks: own.marks } : {}),
     ...(tr.trims.length ? { trims: tr.trims } : {}),
+    ...(writerClosing ? { writerClosing } : {}),
   };
   designed.library = report;
   report.codeAdjustments.unshift(...tr.trims.map(trimNote));

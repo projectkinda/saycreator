@@ -113,7 +113,7 @@ test('closing rule: no real action means a generic cta (a plain statement is a m
   expect(r.fixLeaves, 'a text with a real action is not touched').toBe(0);
 });
 
-test('the deck maker: one retry for a plain statement closing, then the code settles it; style-5 puts the label in the card caption; a real action keeps its closing', async ({ page }) => {
+test('the deck maker: a plain statement closing is settled by the code (no second writer call); style-5 puts the label in the card caption; a real action keeps its closing', async ({ page }) => {
   await page.goto('/images/carousel');
   const r = await page.evaluate(async ({ NO_ACTION }) => {
     const D = await import('/src/carousel/designLibrary.ts');
@@ -147,13 +147,12 @@ test('the deck maker: one retry for a plain statement closing, then the code set
       realAction: await run('style-4', [action], withAction),
     };
   }, { NO_ACTION });
-  // a plain statement: asked for again (one retry), the retry answer is used
-  expect(r.fixedByRetry.retries).toEqual([7]);
-  expect(r.fixedByRetry.calls).toBe(2);
+  // a plain statement: never a reason for a second writer call; the code makes the closing the generic cta (a trim)
+  expect(r.fixedByRetry.retries).toEqual([]);
+  expect(r.fixedByRetry.calls).toBe(1);
   expect(r.fixedByRetry.last.layout).toBe('cta-button');
-  expect(r.fixedByRetry.last.fields.button).toBe('Follow for more');
-  // still a statement after the retry: the code makes the closing the generic cta (a trim); never a third call
-  expect(r.neverFixed.calls).toBe(2);
+  expect(r.fixedByRetry.last.fields.button).toBe('Follow @maya.designs');
+  expect(r.neverFixed.calls).toBe(1);
   expect(r.neverFixed.last.layout).toBe('cta-button');
   expect(r.neverFixed.last.fields.button).toBe('Follow @maya.designs');
   expect(r.neverFixed.trims.length).toBe(1);
