@@ -500,7 +500,7 @@
     "field": true
   },
   "library": {
-    "byType": { "cover": { "layouts": ["cover-centred", "cover-block", "cover-word", "statement"] } },
+    "byType": { "cover": { "layouts": ["cover-centred", "cover-block", "cover-word", "statement"], "signature": "cover-block" } },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "gradients": {
       "dusk": {

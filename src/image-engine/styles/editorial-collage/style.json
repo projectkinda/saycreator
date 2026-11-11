@@ -112,7 +112,7 @@
     "elements": true
   },
   "library": {
-    "byType": { "cover": { "layouts": ["cover-block", "cover-sticker", "cover-index", "statement"] } },
+    "byType": { "cover": { "layouts": ["cover-block", "cover-sticker", "cover-ruled", "statement"], "signature": "cover-block" } },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "flavour": {
       "cover": "statement",

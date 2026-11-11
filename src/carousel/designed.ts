@@ -111,6 +111,8 @@ export interface Look {
   images?: { id: string; width: number; height: number }[];
   /** The website set in the profile / brand settings (shown in the footer; none set: no website line). */
   site?: string;
+  /** A sample deck (the style cards, the Preview, the Pick-for-me picture): the cover is the style's signature cover, not the one its hash would pick. */
+  signatureCover?: boolean;
 }
 
 // ----- the estimate, shown before anything runs -----

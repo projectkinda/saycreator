@@ -117,7 +117,8 @@ test('the preview slides use the same code as a real deck: small slides are draw
     const direct = await D.drawOne({ layout: pk.layout, fields: S.HABIT_FIELDS[pk.layout], accents: [] }, ((style.flavour?.variants ?? {})[pk.layout] === 1 ? 1 : 0), style, { handle: '', index: 1, total: 7, cut: 'plain', invert: pk.invert ?? false, density: 'normal' });
     const viaCard = (await S.cardSlides(n0))[0];
     const script = Sc.validateScriptText(JSON.stringify(S.PREVIEW_SCRIPT), 'carousel').script;
-    const made = await FS.libraryDeckFromScript(script, { pack, brief: '', hasPhoto: false, images: [], site: '' }, '');
+    // (a sample deck takes the style's signature cover: Round 6b)
+    const made = await FS.libraryDeckFromScript(script, { pack, brief: '', hasPhoto: false, images: [], site: '', signatureCover: true }, '');
     const viaPanel = await S.previewDeck(n0);
     return { out, sameSmall: direct.built?.svg === viaCard, sameDeck: made.ok && script.slides.every((_: any, i: number) => made.designed.slides[String(i)]?.built?.svg === viaPanel[i].svg), calls: made.designed?.calls ?? -1 };
   });

@@ -3,7 +3,7 @@
 // highlight the way every cover does (withAccent: an accent word on a marker bar when the ink would not read). Nothing is drawn that nobody wrote: the only mark that is not the person's words
 // is the page number "01" of cover-index, which is the page chrome.
 import { measureWidth } from '../../image-engine/draw/text';
-import { measure, nearestWeight } from './draw';
+import { lineTexts, measure, nearestWeight } from './draw';
 import { kickerOf, mk, place, str, withAccent } from './library';
 import type { LayoutDef, LayoutStyle } from './types';
 
@@ -37,6 +37,32 @@ const heroSize = (st: LayoutStyle, text: string, w: number, dflt = 150): number 
 const capBox = (st: LayoutStyle, cap: string, w: number) => (cap ? Math.ceil(44 * 1.3) * Math.min(2, measure(cap, st.fonts.body, nearestWeight(st.fonts.body, 500), 44, w, 1.3).n) + 16 : 0);
 const coverSlide = (kick: string, head: string, cap: string, dense: boolean) => ({ type: 'cover', kicker: dense ? '' : kick, headline: head, sub: dense ? '' : cap });
 const wordsOf = (t: string) => t.split(/\s+/).filter(Boolean);
+
+/** The size of the small line above the big word (fixed: a type scale would wrap it again). */
+const REST_SIZE = 128;
+/**
+ * The small line of the word cover wrapped without an orphan: the last line is never a single word and never shorter than 40% of the longest line. The box is narrowed (balanced wrapping) until it
+ * holds, at most to 55% of the width; null when no width does (the word cover is then not a candidate for that headline).
+ */
+export function restWrap(st: LayoutStyle, rest: string, w: number): { width: number; lines: number } | null {
+  const wt = nearestWeight(st.fonts.headline, 700);
+  const widest = Math.max(...rest.split(/\s+/).filter(Boolean).map((x) => measureWidth(x, st.fonts.headline, wt, REST_SIZE)));
+  for (let ww = w; ww >= Math.max(widest, w * 0.55); ww -= 12) {
+    const lines = lineTexts(rest, st.fonts.headline, wt, REST_SIZE, ww, 1.1);
+    if (lines.length > 4) continue;
+    if (lines.length < 2) return { width: ww, lines: 1 };
+    const last = lines[lines.length - 1];
+    const lastW = measureWidth(last, st.fonts.headline, wt, REST_SIZE);
+    const maxW = Math.max(...lines.map((l) => measureWidth(l, st.fonts.headline, wt, REST_SIZE)));
+    if (last.trim().split(/\s+/).length >= 2 && lastW >= 0.4 * maxW) return { width: ww, lines: lines.length };
+  }
+  return null;
+}
+/** Whether the word cover can show this headline without an orphan line above the word. */
+export const wordCoverFits = (st: LayoutStyle, head: string): boolean => {
+  const ws = head.split(/\s+/).filter(Boolean);
+  return ws.length >= 3 && !!restWrap(st, ws.slice(0, -1).join(' '), 978);
+};
 
 export const COVER_LAYOUTS: LayoutDef[] = [
   // 1. centred, a small kicker label above ------------------------------------------------------------------------------------------
@@ -170,7 +196,8 @@ export const COVER_LAYOUTS: LayoutDef[] = [
         // the biggest size at which the word fits the width
         let z = 420;
         while (z > 110 && measureWidth(word, st.fonts.headline, hw(st), z) > d.w * 0.96) z -= 6;
-        d.text('body', rest, { size: 80, max: 150, weight: 700, font: 'h', fill: '$text', align: al, lines: 5, min: 56, lh: 1.1, gap: 20 });
+        const rw = restWrap(st, rest, d.w) ?? { width: d.w, lines: 4 };
+        d.text('body', rest, { x: al === 'center' ? d.x0 + Math.round((d.w - rw.width) / 2) : d.x0, w: rw.width, size: REST_SIZE, max: REST_SIZE, weight: 700, font: 'h', fill: '$text', align: al, lines: 4, min: 56, lh: 1.1, gap: 60 });
         d.text('title', last, { size: z, max: Math.max(z, 150), weight: 800, font: 'h', lines: 1, min: 110, align: al, lh: 0.95 });
       });
       // the huge word is highlighted on a marker bar in every style (a huge word in the accent colour reads under 4.5:1 on some grounds; the bar always reads)

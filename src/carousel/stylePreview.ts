@@ -129,8 +129,12 @@ export const PREVIEW_COUNT = PREVIEW_SCRIPT.slides.length;
 export async function previewDeck(name: string): Promise<{ svg: string | null; layout: string }[]> {
   const pack = presetPackFor(name, false);
   if (!pack) return [];
-  const script = validateScriptText(JSON.stringify(PREVIEW_SCRIPT), 'carousel').script as CarouselScript;
-  const made = await libraryDeckFromScript(script, { pack, brief: '', hasPhoto: false, images: [], site: '' }, '');
+  // the cover of the sample deck: the signature cover needs the sample cover it can show (the word cover has no kicker and no sub line, the stacked cover a headline of 2 to 4 words)
+  const sig = pack.look?.coverLayouts?.signature;
+  const cover = PREVIEW_SCRIPT.slides[0] as Record<string, unknown>;
+  const first = sig === 'cover-word' ? { type: 'cover', headline: 'Make it tiny', highlight: 'tiny' } : sig === 'lead-statement' ? { type: 'cover', kicker: cover.kicker, headline: cover.headline, highlight: 'smaller' } : sig === 'statement-stacked' ? { type: 'cover', headline: 'Start very small', sub: cover.sub, highlight: 'small' } : cover;
+  const script = validateScriptText(JSON.stringify({ ...PREVIEW_SCRIPT, slides: [first, ...PREVIEW_SCRIPT.slides.slice(1)] }), 'carousel').script as CarouselScript;
+  const made = await libraryDeckFromScript(script, { pack, brief: '', hasPhoto: false, images: [], site: '', signatureCover: true }, '');
   if (!made.ok) return [];
   const lib = made.designed.library;
   return script.slides.map((_, i) => ({ svg: made.designed.slides[String(i)]?.built?.svg ?? null, layout: lib?.layouts[i] ?? '' }));

@@ -12,6 +12,7 @@ import type { SlideSpec } from './designLibrary';
 import { accentsIn, flat, layoutOptionsFor, toCanon } from './layoutMap';
 import { IMAGE_LAYOUT_IDS, hasEnoughPictures } from './layouts/images';
 import { COVER_FORMS, isCoverLayout } from './layouts/coverIds';
+import { wordCoverFits } from './layouts/covers';
 
 /** A stable 32-bit hash of a text (FNV-1a): the cover of a deck is chosen from it, never at random. */
 export function stableHash(text: string): number {
@@ -161,11 +162,13 @@ export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look,
     // the covers that can take this headline (a word cover needs three words and no other text, a stacked one two to four words ...): the choice is among them, so a deck is never moved to a cover that cannot show it
     // (the word cover sets the LAST word huge and highlights it: a headline whose highlight is another word is not given that cover)
     const lastW = (String(specs[0].fields.headline ?? '').trim().split(/\s+/).pop() ?? '').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
-    const wordOk = (t: string) => t !== 'cover-word' || specs[0].accents.every((a) => a.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase() === lastW);
+    const wordOk = (t: string) => t !== 'cover-word' || (wordCoverFits(style, String(specs[0].fields.headline ?? '')) && specs[0].accents.every((a) => a.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase() === lastW));
     const eligible = pool.map((target) => ({ target, opt: layoutOptionsFor(specs[0], look, { joinStat: true }).find((o) => o.layout === target) })).filter((x) => x.target === specs[0].layout || (x.opt && wordOk(x.target) && !x.opt.droppedCore.length && !x.opt.dropped.length && specs[1]?.layout !== x.target));
     let done0 = false;
     if (eligible.length) {
-      const { target, opt } = eligible[h % eligible.length];
+      // a sample deck takes the style's signature cover when it can show the headline; a real deck takes one of the allowed covers by the hash
+      const sig = look.signatureCover && cl0.signature ? eligible.find((e) => e.target === cl0.signature) : undefined;
+      const { target, opt } = sig ?? eligible[h % eligible.length];
       done0 = true;
       if (target !== specs[0].layout && opt) {
         apply(0, target, opt.fields, opt.dropped, `the cover of ${name} is one of its ${pool.length} covers, chosen from the deck: "${target}"`);

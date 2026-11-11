@@ -139,7 +139,7 @@ test('covers: each preset gives the deck one of the covers it allows (Round 6: a
       s1: await run('style-1', plain),
     };
   }, BODY);
-  const ALLOWED: Record<string, string[]> = { s4: ['statement-stacked', 'cover-word', 'cover-sticker', 'cover-index'], s7: ['statement-pill', 'cover-sticker', 'cover-word', 'cover-centred'], s5: ['statement-card', 'cover-centred', 'cover-ruled', 'cover-block'], s8: ['cover-centred', 'cover-word', 'cover-index', 'cover-ruled'], s1: ['cover-ruled', 'cover-index', 'cover-centred', 'statement'] };
+  const ALLOWED: Record<string, string[]> = { s4: ['statement-stacked', 'cover-word', 'cover-sticker', 'cover-centred'], s7: ['statement-pill', 'cover-sticker', 'cover-word', 'cover-centred'], s5: ['statement-card', 'cover-centred', 'cover-ruled', 'cover-block'], s8: ['cover-centred', 'cover-word', 'cover-ruled', 'cover-block'], s1: ['cover-ruled', 'cover-centred', 'cover-block', 'statement'] };
   for (const k of ['s4', 's4own']) expect(ALLOWED.s4, `style-4 ${k}`).toContain((r as any)[k].first);
   for (const k of ['s7', 's7own']) expect(ALLOWED.s7, `style-7 ${k}`).toContain((r as any)[k].first);
   for (const k of ['s5', 's5own']) expect(ALLOWED.s5, `style-5 ${k}`).toContain((r as any)[k].first);

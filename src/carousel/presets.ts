@@ -27,8 +27,11 @@ export async function presetThumbSvg(name: string): Promise<string | null> {
   if (!pack) return null;
   const { style } = styleFromPack(pack);
   // the cover the style gives a deck of this sample (the same rule as a real deck: one of the style's own covers, chosen from the deck and the style name), so the cards no longer all show the same cover
-  const sample = { layout: 'statement', fields: { kicker: 'Example', headline: 'A headline that makes people stop', caption: 'And a line that makes them swipe.' }, accents: ['stop'] };
-  const fp = pack.look?.flavour ? flavourPass([sample], style, { pack, brief: '', hasPhoto: false, images: [], site: '' }, name, coverKeyOf('Example', [sample], name)) : null;
+  // the sample the signature cover can show: the word cover has no kicker and no caption, the stacked cover a headline of 2 to 4 words
+  const sig = pack.look?.coverLayouts?.signature;
+  const fields: Record<string, string> = sig === 'cover-word' ? { headline: 'Make people stop' } : sig === 'lead-statement' ? { kicker: 'Example', headline: 'A headline that makes people stop' } : sig === 'statement-stacked' ? { headline: 'Make people stop', caption: 'And a line that makes them swipe.' } : { kicker: 'Example', headline: 'A headline that makes people stop', caption: 'And a line that makes them swipe.' };
+  const sample = { layout: 'statement', fields, accents: ['stop'] };
+  const fp = pack.look?.flavour ? flavourPass([sample], style, { pack, brief: '', hasPhoto: false, images: [], site: '', signatureCover: true }, name, coverKeyOf('Example', [sample], name)) : null;
   const cover: import('./designLibrary').SlideSpec = fp?.specs[0] ?? sample;
   const d = await drawOne(cover, (cover.pin?.variant ?? style.flavour?.coverVariant ?? 0) as 0 | 1, style, { handle: '@yourname', index: 0, total: 6, cut: 'plain', invert: false, density: 'normal' });
   return d.built ? d.built.svg : null;

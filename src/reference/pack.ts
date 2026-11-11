@@ -78,7 +78,7 @@ export interface PackLook {
   /** The layout the closing slide takes (library.byType.closing) and the layouts it avoids. */
   closingLayout?: { layout: string; variant?: 0 | 1; avoid?: string[] };
   /** The covers the preset allows and avoids (library.byType.cover). */
-  coverLayouts?: { layouts: string[]; avoid?: string[] };
+  coverLayouts?: { layouts: string[]; avoid?: string[]; signature?: string };
   caseStyle?: 'none' | 'upper' | 'lower';
   caseExceptions?: string[];
   weights?: { headline: number; body: number };

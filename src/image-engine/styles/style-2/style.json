@@ -221,7 +221,7 @@
   },
   "assets": {},
   "library": {
-    "byType": { "cover": { "layouts": ["cover-word", "cover-block", "cover-index", "statement"] } },
+    "byType": { "cover": { "layouts": ["cover-word", "cover-block", "cover-sticker", "statement"], "signature": "cover-word" } },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "flavour": {
       "cover": "statement",
