@@ -31,6 +31,8 @@ export interface BuildOpts {
   density?: 'normal' | 'statement';
   /** comparison: 'unequal' makes the second card loud and wider. */
   weight?: 'equal' | 'unequal';
+  /** title-over-photo: the strength of the scrim (see Cx.scrim). */
+  scrim?: number;
   tone?: PlaneTone;
   /** The ground of the style's palette rhythm this slide takes (-1 = the closing ground); default: slide index mod the rhythm length. */
   ground?: number;
@@ -203,7 +205,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   const def = layoutDef(layoutId)!;
   if (!cutsOf(layoutId).includes(cut)) return fail([`${layoutId} does not support the cut "${cut}" (it supports ${cutsOf(layoutId).join(', ')}).`]);
   await loadFonts();
-  const mkCx = (field: Cx['field'], extra: Partial<Cx> = {}): Cx => ({ cut, field, density: o.density ?? 'normal', weight: o.weight ?? 'equal', ...extra });
+  const mkCx = (field: Cx['field'], extra: Partial<Cx> = {}): Cx => ({ cut, field, density: o.density ?? 'normal', weight: o.weight ?? 'equal', ...(o.scrim !== undefined ? { scrim: o.scrim } : {}), ...extra });
   const side = { x0: 48, w: 978, y0: 190, y1: 1190 };
   let g!: Geometry;
   let plan!: Plan;

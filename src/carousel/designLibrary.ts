@@ -20,6 +20,7 @@ import type { WriteRequest } from './writerPrompt';
 import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
 import { placeImages } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
+import { settleScrim } from './scrim';
 import { heroPass, picturePass, separatePictureRuns, type PictureSwap } from './picturePass';
 import { TONES } from './writerPrompt';
 import { inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
@@ -278,6 +279,12 @@ export function styleFromPack(pack: StylePack | null | undefined): { style: Layo
 
 // ----- what the model is told -----
 const GOOD_FOR: Record<LayoutId, string> = {
+  'photo-full-caption': 'a big picture (65% of the slide) with a short headline and one line in a caption panel (1 picture of any shape)',
+  'split-half': 'a headline and a short paragraph beside a picture that fills exactly half (1 picture: portrait or tall, left or right; other shapes, top or bottom)',
+  'title-over-photo': 'a cover or a big claim set on a picture with a scrim (1 picture of any shape)',
+  'twin-photos': 'two pictures with a short caption each, only when the text has the captions (2 pictures)',
+  'photo-grid': 'a headline over a grid of 3 or 4 pictures',
+  'phone-frame': 'a tall or portrait picture (a screenshot) in a phone outline with a headline and a line beside it (1 tall or portrait picture)',
   'cover-centred': 'a cover (the code chooses it, never you)', 'cover-index': 'a cover (the code chooses it, never you)', 'cover-block': 'a cover (the code chooses it, never you)', 'cover-sticker': 'a cover (the code chooses it, never you)', 'cover-word': 'a cover (the code chooses it, never you)', 'cover-ruled': 'a cover (the code chooses it, never you)',
   statement: 'a bold claim or the cover hook: one huge headline, optional kicker and caption',
   'lead-statement': 'a story beat: a short lead-in line over a heavy headline',
@@ -335,6 +342,15 @@ const FIELD_NOTE: Record<string, string> = {
   author: 'only when the text names who said it (a person or a source); otherwise leave the field out. Never write a label such as "The text"',
   callouts: 'exactly 3',
 };
+/** The six picture layouts of Round 9, as the writer is told about them (count and shape only). */
+const NEW_PICTURE_NOTES: [string, string][] = [
+  ['photo-full-caption', '1 picture of any shape, 65% of the slide with a caption panel'],
+  ['split-half', '1 picture: a portrait or tall one fills a left or right half, any other a top or bottom half'],
+  ['title-over-photo', '1 picture of any shape, the headline set on it'],
+  ['twin-photos', '2 pictures, short captions only when the text has them'],
+  ['photo-grid', '3 or 4 pictures under a headline'],
+  ['phone-frame', '1 tall or portrait screenshot in a phone outline'],
+];
 /** The writer's picture rules: metadata only (id, orientation, shape, pixel size), never pixels. */
 export function imageRules(images: { id: string; width: number; height: number }[], slides = 7): string[] {
   const ratio = (p: { width: number; height: number }) => (p.width >= p.height ? `${(p.width / p.height).toFixed(2)}:1` : `1:${(p.height / p.width).toFixed(2)}`);
@@ -343,6 +359,7 @@ export function imageRules(images: { id: string; width: number; height: number }
   return [
     `- Pictures available (metadata only, you never see them and never write a picture field): ${list.join('; ')}.`,
     `- PICTURE SLIDES: use at least ${Math.max(1, Math.min(images.length, Math.floor(slides / 2)))} picture slide${Math.max(1, Math.min(images.length, Math.floor(slides / 2))) === 1 ? '' : 's'} (the smaller of the number of pictures and half the slides), a DIFFERENT picture layout each time, never the same one on two slides in a row. Match the picture's shape: a portrait or tall picture (a phone screenshot) takes a split layout ("headline-body-image", "photo-cover", "art-side-text" or "cover-art" set it beside the text); a landscape or wide picture takes a full-width layout ("photo-cover", "headline-body-image" or the wide "cover-art"); a square picture takes "cover-art" (a circle) or a card layout. If there are no more pictures than slides, use every picture exactly once.`,
+    `- Picture layouts for these pictures (the code places them; you see only counts and shapes): ${NEW_PICTURE_NOTES.filter(([id]) => nl.includes(id)).map(([id, note]) => `"${id}" (${note})`).join('; ')}. Use them where they suit the slide, a different one each time.`,
     '- Pictures were supplied: USE THEM. Choose a picture layout for at least one slide for every group of pictures that fits one (a single picture can head a text slide or the cover, two can be a comparison, three or more can be a row or thumbnails); a deck that ignores the pictures is wrong. The code places them.',
     '- Choose a layout with picture slots ONLY if there are enough pictures for its slots (the menu lists the slots and how many pictures each needs); every picture is used at most once in the deck, so the slots of all your picture layouts together must not exceed the pictures available. Prefer a layout whose slot orientation matches the pictures (landscape slots for landscape pictures, tall slots for portrait pictures). The code places the pictures.',
     nl.includes('do-dont') ? '- Two-sided content (a do and do-not pair, before and after, myth and fact): use "do-dont" when two pictures are available; with fewer pictures use "comparison".' : '- Two-sided content (a do and do-not pair, before and after, myth and fact): use "comparison" (not enough pictures for "do-dont").',
@@ -1105,7 +1122,19 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
   if (o.invert) tries.push({ cut: 'plain', invert: false, density: 'normal' });
   let last: Built | null = null;
   for (const [k, t] of tries.entries()) {
-    const b = await buildSlide(spec.layout, variant, f, style, { handle: o.handle, index: o.index, total: o.total, cut: cutsOf(spec.layout).includes(t.cut) ? t.cut : 'plain', invert: t.invert, density: t.density, ...(o.ground !== undefined ? { ground: o.ground } : {}) });
+    const opts = { handle: o.handle, index: o.index, total: o.total, cut: cutsOf(spec.layout).includes(t.cut) ? t.cut : ('plain' as Cut), invert: t.invert, density: t.density, ...(o.ground !== undefined ? { ground: o.ground } : {}) };
+    let b: Built;
+    if (spec.layout === 'title-over-photo' && typeof f.image === 'string' && f.image) {
+      // a headline on a picture: the scrim is the weakest one at which every word reads at 4.5:1 over 95% of the pixels behind it, measured on the real picture; if even the solid panel does not read, the slide is the full-photo caption layout
+      const sc = await settleScrim((level) => buildSlide(spec.layout, variant, f, style, { ...opts, scrim: level }));
+      if (sc.reads) {
+        b = sc.built;
+        if (sc.level > 0) adjustments.push(`slide ${o.index + 1}: the scrim behind the headline was strengthened to level ${sc.level} of 3 so every word reads at 4.5:1 on the picture.`);
+      } else {
+        b = await buildSlide('photo-full-caption', variant, { headline: f.headline, ...(f.line ? { line: f.line } : {}), image: f.image, ...(f.accent ? { accent: f.accent } : {}) } as Fields, style, opts);
+        adjustments.push(`slide ${o.index + 1}: no scrim made the headline read on this picture, so it is drawn as a full photo with a caption panel.`);
+      }
+    } else b = await buildSlide(spec.layout, variant, f, style, opts);
     last = b;
     if (b.ok) {
       if (k > 0) adjustments.push(`slide ${o.index + 1}: drawn with ${t.cut}${t.invert ? ' + invert' : ''}${t.density === 'statement' ? ' + statement density' : ''} instead of ${o.cut}${o.invert ? ' + invert' : ''}${density === 'statement' ? ' + statement density' : ''} (that did not fit: ${tries[k - 1] && last ? 'content too big for it' : ''}).`);

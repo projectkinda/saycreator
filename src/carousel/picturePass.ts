@@ -21,10 +21,11 @@ const TEXT_SLIDES = ['split-text', 'prose', 'headline-card'];
 const COVERS = ['statement', 'statement-card', 'statement-stacked', 'statement-pill', 'lead-statement', 'big-question', 'statement-question'];
 const LISTS = ['checklist', 'bullet-list', 'pill-stagger'];
 export function targetsFor(layout: string, index: number): string[] {
-  if (index === 0 && COVERS.includes(layout)) return ['photo-cover', 'cover-art'];
+  if (index === 0 && COVERS.includes(layout)) return ['title-over-photo', 'photo-cover', 'cover-art', 'photo-full-caption'];
   // a statement in the middle of the deck (a headline and an optional line) can carry a picture as a cover-art slide
-  if (COVERS.includes(layout)) return ['cover-art', 'photo-cover'];
-  if (TEXT_SLIDES.includes(layout)) return ['headline-body-image', 'art-side-text', 'photo-cover'];
+  if (COVERS.includes(layout)) return ['title-over-photo', 'photo-full-caption', 'cover-art', 'photo-cover'];
+  // (a tall or portrait picture goes to the phone, the others to a half: the newer layouts first, so the deck uses the variety)
+  if (TEXT_SLIDES.includes(layout)) return ['phone-frame', 'split-half', 'headline-body-image', 'art-side-text', 'photo-cover'];
   if (LISTS.includes(layout)) return ['thumb-rows', 'image-row'];
   if (layout === 'comparison') return ['do-dont'];
   // a quote carries a picture as a last resort: the same words in a headline and a line with the picture (a figure or an order has no picture layout that keeps its look and its words)
@@ -73,7 +74,9 @@ export function picturePass(specs0: SlideSpec[], look: Look): { specs: SlideSpec
     const look2: Look = { ...look, images: unused };
     let best: { i: number; to: string; fields: Fields; take: number; rank: number } | null = null;
     specs.forEach((sp, i) => {
-      for (const to of targetsFor(sp.layout, i)) {
+      // a picture layout the deck does not have yet comes first (variety), then the ones it has once
+      const ordered = targetsFor(sp.layout, i).map((t, k) => ({ t, k, u: specs.filter((q) => q.layout === t).length })).sort((x, y) => x.u - y.u || x.k - y.k).map((x) => x.t);
+      for (const to of ordered) {
         if (!hasEnoughPictures(to, unused)) continue;
         // no neighbour in the same layout, no layout more than twice
         if (specs[i - 1]?.layout === to || specs[i + 1]?.layout === to || specs.filter((q) => q.layout === to).length >= 2) continue;
@@ -96,7 +99,8 @@ export function picturePass(specs0: SlideSpec[], look: Look): { specs: SlideSpec
 /** The picture layouts a slide may take instead of its own (the same words), when two neighbours would have the same one. */
 const ALTERNATIVES: Record<string, string[]> = {
   'headline-body-image': ['photo-cover', 'art-side-text'], 'photo-cover': ['headline-body-image', 'art-side-text'], 'art-side-text': ['headline-body-image', 'photo-cover'],
-  'cover-art': ['photo-cover', 'headline-body-image'], 'thumb-rows': ['image-row'], 'image-row': ['thumb-rows'],
+  'cover-art': ['photo-cover', 'headline-body-image', 'photo-full-caption'], 'thumb-rows': ['image-row'], 'image-row': ['thumb-rows'],
+  'split-half': ['headline-body-image', 'art-side-text'], 'photo-full-caption': ['title-over-photo', 'cover-art'], 'title-over-photo': ['photo-full-caption', 'cover-art'],
 };
 const isPictureLayout = (l: string) => (IMAGE_LAYOUT_IDS as readonly string[]).includes(l);
 
@@ -137,6 +141,10 @@ export function heroShare(layout: string, variant: 0 | 1, picture: string): numb
   if ((k === 'tall' || k === 'portrait') && SPLIT_LAYOUTS.includes(layout)) return (PANEL_W * PANEL_H) / (1080 * 1350);
   // a wide picture (2:1 or wider) on art-side-text is drawn as the hero band
   if (layout === 'art-side-text' && (shapeOf(picture)?.aspect ?? 0) >= 2) return (1080 * HERO_BAND_H) / (1080 * 1350);
+  // Round 9: a full photo (65% of the slide), a photo with the title on it (84%), a half (50%)
+  if (layout === 'photo-full-caption') return (1080 * 880) / (1080 * 1350);
+  if (layout === 'title-over-photo') return (1080 * 1134) / (1080 * 1350);
+  if (layout === 'split-half') return 0.5;
   return 0;
 }
 /**

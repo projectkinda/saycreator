@@ -15,6 +15,8 @@ const cost = (p: PicInfo, aspect: number, accepts: string[], orientation: string
 export const CROP_OK = 0.6;
 /** A picture this tall (aspect 0.5 or less, like a phone screenshot) shows its top and goes to a one-picture layout. */
 export const TALL = 0.5;
+/** The multi-picture layouts that take a tall picture in a tile (it shows its top). */
+const TALL_OK = new Set(['twin-photos', 'photo-grid']);
 const acceptable = (p: PicInfo, s: { aspect: number; accepts: string[] }) => s.accepts.includes(picOrientation(p)) && Math.abs(Math.log(picAspect(p) / s.aspect)) <= CROP_OK;
 
 /** The fields of a slide without its picture fields. */
@@ -32,7 +34,7 @@ export function placeOne(layout: string, variant: 0 | 1, free0: PicInfo[]): Fiel
   const slots = imageSlotsOf(layout, variant);
   if (!slots.length) return null;
   // a very tall picture (a phone screenshot) is never cut into one of several small slots: it goes to a one-picture layout (a split panel)
-  const free = slots.length >= 2 ? free0.filter((p) => picAspect(p) > TALL) : free0;
+  const free = slots.length >= 2 && !TALL_OK.has(layout) ? free0.filter((p) => picAspect(p) > TALL) : free0;
   const need = imagesNeeded(layout);
   const fill = (pool: PicInfo[]): { picked: string[]; fields: Fields } => {
     const left = [...pool];

@@ -7,6 +7,7 @@ export type LayoutId =
   | 'listicle-numeral' | 'stat-grid' | 'timeline' | 'spotlight'
   | 'prose' | 'statement-stacked' | 'statement-card' | 'statement-pill' | 'statement-question' | 'contact-closing' | 'cta-pair' | 'numbered-stagger' | 'bullet-list' | 'pill-stagger' | 'headline-card'
   | 'cover-centred' | 'cover-index' | 'cover-block' | 'cover-sticker' | 'cover-word' | 'cover-ruled'
+  | 'photo-full-caption' | 'split-half' | 'title-over-photo' | 'twin-photos' | 'photo-grid' | 'phone-frame'
   | 'headline-body-image' | 'image-row' | 'thumb-rows' | 'cover-art' | 'photo-cover' | 'portrait-closing' | 'art-side-text' | 'do-dont';
 
 export type ContentShape =
@@ -143,6 +144,8 @@ export interface Cx {
   noPart?: boolean;
   /** Use this type scale (the second pass of a split slide uses the first pass's). */
   k?: number;
+  /** title-over-photo: how strong the scrim behind the text is (0 gradient .. 3 solid panel); the draw step raises it until every word reads at 4.5:1 on the real picture. */
+  scrim?: number;
 }
 
 export interface Plan {

@@ -20,9 +20,12 @@ const HELP = `(async () => {
     const s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c1 + '"/><stop offset="1" stop-color="' + c2 + '"/></linearGradient></defs><rect width="' + w + '" height="' + h + '" fill="url(#g)"/><rect width="' + w + '" height="' + Math.round(h * 0.07) + '" fill="#111"/>' + lines + '<text x="' + w / 2 + '" y="' + (h * 0.5) + '" font-size="' + fs + '" font-family="sans-serif" font-weight="800" text-anchor="middle" fill="#ffffff">' + label + '</text></svg>';
     return 'data:image/svg+xml;base64,' + btoa(s);
   };
-  const SHAPES = { landscape: [1600, 1067, 'LAND', '#1E88E5', '#0D47A1'], landscape2: [1500, 1000, 'LAND 2', '#43A047', '#1B5E20'], wide: [2400, 600, 'WIDE', '#F4511E', '#BF360C'], wideReal: [597, 335, 'WIDE', '#8E24AA', '#4A148C'], portrait: [1000, 1500, 'PORT', '#FB8C00', '#E65100'], portrait2: [1200, 1600, 'PORT 2', '#00ACC1', '#006064'], square: [1200, 1200, 'SQUARE', '#D81B60', '#880E4F'], tall: [547, 2400, 'TALL', '#3949AB', '#1A237E'], tiny: [300, 200, 'TINY', '#6D4C41', '#3E2723'] };
+  const SHAPES = { landscape: [1600, 1067, 'LAND', '#1E88E5', '#0D47A1'], landscape2: [1500, 1000, 'LAND 2', '#43A047', '#1B5E20'], wide: [2400, 600, 'WIDE', '#F4511E', '#BF360C'], wideReal: [597, 335, 'WIDE', '#8E24AA', '#4A148C'], portrait: [1000, 1500, 'PORT', '#FB8C00', '#E65100'], portrait2: [1200, 1600, 'PORT 2', '#00ACC1', '#006064'], square: [1200, 1200, 'SQUARE', '#D81B60', '#880E4F'], tall: [547, 2400, 'TALL', '#3949AB', '#1A237E'], tiny: [300, 200, 'TINY', '#6D4C41', '#3E2723'], bright: [1600, 1067, 'BRIGHT', '#ffffff', '#f2f2f2'], busy: [1600, 1067, 'BUSY', '#000000', '#ffffff'] };
   const urls = {};
   for (const [id, [w, h, label, a, b]] of Object.entries(SHAPES)) urls[id] = svgPic(w, h, label, a, b);
+  // a very bright picture (white) and a very busy one (a fine black and white check): the title-over-photo scrim has to cope with both
+  urls.bright = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1067"><rect width="1600" height="1067" fill="#ffffff"/><rect x="0" y="700" width="1600" height="367" fill="#f4f4f4"/></svg>');
+  urls.busy = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1067" preserveAspectRatio="xMidYMid slice"><defs><pattern id="p" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="24" height="24" fill="#000"/><rect x="24" y="24" width="24" height="24" fill="#000"/><rect x="24" width="24" height="24" fill="#fff"/><rect y="24" width="24" height="24" fill="#fff"/></pattern></defs><rect width="1600" height="1067" fill="url(#p)"/></svg>');
   FA.setPictureResolver(async (ref) => urls[ref.slice('picture:'.length).split('#')[0]] ?? null);
   const info = (id) => ({ id, width: SHAPES[id][0], height: SHAPES[id][1] });
   const png64 = async (svg, w) => { const blob = await FA.svgToPng(svg, w); const u = new Uint8Array(await blob.arrayBuffer()); let t = ''; for (const x of u) t += String.fromCharCode(x); return btoa(t); };
@@ -158,8 +161,9 @@ test('C3: an unused picture gives a text slide a picture layout with the same wo
   });
   expect(r.usedTotal, 'both pictures are used: ' + JSON.stringify(r)).toBe(2);
   expect(r.lost, 'no word lost').toEqual([]);
-  expect(r.targets['statement (cover)']).toEqual(['photo-cover', 'cover-art']);
-  expect(r.targets['statement']).toEqual(['cover-art', 'photo-cover']);
+  // (Round 9: title-over-photo and photo-full-caption join the targets of a statement, newer layouts first)
+  expect(r.targets['statement (cover)']).toEqual(['title-over-photo', 'photo-cover', 'cover-art', 'photo-full-caption']);
+  expect(r.targets['statement']).toEqual(['title-over-photo', 'photo-full-caption', 'cover-art', 'photo-cover']);
 });
 
 // ----- C4: never the same picture layout twice in a row -----

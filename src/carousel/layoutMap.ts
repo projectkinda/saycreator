@@ -67,6 +67,10 @@ export function toCanon(layout: string, f: Fields): Canon {
     case 'image-row': return { ...c, head: txt(f, 'headline'), body: txt(f, 'paragraph'), sub: txt(f, 'subline') };
     case 'thumb-rows': return { ...c, head: txt(f, 'title'), items: lst(f, 'items') };
     case 'cover-art': return { ...c, head: txt(f, 'headline'), sub: txt(f, 'subtitle') };
+    case 'photo-full-caption': case 'title-over-photo': return { ...c, head: txt(f, 'headline'), sub: txt(f, 'line') };
+    case 'split-half': case 'phone-frame': return { ...c, head: txt(f, 'headline'), body: txt(f, 'body') };
+    case 'twin-photos': return { ...c, head: txt(f, 'headline'), own: { layout, fields: f } };
+    case 'photo-grid': return { ...c, head: txt(f, 'headline'), sub: txt(f, 'line') };
     case 'photo-cover': return { ...c, head: txt(f, 'headline'), body: txt(f, 'intro') };
     case 'art-side-text': return { ...c, head: txt(f, 'heading'), body: txt(f, 'paragraph') };
     case 'portrait-closing': return { ...c, head: txt(f, 'headline'), own: { layout, fields: f } };
@@ -115,6 +119,11 @@ export function fromCanon(layout: string, c: Canon, hasPhoto: boolean, images?: 
     case 'image-row': if (!(c.body || c.sub)) return null; put(o, 'headline', head); put(o, 'paragraph', c.body || c.sub); if (c.body && c.sub) put(o, 'subline', c.sub); break;
     case 'thumb-rows': if (c.items.length < 3 || c.items.length > 4) return null; put(o, 'title', head); put(o, 'items', c.items); break;
     case 'cover-art': put(o, 'headline', head); put(o, 'subtitle', c.sub); break;
+    case 'photo-full-caption': case 'title-over-photo': if (head.length > 48) return null; put(o, 'headline', head); put(o, 'line', c.sub || (words(c.body) <= 8 ? c.body : '')); break;
+    case 'split-half': if (!(c.body || c.sub)) return null; put(o, 'headline', head); put(o, 'body', c.body || c.sub); break;
+    case 'phone-frame': put(o, 'headline', head); put(o, 'body', c.body || c.sub); break;
+    case 'photo-grid': if (c.body || c.kicker) return null; put(o, 'headline', head); put(o, 'line', c.sub); break;
+    case 'twin-photos': return c.own?.layout === layout ? { ...c.own.fields } : null;
     case 'photo-cover': if (!(c.body || c.sub)) return null; put(o, 'headline', head); put(o, 'intro', c.body || c.sub); break;
     case 'art-side-text': if (!(c.body || c.sub)) return null; put(o, 'heading', head); put(o, 'paragraph', c.body || c.sub); break;
     case 'portrait-closing': case 'do-dont': return c.own?.layout === layout ? { ...c.own.fields } : null;

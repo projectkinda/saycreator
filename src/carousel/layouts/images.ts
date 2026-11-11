@@ -4,14 +4,14 @@
 // tick and cross badges ...): never an empty box. The writer is only offered these layouts when the deck has a picture. No text is ever drawn over a picture, so no scrim is needed.
 import { CARD_PAD, Draw, measure, nearestWeight, S } from './draw';
 import { measureWidth } from '../../image-engine/draw/text';
-import { arr, layoutDef, mk, place, str } from './library';
+import { arr, layoutDef, mk, place, str, withAccent } from './library';
 import type { Cx, ImageSlotDef, LayoutDef, LayoutStyle, Orientation, PlanImage } from './types';
 
 /** The field names that hold a picture (not text: they are left out of every text budget, comparison and word list). */
 export const IMAGE_KEYS = ['image', 'image2', 'image3', 'image4'] as const;
 export const isImageKey = (k: string) => (IMAGE_KEYS as readonly string[]).includes(k);
 /** The layouts that draw a picture when the slide has one (the writer is offered them only for a deck with a picture). */
-export const IMAGE_LAYOUT_IDS = ['headline-body-image', 'image-row', 'thumb-rows', 'cover-art', 'photo-cover', 'portrait-closing', 'art-side-text', 'do-dont'] as const;
+export const IMAGE_LAYOUT_IDS = ['headline-body-image', 'image-row', 'thumb-rows', 'cover-art', 'photo-cover', 'portrait-closing', 'art-side-text', 'do-dont', 'photo-full-caption', 'split-half', 'title-over-photo', 'twin-photos', 'photo-grid', 'phone-frame'] as const;
 const DATA_IMAGE = /^data:image\/(?:png|jpe?g|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+(?:#[\w.=&-]*)?$/;
 const PICTURE_REF = /^picture:[A-Za-z0-9_-]{1,40}(?:#[\w.=&-]*)?$/;
 /**
@@ -110,6 +110,15 @@ export const nearSquare = (a: number): boolean => a >= 0.7 && a <= 1.4;
 /** A tall or portrait picture (a phone screenshot, a portrait photo) is shown in a half-and-half split, edge to edge. */
 const panelShape = (src: string): boolean => { const k = shapeOf(src)?.kind; return k === 'tall' || k === 'portrait'; };
 const SLIDE_W = 1080;
+/** The picture zone: between the handle row (y 109) and the page counter (y 1258), so no page chrome is ever over a picture. */
+const ZONE_TOP = 116;
+const ZONE_BOTTOM = 1250;
+const FULL_PIC_H = 880;
+const FULL_PANEL_H = ZONE_BOTTOM - ZONE_TOP - FULL_PIC_H;
+const HALF_W = 655;
+const HALF_H = 1114;
+const HALF_BAND_H = 675;
+const r3 = (n: number) => Math.round(n * 1000) / 1000;
 /** The picture panel of a split: 61% of the width. */
 export const PANEL_W = 486;
 /** The panel and the hero band sit between the handle / number at the top of the slide (y 62 to 109) and the page counter at the foot (from y 1258), so no text of the page chrome is ever over a picture. */
@@ -515,6 +524,279 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       return mk(d, { noBalance: true, type: 'checklist', fitAs: 'do-dont', slide: rowsSlide(d, title) });
     },
   },
+
+  // ===== Round 9: six more picture layouts (the model only chooses the name and the fields; the code draws) ==========================================================================
+  // The picture zone is the page between the handle row (y 109) and the page counter (y 1258): no page chrome is ever over a picture. Every layout has its text-only form (never an empty box).
+  // photo-full-caption -------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  {
+    id: 'photo-full-caption', label: 'Full photo with a caption panel', shapes: ['photo', 'claim'], variants: ['caption panel below', 'caption panel above'],
+    fields: [{ name: 'headline', required: true, max: 48 }, { name: 'line', required: false, max: 50 }, IMG('image', 'one picture of any shape (tall ones show their top)')],
+    samples: {
+      normal: { headline: 'The hoodie that becomes a backpack', line: 'Ten seconds, one zip.' },
+      long: { headline: 'The hoodie that turns into a backpack fast', line: 'One piece of clothing, two jobs.' },
+      short: { headline: 'Meet Quick Flip' },
+    },
+    plan(f, v, st, cx) {
+      const img = imageOf(f.image);
+      const head = str(f, 'headline');
+      const line = str(f, 'line');
+      // no picture: the text-only form is a statement (the line is its caption)
+      if (!img) return layoutDef('statement')!.plan({ headline: head, ...(line ? { caption: line } : {}) }, v, st, cx);
+      const PAD = 24;
+      const d = place(st, cx, 'top', (d) => {
+        // the picture takes 65% of the slide (1080 x 880); the caption panel (the card colour) the rest of the picture zone
+        const picY = v === 0 ? ZONE_TOP : ZONE_TOP + FULL_PANEL_H;
+        const panelY = v === 0 ? ZONE_TOP + FULL_PIC_H : ZONE_TOP;
+        d.image(img, 0, picY, SLIDE_W, FULL_PIC_H, { rx: 0 });
+        d.rect(0, panelY, SLIDE_W, FULL_PANEL_H, '$surface', { rx: 0 });
+        const texts = (t: Draw) => {
+          t.text('title', head, { size: 76, max: 84, weight: 800, font: 'h', lines: 2, min: 72, gap: line ? 10 : 0 });
+          if (line) t.text('body', line, { size: 44, max: 48, fill: '$muted', lines: 1, min: 44 });
+        };
+        const th = heightOf(d, texts);
+        d.y = panelY + Math.max(PAD, Math.round((FULL_PANEL_H - th) / 2));
+        texts(d);
+      });
+      return mk(d, { noBalance: true, type: 'content', fitAs: 'statement-card', slide: withAccent({ type: 'content', headline: head, body: line }, head, f, st) });
+    },
+  },
+  // split-half -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  {
+    id: 'split-half', label: 'Half photo, half text', shapes: ['explainer', 'photo'], variants: ['picture right / top', 'picture left / bottom'],
+    fields: [{ name: 'headline', required: true, max: 50 }, { name: 'body', required: true, max: 140 }, IMG('image', 'a picture: tall or portrait ones fill a left or right half, others a top or bottom half')],
+    samples: {
+      normal: { headline: 'Why we built it', body: 'We sewed the bag into the hood, so one layer does both jobs.' },
+      long: { headline: 'Why we decided to build it ourselves', body: 'We sewed a waterproof bag into the hood and tested it for two years on trains and planes.' },
+      short: { headline: 'The flip', body: 'One zip, ten seconds, no bag to pack.' },
+    },
+    plan(f, v, st, cx) {
+      const img = imageOf(f.image);
+      const head = str(f, 'headline');
+      const body = str(f, 'body');
+      if (!img) return layoutDef('split-text')!.plan({ headline: head, paragraph: body }, v, st, cx);
+      const sh = shapeOf(img);
+      const side = !!sh && (sh.kind === 'tall' || sh.kind === 'portrait');
+      const slide = withAccent({ type: 'content', headline: head, body }, head, f, st);
+      // a tall or portrait picture: a left or right half (655 x 1114: 50.0% of the slide); the headline takes the largest size at which it wraps to 5 lines or fewer in the text column
+      if (side) {
+        const tw = SLIDE_W - HALF_W - 48 - 32;
+        const wt = nearestWeight(st.fonts.headline, 800);
+        const words = head.split(/\s+/).filter(Boolean);
+        let z = 0;
+        for (let s = 120; s >= 72; s -= 4) if (words.every((x) => measureWidth(x, st.fonts.headline, wt, s) <= tw * 0.98) && measure(head, st.fonts.headline, wt, s, tw, 1.05).n <= 5) { z = s; break; }
+        if (z) {
+          const d = place(st, cx, 'top', (d) => {
+            const right = v === 0;
+            d.image(img, right ? SLIDE_W - HALF_W : 0, ZONE_TOP, HALF_W, HALF_H, { rx: 0 });
+            const tx = right ? 48 : HALF_W + 32;
+            const texts = (t: Draw) => {
+              t.text('title', head, { x: tx, w: tw, size: z, max: z, weight: 800, font: 'h', lines: 5, min: 72, gap: 24 });
+              t.text('body', body, { x: tx, w: tw, size: 44, max: 48, lines: 12, min: 44, lh: 1.3 });
+            };
+            d.y = ZONE_TOP + Math.max(0, Math.round((HALF_H - heightOf(d, texts)) / 2));
+            texts(d);
+          });
+          return mk(d, { noBalance: true, type: 'content', fitAs: 'art-side-text', slide });
+        }
+      }
+      // any other picture (or a headline too long for the side column): a top or bottom half (1080 x 675: 50.0% of the slide)
+      const d = place(st, cx, 'top', (d) => {
+        const top = v === 0;
+        const picY = top ? ZONE_TOP : ZONE_TOP + (ZONE_BOTTOM - ZONE_TOP) - HALF_BAND_H;
+        d.image(img, 0, picY, SLIDE_W, HALF_BAND_H, { rx: 0 });
+        const textTop = top ? ZONE_TOP + HALF_BAND_H : ZONE_TOP;
+        const textH = ZONE_BOTTOM - ZONE_TOP - HALF_BAND_H;
+        const texts = (t: Draw) => {
+          t.text('title', head, { size: 84, max: 96, weight: 800, font: 'h', lines: 2, min: 72, gap: 20 });
+          t.text('body', body, { size: 44, max: 48, lines: 4, min: 44, lh: 1.3 });
+        };
+        d.y = textTop + Math.max(24, Math.round((textH - heightOf(d, texts)) / 2));
+        texts(d);
+      });
+      return mk(d, { noBalance: true, type: 'content', fitAs: 'headline-body-image', slide });
+    },
+  },
+  // title-over-photo -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  {
+    id: 'title-over-photo', label: 'Title over a photo', shapes: ['claim', 'hook', 'photo'], variants: ['text low', 'text high'],
+    fields: [{ name: 'headline', required: true, max: 50 }, { name: 'line', required: false, max: 50 }, IMG('image', 'one picture of any shape')],
+    samples: {
+      normal: { headline: 'The hoodie that becomes a backpack', line: 'Ten seconds, one zip.' },
+      long: { headline: 'The hoodie that turns into a backpack fast', line: 'One piece of clothing, two jobs.' },
+      short: { headline: 'Meet Quick Flip' },
+    },
+    plan(f, v, st, cx) {
+      const img = imageOf(f.image);
+      const head = str(f, 'headline');
+      const line = str(f, 'line');
+      if (!img) return layoutDef('statement')!.plan({ headline: head, ...(line ? { caption: line } : {}) }, v, st, cx);
+      const level = Math.max(0, Math.min(3, cx.scrim ?? 0));
+      const d = place(st, cx, 'top', (d) => {
+        d.image(img, 0, ZONE_TOP, SLIDE_W, ZONE_BOTTOM - ZONE_TOP, { rx: 0 });
+        const texts = (t: Draw) => {
+          t.text('title', head, { size: 112, max: 120, weight: 800, font: 'h', lines: 3, min: 72, gap: line ? 18 : 0 });
+          if (line) t.text('body', line, { size: 48, max: 52, lines: 1, min: 44 });
+        };
+        const th = heightOf(d, texts);
+        const low = v === 0;
+        // the text sits low (or high) on the picture, 56 px inside the picture edge
+        const y0 = low ? ZONE_BOTTOM - 56 - th : ZONE_TOP + 56;
+        // the scrim: the ground colour over the picture behind the text, stronger with each level (the last is a solid panel)
+        const sy0 = low ? Math.max(ZONE_TOP, y0 - 190) : ZONE_TOP;
+        const sy1 = low ? ZONE_BOTTOM : Math.min(ZONE_BOTTOM, y0 + th + 190);
+        const a = [0.82, 0.92, 0.97, 1][level];
+        const solidFrom = level === 3 ? (low ? (y0 - 40 - sy0) / (sy1 - sy0) : 0) : level === 2 ? (low ? (y0 - 90 - sy0) / (sy1 - sy0) : 0) : 1;
+        const id = 'scrim' + (low ? 'L' : 'H');
+        const stops = low
+          ? `<stop offset="0" stop-color="$bg" stop-opacity="0"/><stop offset="${r3(Math.max(0.05, Math.min(0.9, solidFrom < 1 ? solidFrom : 0.55)))}" stop-color="$bg" stop-opacity="${a}"/><stop offset="1" stop-color="$bg" stop-opacity="${a}"/>`
+          : `<stop offset="0" stop-color="$bg" stop-opacity="${a}"/><stop offset="${r3(level >= 2 ? 0.7 : 0.45)}" stop-color="$bg" stop-opacity="${a}"/><stop offset="1" stop-color="$bg" stop-opacity="0"/>`;
+        d.shape(`<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${stops}</linearGradient></defs><rect x="0" y="${sy0}" width="${SLIDE_W}" height="${sy1 - sy0}" fill="url(#${id})"/>`, { y0: sy0, y1: sy1 });
+        d.y = y0;
+        texts(d);
+      });
+      return mk(d, { noBalance: true, type: 'content', fitAs: 'statement-card', slide: withAccent({ type: 'content', headline: head, body: line }, head, f, st) });
+    },
+  },
+  // twin-photos ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  {
+    id: 'twin-photos', label: 'Two photos with captions', shapes: ['contrast', 'photo'], variants: ['captions under', 'captions under (pictures taller)'],
+    fields: [{ name: 'headline', required: true, max: 50 }, { name: 'caption', required: false, max: 40 }, { name: 'caption2', required: false, max: 40 }, IMG('image', 'the first picture'), IMG('image2', 'the second picture')],
+    samples: {
+      normal: { headline: 'Before and after', caption: 'A bag and a hoodie', caption2: 'One piece' },
+      long: { headline: 'Two ways to carry your day', caption: 'A bag and a hoodie, both heavy', caption2: 'One hoodie that is the bag' },
+      short: { headline: 'Two ways to carry', caption: 'A bag and a hoodie', caption2: 'One piece' },
+    },
+    plan(f, v, st, cx) {
+      const imgs = ['image', 'image2'].map((k) => imageOf(f[k]));
+      const head = str(f, 'headline');
+      const caps = [str(f, 'caption'), str(f, 'caption2')];
+      // no two pictures: the text-only form (the captions are kept as a paragraph, never dropped)
+      if (!imgs[0] || !imgs[1]) {
+        const cap = caps.filter(Boolean).join('. ');
+        return cap ? layoutDef('prose')!.plan({ heading: head, p1: cap }, v, st, cx) : layoutDef('statement')!.plan({ headline: head }, v, st, cx);
+      }
+      const kinds = imgs.map((q) => shapeOf(q)?.kind);
+      const tallBoth = kinds.every((k) => k === 'tall' || k === 'portrait');
+      const d = place(st, cx, 'center', (d) => {
+        d.text('title', head, { size: 84, max: 100, weight: 800, font: 'h', lines: 2, min: 72, gap: 28 });
+        const capH = (t: Draw, w: number) => Math.max(...caps.map((c) => (c ? heightOf(t, (q) => q.text('body', c, { w, size: 44, max: 48, lines: 2, min: 44, lh: 1.25 })) : 0)));
+        if (tallBoth) {
+          // side by side: two tall columns
+          const gap = 28;
+          const w = Math.floor((d.w - gap) / 2);
+          const ch = capH(d, w);
+          const ph = room(d, heightOf(d, (t) => t.text('title', head, { size: 84, max: 100, weight: 800, font: 'h', lines: 2, min: 72, gap: 28 })) + (ch ? ch + 20 : 0), 420, v === 1 ? 760 : 620);
+          const y0 = d.y;
+          imgs.forEach((q, i) => {
+            const x = d.x0 + i * (w + gap);
+            d.image(q, x, y0, w, ph, { rx: rad(st) });
+            if (caps[i]) d.text('body', caps[i], { x, w, size: 44, max: 48, lines: 2, min: 44, lh: 1.25, at: y0 + ph + 20, boxH: ch });
+          });
+          d.y = y0 + ph + (ch ? ch + 20 : 0);
+        } else {
+          // stacked: two wide pictures, each with its caption under it
+          const ch = Math.max(...caps.map((c) => (c ? heightOf(d, (t) => t.text('body', c, { size: 44, max: 48, lines: 1, min: 44 })) : 0)));
+          const used = heightOf(d, (t) => t.text('title', head, { size: 84, max: 100, weight: 800, font: 'h', lines: 2, min: 72, gap: 28 })) + 2 * (ch ? ch + 16 : 0) + 24;
+          const ph = Math.max(220, Math.min(520, Math.floor(((d.fy1 - d.fy0) * 0.97 - used) / 2)));
+          imgs.forEach((q, i) => {
+            const y0 = d.y;
+            d.image(q, d.x0, y0, d.w, ph, { rx: rad(st) });
+            d.y = y0 + ph;
+            if (caps[i]) { d.gap(16); d.text('body', caps[i], { size: 44, max: 48, lines: 1, min: 44, gap: i === 0 ? 24 : 0 }); } else if (i === 0) d.gap(24);
+          });
+        }
+      });
+      // (the captions are the rows of the slide, in reading order: each is filled into its own slot)
+      return mk(d, { noBalance: true, type: slideType(d), fitAs: 'headline-body-image', slide: withAccent(rowsSlide(d, head), head, f, st) });
+    },
+  },
+  // photo-grid ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  {
+    id: 'photo-grid', label: 'Photo grid', shapes: ['categories', 'photo'], variants: ['grid', 'grid (headline below)'],
+    fields: [{ name: 'headline', required: true, max: 50 }, { name: 'line', required: false, max: 60 }, IMG('image', 'picture 1'), IMG('image2', 'picture 2'), IMG('image3', 'picture 3'), IMG('image4', 'picture 4')],
+    samples: {
+      normal: { headline: 'What is in the box', line: 'A hoodie, a pouch and a guide.' },
+      long: { headline: 'Everything that is in the box and more', line: 'A hoodie, a pouch, a guide and a card.' },
+      short: { headline: 'In the box today', line: 'Three things.' },
+    },
+    plan(f, v, st, cx) {
+      const imgs = ['image', 'image2', 'image3', 'image4'].map((k) => imageOf(f[k])).filter(Boolean);
+      const head = str(f, 'headline');
+      const gline = str(f, 'line');
+      if (imgs.length < 3) return layoutDef('statement-card')!.plan({ headline: head, ...(gline ? { caption: gline } : {}) }, v, st, cx);
+      const slide = withAccent({ type: 'content', headline: head, body: gline }, head, f, st);
+      const d = place(st, cx, 'center', (d) => {
+        const headBlock = (t: Draw) => {
+          t.text('title', head, { size: 92, max: 110, weight: 800, font: 'h', lines: 2, min: 72, gap: gline ? 12 : 28 });
+          if (gline) t.text('body', gline, { size: 44, max: 48, fill: '$muted', lines: 1, min: 44, gap: 28 });
+        };
+        const hh = heightOf(d, headBlock);
+        const avail = Math.floor((d.fy1 - d.fy0) * 0.97 - hh);
+        const gap = 24;
+        const w2 = Math.floor((d.w - gap) / 2);
+        const grid = () => {
+          const y0 = d.y;
+          if (imgs.length >= 4) {
+            const th = Math.min(520, Math.floor((avail - gap) / 2));
+            imgs.slice(0, 4).forEach((q, i) => d.image(q, d.x0 + (i % 2) * (w2 + gap), y0 + Math.floor(i / 2) * (th + gap), w2, th, { rx: rad(st) }));
+            d.y = y0 + 2 * th + gap;
+          } else {
+            // three pictures: one big on top, two small under it
+            const bh = Math.min(520, Math.floor((avail - gap) * 0.56));
+            const sh2 = Math.min(400, avail - gap - bh);
+            d.image(imgs[0], d.x0, y0, d.w, bh, { rx: rad(st) });
+            imgs.slice(1, 3).forEach((q, i) => d.image(q, d.x0 + i * (w2 + gap), y0 + bh + gap, w2, sh2, { rx: rad(st) }));
+            d.y = y0 + bh + gap + sh2;
+          }
+        };
+        if (v === 1) { grid(); d.gap(28); headBlock(d); } else { headBlock(d); grid(); }
+      });
+      return mk(d, { noBalance: true, type: 'content', fitAs: 'headline-body-image', slide });
+    },
+  },
+  // phone-frame ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  {
+    id: 'phone-frame', label: 'Screenshot in a phone', shapes: ['product', 'photo'], variants: ['phone left', 'phone right'],
+    fields: [{ name: 'headline', required: true, max: 50 }, { name: 'body', required: false, max: 120 }, IMG('image', 'a tall or portrait picture (a screenshot)')],
+    samples: {
+      normal: { headline: 'Open it and tap start', body: 'The first screen takes ten seconds.' },
+      long: { headline: 'Open the app and tap start to begin', body: 'The first screen takes ten seconds, and the second one is faster.' },
+      short: { headline: 'Tap start to begin', body: 'It takes ten seconds.' },
+    },
+    plan(f, v, st, cx) {
+      const img = imageOf(f.image);
+      const head = str(f, 'headline');
+      const body = str(f, 'body');
+      const sh = img ? shapeOf(img) : null;
+      // only a tall or portrait picture goes in a phone: anything else is the text-only form
+      if (!img || !sh || !(sh.kind === 'tall' || sh.kind === 'portrait')) return body ? layoutDef('split-text')!.plan({ headline: head, paragraph: body }, v, st, cx) : layoutDef('statement')!.plan({ headline: head }, v, st, cx);
+      const slide = withAccent({ type: 'content', headline: head, body }, head, f, st);
+      const d = place(st, cx, 'top', (d) => {
+        const PW = 430, PH = 860, B = 14;
+        const left = v === 0;
+        const px = left ? d.x0 : d.x0 + d.w - PW;
+        const py = d.fy0 + Math.round((d.fy1 - d.fy0 - PH) / 2);
+        // the phone: a rounded outline (generic, no marks), the picture inside it, a small speaker slot at the top
+        d.image(img, px + B, py + B, PW - 2 * B, PH - 2 * B, { rx: 50 });
+        const r0 = 64;
+        d.path(`M ${px + r0} ${py} L ${px + PW - r0} ${py} Q ${px + PW} ${py} ${px + PW} ${py + r0} L ${px + PW} ${py + PH - r0} Q ${px + PW} ${py + PH} ${px + PW - r0} ${py + PH} L ${px + r0} ${py + PH} Q ${px} ${py + PH} ${px} ${py + PH - r0} L ${px} ${py + r0} Q ${px} ${py} ${px + r0} ${py} Z`, { stroke: '$text', sw: B, cap: true, y0: py, y1: py + PH });
+        d.path(`M ${px + PW / 2 - 44} ${py + 40} L ${px + PW / 2 + 44} ${py + 40}`, { stroke: '$text', sw: 22, cap: true, y0: py + 28, y1: py + 52 });
+        const tw = d.w - PW - 48;
+        const tx = left ? d.x0 + PW + 48 : d.x0;
+        const wt = nearestWeight(st.fonts.headline, 800);
+        const words = head.split(/\s+/).filter(Boolean);
+        let z = 72;
+        for (let s = 112; s >= 72; s -= 4) if (words.every((x) => measureWidth(x, st.fonts.headline, wt, s) <= tw * 0.98) && measure(head, st.fonts.headline, wt, s, tw, 1.05).n <= 5) { z = s; break; }
+        const texts = (t: Draw) => {
+          t.text('title', head, { x: tx, w: tw, size: z, max: z, weight: 800, font: 'h', lines: 6, min: 72, gap: body ? 24 : 0 });
+          if (body) t.text('body', body, { x: tx, w: tw, size: 48, max: 52, lines: 8, min: 44, lh: 1.3 });
+        };
+        d.y = d.fy0 + Math.max(0, Math.round((d.fy1 - d.fy0 - heightOf(d, texts)) / 2));
+        texts(d);
+      });
+      return mk(d, { noBalance: true, type: 'content', fitAs: 'art-side-text', slide });
+    },
+  },
 ];
 // The picture slots of each layout (from the geometry the plans use): how many, the shape of each (width / height) and which picture orientations crop well in it. A layout is drawn in its
 // picture form only when at least `min` pictures fit; otherwise the slide uses the layout's text-only form (never an empty box).
@@ -530,6 +812,12 @@ const SLOTS: Record<string, { min: number; slots: (v: 0 | 1) => ImageSlotDef[] }
   'photo-cover': { min: 1, slots: () => [slot('image', 978 / 420, ANY)] },
   'portrait-closing': { min: 1, slots: () => [slot('image', 0.7, PORT, 'portrait')] },
   'art-side-text': { min: 1, slots: () => [slot('image', 978 / 400, ANY)] },
+  'photo-full-caption': { min: 1, slots: () => [slot('image', 1080 / 880, ANY)] },
+  'split-half': { min: 1, slots: () => [slot('image', 1, ANY)] },
+  'title-over-photo': { min: 1, slots: () => [slot('image', 1080 / 1134, ANY)] },
+  'twin-photos': { min: 2, slots: () => [slot('image', 0.8, ANY), slot('image2', 0.8, ANY)] },
+  'photo-grid': { min: 3, slots: () => ['image', 'image2', 'image3', 'image4'].map((k) => slot(k, 1.2, ANY)) },
+  'phone-frame': { min: 1, slots: () => [slot('image', 0.46, ['portrait'], 'portrait')] },
   'do-dont': { min: 2, slots: (v) => [slot('image', v === 0 ? 475 / 400 : 340 / 250, ANY), slot('image2', v === 0 ? 475 / 400 : 340 / 250, ANY)] },
 };
 IMAGE_LAYOUTS.forEach((l) => { const s = SLOTS[l.id]; l.imageSlots = s.slots; l.minImages = s.min; });
