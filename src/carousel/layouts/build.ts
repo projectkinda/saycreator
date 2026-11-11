@@ -18,9 +18,14 @@ import { CUT_RATIO, RAKE, coloursFor, geometry, type Geometry, type Roles } from
 import { contrast, esc, setWeights } from './draw';
 import { cutsOf, layoutDef, withAccent } from './library';
 import { validateSlideContent } from './pick';
+import { textFitProblems } from './textFits';
 import type { Cut, Cx, Fields, Gradient, LayoutStyle, Plan, PlaneTone, PlanImage, Slot } from './types';
 
 export interface BuildOpts {
+  /** Second pass of a card layout: the real headline height measured on the first drawing (see Plan.hug). */
+  hugged?: number;
+  /** Second pass of a stacked headline + body: the real laid-out heights measured on the first drawing (see Plan.stack). */
+  stackReal?: { ht: number; hb: number };
   handle: string;
   index: number;
   total: number;
@@ -205,7 +210,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   const def = layoutDef(layoutId)!;
   if (!cutsOf(layoutId).includes(cut)) return fail([`${layoutId} does not support the cut "${cut}" (it supports ${cutsOf(layoutId).join(', ')}).`]);
   await loadFonts();
-  const mkCx = (field: Cx['field'], extra: Partial<Cx> = {}): Cx => ({ cut, field, density: o.density ?? 'normal', weight: o.weight ?? 'equal', ...(o.scrim !== undefined ? { scrim: o.scrim } : {}), ...extra });
+  const mkCx = (field: Cx['field'], extra: Partial<Cx> = {}): Cx => ({ cut, field, density: o.density ?? 'normal', weight: o.weight ?? 'equal', ...(o.scrim !== undefined ? { scrim: o.scrim } : {}), ...(o.hugged !== undefined ? { titleH: o.hugged } : {}), ...extra });
   const side = { x0: 48, w: 978, y0: 190, y1: 1190 };
   let g!: Geometry;
   let plan!: Plan;
@@ -286,7 +291,26 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     pack = { ...pack, designs: { ...pack.designs, [key]: ls }, slotMeta: { ...pack.slotMeta, [key]: slotMetaOf(ls) } };
     notes.push(`statement density: the headline is set at ${big.size} px.`);
   }
-  const balanced = plan.noBalance || cut !== 'plain' ? pack : balanceVertical(pack, key, slide, o.handle, plan.fitAs);
+  let stackEst: { ht: number; hb: number } | null = null;
+  let balanced = plan.noBalance || cut !== 'plain' ? pack : balanceVertical(pack, key, slide, o.handle, plan.fitAs);
+  // A headline with its body below it is one block: stacked with the normal gap from the REAL laid-out heights and centred in the band the layout names (against its picture)
+  if (plan.stack) {
+    const ls = balanced.designs[key] ?? [];
+    const tl = ls.find((l) => l.kind === 'text' && l.name === 'title');
+    const bl = ls.find((l) => l.kind === 'text' && l.name === 'body');
+    if (tl && bl) {
+      // the real heights: the text laid out the way the drawing lays it out (balanced lines, the accent phrase kept whole)
+      const acc = slide.accent as { phrase?: string; phrases?: string[] } | string[] | string | undefined;
+      const phrases = Array.isArray(acc) ? acc : typeof acc === 'string' ? [acc] : acc?.phrases ?? (acc?.phrase ? [acc.phrase] : []);
+      const runs = phrases.flatMap((p) => { const at = String((tl as { text?: string }).text ?? '').toLowerCase().indexOf(String(p).toLowerCase()); return at >= 0 ? [{ start: at, end: at + String(p).length, color: '#000000' }] : []; });
+      const ht = o.stackReal?.ht ?? Math.ceil(layoutText({ ...tl, balance: true, ...(runs.length ? { runs } : {}) } as never).height);
+      const hb = o.stackReal?.hb ?? Math.ceil(layoutText({ ...bl, balance: true } as never).height);
+      stackEst = { ht, hb };
+      const y = Math.round(plan.stack.y0 + Math.max(0, (plan.stack.y1 - plan.stack.y0 - (ht + plan.stack.gap + hb)) / 2));
+      const moved = ls.map((l) => (l === tl ? ({ ...l, y, height: ht + 2 } as RLayer) : l === bl ? ({ ...l, y: y + ht + plan.stack!.gap, height: hb + 2 } as RLayer) : l));
+      balanced = { ...balanced, designs: { ...balanced.designs, [key]: moved }, slotMeta: { ...balanced.slotMeta, [key]: slotMetaOf(moved) } };
+    }
+  }
   const col = resolveCollisions(balanced, key, slide, o.handle, plan.fitAs);
   problems.push(...col.problems);
   notes.push(...col.notes);
@@ -313,6 +337,21 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   }
   const r = packSlide(pack, plan.type, slide, o.handle);
   if (!r.faithful) return fail(['the drawing could not be made: ' + r.notes.join(' ')]);
+  // A stacked headline + body: when their REAL heights (marker padding, a word too wide) differ from the estimate, stack them again with the real ones.
+  if (plan.stack && stackEst && !o.stackReal) {
+    const t3 = r.layers.find((l) => l.kind === 'text' && l.name === 'title');
+    const b3 = r.layers.find((l) => l.kind === 'text' && l.name === 'body');
+    if (t3 && b3) {
+      const real = { ht: Math.ceil(layoutText(t3 as never).height), hb: Math.ceil(layoutText(b3 as never).height) };
+      if (Math.abs(real.ht - stackEst.ht) > 3 || Math.abs(real.hb - stackEst.hb) > 3) return buildSlide(layoutId, variant, fields0, st00, { ...o, stackReal: real });
+    }
+  }
+  // A card sized to its headline: when the headline's REAL height (marker padding, a word too wide for the box) differs from the planned one, plan it again with the real height so the card hugs the text.
+  if (plan.hug !== undefined && o.hugged === undefined && cut === 'plain') {
+    const tl2 = r.layers.find((l) => l.kind === 'text' && l.name === 'title');
+    const real = tl2 ? Math.ceil(layoutText(tl2 as never).height) + 2 : plan.hug;
+    if (Math.abs(real - plan.hug) > 24) return buildSlide(layoutId, variant, fields0, st00, { ...o, hugged: real });
+  }
   notes.push(...r.notes);
   // The chrome (profile header, counter, swipe cue) uses the field's roles; an item on the plane takes the plane's ink, one that straddles the plane edge an ink that reads on both.
   const rec = chromeFor({ handle: o.handle, name: o.name, index: o.index, total: o.total, profile: !!st.devices.profileHeader, font: st.fonts.body, deco: st.deco, site: st.site }).map((c) => {
@@ -399,5 +438,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       return plain;
     }
   }
+  // The text-fits rule: the real text boxes stay inside the margins, off the page counter and the swipe footer, and off each other. A drawing that breaks it is not accepted (the layout does not fit this text).
+  problems.push(...textFitProblems(r.layers as never, recurringLayers(rec, pack, 'c' + o.index) as never));
   return { ...(pics.length ? { images: pics } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: withLayoutTag(done, layoutId), layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
 }

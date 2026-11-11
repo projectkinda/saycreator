@@ -47,6 +47,36 @@ export function textSizesOf(layers: unknown[]): { role: string; size: number; wo
     });
 }
 
+/** The words of a text, lower case, apostrophes made plain ("I’ll" and "I'll" are one word). */
+export const wordsOfText = (t: string): string[] => (t.toLowerCase().replace(/[\u2018\u2019]/g, "'").match(/[\p{L}\p{N}]+(?:'[\p{L}]+)?/gu) ?? []);
+/**
+ * The wording check (measure only: the slides are never changed): every visible word of every slide is compared with the words of the source text. `wordsNotInSource` are the words the slides show
+ * that the text does not have, `slidesWithChangedWording` the slide numbers (1-based) that show at least one, `matchPercent` the share of visible words that are in the source.
+ */
+export function wordingCheckOf(source: string, slideTexts: string[]): { totalWords: number; matchPercent: number | null; wordsNotInSource: string[]; slidesWithChangedWording: number[]; perSlide: { slide: number; words: number; notInSource: string[] }[] } {
+  const have = new Set(wordsOfText(source));
+  let total = 0;
+  let match = 0;
+  const notIn: string[] = [];
+  const changed: number[] = [];
+  const perSlide = slideTexts.map((t, i) => {
+    const ws = wordsOfText(t);
+    const miss = ws.filter((w) => !have.has(w));
+    total += ws.length;
+    match += ws.length - miss.length;
+    miss.forEach((w) => !notIn.includes(w) && notIn.push(w));
+    if (miss.length) changed.push(i + 1);
+    return { slide: i + 1, words: ws.length, notInSource: [...new Set(miss)] };
+  });
+  return { totalWords: total, matchPercent: total && have.size ? Math.round((match / total) * 1000) / 10 : null, wordsNotInSource: notIn, slidesWithChangedWording: changed, perSlide };
+}
+/** The visible words of a composed slide's layers: every text except the page counter, the swipe cue, the handle and decoration. */
+export const visibleTextOf = (layers: unknown[]): string =>
+  (layers as { kind?: string; visible?: boolean; id?: string; name?: string; role?: string; text?: string }[])
+    .filter((l) => l.kind === 'text' && l.visible !== false && l.role !== 'decor' && !/recurring|^page|^swipe|^handle|^strip|^dots/.test(`${l.id ?? ''} ${l.name ?? ''}`) && (l.text ?? '').trim())
+    .map((l) => l.text)
+    .join(' ');
+
 /** The library layout slide i was drawn with, when the layout library drew that slide (else null: the old route's own layout and rule are reported). */
 export function libraryLayoutOf(doc: Doc, i: number): string | null {
   const d = doc.designed;
@@ -77,6 +107,8 @@ export async function buildReport(o: ReportOptions): Promise<{ json: string; com
     route: o.doc.route?.route ?? (o.doc.designed ? 'designed' : 'pack'),
     /** The text the person typed, as the writer received it. */
     sourceText: o.doc.topic ?? '',
+    /** Round 12: every visible word of every slide compared with the source text (measure only, nothing is changed). */
+    wordingCheck: wordingCheckOf(o.doc.topic ?? '', composed.slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? []))),
     routeReason: o.doc.route?.reason ?? (o.doc.designed ? 'Designed slides are present (the route was not recorded).' : 'No route was recorded for this project: the style templates are assumed to have filled the slides.'),
     designedCalls: o.doc.designed?.calls ?? null,
     designed: o.doc.designed ? { calls: o.doc.designed.calls, tokens: o.doc.designed.tokens ?? null, layouts: o.doc.designed.layouts ?? null, fallbacks: o.doc.designed.fallbacks, notes: o.doc.designed.notes, requestBytes: o.doc.designed.requestBytes ?? null, library: o.doc.designed.library ?? null, model: 'DRAW_MODEL, else CAROUSEL_MODEL, else sonnet (server setting)' } : o.doc.route?.error ? { failed: true, error: o.doc.route.error, requestBytes: o.doc.route.requestBytes ?? null } : null,

@@ -20,10 +20,11 @@ function fitSize(st: LayoutStyle, text: string, w: number, lines: number, from =
   const words = text.split(/\s+/).filter(Boolean);
   for (const z of SIZES.filter((s) => s <= from)) {
     const widest = Math.max(...words.map((x) => measureWidth(x, st.fonts.headline, hw(st), z)));
-    const m = measure(text, st.fonts.headline, hw(st), z, w, 1.05);
-    if (widest <= w * 0.98 && m.n <= lines) return { size: z, h: Math.ceil(m.h) + 2, n: m.n };
+    // the engine's own fit decides (a word a few px too wide makes it smaller): the size and the height returned are the ones the drawing really has
+    const m = measure(text, st.fonts.headline, hw(st), z, w, 1.05, 72);
+    if (widest <= w * 0.98 && m.n <= lines) return { size: Math.min(z, m.size), h: Math.ceil(m.h) + 2, n: m.n };
   }
-  const m = measure(text, st.fonts.headline, hw(st), 72, w, 1.05);
+  const m = measure(text, st.fonts.headline, hw(st), 72, w, 1.05, 72);
   return { size: 72, h: Math.ceil(m.h) + 2, n: m.n };
 }
 /** A headline of three words or fewer is set big (up to 220 px), as long as its longest word fits the width: a short headline fills the page like the statement cover does. */
@@ -124,26 +125,33 @@ export const COVER_LAYOUTS: LayoutDef[] = [
       const head = str(f, 'headline');
       const kick = str(f, 'kicker');
       const cap = cx.density === 'statement' ? '' : str(f, 'caption');
+      let z0h = 0;
       const d = place(st, cx, 'top', (d) => {
         const fh = d.fy1 - d.fy0;
         const pad = 64;
         const w = d.w - 2 * pad - 24;
         const cb = capBox(st, cap, d.w);
-        const bh = Math.round(fh * 0.66);
+        const maxBh = Math.round(fh * 0.66);
         const kH = kick ? Math.ceil(48 * 1.25) + 24 : 0;
         let z = fitSize(st, head, w, 5);
-        while (z.size > 72 && kH + z.h + 2 * pad > bh) z = fitSize(st, head, w, 5, z.size - 6);
-        const by = v === 0 ? d.fy0 : d.fy1 - bh;
+        while (z.size > 72 && kH + z.h + 2 * pad > maxBh) z = fitSize(st, head, w, 5, z.size - 6);
+        const zh = cx.titleH ?? z.h; // the real headline height when this is the second pass
+        z0h = z.h;
+        // the block hugs its text (text + padding, never taller than two thirds of the field and never under 360 px), and the block with its caption sits in the middle of the field
+        const bh = Math.max(Math.min(maxBh, kH + zh + 2 * pad), Math.min(maxBh, 360));
+        const group = bh + (cb ? cb + 36 : 0);
+        const gy = d.fy0 + Math.max(0, Math.round((fh - group) / 2));
+        const by = v === 0 ? gy : gy + (cb ? cb + 36 : 0);
         d.rect(d.x0, by, d.w, bh, '$surface', { rx: 48 });
         d.rect(d.x0 + 28, by + 56, 14, bh - 112, '$accent', { rx: 7 });
-        const block = kH + z.h;
+        const block = kH + zh;
         let yy = by + Math.round((bh - block) / 2);
         const x = d.x0 + pad + 24;
         if (kick) { d.text('kicker', kick, { x, w, size: 48, max: 48, weight: 600, fill: '$muted', align: 'left', lines: 1, min: 48, at: yy }); yy += kH; }
         d.text('title', head, { x, w, size: z.size, max: z.size, weight: 800, font: 'h', lines: 5, min: 72, lh: 1.05, at: yy });
         if (cap) d.text('body', cap, { x: d.x0, w: d.w, size: 44, max: 44, fill: '$muted', lines: 2, min: 44, at: v === 0 ? by + bh + 36 : by - 36 - cb, boxH: cb });
       });
-      return mk(d, { type: 'content', fitAs: 'statement-card', noBalance: true, slide: withAccent({ type: 'content', kicker: kick, headline: head, body: cap }, head, f, st) });
+      return mk(d, { type: 'content', fitAs: 'statement-card', noBalance: true, hug: cx.titleH === undefined ? z0h : undefined, slide: withAccent({ type: 'content', kicker: kick, headline: head, body: cap }, head, f, st) });
     },
   },
   // 4. the headline on a sticker (a card with a hard offset behind it) ------------------------------------------------------------
@@ -154,6 +162,7 @@ export const COVER_LAYOUTS: LayoutDef[] = [
       const head = str(f, 'headline');
       const kick = str(f, 'kicker');
       const cap = cx.density === 'statement' ? '' : str(f, 'caption');
+      let z0h = 0;
       const d = place(st, cx, 'top', (d) => {
         const fh = d.fy1 - d.fy0;
         const pad = 64;
@@ -164,7 +173,8 @@ export const COVER_LAYOUTS: LayoutDef[] = [
         const room = fh - 40 - 2 * pad - kH - (cb ? cb + 36 : 0);
         let z = fitSize(st, head, w, 5, heroSize(st, head, w, 138));
         while (z.size > 72 && z.h > room) z = fitSize(st, head, w, 5, z.size - 6);
-        const ph = z.h + kH + (cb ? cb + 36 : 0) + 2 * pad;
+        z0h = z.h;
+        const ph = (cx.titleH ?? z.h) + kH + (cb ? cb + 36 : 0) + 2 * pad;
         const x0 = v === 0 ? d.x0 : d.x0 + d.w - cw - 22;
         const y0 = d.fy0 + Math.round((fh - ph - 22) / 2);
         // the hard shadow behind the sticker: two strips (right and bottom), so no text sits over the accent colour
@@ -174,9 +184,9 @@ export const COVER_LAYOUTS: LayoutDef[] = [
         const x = x0 + pad;
         if (kick) { d.text('kicker', kick, { x, w, size: 48, max: 48, weight: 600, fill: '$muted', align: 'left', lines: 1, min: 48, at: yy }); yy += kH; }
         d.text('title', head, { x, w, size: z.size, max: z.size, weight: 800, font: 'h', lines: 5, min: 72, lh: 1.05, at: yy });
-        if (cap) d.text('body', cap, { x, w, size: 44, max: 44, fill: '$muted', lines: 2, min: 44, at: yy + z.h + 36, boxH: cb });
+        if (cap) d.text('body', cap, { x, w, size: 44, max: 44, fill: '$muted', lines: 2, min: 44, at: yy + (cx.titleH ?? z.h) + 36, boxH: cb });
       });
-      return mk(d, { type: 'content', fitAs: 'statement-card', noBalance: true, slide: withAccent({ type: 'content', kicker: kick, headline: head, body: cap }, head, f, st) });
+      return mk(d, { type: 'content', fitAs: 'statement-card', noBalance: true, hug: cx.titleH === undefined ? z0h : undefined, slide: withAccent({ type: 'content', kicker: kick, headline: head, body: cap }, head, f, st) });
     },
   },
   // 5. one oversized word, the rest of the headline small above it ----------------------------------------------------------------

@@ -598,7 +598,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
             d.y = ZONE_TOP + Math.max(0, Math.round((HALF_H - heightOf(d, texts)) / 2));
             texts(d);
           });
-          return mk(d, { noBalance: true, type: 'content', fitAs: 'art-side-text', slide });
+          return mk(d, { noBalance: true, type: 'content', fitAs: 'art-side-text', slide, stack: { gap: 24, y0: ZONE_TOP, y1: ZONE_TOP + HALF_H } });
         }
       }
       // any other picture (or a headline too long for the side column): a top or bottom half (1080 x 675: 50.0% of the slide)
@@ -615,7 +615,8 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         d.y = textTop + Math.max(24, Math.round((textH - heightOf(d, texts)) / 2));
         texts(d);
       });
-      return mk(d, { noBalance: true, type: 'content', fitAs: 'headline-body-image', slide });
+      const bandTop = v === 0 ? ZONE_TOP + HALF_BAND_H : ZONE_TOP;
+      return mk(d, { noBalance: true, type: 'content', fitAs: 'headline-body-image', slide, stack: { gap: 20, y0: bandTop, y1: bandTop + (ZONE_BOTTOM - ZONE_TOP - HALF_BAND_H) } });
     },
   },
   // title-over-photo -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -796,7 +797,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         d.y = d.fy0 + Math.max(0, Math.round((d.fy1 - d.fy0 - heightOf(d, texts)) / 2));
         texts(d);
       });
-      return mk(d, { noBalance: true, type: 'content', fitAs: 'art-side-text', slide });
+      return mk(d, { noBalance: true, type: 'content', fitAs: 'art-side-text', slide, ...(body ? { stack: { gap: 24, y0: d.fy0 + Math.round((d.fy1 - d.fy0 - 860) / 2), y1: d.fy0 + Math.round((d.fy1 - d.fy0 - 860) / 2) + 860 } } : {}) });
     },
   },
 ];

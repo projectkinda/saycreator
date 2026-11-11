@@ -40,13 +40,14 @@ export const S = (n: number) => Math.round(n * K);
 /** The largest a text of each role may grow to (the engine's own caps: titles 150 px). */
 const ROLE_MAX: Record<string, number> = { kicker: 48, tag: 48, caption: 56, body: 64, title: 150, number: 600 };
 /** Measures text at the scaled size. */
-export function measure(text: string, font: FontFamily, weight: number, size: number, width: number, lh: number): { n: number; h: number } {
-  return measureRaw(text, font, weight, Math.round(size * K), width, lh);
+export function measure(text: string, font: FontFamily, weight: number, size: number, width: number, lh: number, fitMin?: number): { n: number; h: number; size: number } {
+  return measureRaw(text, font, weight, Math.round(size * K), width, lh, fitMin);
 }
-function measureRaw(text: string, font: FontFamily, weight: number, size: number, width: number, lh: number): { n: number; h: number } {
-  const l = { kind: 'text', id: 'm', name: 'm', role: 'content', x: 0, y: 0, width, height: 6000, rotation: 0, opacity: 1, text, style: { font, weight, size, color: '#000000', align: 'left', valign: 'top', lineHeight: lh } } as unknown as TextLayer;
+/** `fitMin`: the engine's own fit is applied (a word too wide for the box makes the text smaller, down to fitMin), so the lines and the height are the ones the drawing really has; `size` is the size it ends at. */
+function measureRaw(text: string, font: FontFamily, weight: number, size: number, width: number, lh: number, fitMin?: number): { n: number; h: number; size: number } {
+  const l = { kind: 'text', id: 'm', name: 'm', role: 'content', x: 0, y: 0, width, height: 6000, rotation: 0, opacity: 1, text, style: { font, weight, size, color: '#000000', align: 'left', valign: 'top', lineHeight: lh }, ...(fitMin ? { autoFit: { minSize: Math.min(fitMin, size) }, balance: true } : {}) } as unknown as TextLayer;
   const b = layoutText(l);
-  return { n: Math.max(1, b.lines.length), h: Math.max(1, b.lines.length) * b.lineStep };
+  return { n: Math.max(1, b.lines.length), h: Math.max(1, b.lines.length) * b.lineStep, size: b.size };
 }
 
 /** The lines a text wraps into (at the scaled size), for checks such as a lone short word on a line. */
@@ -164,11 +165,13 @@ export class Draw {
     const min = o.min ?? 32;
     // the type scale: up to the text's own largest size, never below the size the layout asked for
     let size = Math.max(o.size, Math.min(o.max ?? ROLE_MAX[role] ?? 150, Math.round(o.size * K)));
-    let m = measureRaw(text, font, weight, size, w, lh);
+    let m = measureRaw(text, font, weight, size, w, lh, min);
     while (o.fit !== false && m.n > maxLines && size - 4 >= min) {
       size -= 4;
-      m = measureRaw(text, font, weight, size, w, lh);
+      m = measureRaw(text, font, weight, size, w, lh, min);
     }
+    // a word too wide at this size made the engine's fit smaller: the slot is planned at the size the drawing really has
+    if (m.size < size) size = m.size;
     const y = o.at ?? this.y;
     // Display text (96 px and up) takes the display accent, smaller text the small-text accent
     const fill0 = o.fill ?? '$text';

@@ -146,6 +146,8 @@ export interface Cx {
   k?: number;
   /** title-over-photo: how strong the scrim behind the text is (0 gradient .. 3 solid panel); the draw step raises it until every word reads at 4.5:1 on the real picture. */
   scrim?: number;
+  /** The real laid-out headline height (px), from a first drawing: a card layout sizes its card from it (see Plan.hug). */
+  titleH?: number;
 }
 
 export interface Plan {
@@ -168,6 +170,10 @@ export interface Plan {
   /** Slide words by field for textsOf (the engine's own mapping of words to slots). */
   slide: Record<string, unknown>;
   noBalance?: boolean;
+  /** The headline and the body below it are ONE block: after the real fit they are stacked with this gap and centred between y0 and y1 (the heights are the real laid-out heights, not the planned ones). */
+  stack?: { gap: number; y0: number; y1: number };
+  /** A card sized to its headline: the headline height the plan assumed. When the REAL laid-out height differs (a marker bar's padding, a word too wide), the slide is planned again with the real one (Cx.titleH) so the card hugs the text. */
+  hug?: number;
   photo?: { x: number; y: number; w: number; h: number };
   /** Height the content needs (for sizing the plane). */
   span: number;

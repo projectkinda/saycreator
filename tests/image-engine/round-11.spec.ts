@@ -98,7 +98,7 @@ test('A: the Content step shows the choice (writer preselected, with the cost of
   await expect(choice).toBeVisible();
   await expect(choice.getByRole('radio', { name: /Let the writer make slides/ })).toBeChecked();
   await expect(choice).toContainText('1 small writing call');
-  await expect(choice).toContainText('0 calls, your exact words');
+  await expect(choice).toContainText('No writing call. Your exact words');
   // screenshots: desktop and phone width
   const desk = await page.screenshot({ clip: { x: 0, y: 0, width: 1280, height: 900 } });
   await page.setViewportSize({ width: 390, height: 900 });

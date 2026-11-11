@@ -17,6 +17,7 @@ import { withoutSwitches } from '../reference/deco';
 import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
+import { layoutOptionsFor } from './layoutMap';
 import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
 import { placeImages } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
@@ -1359,7 +1360,23 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     }
     let done: Drawn | null = null;
     let level = 'plain version of the same layout';
-    const fixed = layoutDef(sp.layout) && !(sp.layout === 'photo-led' && !look.hasPhoto) ? repairFields(sp.layout, fieldsOf(sp)) : null;
+    // first: another layout that takes ALL of the slide's words and fits (no word is cut to make a drawing fit)
+    if (!(sp.layout === 'photo-led' && !look.hasPhoto)) {
+      for (const opt of layoutOptionsFor(sp, look)) {
+        if (opt.current || opt.dropped.length || opt.droppedCore.length) continue;
+        if (IMAGE_LAYOUT_IDS.includes(opt.layout as never) && !look.images?.length) continue;
+        for (const v of [rot.variants[i], (1 - rot.variants[i]) as 0 | 1]) {
+          const d = await drawOne({ ...sp, layout: opt.layout, fields: opt.fields, density: undefined }, v, style, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
+          if (d.built) { done = d; break; }
+        }
+        if (done) {
+          level = `another layout that shows every word and fits ("${opt.layout}")`;
+          specs = specs.map((s, k) => (k === i ? { ...s, layout: opt.layout, fields: opt.fields, density: undefined } : s));
+          break;
+        }
+      }
+    }
+    const fixed = done ? null : layoutDef(sp.layout) && !(sp.layout === 'photo-led' && !look.hasPhoto) ? repairFields(sp.layout, fieldsOf(sp)) : null;
     if (fixed) for (const v of [rot.variants[i], (1 - rot.variants[i]) as 0 | 1]) {
       const d = await drawOne({ ...sp, fields: Object.fromEntries(Object.entries(fixed).filter(([k]) => k !== 'accent')) as Fields, density: undefined }, v, style, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
       if (d.built) { done = d; break; }
@@ -1370,7 +1387,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
       const text0 = Object.values(sp.fields).flat().map((x) => String(x).trim()).filter(Boolean)[0] ?? 'Slide ' + (i + 1);
       done = await drawOne({ layout: 'statement', fields: { headline: clip(text0, 60) }, accents: [] }, 0, style, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
       specs = specs.map((s, k) => (k === i ? { layout: 'statement', fields: { headline: clip(text0, 60) }, accents: [] } : s));
-    } else specs = specs.map((s, k) => (k === i ? { ...s, fields: fixed!, density: undefined } : s));
+    } else if (fixed) specs = specs.map((s, k) => (k === i ? { ...s, fields: fixed, density: undefined } : s));
     fallbacks.push({ slide: i + 1, layout: specs[i].layout, level, reason });
     if (done) drawn.set(i, done);
   }
