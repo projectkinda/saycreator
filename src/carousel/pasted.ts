@@ -25,7 +25,7 @@ export function scriptFromBlocks(blocks: string[], format: Format, handle: strin
     const ls = lines(b);
     const first = ls[0] ?? b;
     const rest = ls.slice(1).join(' ');
-    if (format === 'quote') return { type: 'quote', quote: ls.join(' ').replace(/^["“]|["”]$/g, ''), by: h === '@yourname' ? 'From the text' : h };
+    if (format === 'quote') return { type: 'quote', quote: ls.join(' ').replace(/^["“]|["”]$/g, ''), by: h === '@yourname' ? '' : h };
     if (i === 0) return { type: 'cover', headline: first, ...(rest ? { sub: rest } : {}) };
     if (i === last) return { type: 'closing', headline: first, cta: rest || first };
     const items = ls.slice(1).filter((l) => bullet.test(l)).map((l) => l.replace(bullet, ''));

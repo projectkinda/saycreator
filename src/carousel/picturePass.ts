@@ -28,7 +28,7 @@ export function targetsFor(layout: string, index: number): string[] {
   if (LISTS.includes(layout)) return ['thumb-rows', 'image-row'];
   if (layout === 'comparison') return ['do-dont'];
   // a quote carries a picture as a last resort: the same words in a headline and a line with the picture (a figure or an order has no picture layout that keeps its look and its words)
-  if (layout === 'quote') return ['art-side-text', 'headline-body-image'];
+  if (layout === 'quote') return ['art-side-text', 'headline-body-image', 'cover-art'];
   return [];
 }
 /** How much a slide changes when it takes a picture layout (0 = a text slide, 1 = a list, a quote or a comparison): the least change goes first. */
@@ -133,6 +133,8 @@ export function heroShare(layout: string, variant: 0 | 1, picture: string): numb
   const k = shapeOf(picture)?.kind;
   if ((k === 'tall' || k === 'portrait') && SPLIT_LAYOUTS.includes(layout)) return (PANEL_W * PANEL_H) / (1080 * 1350);
   if (BAND_LAYOUTS.includes(layout) && variant === 1) return (1080 * HERO_BAND_H) / (1080 * 1350);
+  // a wide picture (2:1 or wider) on art-side-text is drawn as the hero band
+  if (layout === 'art-side-text' && (shapeOf(picture)?.aspect ?? 0) >= 2) return (1080 * HERO_BAND_H) / (1080 * 1350);
   return 0;
 }
 /**

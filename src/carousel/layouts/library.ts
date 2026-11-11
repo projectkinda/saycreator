@@ -244,10 +244,12 @@ const BASE_LIST: LayoutDef[] = [
           const th = lineTexts(head, hfam, hwt, t.size, w1, 1.05, acc).length * t.size * 1.05;
           const ph = lineTexts(para, bfam, bwt, p.size, cx.field.w - gutter - w1, 1.3).length * p.size * 1.3;
           const h = Math.max(th, ph);
+          // a body column that wraps to more than 5 lines is a squeezed column: that split is not used (the stacked layout below is)
+          if (lineTexts(para, bfam, bwt, p.size, cx.field.w - gutter - w1, 1.3).length > 5) continue;
           if (!best || (t.ok && !best.ok) || (t.ok === best.ok && h > best.h + 8)) best = { lw: w1, tsz: t.size, psz: p.size, ok: t.ok, h };
         }
         // a short block (under 70% of the free height) is not set in columns: the stacked layout below scales the type up to fill the field
-        if (best!.h >= 0.7 * fieldH) {
+        if (best && best.h >= 0.7 * fieldH) {
         const lw = best!.lw;
         const tsz = best!.tsz;
         const rw = cx.field.w - gutter - lw;
@@ -524,7 +526,7 @@ const BASE_LIST: LayoutDef[] = [
   // 12 -----------------------------------------------------------------------------------------------------------------------------
   {
     id: 'quote', label: 'Quote', shapes: ['quote'], variants: ['left', 'centred'],
-    fields: [{ name: 'quote', required: true, max: 120 }, { name: 'author', required: true, max: 40 }],
+    fields: [{ name: 'quote', required: true, max: 120 }, { name: 'author', required: false, max: 40, note: 'only when the text names who said it; otherwise leave it out' }],
     samples: {
       normal: { quote: 'I stopped carrying a bag the day this arrived.', author: 'Maya R., early backer' },
       long: { quote: 'I stopped carrying a bag the day this arrived, and my shoulders finally thanked me for it.', author: 'Maya Rodriguez, early backer' },
@@ -539,12 +541,15 @@ const BASE_LIST: LayoutDef[] = [
         d.y += 86 * qk;
         d.gap(36);
         d.text('title', str(f, 'quote'), { size: 100, weight: 700, font: 'h', lines: 6, min: 72, align: al, gap: 36, lh: 1.12 });
-        d.part();
-        d.rect(v === 0 ? d.x0 : d.cx - 40, d.y, 80, 8, '$accent', { rx: 4 });
-        d.y += 28;
-        d.text('body', '— ' + str(f, 'author'), { size: 44, fill: '$muted', align: al, lines: 2 });
+        // the attribution (and the short rule above it) only when there is one: nothing is drawn that nobody wrote
+        if (str(f, 'author')) {
+          d.part();
+          d.rect(v === 0 ? d.x0 : d.cx - 40, d.y, 80, 8, '$accent', { rx: 4 });
+          d.y += 28;
+          d.text('body', '— ' + str(f, 'author'), { size: 44, fill: '$muted', align: al, lines: 2 });
+        }
       });
-      return mk(d, { type: 'quote', fitAs: 'quote', slide: { type: 'quote', quote: str(f, 'quote'), author: '— ' + str(f, 'author') } });
+      return mk(d, { type: 'quote', fitAs: 'quote', slide: { type: 'quote', quote: str(f, 'quote'), ...(str(f, 'author') ? { author: '— ' + str(f, 'author') } : {}) } });
     },
   },
   // 13 -----------------------------------------------------------------------------------------------------------------------------

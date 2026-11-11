@@ -21,7 +21,7 @@ import { placeImages } from './imagePlace';
 import { flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { heroPass, picturePass, separatePictureRuns, type PictureSwap } from './picturePass';
 import { TONES } from './writerPrompt';
-import { inSource, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
+import { inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
 
 /** The old route, where the model draws every slide as SVG, stays available behind this flag (off by default): localStorage "creator.legacySvgRoute" = "1" or VITE_LEGACY_SVG_ROUTE=1. */
 export const legacySvgRoute = (): boolean => {
@@ -329,6 +329,7 @@ const FIELD_NOTE: Record<string, string> = {
   events: 'parallel to "labels"',
   label: 'finishes the number: number + label read as ONE phrase, e.g. "30%" + "off for early backers"',
   paragraph: 'ONE idea, at most 14 words, no second sentence',
+  author: 'only when the text names who said it (a person or a source); otherwise leave the field out. Never write a label such as "The text"',
   callouts: 'exactly 3',
 };
 /** The writer's picture rules: metadata only (id, orientation, shape, pixel size), never pixels. */
@@ -784,8 +785,42 @@ export function clampAccents(specs: SlideSpec[]): { specs: SlideSpec[]; trims: T
   });
   return { specs: out, trims };
 }
+const TOPIC_LINE_FIELDS = ['subtitle', 'subline', 'caption', 'sub'];
+/**
+ * Nothing is drawn that nobody wrote. For a written deck: (1) a quote's attribution only stays when its words are in the person's text (a person or a source the text names); an invented one ("The text",
+ * "An editor") goes, and the quote is drawn with no attribution and no rule; (2) a line under a headline (sub line, caption) that only repeats the topic (a short phrase made of the words of the deck's
+ * title) is not a sentence of the text and goes. The closing's own lines are settled by settleClosing.
+ */
+export function dropInvented(specs: SlideSpec[], text: string, title: string): { specs: SlideSpec[]; trims: Trim[] } {
+  const trims: Trim[] = [];
+  const titleWords = new Set(wordsOf(title));
+  const out = specs.map((sp, i) => {
+    let fields = sp.fields;
+    const author = typeof fields.author === 'string' ? fields.author.trim() : '';
+    if (sp.layout === 'quote' && author && !inSource(author, text)) {
+      fields = Object.fromEntries(Object.entries(fields).filter(([k]) => k !== 'author')) as Fields;
+      trims.push({ slide: i + 1, field: 'attribution', from: author, to: '(removed)', max: 0 });
+    }
+    if (i < specs.length - 1) {
+      for (const k of TOPIC_LINE_FIELDS) {
+        const v = fields[k];
+        if (typeof v !== 'string' || !v.trim()) continue;
+        const ws = wordsOf(v);
+        const content = ws.filter((w) => !isFunctionWord(w));
+        if (ws.length <= 4 && content.length > 0 && content.every((w) => titleWords.has(w)) && !repeatsHeadline(v, String(fields.headline ?? fields.title ?? ''))) {
+          fields = Object.fromEntries(Object.entries(fields).filter(([n]) => n !== k)) as Fields;
+          trims.push({ slide: i + 1, field: 'topic line', from: v, to: '(removed)', max: 0 });
+        }
+      }
+    }
+    return fields === sp.fields ? sp : { ...sp, fields };
+  });
+  return { specs: out, trims };
+}
 /** One line of the report for a trim the code made. */
 export function trimNote(t: Trim): string {
+  if (t.field === 'attribution') return `slide ${t.slide}: the quote's attribution "${t.from}" is not in your text, so the code left it out (nothing is drawn that nobody wrote).`;
+  if (t.field === 'topic line') return `slide ${t.slide}: the line "${t.from}" only repeats the topic and is not a sentence of your text, so the code left it out.`;
   if (t.field === 'highlight') return `slide ${t.slide}: the highlight "${t.from}" was longer than ${t.max} word${t.max === 1 ? '' : 's'}, so the code kept the last words: "${t.to}".`;
   if (t.field === 'step swap') return `slide ${t.slide}: only one slide in the deck is a step, so the code drew it as split-text with the same words (step-numeral is for two or more steps of one sequence).`;
   if (t.field === 'closing cta') return t.from ? `slide ${t.slide}: the closing button "${t.from}" was not the call to action the text asks for, so the code used "${t.to}".` : `slide ${t.slide}: the closing had no call to action, so the code made it "${t.to}".`;
@@ -1143,6 +1178,12 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     const ca = clampAccents(specs);
     specs = ca.specs;
     tr.trims.push(...ca.trims);
+  }
+  // nothing invented: an attribution the text does not name, a line that only repeats the topic
+  if (!own) {
+    const di = dropInvented(specs, req.text, parsed.title);
+    specs = di.specs;
+    tr.trims.push(...di.trims);
   }
   // one step-numeral slide alone in a deck is not a sequence: it is drawn as split-text with the same words (for the person's own script too)
   {

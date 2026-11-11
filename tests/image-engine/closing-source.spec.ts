@@ -27,7 +27,7 @@ const BODY = [
   { layout: 'checklist', fields: { title: 'What I did', items: ['Moved everything into a structure', 'Gave it as much context as possible', 'Let it work for me'] }, accents: [] as string[] },
   { layout: 'big-stat', fields: { number: '3', label: 'things I did' }, accents: [] as string[] },
   { layout: 'comparison', fields: { title: 'Notes app or second brain', leftLabel: 'Notes app', leftText: 'A graveyard you never open.', rightLabel: 'Second brain', rightText: 'A wiki that resurfaces.' }, accents: [] as string[] },
-  { layout: 'quote', fields: { quote: 'I let it work for me.', author: 'The text' }, accents: [] as string[] },
+  { layout: 'quote', fields: { quote: 'I let it work for me.' }, accents: [] as string[] },
 ];
 
 /** Runs the deck maker with a fake writer; returns what the app ended up with. `shots` are slide indexes (0-based) drawn to PNG. */

@@ -22,7 +22,7 @@ async function run(page: Page, o: { preset: string; text: string; closing: any; 
       { layout: 'checklist', fields: { title: 'A habit that works', items: ['Capture one idea a day', 'Review it every Friday', 'Link it to what you know'] }, accents: [] },
       { layout: 'big-stat', fields: { number: '1', label: 'idea a day, one place' }, accents: [] },
       { layout: 'comparison', fields: { title: 'Two ways to keep notes', leftLabel: 'Graveyard', leftText: 'Save everything, open nothing.', rightLabel: 'Small wiki', rightText: 'Keep only what helps you act.' }, accents: [] },
-      { layout: 'quote', fields: { quote: 'A second brain fixes that.', author: 'The text' }, accents: [] },
+      { layout: 'quote', fields: { quote: 'A second brain fixes that.' }, accents: [] },
     ];
     let calls = 0;
     const provider: any = { id: 'dev-cli', label: 'fake', async write() { calls++; return { text: JSON.stringify({ title: 'Second brain', slides: calls === 1 ? [...body, closing] : { '7': second ?? closing } }), ms: 1 }; } };
@@ -296,7 +296,7 @@ test('F2: a deck the writer made with ONE step-numeral is drawn with split-text,
     ...(steps > 1 ? [{ layout: 'step-numeral', fields: { step: '2', title: 'Set a time', body: 'Same time every day.' }, accents: [] }] : [{ layout: 'checklist', fields: { title: 'A habit that works', items: ['Capture one idea a day', 'Review it every Friday', 'Link it to what you know'] }, accents: [] }]),
     { layout: 'big-stat', fields: { number: '1', label: 'idea a day, one place' }, accents: [] },
     { layout: 'comparison', fields: { title: 'Two ways to keep notes', leftLabel: 'Graveyard', leftText: 'Save everything, open nothing.', rightLabel: 'Small wiki', rightText: 'Keep only what helps you act.' }, accents: [] },
-    { layout: 'quote', fields: { quote: 'A second brain fixes that.', author: 'The text' }, accents: [] },
+    { layout: 'quote', fields: { quote: 'A second brain fixes that.' }, accents: [] },
   ];
   const closing = { layout: 'cta-button', fields: { headline: 'Build a second brain', button: 'Comment brain' }, accents: [] };
   const one: any = await run(page, { preset: 'hot-flat', text: BRAIN_SOURCE, closing, body: body(1) });

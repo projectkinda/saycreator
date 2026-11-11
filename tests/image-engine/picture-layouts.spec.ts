@@ -32,12 +32,12 @@ const HELP = `(async () => {
     { layout: 'split-text', fields: { headline: 'Saving is not keeping', paragraph: 'Most people save notes and never open them again.' }, accents: [] },
     { layout: 'checklist', fields: { title: 'A habit that works', items: ['Capture one idea a day', 'Review it every Friday', 'Link it to what you know'] }, accents: [] },
     { layout: 'big-stat', fields: { number: '1', label: 'idea a day' }, accents: [] },
-    { layout: 'quote', fields: { quote: 'A second brain fixes that.', author: 'The text' }, accents: [] },
+    { layout: 'quote', fields: { quote: 'A second brain fixes that.' }, accents: [] },
   ];
   const CLOSING = { layout: 'cta-button', fields: { headline: 'Build a second brain', button: 'Comment brain' }, accents: [] };
   /** A deck from a fake writer: slides = the writer's plan (7 slides), pictures = ids of SHAPES. */
   const deck = async (o) => {
-    const provider = { id: 'dev-cli', label: 'fake', async write(prompt) { deck.prompt = deck.prompt ?? prompt; return { text: JSON.stringify({ title: 'T', slides: o.slides }), ms: 1 }; } };
+    const provider = { id: 'dev-cli', label: 'fake', async write(prompt) { deck.prompt = deck.prompt ?? prompt; return { text: JSON.stringify({ title: 'Second brain', slides: o.slides }), ms: 1 }; } };
     deck.prompt = undefined;
     const look = { pack: PR.presetPackFor(o.style, false), brief: '', hasPhoto: o.pictures.length > 0, images: o.pictures.map(info), site: '' };
     const res = await D.designLibraryDeck({ text: o.text ?? SOURCE, slides: o.slides.length, tone: 'clear', format: 'carousel', styleChoice: o.style, styles: [] }, look, '', provider, new AbortController().signal);
@@ -144,7 +144,7 @@ test('C3: an unused picture gives a text slide a picture layout with the same wo
       { layout: 'big-stat', fields: { number: '1', label: 'idea a day' }, accents: [] },
       { layout: 'statement', fields: { headline: 'Keep only what helps you act' }, accents: [] },
       { layout: 'checklist', fields: { title: 'A habit that works', items: ['Capture one idea', 'Review it Friday', 'Link it'] }, accents: [] },
-      { layout: 'quote', fields: { quote: 'A second brain fixes that.', author: 'The text' }, accents: [] },
+      { layout: 'quote', fields: { quote: 'A second brain fixes that.' }, accents: [] },
       H.CLOSING,
     ];
     const d = await H.deck({ style: 'style-6', slides, pictures: ['landscape', 'portrait'] });

@@ -240,14 +240,18 @@ const quote: Build = (c, s: Extract<SlideScript, { type: 'quote' }>) => {
   const qm = 120;
   const q = buildText({ id: 'quote', x: c.M, y: 0, width: c.W - 2 * c.M, text: s.quote, font: t.fonts.headline, weight: t.fonts.headlineWeight, size: t.type.quote, minSize: 56, maxHeight: 560, color: pal.text, lineHeight: 1.16 });
   const by = buildText({ id: 'by', x: c.M, y: 0, width: c.W - 2 * c.M, text: s.by, font: t.fonts.body, weight: t.fonts.strong, size: t.type.body - 4, minSize: 34, maxHeight: 140, color: pal.muted, lineHeight: 1.2, balance: false });
-  const total = qm * 1.2 + t.spacing.gap + q.height + t.spacing.section + by.height;
+  // no attribution when nobody is named: no line and no divider are drawn
+  const hasBy = !!String(s.by ?? '').trim();
+  const total = qm * 1.2 + t.spacing.gap + q.height + (hasBy ? t.spacing.section + by.height : 0);
   const y0 = startY(c, total, 0.45);
   add(c, ...quoteMarks('qmark', c.M, y0, qm, pal.accent));
   const yq = y0 + qm * 1.2 + t.spacing.gap;
   const qb = headline(c, pal, 'quote', yq, s.quote, t.type.quote, 56, 560, s.highlight);
-  add(c, divider(t, pal, 'divider', c.M, yq + qb.height + t.spacing.section / 2, 140));
-  c.notes.push(...by.notes);
-  add(c, { ...by.layer, y: yq + qb.height + t.spacing.section });
+  if (hasBy) {
+    add(c, divider(t, pal, 'divider', c.M, yq + qb.height + t.spacing.section / 2, 140));
+    c.notes.push(...by.notes);
+    add(c, { ...by.layer, y: yq + qb.height + t.spacing.section });
+  }
   chrome(c, pal);
   return pal;
 };

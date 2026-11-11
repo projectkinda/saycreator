@@ -55,7 +55,7 @@ export const FIELDS: Record<SlideType, FieldDef[]> = {
   ],
   quote: [
     { key: 'quote', label: 'Quote', kind: 'area', required: true },
-    { key: 'by', label: 'Said by', kind: 'text', required: true },
+    { key: 'by', label: 'Said by (leave empty when nobody is named)', kind: 'text', required: false },
     { key: 'highlight', label: 'Highlighted words', kind: 'text', required: false, hint: 'Words from the quote to mark.' },
   ],
   closing: [

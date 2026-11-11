@@ -392,6 +392,9 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
     },
     plan(f, v, st, cx) {
       const img = imageOf(f.image);
+      // a wide picture (2:1 or wider) is small in the band under the text: it takes the hero band of headline-body-image (the whole width, 50% of the slide) with the same words
+      const wideAt = shapeOf(img);
+      if (img && wideAt && wideAt.aspect >= 2) return layoutDef('headline-body-image')!.plan({ headline: str(f, 'heading'), body: str(f, 'paragraph'), image: img }, 1, st, cx);
       if (img && panelShape(img) && columnFits(st, str(f, 'heading'))) {
         const d = place(st, cx, 'top', (d) => splitPanel(d, img, v, (t, x, w) => {
           t.text('title', str(f, 'heading'), { x, w, size: 72, max: 96, weight: 800, font: 'h', lines: 6, min: 56, gap: 28 });

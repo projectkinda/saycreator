@@ -220,6 +220,10 @@ function wrapStyled(layer: TextLayer, maxWidth: number, size: number): { lines: 
   const spaceW = measureWidth(' ', layer.style.font, layer.style.weight, size) + (layer.style.letterSpacing ?? 0);
   const marked = new Set((layer.highlight?.words ?? []).map(wordKey).filter(Boolean));
   const tokW = (t: Tok) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size) + trailGap(layer, marked, t);
+  // a line of left-aligned text that starts with a marked word is set in by the bar's padding, so the bar's left edge stays on the text box's edge (inside the margin)
+  const lead = (t: Tok) => (layer.style.align !== 'center' && layer.style.align !== 'right' && markedTok(layer, marked, t) ? layer.highlight!.paddingX : 0);
+  // a marked word that ends a line leaves the bar's padding at its right: the line must still fit with it
+  const tail = (t: Tok) => (markedTok(layer, marked, t) ? layer.highlight!.paddingX : 0);
   let offset = 0;
   for (const para of layer.text.split('\n')) {
     // Only ordinary white space breaks a line: a no-break space keeps two words together.
@@ -230,19 +234,19 @@ function wrapStyled(layer: TextLayer, maxWidth: number, size: number): { lines: 
       continue;
     }
     let line: Tok[] = [toks[0]];
-    let w = tokW(toks[0]);
+    let w = tokW(toks[0]) + lead(toks[0]);
     if (w > maxWidth) wordTooWide = true;
     for (const t of toks.slice(1)) {
       const tw = tokW(t);
       const add = spaceW + pillGap(layer, marked, line[line.length - 1], t, spaceW);
-      if (w + add + tw <= maxWidth) {
+      if (w + add + tw + tail(t) <= maxWidth) {
         line.push(t);
         w += add + tw;
       } else {
         lines.push(line);
         line = [t];
-        w = tw;
-        if (tw > maxWidth) wordTooWide = true;
+        w = tw + lead(t);
+        if (w > maxWidth) wordTooWide = true;
       }
     }
     lines.push(line);
@@ -324,7 +328,8 @@ function layoutStyled(layer0: TextLayer): TextBlock {
     const tw = toks.map((t, k) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, fit.size) + gaps[k]);
     const gapAt = (k: number) => (k > 0 ? spaceW + pillGap(layer, marked, toks[k - 1], toks[k], spaceW) : 0);
     const width = Math.max(0, tw.reduce((a, b) => a + b, 0) + toks.reduce((a, _t, k) => a + gapAt(k), 0) - (ls > 0 ? ls : 0));
-    const x0 = s.align === 'center' ? (layer.width - width) / 2 : s.align === 'right' ? layer.width - width : 0;
+    const lead = toks.length && s.align !== 'center' && s.align !== 'right' && markedTok(layer, marked, toks[0]) ? layer.highlight!.paddingX : 0;
+    const x0 = s.align === 'center' ? (layer.width - width) / 2 : s.align === 'right' ? layer.width - width : lead;
     const words: LaidWord[] = [];
     const segments: NonNullable<LaidLine['segments']> = [];
     let cx = x0;
