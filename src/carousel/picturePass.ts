@@ -131,8 +131,10 @@ const BAND_LAYOUTS = ['headline-body-image', 'photo-cover'];
 /** The largest share of the slide a picture of this layout covers: a split panel 50%, a hero band 50% (variant 2); every other picture layout less than half. */
 export function heroShare(layout: string, variant: 0 | 1, picture: string): number {
   const k = shapeOf(picture)?.kind;
+  // the hero band ("picture above", any shape: a tall picture shows its top); the split panel of a tall picture is at most 45% of the width, so it is not a hero
+  // (a cover-art slide with a tall or portrait picture is drawn by headline-body-image, so it has the band too)
+  if ((BAND_LAYOUTS.includes(layout) || (layout === 'cover-art' && (k === 'tall' || k === 'portrait'))) && variant === 1) return (1080 * HERO_BAND_H) / (1080 * 1350);
   if ((k === 'tall' || k === 'portrait') && SPLIT_LAYOUTS.includes(layout)) return (PANEL_W * PANEL_H) / (1080 * 1350);
-  if (BAND_LAYOUTS.includes(layout) && variant === 1) return (1080 * HERO_BAND_H) / (1080 * 1350);
   // a wide picture (2:1 or wider) on art-side-text is drawn as the hero band
   if (layout === 'art-side-text' && (shapeOf(picture)?.aspect ?? 0) >= 2) return (1080 * HERO_BAND_H) / (1080 * 1350);
   return 0;
@@ -153,7 +155,7 @@ export function heroPass(specs0: SlideSpec[], look: Look): { specs: SlideSpec[];
   for (const i of withPic) if (heroShare(specs[i].layout, (specs[i].pin?.variant ?? 0) as 0 | 1, pic(i)) >= 0.5) return { specs, swaps, hero: i };
   // a picture slide of a hero layout: pin its "picture above" variant
   for (const i of withPic) {
-    if (BAND_LAYOUTS.includes(specs[i].layout) && heroShare(specs[i].layout, 1, pic(i)) >= 0.5) {
+    if (heroShare(specs[i].layout, 1, pic(i)) >= 0.5) {
       specs = specs.map((s, k) => (k === i ? { ...s, pin: { ...s.pin, variant: 1 as const } } : s));
       swaps.push({ slide: i + 1, from: specs[i].layout, to: specs[i].layout, why: 'the hero: the picture runs edge to edge over more than half of the slide ("picture above")' });
       return { specs, swaps, hero: i };

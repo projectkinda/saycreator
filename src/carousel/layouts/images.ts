@@ -111,7 +111,7 @@ export const nearSquare = (a: number): boolean => a >= 0.7 && a <= 1.4;
 const panelShape = (src: string): boolean => { const k = shapeOf(src)?.kind; return k === 'tall' || k === 'portrait'; };
 const SLIDE_W = 1080;
 /** The picture panel of a split: 61% of the width. */
-export const PANEL_W = 655;
+export const PANEL_W = 486;
 /** The panel and the hero band sit between the handle / number at the top of the slide (y 62 to 109) and the page counter at the foot (from y 1258), so no text of the page chrome is ever over a picture. */
 export const PANEL_Y = 116;
 /** Its height: 655 x 1114 is 50.04% of the slide. */
@@ -139,11 +139,20 @@ function heroBand(d: Draw, img: string, texts: (t: Draw) => void): void {
   d.y = top + Math.max(0, Math.round((d.fy1 - top - heightOf(d, texts)) / 2));
   texts(d);
 }
-/** Whether a headline fits the narrow text column of a split (6 lines at the 72 px floor of a content headline, no word wider than the column). A longer one takes the hero band instead. */
-const columnFits = (st: LayoutStyle, text: string): boolean => {
+/** The headline size of the other headline-left layouts of a style (a statement is set at 140 px, up to 150): the headline of a split is at least 85% of it. */
+const HEAD_REF = 140;
+/**
+ * The size the headline takes beside a tall picture: the largest from the reference size down to 85% of it at which it wraps to at most 4 lines in the text column (the picture panel is at most 45% of the
+ * width) with no word wider than the column. Null when it does not fit: the slide is then the stacked version (the picture below the text).
+ */
+const panelHeadSize = (st: LayoutStyle, text: string): number | null => {
   const w = SLIDE_W - PANEL_W - 40 - 48 - 6;
   const wt = nearestWeight(st.fonts.headline, 800);
-  return text.split(/\s+/).filter(Boolean).every((x) => measureWidth(x, st.fonts.headline, wt, 72) <= w * 0.98) && measure(text, st.fonts.headline, wt, 72, w, 1.05).n <= 6;
+  const words = text.split(/\s+/).filter(Boolean);
+  for (let z = HEAD_REF; z >= Math.ceil(HEAD_REF * 0.85); z -= 3) {
+    if (words.every((x) => measureWidth(x, st.fonts.headline, wt, z) <= w * 0.98) && measure(text, st.fonts.headline, wt, z, w, 1.05).n <= 4) return z;
+  }
+  return null;
 };
 const IMG = (name: string, note: string) => ({ name, required: false as const, max: 12_000_000, image: true as const, note });
 
@@ -165,22 +174,23 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       if (!img) return layoutDef('prose')!.plan({ heading: str(f, 'headline'), ...(num ? { num } : {}), p1: str(f, 'body') }, v, st, cx);
       const texts = (t: Draw) => {
         t.text('title', head, { size: 96, max: 130, weight: 800, font: 'h', lines: 3, min: 72, gap: 28 });
-        t.text('body', str(f, 'body'), { size: 56, max: 64, lines: 4, min: 44, lh: 1.3, gap: v === 0 ? 40 : 0 });
+        if (str(f, 'body')) t.text('body', str(f, 'body'), { size: 56, max: 64, lines: 4, min: 44, lh: 1.3, gap: v === 0 ? 40 : 0 });
       };
       // a tall or portrait picture: a half-and-half split (the picture edge to edge on one side)
-      if (panelShape(img) && columnFits(st, head)) {
-        const d = place(st, cx, 'top', (d) => splitPanel(d, img, v, (t, x, w) => {
-          t.text('title', head, { x, w, size: 72, max: 96, weight: 800, font: 'h', lines: 6, min: 56, gap: 28 });
-          t.text('body', str(f, 'body'), { x, w, size: 44, max: 48, lines: 12, min: 44, lh: 1.3 });
+      const panelZ = panelShape(img) && v === 0 ? panelHeadSize(st, head) : null;
+      if (panelZ) {
+        const d = place(st, cx, 'top', (d) => splitPanel(d, img, 0, (t, x, w) => {
+          t.text('title', head, { x, w, size: panelZ, max: panelZ, weight: 800, font: 'h', lines: 4, min: 72, gap: 28 });
+          if (str(f, 'body')) t.text('body', str(f, 'body'), { x, w, size: 44, max: 48, lines: 12, min: 44, lh: 1.3 });
         }));
         return mk(d, { noBalance: true, type: slideType(d), fitAs: 'headline-body-image', slide: rowsSlide(d, head) });
       }
-      // "picture above" (or a tall or portrait picture with a headline too long for the split column): the hero band, edge to edge over more than half of the slide
-      if (v === 1 || panelShape(img)) {
+      // "picture above": the hero band, edge to edge over more than half of the slide (a tall picture too: it shows its top). A tall picture with a headline too long for the split column is the stacked version below
+      if (v === 1) {
         const d = place(st, cx, 'top', (d) => {
           heroBand(d, img, (t) => {
             t.text('title', head, { size: 76, max: 88, weight: 800, font: 'h', lines: 2, min: 56, gap: 24 });
-            t.text('body', str(f, 'body'), { size: 44, max: 48, lines: 3, min: 44, lh: 1.3 });
+            if (str(f, 'body')) t.text('body', str(f, 'body'), { size: 44, max: 48, lines: 3, min: 44, lh: 1.3 });
           });
         });
         return mk(d, { noBalance: true, type: slideType(d), fitAs: 'headline-body-image', slide: rowsSlide(d, head) });
@@ -395,9 +405,10 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       // a wide picture (2:1 or wider) is small in the band under the text: it takes the hero band of headline-body-image (the whole width, 50% of the slide) with the same words
       const wideAt = shapeOf(img);
       if (img && wideAt && wideAt.aspect >= 2) return layoutDef('headline-body-image')!.plan({ headline: str(f, 'heading'), body: str(f, 'paragraph'), image: img }, 1, st, cx);
-      if (img && panelShape(img) && columnFits(st, str(f, 'heading'))) {
-        const d = place(st, cx, 'top', (d) => splitPanel(d, img, v, (t, x, w) => {
-          t.text('title', str(f, 'heading'), { x, w, size: 72, max: 96, weight: 800, font: 'h', lines: 6, min: 56, gap: 28 });
+      const sideZ = img && panelShape(img) ? panelHeadSize(st, str(f, 'heading')) : null;
+      if (img && sideZ) {
+        const d = place(st, cx, 'top', (d) => splitPanel(d, img, 0, (t, x, w) => {
+          t.text('title', str(f, 'heading'), { x, w, size: sideZ, max: sideZ, weight: 800, font: 'h', lines: 4, min: 72, gap: 28 });
           t.text('body', str(f, 'paragraph'), { x, w, size: 44, max: 48, lines: 12, min: 44, lh: 1.3 });
         }));
         return mk(d, { noBalance: true, type: 'content', fitAs: 'art-side-text', slide: { type: 'content', headline: str(f, 'heading'), body: str(f, 'paragraph') } });
@@ -515,7 +526,7 @@ const SLOTS: Record<string, { min: number; slots: (v: 0 | 1) => ImageSlotDef[] }
   'headline-body-image': { min: 1, slots: () => [slot('image', 978 / 520, ANY)] },
   'image-row': { min: 3, slots: (v) => ['image', 'image2', 'image3'].map((f) => slot(f, 310 / (v === 1 ? 500 : 400), PORT)) },
   'thumb-rows': { min: 3, slots: () => ['image', 'image2', 'image3', 'image4'].map((f) => slot(f, 230 / 160, LAND)) },
-  'cover-art': { min: 1, slots: (v) => [v === 0 ? slot('image', 1, ANY) : slot('image', 978 / 400, LAND)] },
+  'cover-art': { min: 1, slots: (v) => [v === 0 ? slot('image', 1, ANY) : slot('image', 978 / 400, ANY)] },
   'photo-cover': { min: 1, slots: () => [slot('image', 978 / 420, ANY)] },
   'portrait-closing': { min: 1, slots: () => [slot('image', 0.7, PORT, 'portrait')] },
   'art-side-text': { min: 1, slots: () => [slot('image', 978 / 400, ANY)] },

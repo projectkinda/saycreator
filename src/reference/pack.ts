@@ -77,6 +77,8 @@ export interface PackLook {
   flavour?: { cover?: string; coverVariant?: 0 | 1; coverQuestion?: string; prefer?: string[]; avoid?: string[]; variants?: Record<string, 0 | 1> };
   /** The layout the closing slide takes (library.byType.closing) and the layouts it avoids. */
   closingLayout?: { layout: string; variant?: 0 | 1; avoid?: string[] };
+  /** The covers the preset allows and avoids (library.byType.cover). */
+  coverLayouts?: { layouts: string[]; avoid?: string[] };
   caseStyle?: 'none' | 'upper' | 'lower';
   caseExceptions?: string[];
   weights?: { headline: number; body: number };
@@ -552,7 +554,16 @@ const gradientOf = (v: unknown): PackGround['gradient'] => {
 const groundOfName = (spec: StyleSpec, n: string): PackGround => {
   const p = spec.palettes[n] as unknown as Record<string, unknown>;
   const g = spec.library?.gradients?.[n] ?? gradientOf(p.bg);
-  return { bg: solid(p.bg), text: solid(p.text), muted: solid(p.muted ?? p.text), accent: solid(p.accent), surface: solid(p.surface ?? p.bg), onAccent: solid(p.onAccent), ...(g ? { gradient: g } : {}) };
+  const ground = { bg: solid(p.bg), text: solid(p.text), muted: solid(p.muted ?? p.text), accent: solid(p.accent), surface: solid(p.surface ?? p.bg), onAccent: solid(p.onAccent), ...(g ? { gradient: g } : {}) };
+  // a gradient ground: the colour the contrast is worked out on is the stop the inks read WORST on (the lightest stop for a light ink), so an accent word never lands on a stop where it drops under 4.5:1
+  if (g) {
+    const lum = (h: string) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+    const ratio = (x: string, y: string) => { const a = lum(x), b = lum(y); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
+    const weakest = (stop: string) => Math.min(ratio(ground.text, stop), ratio(ground.muted, stop), ratio(ground.accent, stop));
+    const stops = g.stops.map((x) => solid(x.color)).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
+    if (stops.length) ground.bg = stops.reduce((w, c) => (weakest(c) < weakest(w) ? c : w), stops[0]);
+  }
+  return ground;
 };
 const groundsOf = (spec: StyleSpec): PackGround[] => {
   const names = (spec.rhythm && spec.rhythm.length ? spec.rhythm : Object.keys(spec.palettes)).filter((n) => spec.palettes[n]).slice(0, 6);
@@ -587,7 +598,7 @@ export function packFromStyle(spec: StyleSpec): StylePack {
   };
   const pack: StylePack = { name: `${spec.title} pack`, palette, fonts, motifs: [], designs, imageSlots, square: sq, canvas: { ...SIZE }, basic: true, notes: [`Basic pack: the ${spec.title} style's colours and fonts on the standard compositions (the same for every style). A pack made from a reference by the model is better.`] };
   const closeName = spec.byType?.closing;
-  pack.look = { rhythm: groundsOf(spec), ...(closeName && spec.palettes[closeName] ? { closing: groundOfName(spec, closeName) } : {}), ...(spec.library?.flavour ? { flavour: spec.library.flavour } : {}), ...(spec.library?.byType?.closing ? { closingLayout: spec.library.byType.closing } : {}), ...(spec.library?.devices ? { deco: spec.library.devices } : {}), radius: spec.shape.radius, ...(spec.library?.caseExceptions?.length ? { caseExceptions: spec.library.caseExceptions } : {}), caseStyle: spec.caseStyle === 'upper' ? 'upper' : spec.caseStyle === 'lower' ? 'lower' : 'none', weights: { headline: spec.fonts.headlineWeight ?? 800, body: spec.fonts.bodyWeight ?? 500 }, ...(gradientOf((Object.values(spec.palettes)[0] as unknown as { bg?: unknown }).bg) ? { gradient: gradientOf((Object.values(spec.palettes)[0] as unknown as { bg?: unknown }).bg) } : {}) };
+  pack.look = { rhythm: groundsOf(spec), ...(closeName && spec.palettes[closeName] ? { closing: groundOfName(spec, closeName) } : {}), ...(spec.library?.flavour ? { flavour: spec.library.flavour } : {}), ...(spec.library?.byType?.closing ? { closingLayout: spec.library.byType.closing } : {}), ...(spec.library?.byType?.cover ? { coverLayouts: spec.library.byType.cover } : {}), ...(spec.library?.devices ? { deco: spec.library.devices } : {}), radius: spec.shape.radius, ...(spec.library?.caseExceptions?.length ? { caseExceptions: spec.library.caseExceptions } : {}), caseStyle: spec.caseStyle === 'upper' ? 'upper' : spec.caseStyle === 'lower' ? 'lower' : 'none', weights: { headline: spec.fonts.headlineWeight ?? 800, body: spec.fonts.bodyWeight ?? 500 }, ...(gradientOf((Object.values(spec.palettes)[0] as unknown as { bg?: unknown }).bg) ? { gradient: gradientOf((Object.values(spec.palettes)[0] as unknown as { bg?: unknown }).bg) } : {}) };
   return pack;
 }
 

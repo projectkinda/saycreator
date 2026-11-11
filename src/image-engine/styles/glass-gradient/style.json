@@ -500,6 +500,7 @@
     "field": true
   },
   "library": {
+    "byType": { "cover": { "layouts": ["cover-centred", "cover-block", "cover-word", "statement"] } },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "gradients": {
       "dusk": {
@@ -511,7 +512,7 @@
           },
           {
             "at": 1,
-            "color": "#6B3216"
+            "color": "#552710"
           }
         ]
       }

@@ -11,6 +11,25 @@ import { layoutDef, validateSlideContent } from './layouts';
 import type { SlideSpec } from './designLibrary';
 import { accentsIn, flat, layoutOptionsFor, toCanon } from './layoutMap';
 import { IMAGE_LAYOUT_IDS, hasEnoughPictures } from './layouts/images';
+import { COVER_FORMS, isCoverLayout } from './layouts/coverIds';
+
+/** A stable 32-bit hash of a text (FNV-1a): the cover of a deck is chosen from it, never at random. */
+export function stableHash(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h >>> 0;
+}
+/** What the cover is chosen from: the deck's title and the words of its first headline (the same deck always has the same key, whichever cover it is drawn with). */
+/** The id of a built-in style from its pack ("preset:style-4" -> "style-4"): the same whatever the title the style shows. */
+export const styleIdOf = (pack: { name: string; readKey?: string } | null | undefined): string => (pack?.readKey ?? '').replace(/^preset:/, '') || (pack?.name ?? '').replace(/ pack$/, '');
+export function coverKeyOf(title: string, specs: SlideSpec[], styleId = ''): string {
+  const f = specs[0]?.fields ?? {};
+  const head = String(f.headline ?? f.question ?? f.lead ?? f.heading ?? '');
+  const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean).join(' ');
+  return norm(title) + '|' + norm(head) + '|' + styleId;
+}
+/** The layouts a cover may be replaced by: the covers and plain statement forms (a picture cover the person's picture fills is kept as it is). */
+const COVER_SWAPPABLE = new Set<string>([...COVER_FORMS, 'big-question', 'statement-question']);
 
 /** Layouts that look alike in a row (a deck should not put two of one family side by side). */
 export const FAMILY: Partial<Record<LayoutId, string>> = {
@@ -19,6 +38,7 @@ export const FAMILY: Partial<Record<LayoutId, string>> = {
   stepper: 'list', checklist: 'list', 'numbered-list': 'list', timeline: 'list', 'card-grid': 'list', spotlight: 'list',
   'split-text': 'text', 'feature-slider': 'text', quote: 'text', comparison: 'text',
   'step-numeral': 'numeral', 'listicle-numeral': 'numeral',
+  'cover-centred': 'hero', 'cover-index': 'hero', 'cover-block': 'hero', 'cover-sticker': 'hero', 'cover-word': 'hero', 'cover-ruled': 'hero',
   'statement-stacked': 'hero', 'statement-card': 'hero', 'statement-pill': 'hero', 'statement-question': 'hero', 'contact-closing': 'hero', 'cta-pair': 'hero',
   'headline-body-image': 'photo', 'image-row': 'photo', 'thumb-rows': 'photo', 'cover-art': 'photo', 'photo-cover': 'photo', 'portrait-closing': 'photo', 'art-side-text': 'photo', 'do-dont': 'photo',
   prose: 'text', 'headline-card': 'text', 'numbered-stagger': 'list', 'bullet-list': 'list', 'pill-stagger': 'list',
@@ -86,7 +106,7 @@ function closingCard(spec: SlideSpec, layout: string): { layout: LayoutId; field
   return { layout: 'statement-card', fields, dropped: flat(own).filter(lost), droppedCore, current: false };
 }
 
-export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look, name = 'this style'): FlavourResult {
+export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look, name = 'this style', deckKey = ''): FlavourResult {
   const fl = style.flavour;
   const specs = specs0.map((s) => ({ ...s }));
   const swaps: FlavourSwap[] = [];
@@ -132,7 +152,28 @@ export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look,
     const r = tryLayout(0, q);
     if (r.ok) apply(0, q, r.fields, r.dropped, `the hook of the cover is a question, so the cover of ${name} is "${q}"`);
     else kept.push({ slide: 1, layout: specs[0].layout, why: `question cover stays: ${r.why}` });
-  } else if (fl.cover && specs[0].layout !== fl.cover && !(q && specs[0].layout === q) && swaps.length < cap && !picturedLayout(specs[0].layout)) {
+  } else if (style.coverLayouts?.layouts.length && !picturedLayout(specs[0].layout) && COVER_SWAPPABLE.has(specs[0].layout)) {
+    // the cover family: the style lists the covers it allows; the deck takes one of them by a stable rule (its key and the style name), a picture cover too when the person added pictures
+    const cl0 = style.coverLayouts;
+    const avoidC = new Set<string>((cl0.avoid ?? []) as string[]);
+    const pool = [...(cl0.layouts as string[]), ...(look.images?.length ? ['photo-cover', 'cover-art'].filter((p) => hasEnoughPictures(p, look.images!)) : [])].filter((l, i, a) => !avoidC.has(l) && a.indexOf(l) === i);
+    const h = stableHash(deckKey || coverKeyOf('', specs, name));
+    // the covers that can take this headline (a word cover needs three words and no other text, a stacked one two to four words ...): the choice is among them, so a deck is never moved to a cover that cannot show it
+    // (the word cover sets the LAST word huge and highlights it: a headline whose highlight is another word is not given that cover)
+    const lastW = (String(specs[0].fields.headline ?? '').trim().split(/\s+/).pop() ?? '').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+    const wordOk = (t: string) => t !== 'cover-word' || specs[0].accents.every((a) => a.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase() === lastW);
+    const eligible = pool.map((target) => ({ target, opt: layoutOptionsFor(specs[0], look, { joinStat: true }).find((o) => o.layout === target) })).filter((x) => x.target === specs[0].layout || (x.opt && wordOk(x.target) && !x.opt.droppedCore.length && !x.opt.dropped.length && specs[1]?.layout !== x.target));
+    let done0 = false;
+    if (eligible.length) {
+      const { target, opt } = eligible[h % eligible.length];
+      done0 = true;
+      if (target !== specs[0].layout && opt) {
+        apply(0, target, opt.fields, opt.dropped, `the cover of ${name} is one of its ${pool.length} covers, chosen from the deck: "${target}"`);
+        if (isCoverLayout(target)) specs[0] = { ...specs[0], pin: { ...specs[0].pin, variant: ((h >>> 7) & 1) as 0 | 1 } };
+      }
+    }
+    if (!done0) kept.push({ slide: 1, layout: specs[0].layout, why: 'cover stays: none of the covers of the style takes its text' });
+  } else if (fl.cover && (!style.coverLayouts?.layouts.length || !COVER_SWAPPABLE.has(specs[0].layout)) && specs[0].layout !== fl.cover && !(q && specs[0].layout === q) && swaps.length < cap && !picturedLayout(specs[0].layout)) {
     const r = tryLayout(0, fl.cover);
     if (r.ok) apply(0, fl.cover, r.fields, r.dropped, `the cover of ${name} is "${fl.cover}"`);
     else kept.push({ slide: 1, layout: specs[0].layout, why: `cover stays: ${r.why}` });

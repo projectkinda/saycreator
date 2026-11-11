@@ -5,6 +5,7 @@ import { isUserStyle } from '../reference/templates';
 import { withOverrides } from '../reference/overrides';
 import { packFromStyle, type StylePack } from '../reference/pack';
 import { drawOne, styleFromPack, templateRoute } from './designLibrary';
+import { coverKeyOf, flavourPass } from './flavour';
 import { styleByName } from './render';
 
 export const presetKey = (name: string) => 'preset:' + name;
@@ -25,6 +26,10 @@ export async function presetThumbSvg(name: string): Promise<string | null> {
   const pack = presetPackFor(name, false);
   if (!pack) return null;
   const { style } = styleFromPack(pack);
-  const d = await drawOne({ layout: 'statement', fields: { kicker: 'Example', headline: 'A headline that makes people stop', caption: 'And a line that makes them swipe.' }, accents: ['stop'] }, style.flavour?.coverVariant === 1 ? 1 : 0, style, { handle: '@yourname', index: 0, total: 6, cut: 'plain', invert: false, density: 'normal' });
+  // the cover the style gives a deck of this sample (the same rule as a real deck: one of the style's own covers, chosen from the deck and the style name), so the cards no longer all show the same cover
+  const sample = { layout: 'statement', fields: { kicker: 'Example', headline: 'A headline that makes people stop', caption: 'And a line that makes them swipe.' }, accents: ['stop'] };
+  const fp = pack.look?.flavour ? flavourPass([sample], style, { pack, brief: '', hasPhoto: false, images: [], site: '' }, name, coverKeyOf('Example', [sample], name)) : null;
+  const cover: import('./designLibrary').SlideSpec = fp?.specs[0] ?? sample;
+  const d = await drawOne(cover, (cover.pin?.variant ?? style.flavour?.coverVariant ?? 0) as 0 | 1, style, { handle: '@yourname', index: 0, total: 6, cut: 'plain', invert: false, density: 'normal' });
   return d.built ? d.built.svg : null;
 }

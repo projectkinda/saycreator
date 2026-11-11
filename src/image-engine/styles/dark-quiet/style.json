@@ -69,6 +69,7 @@
     "The reference's small logo mark and round arrow button in the top corners: the round arrow button exists as a tool but is not used in these layouts."
   ],
   "library": {
+    "byType": { "cover": { "layouts": ["cover-centred", "cover-ruled", "cover-index", "statement"] } },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "flavour": {
       "cover": "statement",

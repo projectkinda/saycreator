@@ -1,6 +1,7 @@
 // Deterministic picking helpers. The model gives a content shape (or a layout id) and text; the code decides the rest.
 import { IMAGE_LAYOUT_IDS, imageProblem } from './images';
 import { LAYOUT_IDS, cutsOf, layoutDef } from './library';
+import { isCoverLayout } from './coverIds';
 import { contrast } from './draw';
 import type { ContentShape, Cut, Fields, Flavour, LayoutId, LayoutStyle } from './types';
 
@@ -40,7 +41,7 @@ export function rotateVariants(deck: DeckItem[], opts: { photo?: boolean; flavou
     const prev = out[i - 1]?.layout;
     const ok = (id: LayoutId) => (!prev || neighbourFamily(id) !== neighbourFamily(prev)) && (used[id] ?? 0) < 2 && (opts.photo || !isPhotoLayout(id));
     const wanted = item.layout ? [item.layout, ...(item.shape ? layoutFor(item.shape) : [])] : item.shape ? layoutFor(item.shape) : [];
-    const pool = [...wanted, ...LAYOUT_IDS.filter((id) => !isPhotoLayout(id) || !!opts.photo).sort((a, b) => rank(a) - rank(b))];
+    const pool = [...wanted, ...LAYOUT_IDS.filter((id) => !isCoverLayout(id) && (!isPhotoLayout(id) || !!opts.photo)).sort((a, b) => rank(a) - rank(b))];
     const layout = pool.find(ok) ?? pool[0];
     const n = used[layout] ?? 0;
     used[layout] = n + 1;

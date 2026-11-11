@@ -112,7 +112,7 @@ test('a button that is not an action phrase: one retry asks for a new one; if it
   expect(r.d.layouts[6], 'a closing statement with no button is kept as it is').toBe('statement-card');
 });
 
-test('covers: each preset keeps its own cover form (statement-stacked, statement-pill, statement-card); a question hook takes statement-question where the preset has it; plain statement is never the result', async ({ page }) => {
+test('covers: each preset gives the deck one of the covers it allows (Round 6: a cover family chosen from the deck); a question hook takes statement-question where the preset has it', async ({ page }) => {
   await page.goto('/images/carousel');
   const r = await page.evaluate(async (BODY) => {
     const D = await import('/src/carousel/designLibrary.ts');
@@ -139,15 +139,13 @@ test('covers: each preset keeps its own cover form (statement-stacked, statement
       s1: await run('style-1', plain),
     };
   }, BODY);
-  expect(r.s4.first, 'style-4 cover form').toBe('statement-stacked');
-  expect(r.s4own.first, 'its own cover form is never swapped to plain statement').toBe('statement-stacked');
-  expect(r.s7.first, 'style-7 cover form').toBe('statement-pill');
-  expect(r.s7own.first).toBe('statement-pill');
-  expect(r.s5.first, 'style-5 cover form').toBe('statement-card');
-  expect(r.s5own.first).toBe('statement-card');
+  const ALLOWED: Record<string, string[]> = { s4: ['statement-stacked', 'cover-word', 'cover-sticker', 'cover-index'], s7: ['statement-pill', 'cover-sticker', 'cover-word', 'cover-centred'], s5: ['statement-card', 'cover-centred', 'cover-ruled', 'cover-block'], s8: ['cover-centred', 'cover-word', 'cover-index', 'cover-ruled'], s1: ['cover-ruled', 'cover-index', 'cover-centred', 'statement'] };
+  for (const k of ['s4', 's4own']) expect(ALLOWED.s4, `style-4 ${k}`).toContain((r as any)[k].first);
+  for (const k of ['s7', 's7own']) expect(ALLOWED.s7, `style-7 ${k}`).toContain((r as any)[k].first);
+  for (const k of ['s5', 's5own']) expect(ALLOWED.s5, `style-5 ${k}`).toContain((r as any)[k].first);
   expect(r.s8q.first, 'style-8: a question hook').toBe('statement-question');
-  expect(r.s8plain.first, 'style-8: a hook that is not a question stays a statement').toBe('statement');
-  expect(r.s1.first, 'a preset whose cover form is statement keeps it').toBe('statement');
+  expect(ALLOWED.s8, 'style-8: a hook that is not a question gets one of its covers').toContain(r.s8plain.first);
+  expect(ALLOWED.s1, 'style-1').toContain(r.s1.first);
 });
 
 test('numbered-stagger: numerals in one column, sentences on one edge; three long items fall back to numbered-list; two items stay a stagger', async ({ page }) => {

@@ -6,6 +6,7 @@ export type LayoutId =
   | 'checklist' | 'numbered-list' | 'comparison' | 'quote' | 'feature-slider' | 'cta-button' | 'card-grid' | 'photo-led'
   | 'listicle-numeral' | 'stat-grid' | 'timeline' | 'spotlight'
   | 'prose' | 'statement-stacked' | 'statement-card' | 'statement-pill' | 'statement-question' | 'contact-closing' | 'cta-pair' | 'numbered-stagger' | 'bullet-list' | 'pill-stagger' | 'headline-card'
+  | 'cover-centred' | 'cover-index' | 'cover-block' | 'cover-sticker' | 'cover-word' | 'cover-ruled'
   | 'headline-body-image' | 'image-row' | 'thumb-rows' | 'cover-art' | 'photo-cover' | 'portrait-closing' | 'art-side-text' | 'do-dont';
 
 export type ContentShape =
@@ -52,6 +53,8 @@ export interface LayoutStyle {
   closing?: Ground;
   /** The layout the closing slide takes in a preset (library.byType.closing): the layout, its variant, and the layouts a closing avoids. */
   closingLayout?: { layout: LayoutId; variant?: 0 | 1; avoid?: LayoutId[] };
+  /** The covers the preset allows (3 or more) and avoids (library.byType.cover). */
+  coverLayouts?: { layouts: LayoutId[]; avoid?: LayoutId[] };
   /** The website the person has set in their profile / brand settings: the footer shows it, and shows no website line when there is none. */
   site?: string;
   /** Layout flavour (see Flavour). */

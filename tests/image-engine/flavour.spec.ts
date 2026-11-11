@@ -34,14 +34,15 @@ test('flavour pass rules', async ({ page }) => {
   // references (no flavour): untouched
   expect(r.none.swaps).toEqual([]);
   expect(r.none.specs.map((s: any) => s.layout)).toEqual(r.srcWords.map((_: unknown, i: number) => ['big-question', 'split-text', 'stepper', 'big-stat', 'checklist', 'stat-bar', 'quote', 'cta-button'][i]));
-  // editorial-collage: the cover takes its cover layout, avoided stat-bar moves, the story order stays, the cap holds
-  expect(r.ed.specs[0].layout).toBe('statement');
+  // editorial-collage: the cover is one of the covers the style allows (Round 6: a cover family chosen from the deck; it was always "statement"), avoided stat-bar moves, the story order stays, the cap holds
+  expect(['cover-block', 'cover-sticker', 'cover-index', 'statement']).toContain(r.ed.specs[0].layout);
   // meaning is protected: the stepper, the figure slides and the quote keep their layouts (they would only move to a layout that says the same thing)
   expect(r.ed.specs[2].layout).toBe('stepper');
   expect(r.ed.specs[3].layout).toBe('big-stat');
   expect(r.ed.specs[5].layout).toBe('stat-bar');
   expect(r.ed.specs[6].layout).toBe('quote');
-  expect(r.open.swaps.map((w: any) => w.from + '>' + w.to)).toEqual(['big-question>statement', 'feature-slider>split-text']);
+  // (the question cover moves to one of the style's covers: Round 6)
+  expect(r.open.swaps.map((w: any) => w.from + '>' + w.to.replace(/^(?:cover-block|cover-sticker|cover-index)$/, 'statement'))).toEqual(['big-question>statement', 'feature-slider>split-text']);
   expect(r.ed.kept.some((k: any) => /carries an order/.test(k.why))).toBe(true);
   expect(r.ed.specs.length).toBe(r.n);
   expect(r.ed.swaps.length).toBeLessThanOrEqual(Math.ceil(r.n / 2));

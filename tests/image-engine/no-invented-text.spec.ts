@@ -143,12 +143,15 @@ test(`G3: a 2:1 or wider picture on art-side-text takes the hero band (45% or mo
   const r = await page.evaluate(async ({ PLAN, SOURCE }) => {
     const H = (window as any).__H;
     const P = eval(PLAN);
+    const L: any = await import('/src/carousel/layouts/index.ts');
+    const st = H.D.styleFromPack(H.PR.presetPackFor('editorial-collage', false)).style;
+    // the slide drawn straight from the art-side-text layout with each picture shape (a deck may give the cover the first picture, so the layout is drawn alone)
     const share = async (pic: string) => {
-      const d = await H.deck({ style: 'editorial-collage', slides: P.slides({ author: 'x' }), pictures: [pic, 'tall'], text: SOURCE });
-      const i = 3;
-      const im = d.imagesOf(i);
-      const img = d.specs[i].fields.image;
-      return { layout: d.specs[i].layout, share: im.length ? Math.round(H.SHARE(im[0]) * 1000) / 10 : 0, drawn: im.length, sh: d.specs[i].layout === 'art-side-text' ? 'band-under-text' : 'other', ref: String(img ?? '').slice(0, 24) };
+      const sh = H.SHAPES[pic];
+      const image = H.IM.makeRef({ id: pic, w: sh[0], h: sh[1] });
+      const b = await L.buildSlide('art-side-text', 0, { heading: 'Think of it as a wiki', paragraph: 'Give it a structure so that it resurfaces at the right moment.', image }, st, { handle: '@h', index: 3, total: 7 });
+      const im = (b.images ?? [])[0];
+      return { layout: 'art-side-text', share: im ? Math.round(((im.w * im.h) / (1080 * 1350)) * 1000) / 10 : 0, drawn: b.images?.length ?? 0, w: im?.w ?? 0 };
     };
     return { wide: await share('wide'), wideReal: await share('wideReal'), landscape: await share('landscape'), square: await share('square') };
   }, { PLAN, SOURCE });

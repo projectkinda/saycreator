@@ -258,7 +258,7 @@
         }
       ]
     },
-    "byType": {
+    "byType": { "cover": { "layouts": ["statement-card", "cover-centred", "cover-ruled", "cover-block"] },
       "closing": {
         "layout": "statement-card",
         "variant": 1,

@@ -209,6 +209,7 @@
   },
   "assets": {},
   "library": {
+    "byType": { "cover": { "layouts": ["statement-stacked", "cover-word", "cover-sticker", "cover-index"] } },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "flavour": {
       "cover": "statement-stacked",

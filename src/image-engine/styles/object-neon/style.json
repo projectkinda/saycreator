@@ -105,6 +105,7 @@
     "elements": true
   },
   "library": {
+    "byType": { "cover": { "layouts": ["cover-index", "cover-centred", "cover-sticker", "cover-word"] } },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "gradients": {
       "dark": {

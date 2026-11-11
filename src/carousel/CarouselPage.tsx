@@ -16,7 +16,7 @@ import type { CarouselScript } from '../image-engine/carousel/types';
 import { clearPageState } from './resetState';
 import { DetectedStyleBox } from './DetectedStyle';
 import { DRAW_VERSION, legacySvgRoute, redrawLibraryDeck, scriptSlideOf, slideProblems, styleFromPack, templateRoute } from './designLibrary';
-import { flavourPass } from './flavour';
+import { coverKeyOf, styleIdOf, flavourPass } from './flavour';
 import { canSplitLayout, splitSpec } from './splitSlide';
 import { presetKey, presetPackFor, presetThumbSvg } from './presets';
 import { svgToPng } from '../reference/faithful';
@@ -1019,7 +1019,7 @@ export default function CarouselPage() {
     try {
       const look = { pack, hasPhoto: pictures.length > 0, images: photoInfos, site: profileWebsite() };
       const style = styleFromPack(pack).style;
-      const fp = pack.look?.flavour ? flavourPass(lib.plan.specs, style, look, pack.name.replace(/ pack$/, '')) : { specs: lib.plan.specs, swaps: [], kept: [] };
+      const fp = pack.look?.flavour ? flavourPass(lib.plan.specs, style, look, pack.name.replace(/ pack$/, ''), coverKeyOf(lib.plan.title, lib.plan.specs, styleIdOf(pack))) : { specs: lib.plan.specs, swaps: [], kept: [] };
       const out = await redrawLibraryDeck({ ...lib, plan: { ...lib.plan, specs: fp.specs } }, look, pickHandle());
       // a slide whose layout changed gets the script form of its new layout (the words are the same ones)
       let script = d.script;

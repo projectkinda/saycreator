@@ -56,7 +56,7 @@ export function lineTexts(text: string, font: FontFamily, weight: number, size: 
   if (accents) {
     const runs: { start: number; end: number; color: string }[] = [];
     for (const p of accents.phrases) {
-      const at = text.toLowerCase().indexOf(p.toLowerCase());
+      const at = new RegExp('(?<![\\p{L}\\p{N}])' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'iu').exec(text)?.index ?? -1;
       if (at >= 0 && !runs.some((r) => at < r.end && at + p.length > r.start)) runs.push({ start: at, end: at + p.length, color: '#000000' });
     }
     (l as unknown as { balance: boolean }).balance = true;

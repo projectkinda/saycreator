@@ -743,7 +743,8 @@ export const FILLER_WORDS = new Set(['get', 'the', 'a', 'an', 'your', 'you', 'an
  */
 export function accentPhrase(headline: string, accent: string): { start: number; end: number } | null {
   const want = accent.trim().replace(/^[^\p{L}\p{N}$%]+|[^\p{L}\p{N}%]+$/gu, '');
-  const at = want ? headline.toLowerCase().indexOf(want.toLowerCase()) : -1;
+  // whole words only: "no" is not found inside "cannot"
+  const at = want ? (new RegExp('(?<![\\p{L}\\p{N}])' + want.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'iu').exec(headline)?.index ?? -1) : -1;
   if (at < 0) return null;
   if (want.toLowerCase().split(/\s+/).some((w) => !FILLER_WORDS.has(w))) return { start: at, end: at + want.length };
   let best: { start: number; end: number } | null = null;

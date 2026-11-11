@@ -12,13 +12,14 @@ import { LAYOUT_IDS, buildSlide, cutsOf, layoutDef, rotateCuts, rotateVariants, 
 import { coloursFor, fromHsl, inkOn, lightenForText, quietOn, readableInk, toHsl } from './layouts/cuts';
 import { contrast } from './layouts/draw';
 import { sourceBrands } from './layouts/build';
+import { isCoverLayout } from './layouts/coverIds';
 import { withoutSwitches } from '../reference/deco';
 import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
 import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
 import { placeImages } from './imagePlace';
-import { flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
+import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { heroPass, picturePass, separatePictureRuns, type PictureSwap } from './picturePass';
 import { TONES } from './writerPrompt';
 import { inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
@@ -262,6 +263,7 @@ export function styleFromPack(pack: StylePack | null | undefined): { style: Layo
     if (L.closing) base.closing = fixGround(L.closing, notes);
     if (L.flavour) base.flavour = L.flavour as LayoutStyle['flavour'];
     if (L.closingLayout) base.closingLayout = L.closingLayout as LayoutStyle['closingLayout'];
+    if (L.coverLayouts) base.coverLayouts = L.coverLayouts as LayoutStyle['coverLayouts'];
     if (L.deco) base.deco = L.deco;
     if (typeof L.radius === 'number') base.radius = L.radius;
     if (L.caseStyle && L.caseStyle !== 'none') base.caseStyle = L.caseStyle;
@@ -276,6 +278,7 @@ export function styleFromPack(pack: StylePack | null | undefined): { style: Layo
 
 // ----- what the model is told -----
 const GOOD_FOR: Record<LayoutId, string> = {
+  'cover-centred': 'a cover (the code chooses it, never you)', 'cover-index': 'a cover (the code chooses it, never you)', 'cover-block': 'a cover (the code chooses it, never you)', 'cover-sticker': 'a cover (the code chooses it, never you)', 'cover-word': 'a cover (the code chooses it, never you)', 'cover-ruled': 'a cover (the code chooses it, never you)',
   statement: 'a bold claim or the cover hook: one huge headline, optional kicker and caption',
   'lead-statement': 'a story beat: a short lead-in line over a heavy headline',
   'big-question': 'a hook or turn as a question, set huge with a drawn question mark',
@@ -412,7 +415,7 @@ export function flavourCoverLine(fl: NonNullable<LayoutStyle['flavour']>): strin
 export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutStyle, brief: string, n: number, handle?: string): string {
   const tone = TONES.find((t) => t.id === req.tone)!;
   // photo-led needs a photo; a layout with picture slots needs enough pictures that fit its slots (the metadata list below); without a list, any photo will do
-  const ids = LAYOUT_IDS.filter((id) => (id === 'photo-led' ? !!look.hasPhoto : (IMAGE_LAYOUT_IDS as readonly string[]).includes(id) ? (look.images ? hasEnoughPictures(id, look.images) : !!look.hasPhoto) : true));
+  const ids = LAYOUT_IDS.filter((id) => !isCoverLayout(id)).filter((id) => (id === 'photo-led' ? !!look.hasPhoto : (IMAGE_LAYOUT_IDS as readonly string[]).includes(id) ? (look.images ? hasEnoughPictures(id, look.images) : !!look.hasPhoto) : true));
   const example = { title: 'Short name of this carousel', note: 'optional, only if the text is thin', slides: [{ layout: 'statement', variant: 1, fields: { kicker: 'Small line', headline: 'The big promise in a few words', caption: 'One line that makes people swipe.' }, accents: ['big promise'], density: 'normal', cut: 'edge-h' }, { layout: 'checklist', fields: { title: 'Before you start', items: ['Short item', 'Short item', 'Short item'] }, accents: [] }] };
   return [
     '[carousel:library]',
@@ -1193,7 +1196,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   }
   const suggested = { cut: specs.map((s) => s.cut ?? null), invert: specs.map((s) => !!s.invert), density: specs.map((s) => s.density ?? null) };
   // A preset's flavour: layouts it avoids move to ones it prefers where the slide's text fits (deterministic, no model call; references have no flavour).
-  const fp = look.pack?.look?.flavour ? flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, '')) : null;
+  const fp = look.pack?.look?.flavour ? flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, ''), coverKeyOf(parsed.title, specs, styleIdOf(look.pack))) : null;
   if (fp) specs = fp.specs;
   // pictures the writer left unused get a slide (a deterministic swap to a picture layout of the slide's own meaning, no text lost)
   let pictureSwaps: PictureSwap[] = [];
@@ -1275,7 +1278,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
       }
     }
     // a preset that closes on a card moves the new closing onto it again (the preset's flavour)
-    if (style.closingLayout && look.pack?.look?.flavour) specs = flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, '')).specs;
+    if (style.closingLayout && look.pack?.look?.flavour) specs = flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, ''), coverKeyOf(parsed.title, specs, styleIdOf(look.pack))).specs;
     // the layouts changed, so the rotation changes: redraw the whole deck (no model call)
     ({ out: drawn, rot } = await drawAll());
   }

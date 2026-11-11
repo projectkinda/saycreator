@@ -6,6 +6,7 @@ import { measure, lineTexts, nearestWeight, Draw, CARD_PAD, S, setScale, accentI
 import { readingOrder } from '../designed';
 import { IMAGE_LAYOUTS } from './images';
 import { MORE_LAYOUTS } from './more';
+import { COVER_LAYOUTS } from './covers';
 import type { Cut, Cx, Fields, LayoutDef, LayoutId, LayoutStyle, Plan, Slot } from './types';
 
 export const str = (f: Fields, k: string) => (typeof f[k] === 'string' ? (f[k] as string).trim() : '');
@@ -861,7 +862,7 @@ const BASE_LIST: LayoutDef[] = [
   },
 ];
 
-const LAYOUT_LIST: LayoutDef[] = [...BASE_LIST, ...MORE_LAYOUTS, ...IMAGE_LAYOUTS];
+const LAYOUT_LIST: LayoutDef[] = [...BASE_LIST, ...MORE_LAYOUTS, ...IMAGE_LAYOUTS, ...COVER_LAYOUTS];
 export const LAYOUTS_BY_ID = Object.fromEntries(LAYOUT_LIST.map((l) => [l.id, l])) as Record<LayoutId, LayoutDef>;
 export const LAYOUT_IDS = LAYOUT_LIST.map((l) => l.id) as LayoutId[];
 export const layoutDef = (id: string): LayoutDef | undefined => LAYOUTS_BY_ID[id as LayoutId];

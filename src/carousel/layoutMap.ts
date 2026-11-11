@@ -53,6 +53,8 @@ export function toCanon(layout: string, f: Fields): Canon {
     case 'comparison': return { ...c, head: txt(f, 'title'), own: { layout, fields: f } };
     case 'prose': return { ...c, head: txt(f, 'heading'), body: txt(f, 'p1'), own: { layout, fields: f } };
     case 'statement-stacked': return { ...c, head: txt(f, 'headline'), sub: txt(f, 'caption') };
+    case 'cover-centred': case 'cover-index': case 'cover-block': case 'cover-sticker': case 'cover-ruled': return { ...c, head: txt(f, 'headline'), kicker: txt(f, 'kicker'), sub: txt(f, 'caption') };
+    case 'cover-word': return { ...c, head: txt(f, 'headline') };
     case 'statement-card': return { ...c, head: txt(f, 'headline'), kicker: txt(f, 'kicker'), sub: txt(f, 'caption') };
     case 'statement-pill': return { ...c, head: txt(f, 'headline'), kicker: txt(f, 'kicker'), sub: txt(f, 'caption') };
     case 'statement-question': return { ...c, head: txt(f, 'question'), sub: txt(f, 'line') };
@@ -100,6 +102,9 @@ export function fromCanon(layout: string, c: Canon, hasPhoto: boolean, images?: 
     case 'timeline': if (!c.labels.length || !c.items.length) return null; put(o, 'title', head); put(o, 'labels', c.labels); put(o, 'events', c.items); break;
     case 'spotlight': put(o, 'subject', head); put(o, 'callouts', c.items); break;
     case 'statement-stacked': if (words(head) > 4 || words(head) < 2) return null; put(o, 'headline', head); put(o, 'caption', c.sub || (words(c.body) <= 14 ? c.body : '')); break;
+    case 'cover-centred': case 'cover-index': case 'cover-block': case 'cover-sticker': case 'cover-ruled': put(o, 'headline', head); put(o, 'kicker', c.kicker); put(o, 'caption', c.sub || (words(c.body) <= 10 ? c.body : '')); break;
+    // one word set huge: three words or more, the last word 3 to 9 letters, and no other text on the cover (the word and the rest of the headline are the whole slide)
+    case 'cover-word': { const ws = head.split(/\s+/).filter(Boolean); const lw = (ws[ws.length - 1] ?? '').replace(/[^\p{L}\p{N}]/gu, ''); if (ws.length < 3 || lw.length < 3 || lw.length > 9 || c.kicker || c.sub || c.body) return null; put(o, 'headline', head); break; }
     case 'statement-card': put(o, 'headline', head); put(o, 'kicker', c.kicker); put(o, 'caption', c.sub || (words(c.body) <= 10 ? c.body : '')); break;
     case 'statement-pill': if (!c.sub) return null; put(o, 'headline', head); put(o, 'kicker', c.kicker); put(o, 'caption', c.sub); break;
     case 'statement-question': put(o, 'question', head); put(o, 'line', c.sub); break;

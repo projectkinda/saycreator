@@ -131,6 +131,9 @@ export function artDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box[
       for (const y of ys) { for (const px of xs) if (!spot && ok(px, y)) spot = { x: px, y }; if (spot) break; }
     }
     if (!spot) { out.notes.push(`No clear spot for the art "${p.item}" (${p.zone}) on this slide.`); return; }
+    // a lone icon (one small pictogram, a "corner" item of a pack, by itself on a slide) is awkward: it is dropped, in every style. A glow, an edge row, a divider and a sticker are devices (a sticker is made to be one),
+    // not icons, and stay
+    if (!glow && /(?:^|\/)corner-/.test(p.item) && p.zone.startsWith('corner') && w <= 320) { out.notes.push(`The art "${p.item}" is a lone icon, so it is left out.`); return; }
     const mk = artMarkup(it, spot.x, spot.y, w, pal, `art${x.index}x${k}`, glow ? { opacity: op, blur: 0.045 } : undefined);
     if (!mk) return;
     if (it.role === 'background') out.behind += mk; else out.over += mk;

@@ -37,7 +37,7 @@ const HELP = `(async () => {
   const CLOSING = { layout: 'cta-button', fields: { headline: 'Build a second brain', button: 'Comment brain' }, accents: [] };
   /** A deck from a fake writer: slides = the writer's plan (7 slides), pictures = ids of SHAPES. */
   const deck = async (o) => {
-    const provider = { id: 'dev-cli', label: 'fake', async write(prompt) { deck.prompt = deck.prompt ?? prompt; return { text: JSON.stringify({ title: 'Second brain', slides: o.slides }), ms: 1 }; } };
+    const provider = { id: 'dev-cli', label: 'fake', async write(prompt) { deck.prompt = deck.prompt ?? prompt; return { text: JSON.stringify({ title: o.title ?? 'Second brain', slides: o.slides }), ms: 1 }; } };
     deck.prompt = undefined;
     const look = { pack: PR.presetPackFor(o.style, false), brief: '', hasPhoto: o.pictures.length > 0, images: o.pictures.map(info), site: '' };
     const res = await D.designLibraryDeck({ text: o.text ?? SOURCE, slides: o.slides.length, tone: 'clear', format: 'carousel', styleChoice: o.style, styles: [] }, look, '', provider, new AbortController().signal);
@@ -203,18 +203,18 @@ test('C5: a circle only for a near-square picture; the tall 547x2400 screenshot 
     };
   });
   expect(r.coverTall.ok && r.coverTall.images[0].circle, 'tall: never a circle').toBe(false);
-  expect(r.coverTall.images[0].w * r.coverTall.images[0].h / (1080 * 1350), 'tall: a panel over half of the slide').toBeGreaterThanOrEqual(0.5);
+  expect(r.coverTall.images[0].w / 1080, 'tall: the panel takes at most 45% of the width (the headline gets the room)').toBeLessThanOrEqual(0.45);
   expect(r.coverTall.images[0].h).toBe(1114);
   expect(r.coverTall.images[0].src, 'the top of the picture is shown').toMatch(/fy=0\.1/);
-  // a headline too long for the narrow split column takes the hero band instead: still over half of the slide, still no circle
+  // a headline that does not fit the text column at 85% of the usual size (4 lines at most) is the stacked version: the picture below the text, no circle, the top of the picture
   expect(r.coverTallLong.images[0].circle).toBe(false);
-  expect(r.coverTallLong.images[0].w * r.coverTallLong.images[0].h / (1080 * 1350)).toBeGreaterThanOrEqual(0.5);
+  expect(r.coverTallLong.images[0].w, 'stacked: the picture runs the width of the page').toBeGreaterThan(900);
   expect(r.coverTallLong.images[0].src).toMatch(/fy=0.1/);
   expect(r.coverSquare.images[0].circle, 'near-square: a circle is fine').toBe(true);
   expect(r.coverLand.images[0].circle, 'landscape: not a circle').toBe(false);
   expect(r.coverWideReal.images[0].circle, 'wide: not a circle').toBe(false);
   expect(r.coverWideReal.images[0].w, 'wide: a wide band').toBeGreaterThan(900);
-  expect(r.sideTall.images[0].w * r.sideTall.images[0].h / (1080 * 1350)).toBeGreaterThanOrEqual(0.5);
+  expect(r.sideTall.images[0].w / 1080).toBeLessThanOrEqual(0.45);
   expect(r.sideWide.images[0].w).toBeGreaterThan(900);
   expect(r.ref.fy).toBeLessThanOrEqual(0.2);
 });

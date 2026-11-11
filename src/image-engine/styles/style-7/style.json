@@ -210,6 +210,7 @@
   },
   "assets": {},
   "library": {
+    "byType": { "cover": { "layouts": ["statement-pill", "cover-sticker", "cover-word", "cover-centred"] } },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "flavour": {
       "cover": "statement-pill",

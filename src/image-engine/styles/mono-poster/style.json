@@ -437,6 +437,7 @@
     "scrim": "$bg"
   },
   "library": {
+    "byType": { "cover": { "layouts": ["cover-word", "cover-index", "cover-ruled", "statement"] } },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "flavour": {
       "cover": "statement",
