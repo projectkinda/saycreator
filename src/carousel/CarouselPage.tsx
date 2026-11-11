@@ -522,7 +522,7 @@ export default function CarouselPage() {
     void applyScript(r.script, r.warnings.length);
     return true;
   };
-  const applyScript = async (script: CarouselScript, warnings: number) => {
+  const applyScript = async (script: CarouselScript, warnings: number, fromText = false) => {
     const unit = doc.format === 'quote' ? 'quote card' : 'slide';
     const handle = options.handle.trim() || script.brand.handle;
     const withHandle = { ...script, brand: { ...script.brand, handle } };
@@ -541,9 +541,10 @@ export default function CarouselPage() {
         const out = await libraryDeckFromScript(withHandle, look, handle); // the script's own handle is drawn as written (the @yourname placeholder never is)
         if (out.ok) {
           const designedOut = out.designed.library ? { ...out.designed, library: { ...out.designed.library, source: presetUsed ?? 'reference' } } : out.designed;
-          const gp = patches.generate(out.script, presetUsed, 'Use your script');
-          const done = apply({ ...gp, ops: [...gp.ops, { path: ['designed'], value: designedOut }, { path: ['route'], value: { route: 'designed', reason: 'Your script was drawn by the layout library from its own words: 0 model calls.' } }] });
+          const gp = patches.generate(out.script, presetUsed, fromText ? GEN_LABEL : 'Use your script');
+          const done = apply({ ...gp, ops: [...gp.ops, { path: ['designed'], value: designedOut }, { path: ['route'], value: { route: 'designed', reason: (fromText ? 'Your slide text (one block per slide) was drawn by the layout library from its own words: 0 model calls.' : 'Your script was drawn by the layout library from its own words: 0 model calls.') } }] });
           if (done.ok) {
+            if (fromText) return setGen({ phase: 'drawing', ms: 0, attempts: 1, message: 'Drawing slide 1 of ' + script.slides.length + '…', extra: ' Your slide text was used as it is: no model was called.' });
             setPasted('');
             setCheck(null);
             setOptions({ autoStyle: false });
@@ -701,6 +702,9 @@ export default function CarouselPage() {
   const ready = slides.length > 0 && slides.every((_, i) => views[i]?.rendered && views[i].status === 'ready');
   const failing = slides.filter((_, i) => views[i]?.rendered?.lint.some((l) => !l.pass)).length;
   // a warning is not a failure: a slide with only warnings still passes the phone-size check
+  const onlyWords = (i: number) => (views[i]?.rendered?.lint ?? []).filter((l) => !l.pass).every((l) => l.id === 'words');
+  const failingWords = slides.filter((_, i) => views[i]?.rendered?.lint.some((l) => !l.pass) && onlyWords(i)).length;
+  const failingText = failingWords === failing ? `${failing} of ${slides.length} slides have too many words.` : failingWords ? `${failing} of ${slides.length} slides have something to fix at phone size (${failingWords} of them only because of too many words).` : `${failing} of ${slides.length} slides have something to fix at phone size.`;
   const warned = slides.filter((_, i) => { const lint = views[i]?.rendered?.lint ?? []; return lint.every((l) => l.pass) && lint.some((l) => l.warn); }).length;
 
   const downloadOne = async (i: number) => {
@@ -761,13 +765,8 @@ export default function CarouselPage() {
     if (blocks) {
       const built = scriptFromBlocks(blocks, doc.format, options.handle.trim());
       if (!built.script) return setGen({ phase: 'error', message: 'Your slide text could not be used as slides.', problems: built.errors });
-      const known0 = carouselStyles().map((x) => x.spec.name);
-      const pick0 = options.autoStyle ? pickStyle({ text: doc.topic, tone: options.tone, slideTypes: built.script.slides.map((x) => x.type), styles: carouselStyles(), writerSuggestion: known0[0] ?? null }) : null;
-      const gp0 = patches.generate(built.script, pick0 ? pick0.name : null, GEN_LABEL);
-      const done0 = apply({ ...gp0, ops: [...gp0.ops, { path: ['designed'], value: undefined }, { path: ['route'], value: chooseRoute({ style: doc.style, activeStyle: ACTIVE_STYLE, pack: null, slideText: true }) }] });
-      if (!done0.ok) return setGen({ phase: 'error', message: 'The slides could not be used: ' + done0.reasons[0] });
       setNotice('');
-      return setGen({ phase: 'drawing', ms: 0, attempts: 1, message: 'Drawing slide 1 of ' + built.script.slides.length + '…', extra: ' Your slide text was used as it is: no model was called.' });
+      return applyScript(built.script, 0, true);
     }
     if (!provider) return;
     const ctl = new AbortController();
@@ -1429,7 +1428,7 @@ export default function CarouselPage() {
         <p className="small muted" role="status" aria-live="polite">
           {exporting || (proj.saveFailed ? 'This browser would not save the project. Download your slides before you leave.' : proj.saved)}
           {hasWork && ready && !exporting && failing === 0 && ` ${warned === 0 ? 'All slides pass the phone-size check.' : `${slides.length - warned} slide${slides.length - warned === 1 ? '' : 's'} pass, ${warned} ${warned === 1 ? 'has' : 'have'} a warning.`}`}
-          {hasWork && ready && !exporting && failing > 0 && <span className="cr-problem"> {failing} of {slides.length} slides have something to fix at phone size.</span>}
+          {hasWork && ready && !exporting && failing > 0 && <span className="cr-problem"> {failingText}</span>}
         </p>
 
             <PreviewStage overlay={previewSlots && previewSlots.length ? <SlotOverlay index={si} slots={previewSlots} open={slotOpen} onOpen={(field) => { setSlotOpen(field); if (field) { setEditTab('pictures'); setStep(4); setEditView(true); } }} onChange={(field, change) => slotChange(si, field, change)} /> : undefined} count={hasWork ? slides.length : 0} items={slides.map((_, i) => views[i] ?? { status: 'drawing' })} selected={sel} onSelect={setSel} onOpen={setOpen} />

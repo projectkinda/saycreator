@@ -98,8 +98,9 @@ test('pasted slide text (blocks split by blank lines): 0 calls of any kind', asy
   await make(page).click();
   await drawn(page, 5);
   expect(calls.length).toBe(0);
-  await openEdit(page, 4);
-  await expect(page.locator('.cr-card').getByLabel('Headline')).toHaveValue('Before you hit save');
+  // pasted text is drawn by the layout library now: its edit card names the checklist's field "Title" (it was "Headline" on the old template route)
+  await openTab(page, 'Text', 4);
+  await expect(page.locator('.cr-card input').first()).toHaveValue('Before you hit save');
 });
 
 // Old expectation: pressing Make with a style that no longer exists showed "is missing or broken" and made no call. Since then a project that names a missing style opens with the default

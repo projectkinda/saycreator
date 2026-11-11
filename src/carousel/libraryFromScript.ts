@@ -7,6 +7,7 @@ import { designLibraryDeck, slideProblems, type CtaCtx, type OwnScript, type Sli
 import type { Designed, Look } from './designed';
 import { accentsIn } from './layoutMap';
 import type { Fields } from './layouts';
+import { sourceAction } from './closingAction';
 import { TYPE_LABEL } from './script';
 import type { GenerateResult, WriteProvider } from './writer';
 
@@ -98,13 +99,18 @@ function ownCandidates(s: SlideScript): SlideSpec[] {
       return [mk('statement', compact({ headline: str(r.headline), kicker: str(r.kicker), caption: str(r.sub) }))];
     case 'content': {
       const body = str(r.body);
+      // a headline alone (no body): a statement, nothing else is drawn
+      if (!body) return [mk('statement', compact({ headline: str(r.headline) })), mk('statement-card', compact({ headline: str(r.headline) }))];
       const ps = paragraphs(body);
       return [
         mk('split-text', compact({ headline: str(r.headline), paragraph: body })),
+        mk('headline-card', compact({ headline: str(r.headline), card: body })),
         ...(ps ? [mk('prose', compact({ heading: str(r.headline), p1: ps[0], p2: ps[1], p3: ps[2] }))] : []),
       ];
     }
     case 'step':
+      // a step with no body keeps its words as a statement (the step number is a counter, not a word)
+      if (!str(r.body)) return [mk('statement', compact({ headline: str(r.headline) }))];
       return [mk('step-numeral', compact({ step: String(Math.round(Number(r.number)) || 1), title: str(r.headline), body: str(r.body) }))];
     case 'stat':
       // the stat layouts have no small line above the number: a stat that has one goes to the prose layout, so no word is lost
@@ -115,7 +121,8 @@ function ownCandidates(s: SlideScript): SlideSpec[] {
       ];
     case 'checklist': {
       const items = Array.isArray(r.items) ? (r.items as unknown[]).map(str).filter(Boolean) : [];
-      return ['checklist', 'numbered-list', 'bullet-list'].map((l) => mk(l, compact({ title: str(r.headline), items })));
+      // a lead-in longer than the checklist titles (40 characters) takes the pill list (headline up to 50), the items are the same
+      return [...['checklist', 'numbered-list', 'bullet-list'].map((l) => mk(l, compact({ title: str(r.headline), items }))), mk('pill-stagger', compact({ headline: str(r.headline), items }))];
     }
     case 'beforeafter':
       return [mk('comparison', compact({ leftLabel: str(r.beforeLabel), leftText: str(r.before), rightLabel: str(r.afterLabel), rightText: str(r.after) }))];
@@ -123,13 +130,20 @@ function ownCandidates(s: SlideScript): SlideSpec[] {
       return [mk('quote', compact({ quote: str(r.quote), author: str(r.by) }))];
     case 'closing': {
       const headline = str(r.headline);
-      const cta = str(r.cta);
+      const cta = str(r.cta) === str(r.headline) ? '' : str(r.cta); // one paragraph is never drawn twice (a headline that is also the cta stays the headline)
       const parts = cta.split(/\s*(?:[,;·|\n]|\s\/\s)\s*/).map((x) => x.trim()).filter(Boolean);
       const contacts = parts.filter(isContact);
       const out: SlideSpec[] = [];
       // contact details (two or more) -> a contact closing; a real action phrase -> a call-to-action button; otherwise a plain statement card with the words as they are
       if (contacts.length >= 2 && contacts.length === parts.length) out.push(mk('contact-closing', compact({ headline, contacts })));
-      if (!isContact(cta)) out.push(mk('cta-button', compact({ headline, button: cta })));
+      if (cta && !isContact(cta)) out.push(mk('cta-button', compact({ headline, button: cta })));
+      // a long call to action that names a real action ("Comment "slides" and I'll send you the link."): the button is the action's own words, the rest of that sentence (source words) goes under the headline
+      const act = cta && !isContact(cta) && cta.length > 24 ? sourceAction(cta) : null;
+      if (act) {
+        const after = cta.replace(/^[\s\S]*["”]\s*(?:and\b|then\b|,|-|–|—)?\s*/i, '').trim();
+        out.push(mk('cta-button', compact({ headline, button: act.label, sub: after && after !== cta && after.length <= 60 ? after : '' })));
+        out.push(mk('cta-button', compact({ headline, button: act.label })));
+      }
       out.push(mk('statement-card', compact({ headline, caption: cta })));
       out.push(mk('statement', compact({ headline, caption: cta })));
       return out;
@@ -143,14 +157,22 @@ function ownCandidates(s: SlideScript): SlideSpec[] {
  * One script slide as the plan of a library slide. Never fails: the nearest layout that fits (the simple "prose" layout for a long text) or, when none fits, the slide's natural layout with
  * its words kept exactly as written (`keepAsWritten`): the code never trims or rewrites the person's words.
  */
-export function specFromSlide(s: SlideScript, _i: number, look: Look, ctx: CtaCtx): { spec: SlideSpec; mark: 'simple' | 'kept' | null; why: string } {
+export function specFromSlide(s: SlideScript, _i: number, look: Look, ctx: CtaCtx, avoid: string[] = []): { spec: SlideSpec; mark: 'simple' | 'kept' | null; why: string } {
   const list = candidates(s);
   let first = '';
+  let again: { spec: SlideSpec; mark: 'simple' | 'kept' | null; why: string } | null = null;
   for (const [k, spec] of list.entries()) {
     const problems = slideProblems(spec, look, ctx);
-    if (!problems.length) return { spec, mark: spec.layout === 'prose' && k > 0 ? 'simple' : null, why: '' };
+    if (!problems.length) {
+      const got = { spec, mark: (spec.layout === 'prose' && k > 0 ? 'simple' : null) as 'simple' | null, why: '' };
+      // the layout of the slide before (or one used twice already) is the last choice: the deck's rotation would only replace it
+      if (!avoid.includes(spec.layout)) return got;
+      again ||= got;
+      continue;
+    }
     first ||= problems[0];
   }
+  if (again) return again;
   const natural: SlideSpec = list[0] ?? { layout: 'statement', fields: { headline: scriptText({ slides: [s] } as unknown as CarouselScript).slice(0, 4000) } as Fields, accents: [] };
   return { spec: { ...natural, keepAsWritten: true }, mark: 'kept', why: `Slide ${_i + 1} (${TYPE_LABEL[s.type]}) has more or longer text than the library layouts can show${first ? `: ${first}` : ''}` };
 }
@@ -170,7 +192,9 @@ export async function libraryDeckFromScript(script: CarouselScript, look: Look, 
   const specs: SlideSpec[] = [];
   const marks: ('simple' | 'kept' | null)[] = [];
   for (const [i, s] of script.slides.entries()) {
-    const r = specFromSlide(s, i, look, ctx);
+    const count = (id: string) => specs.filter((x) => x.layout === id).length;
+    const avoid = [specs[specs.length - 1]?.layout, ...['split-text', 'headline-card', 'prose', 'statement', 'checklist', 'numbered-list', 'pill-stagger'].filter((id) => count(id) >= 2)].filter(Boolean) as string[];
+    const r = specFromSlide(s, i, look, ctx, avoid);
     specs.push(r.spec);
     marks.push(r.mark);
   }

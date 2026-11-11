@@ -155,7 +155,7 @@ export function validateScript(raw: unknown, format: Format): ScriptResult {
       const label = `${n} "${f.key}"`;
       if (v === undefined || v === null || v === '') {
         // A slide with "steps" needs no body: the steps are its content.
-        if (f.required && !(f.key === 'body' && Array.isArray(s.steps) && s.steps.length >= 2)) err(at(f.key), `${label} is missing. ${f.label} is required on a ${type} slide.`);
+        if (f.required && !(f.key === 'body' && ((Array.isArray(s.steps) && s.steps.length >= 2) || s.headlineOnly === true))) err(at(f.key), `${label} is missing. ${f.label} is required on a ${type} slide.`);
         continue;
       }
       if (f.kind === 'list') {
@@ -173,7 +173,7 @@ export function validateScript(raw: unknown, format: Format): ScriptResult {
       }
     }
     if (type === 'stat' && typeof s.value === 'string' && s.value.length > 8) warn(at('value'), `${n} number "${s.value}" is long. Big numbers are best at 8 characters or fewer (like 3x, 42%, 5 min); longer ones wrap onto two lines and fail the one-word-last-line check.`);
-    const known = new Set(['type', 'element_tags', 'photo', 'photo_hint', 'accent', 'steps', ...FIELDS[type].map((f) => f.key)]);
+    const known = new Set(['type', 'headlineOnly', 'element_tags', 'photo', 'photo_hint', 'accent', 'steps', ...FIELDS[type].map((f) => f.key)]);
     for (const k of Object.keys(s)) if (!known.has(k)) warn(at(k), `${n} has "${k}", which a ${type} slide does not use. It is ignored.`);
     if (s.steps !== undefined && !(Array.isArray(s.steps) && s.steps.length >= 2 && s.steps.length <= 5 && s.steps.every((x) => typeof x === 'string' && x.trim() !== ''))) err(at('steps'), `${n} "steps" must be a list of 2 to 5 short texts, for example ["one", "two"].`);
     const hl = s.highlight;

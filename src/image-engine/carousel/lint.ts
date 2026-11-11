@@ -116,7 +116,7 @@ export interface CarouselLintInput {
 export function wordCount(plan: Plan): number {
   let n = 0;
   for (const l of plan.layers) {
-    if (l.kind !== 'text' || l.role === 'decor' || l.visible === false || /^(page|strip|swipe|dots|handle)/.test(l.id)) continue;
+    if (l.kind !== 'text' || l.role === 'decor' || l.visible === false || /^(page|strip|swipe|dots|handle)/.test(l.id) || /recurring/.test(l.id)) continue;
     n += l.text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
   }
   return n;
