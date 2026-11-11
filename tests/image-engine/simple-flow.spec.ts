@@ -92,6 +92,8 @@ test('pasted slide text (blocks split by blank lines): 0 calls of any kind', asy
   const calls = await fake(page);
   const slides = 'Fix your profile in 15 minutes\nThree edits that make people stop scrolling\n\n1. Rewrite your headline\nSkip the job title. Say who you help and how.\n\nPin one proof post\nFeature your best post at the top.\n\nBefore you hit save\n- Clear, well-lit photo\n- Headline names who you help\n- Contact info is current\n\nSave this and fix it tonight\nFollow for weekly posts';
   await open(page, slides);
+  // (Round 11: a text with paragraphs offers a choice and the writer is the default; this test is about the free choice)
+  await page.getByTestId('text-mode').getByRole('radio', { name: /Use my paragraphs as slides/ }).check();
   await toStep(page, 3);
   await expect(page.getByTestId('cost-line')).toHaveText('0 design calls, 0 writing calls: your slide text is used as it is.');
   await styles(page).getByRole('button', { name: /Quiet dark minimal/ }).click();

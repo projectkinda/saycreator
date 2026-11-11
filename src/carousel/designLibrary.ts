@@ -210,7 +210,13 @@ export function fixGround(g: PackGround, notes: string[]): NonNullable<LayoutSty
   const tinted = (c: string) => { const [, s, l] = toHsl(c); return s >= 0.12 && l > 0.06 && l < 0.985; };
   const hueCard = tinted(bgFinal) || tinted(surface0) ? tintedCard(allFinal, bgFinal, text, surface0, tinted(surface0)) : null;
   // only where the old fallback would have been a neutral grey (a coloured fallback, like the olive card on a lime ground, was never the problem and stays)
-  const oldFallback = cards[0] ?? bgFinal;
+  // A lively light ground (yellow, lime, orange) never gets a card made by darkening it: that is a muddy olive or brown. Its card is the ground lightened toward white (a clean pale card, the hairline
+  // outline tells it from the ground), the ground's own colour hue kept.
+  const [gh, gs, gl] = toHsl(bgFinal);
+  const lively = !stops && gs >= 0.35 && gl >= 0.5;
+  const lightCard = lively ? [0.1, 0.14, 0.2, 0.28, 0.36, 0.46, 0.58].map((k) => mixHex(bgFinal, '#FFFFFF', k)).find((c) => contrast(text, c) >= 4.5 && allFinal.every((st) => contrast(c, st) >= 1.4)) ?? mixHex(bgFinal, '#FFFFFF', 0.58) : null;
+  void gh;
+  const oldFallback = lightCard ?? cards[0] ?? bgFinal;
   const surface = cardBad ? (hueCard && toHsl(oldFallback)[1] < 0.2 ? hueCard : oldFallback) : surface0;
   if (cardBad) notes.push(`Ground ${bgFinal}: the card colour ${surface0} is too close to the ground or unreadable under the ink, so cards use ${surface}${hueCard ? ' (the ground\'s own hue' + (allFinal.some((st) => contrast(surface, st) < 1.4) ? ', with a hairline outline' : '') + ')' : ''}.`);
   const mutedMin = Math.max(4.5, Math.min(6, Math.min(...allFinal.map((s) => contrast(text, s))) * 0.7));
@@ -461,6 +467,7 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     '- Use "step-numeral" only when at least two slides in the deck are steps of one sequence (step 1, step 2 ...); with a single step, use "split-text" or "statement" instead.',
     '- Variety: no two consecutive slides use the same layout, and no layout is used more than twice. Use "stepper" for 2 to 5 ordered steps, "stat-bar" or "big-stat" for a figure, "checklist" for benefits, "comparison" for two things set against each other, "quote" only for words that are in the text.',
     '- Stats: the "label" of big-stat and stat-bar is the continuation of the number, so "number label" reads as one phrase: "30%" + "off for early backers" (never a label that starts a new sentence, such as "Early backers save" under a 30%). split-text: the paragraph is ONE idea in at most 14 words.',
+    '- Wording: the person\'s own sentences are the copy. A sentence that already fits its layout is used word for word (same words, same order); shorten only what is over a limit, by cutting words, never by rewording; never add a word, claim or example that is not in the text.',
     '- Facts: use only facts, claims and numbers that are in the text. Never invent statistics, names, quotes, dates or results. If a slide would want a figure the text does not give, use a layout without one. A big-stat or stat-bar number must be a real figure from the text.',
     `- "accents": up to 3 phrases copied EXACTLY from the slide's headline, question or quote text, the words that carry the meaning (never filler such as the, a, and, of, to). Highlight 1 or 2 words, the ones that carry the point (never more than half of the headline). The code sets them in the accent colour or on a marker bar.`,
     '- "density": "statement" is optional and ONLY for a statement, big-question or cta-button whose headline is 4 words or fewer: the code then drops the secondary copy and sets the headline huge. Otherwise leave it out.',

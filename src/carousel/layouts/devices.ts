@@ -309,13 +309,14 @@ export function overDevices(x: DeviceCtx, taken: PlacedDevice[], shapeBoxes: Box
     svg += star(sx + 16, 1272, 16, x.c.text);
     placed.push({ id: 'footer-logo', kind: 'chrome', box: { x: sx, y: 1256, w: 32, h: 32 }, ink: x.c.text });
   }
-  if (d.contactClosing && last) {
+  // (the camera-like frame is the social handle's icon: with no handle there is nothing for it to belong to, so nothing is drawn)
+  if (d.contactClosing && last && (x.handle || x.site)) {
     // two plain contact lines with small drawn icons (a camera-like frame for the socials, a globe for the site)
     const c = x.c.text;
-    svg += `<rect x="52" y="1210" width="32" height="32" rx="9" fill="none" stroke="${c}" stroke-width="3"/><circle cx="68" cy="1226" r="7" fill="none" stroke="${c}" stroke-width="3"/>`;
+    if (x.handle) svg += `<rect x="52" y="1210" width="32" height="32" rx="9" fill="none" stroke="${c}" stroke-width="3"/><circle cx="68" cy="1226" r="7" fill="none" stroke="${c}" stroke-width="3"/>`;
     // the globe belongs to the website line: drawn only when a website is set
     if (x.site) svg += `<circle cx="68" cy="1272" r="16" fill="none" stroke="${c}" stroke-width="3"/><ellipse cx="68" cy="1272" rx="7" ry="16" fill="none" stroke="${c}" stroke-width="3"/><path d="M 52 1272 H 84" stroke="${c}" stroke-width="3"/>`;
-    placed.push({ id: 'contact-icons', kind: 'chrome', box: { x: 50, y: 1208, w: 36, h: x.site ? 82 : 36 }, ink: c });
+    placed.push({ id: 'contact-icons', kind: 'chrome', box: x.handle ? { x: 50, y: 1208, w: 36, h: x.site ? 82 : 36 } : { x: 50, y: 1254, w: 36, h: 36 }, ink: c });
   }
   // stickers: one emoji glyph in an empty corner. It keeps a clear gap from every text (at least one line height of that text, and from the headline's whole box), 24 px from shapes and pictures
   // Stickers are rare: at most one on every third slide (never two in a row), never on a slide whose accent word is ringed (ring > sticker > art), and never within 24 px of a picture, card, pill or button.

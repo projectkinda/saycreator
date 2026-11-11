@@ -34,6 +34,8 @@ export interface GenerateOptions {
   mode?: 'designed' | 'quick';
   /** The look in words, when no pack is chosen (Designed mode). */
   brief?: string;
+  /** A pasted text that is already divided into paragraphs: "writer" (one small writing call) or "paragraphs" (each paragraph is a slide, free). Unset: by the text (pasted.ts defaultTextMode). */
+  textMode?: 'writer' | 'paragraphs';
 }
 export const DEFAULT_OPTIONS: GenerateOptions = { slides: 7, tone: 'clear', autoStyle: true, handle: '', platform: null };
 

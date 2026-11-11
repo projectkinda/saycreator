@@ -584,7 +584,9 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         const words = head.split(/\s+/).filter(Boolean);
         let z = 0;
         for (let s = 120; s >= 72; s -= 4) if (words.every((x) => measureWidth(x, st.fonts.headline, wt, s) <= tw * 0.98) && measure(head, st.fonts.headline, wt, s, tw, 1.05).n <= 5) { z = s; break; }
-        if (z) {
+        // the headline and the body must both fit the narrow column (inside the half's height, with room above and below); otherwise the picture takes a top or bottom half and the text a full-width band
+        const colH = z ? measure(head, st.fonts.headline, wt, z, tw, 1.05).h + 24 + measure(body, st.fonts.body, 400, 44, tw, 1.3).h : 0;
+        if (z && colH <= HALF_H - 160) {
           const d = place(st, cx, 'top', (d) => {
             const right = v === 0;
             d.image(img, right ? SLIDE_W - HALF_W : 0, ZONE_TOP, HALF_W, HALF_H, { rx: 0 });

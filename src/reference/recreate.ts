@@ -865,7 +865,7 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
     const accentColour = rec.palette.accent;
     // accent TEXT may use a lightened copy of the accent (palette.accentInk: same hue, 4.5:1 on a dark ground); bars and shapes keep the accent itself
     const runColour = rec.palette.accentInk ?? accentColour;
-    if (role === 'title') filled.balance = true;
+    if (role === 'title' || role === 'body') filled.balance = true; // balanced lines: no one-word last line in a headline or in body text
     if (role === 'title' && accent && accentColour) {
       const phrases = [accent, ...((texts as { accents?: string[] }).accents ?? []).slice(1)];
       const hits = phrases

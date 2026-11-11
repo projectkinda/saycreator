@@ -8,7 +8,7 @@ import { getStyles } from './render';
 import { designDeck, designEstimate, type Designed } from './designed';
 import { designLibraryDeck, legacySvgRoute } from './designLibrary';
 import { ACTIVE_STYLE, activeReference } from '../reference/active';
-import { slideBlocks } from './pasted';
+import { defaultTextMode, hasSlideMarkers, slideBlocks } from './pasted';
 import { PLATFORMS, isPlatform, platformOf, platformWarning, type Platform } from './platform';
 
 /** The style used when the writer does not name one: by tone. Only names that exist are used. */
@@ -118,7 +118,10 @@ export function MakeIt({ images, scriptBox, scriptMode, onScriptMode, doc, optio
   const [lo, hi] = SLIDE_RANGE[doc.format];
   const counts = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
   // Ready-made slide text (one block per slide) needs no writer at all.
-  const ready = !!slideBlocks(doc.topic);
+  // A text already divided into paragraphs: the person chooses (the writer is the default unless the text has slide markers, see pasted.ts)
+  const canChoose = doc.format === 'carousel' && !!slideBlocks(doc.topic);
+  const textMode = options.textMode ?? defaultTextMode(doc.topic);
+  const ready = !!slideBlocks(doc.topic) && (doc.format !== 'carousel' || textMode === 'paragraphs'); // quote cards keep taking one block per card
   // With a reference style active, Designed is the default route (one design call); Quick fills the style's templates.
   const viaDesigned = !ready && doc.style === ACTIVE_STYLE && !!activeReference()?.pack && options.mode !== 'quick';
   const cost = ready ? '0 design calls, 0 writing calls: your slide text is used as it is.' : viaDesigned ? designEstimate(Math.min(hi, Math.max(lo, options.slides))).text : '0 design calls, 1 small writing call.';
@@ -160,6 +163,13 @@ export function MakeIt({ images, scriptBox, scriptMode, onScriptMode, doc, optio
             <button type="button" className="chip-btn" aria-pressed={scriptMode !== 'own'} onClick={() => onScriptMode?.('write')}>Write my script for me</button>
             <button type="button" className="chip-btn" aria-pressed={scriptMode === 'own'} onClick={() => onScriptMode?.('own')}>I already have a script</button>
           </div>
+          {canChoose && scriptMode !== 'own' && (
+            <fieldset className="cr-textmode" data-testid="text-mode" disabled={busy}>
+              <legend className="field-label">Your text already has paragraphs. How should they become slides?</legend>
+              <label className="cr-mode"><input type="radio" name="cr-textmode" checked={textMode === 'writer'} onChange={() => setOptions({ textMode: 'writer' })} /> <span><strong>Let the writer make slides</strong>{!hasSlideMarkers(doc.topic) ? ' (recommended)' : ''}<br /><span className="small muted">1 small writing call, 0 design calls. It picks the layouts and keeps your wording.</span></span></label>
+              <label className="cr-mode"><input type="radio" name="cr-textmode" checked={textMode === 'paragraphs'} onChange={() => setOptions({ textMode: 'paragraphs' })} /> <span><strong>Use my paragraphs as slides</strong>{hasSlideMarkers(doc.topic) ? ' (recommended: your text has slide markers)' : ''}<br /><span className="small muted">Free: 0 calls, your exact words, one block of text per slide.</span></span></label>
+            </fieldset>
+          )}
           {scriptMode === 'own' ? scriptBox : <p className="small muted">The writer turns your text into slides when you press the make button in step 3. Nothing is sent before that.</p>}
           {images}
         </div>

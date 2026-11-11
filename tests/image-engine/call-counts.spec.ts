@@ -116,3 +116,24 @@ test('a pasted script: ZERO writer calls', async ({ page }) => {
   await settle(page);
   expect(f.calls).toBe(0);
 });
+
+// Round 11: a pasted post that is already divided into paragraphs. The writer is the default choice (ONE writer call); "Use my paragraphs as slides" is free (ZERO).
+const POST = fs.readFileSync('tests/image-engine/script-route.spec.ts', 'utf8').split('export const POST = `')[1].split('`;')[0];
+test('a pasted post with paragraphs, default (writer) choice: ONE writer call', async ({ page }) => {
+  const f = await counting(page, { title: 'Habits', slides: SPECS });
+  await make(page, POST, SPECS.length);
+  await settle(page);
+  expect(f.calls).toBe(1);
+});
+test('a pasted post with paragraphs, "Use my paragraphs as slides": ZERO calls', async ({ page }) => {
+  const f = await counting(page, { title: 'unused', slides: [] });
+  await page.goto('/images/carousel');
+  await page.getByLabel('Your text or topic').fill(POST);
+  await page.getByTestId('text-mode').getByRole('radio', { name: /Use my paragraphs as slides/ }).check();
+  await toStep(page, 3);
+  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat/ }).first().click();
+  await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
+  await deckDrawn(page, 7);
+  await settle(page);
+  expect(f.calls).toBe(0);
+});

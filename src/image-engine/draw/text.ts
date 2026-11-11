@@ -266,6 +266,18 @@ function glueRuns(layer: TextLayer): string {
   return chars.join('');
 }
 
+/** Small words a headline line must not be made of alone ("your", "the", "to" ...); any word of 3 letters or fewer counts too. */
+const SHORT_WORDS = new Set(['your', 'the', 'a', 'to', 'of', 'in', 'on', 'it', 'my', 'we', 'an', 'is', 'at', 'by', 'or', 'and', 'for', 'you', 'our', 'me', 'i', 'this', 'that']);
+/** A headline line (not the first) that is one small word alone: "TRY IT ON / YOUR / NEXT POST". */
+const weakLine = (ts: Tok[]): boolean => {
+  const ws = ts.map((t) => t.text).join(' ').split(/[\s\u00A0]+/).filter(Boolean);
+  if (ws.length !== 1) return false;
+  const w = ws[0].toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+  return w.length <= 3 || SHORT_WORDS.has(w);
+};
+// (a single word alone on the LAST line also counts, whatever it is: the phone check fails a one-word last line)
+const oneWord = (ts: Tok[]): boolean => ts.map((t) => t.text).join(' ').split(/[\s\u00A0]+/).filter(Boolean).length === 1;
+const hasWeakLine = (ls: Tok[][]): boolean => ls.length >= 2 && (ls.slice(1).some(weakLine) || oneWord(ls[ls.length - 1]));
 /** Balanced lines for a headline: the narrowest width that keeps the same number of lines, then no single-word last line when the line before it can give a word. */
 function balanceLines(layer: TextLayer, lines: Tok[][], size: number): Tok[][] {
   const n = lines.length;
@@ -288,6 +300,15 @@ function balanceLines(layer: TextLayer, lines: Tok[][], size: number): Tok[][] {
   const prev = out[out.length - 2];
   const wordsIn = (ts: Tok[]) => ts.reduce((a, t) => a + t.text.split(/[\s ]+/).filter(Boolean).length, 0);
   if (wordsIn(last) === 1 && prev.length >= 2 && widthOf([prev[prev.length - 1], ...last]) <= layer.width) out = [...out.slice(0, -2), prev.slice(0, -1), [prev[prev.length - 1], ...last]];
+  // a headline never has a middle or last line of one small word: the box is widened step by step (same number of lines or fewer) until no line is
+  if (layer.name === 'title' && hasWeakLine(out)) {
+    // wider first, then narrower ("TRY IT / ON YOUR / NEXT POST" has the same number of lines as "TRY IT ON / YOUR / NEXT POST")
+    const widths = [...Array.from({ length: 24 }, (_, k) => hi + ((layer.width - hi) * (k + 1)) / 24), ...Array.from({ length: 40 }, (_, k) => hi - ((hi - lo) * (k + 1)) / 40)];
+    for (const wd of widths) {
+      const cand = wrapStyled(layer, wd, size).lines;
+      if (cand.length <= n && !hasWeakLine(cand)) { out = cand; break; }
+    }
+  }
   return out;
 }
 
@@ -310,12 +331,20 @@ function layoutStyled(layer0: TextLayer): TextBlock {
     if (layer.balance && !layer.text.includes('\n')) w = { ...w, lines: balanceLines(layer, w.lines, size) };
     const lineStep = size * s.lineHeight;
     const height = w.lines.length * lineStep;
-    return { size, w, lineStep, height, fits: height <= layer.height + 0.01 && !w.wordTooWide };
+    return { size, w, lineStep, height, fits: height <= layer.height + 0.01 && !w.wordTooWide, clean: !(layer.balance && layer.name === 'title' && hasWeakLine(w.lines)) };
   };
   let fit = tryAt(Math.floor(layer.autoFit ? s.size : s.size));
-  if (layer.autoFit) for (let size = Math.floor(s.size); size >= Math.ceil(layer.autoFit.minSize); size--) {
-    fit = tryAt(size);
-    if (fit.fits) break;
+  if (layer.autoFit) {
+    let firstFit: ReturnType<typeof tryAt> | null = null;
+    for (let size = Math.floor(s.size); size >= Math.ceil(layer.autoFit.minSize); size--) {
+      fit = tryAt(size);
+      if (fit.fits) {
+        firstFit ||= fit;
+        // a size that leaves no one-word line is taken when it is within 40 px of the first fitting size; otherwise the first fit stays
+        if (fit.clean || firstFit.size - size >= 40) break;
+      }
+    }
+    if (fit.fits && !fit.clean && firstFit) fit = firstFit;
   }
   const marked = new Set((layer.highlight?.words ?? []).map(wordKey).filter(Boolean));
   const wholeLines = new Set(layer.highlight?.lines ?? []);

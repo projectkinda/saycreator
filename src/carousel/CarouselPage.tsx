@@ -10,7 +10,7 @@ import { DEFAULT_OPTIONS, patches } from './doc';
 import { MakeIt, runDesign, runGenerate, useWriters, type GenState } from './MakeIt';
 import { DeckFlags, DesignedCard } from './DesignedCard';
 import { NewStyleFlow } from './NewStyleFlow';
-import { scriptFromBlocks, slideBlocks } from './pasted';
+import { defaultTextMode, scriptFromBlocks, slideBlocks } from './pasted';
 import { libraryDeckFromScript, scriptText } from './libraryFromScript';
 import type { CarouselScript } from '../image-engine/carousel/types';
 import { clearPageState } from './resetState';
@@ -761,7 +761,8 @@ export default function CarouselPage() {
     // A chosen style that is missing or broken is an error, never a reason to generate: the picker stays and no model is called.
     if (!options.autoStyle && !styleByName(doc.style)) return setGen({ phase: 'error', message: 'The chosen style "' + doc.style + '" is missing or broken. Pick another style below. Nothing was generated and no model was called.' });
     // Ready-made slide text (one block per slide) becomes the slides as it is: no writer call at all.
-    const blocks = slideBlocks(doc.topic);
+    // (the person chose "Use my paragraphs as slides", or the text has slide markers and they kept that default; otherwise the writer makes the slides)
+    const blocks = doc.format !== 'carousel' || (options.textMode ?? defaultTextMode(doc.topic)) === 'paragraphs' ? slideBlocks(doc.topic) : null;
     if (blocks) {
       const built = scriptFromBlocks(blocks, doc.format, options.handle.trim());
       if (!built.script) return setGen({ phase: 'error', message: 'Your slide text could not be used as slides.', problems: built.errors });

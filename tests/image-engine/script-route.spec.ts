@@ -150,6 +150,8 @@ test('the app: Make carousel with the post in Cream social profile = library rou
   await page.route('**/api/carousel/write', w);
   await page.goto('/images/carousel');
   await page.getByLabel('Your text or topic').fill(POST);
+  // (Round 11: a text with paragraphs offers a choice and the writer is the default; this test is about the free choice)
+  await page.getByTestId('text-mode').getByRole('radio', { name: /Use my paragraphs as slides/ }).check();
   await toStep(page, 3);
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Cream social profile/ }).first().click();
   await page.getByRole('button', { name: 'Make carousel', exact: true }).click();

@@ -4,8 +4,18 @@ import type { CarouselScript } from '../image-engine/carousel/types';
 import { validateScript, type Format } from './script';
 
 /** The blocks of the text when it looks like ready slide text (3 to 10 blocks; with blank lines only, every block short), else null. */
+/** A line that only says which slide comes next: "Slide 3", "Slide 3:", "Card 2", "3/8". */
+const HEADER_LINE = String.raw`^[ \t]*(?:(?:slide|card)[ \t]*\d{1,2}[ \t]*[:.\-–]?|\d{1,2}[ \t]*/[ \t]*\d{1,2})[ \t]*$`;
+/**
+ * Explicit slide markers: a line of `---`, or a line that is only a slide header ("Slide 1", "1/8"). With markers the person has already divided the text into slides, so "Use my paragraphs as
+ * slides" is the default choice; without them (blank lines only) the writer is the default.
+ */
+export const hasSlideMarkers = (text: string): boolean => /^[ \t]*---+[ \t]*$/m.test(text) || new RegExp(HEADER_LINE, 'im').test(text);
+export type TextMode = 'writer' | 'paragraphs';
+export const defaultTextMode = (text: string): TextMode => (hasSlideMarkers(text) ? 'paragraphs' : 'writer');
 export function slideBlocks(text: string): string[] | null {
-  const t = text.replace(/\r\n/g, '\n').trim();
+  // a header line ("Slide 2", "2/8") starts a new block and is not a word of the slide
+  const t = text.replace(/\r\n/g, '\n').replace(new RegExp(HEADER_LINE, 'gim'), '\n---\n').trim();
   if (!t) return null;
   const explicit = /^[ \t]*---+[ \t]*$/m.test(t);
   const blocks = (explicit ? t.split(/^[ \t]*---+[ \t]*$/m) : t.split(/\n[ \t]*\n/)).map((b) => b.trim()).filter(Boolean);

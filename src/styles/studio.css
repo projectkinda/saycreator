@@ -254,3 +254,9 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
 .cr-sp-strip { list-style: none; margin: 0; padding: 0 0 var(--sp-2, 8px); display: flex; gap: var(--sp-3, 12px); overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
 .cr-sp-strip li { flex: 0 0 min(250px, 64vw); aspect-ratio: 4 / 5; scroll-snap-align: start; display: grid; place-items: center; background: var(--surface); border-radius: var(--radius-thumb); overflow: hidden; }
 .cr-sp-strip img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* "Your text already has paragraphs": the two choices, one per row (the radio on the left, the words and the cost on the right) */
+.cr-textmode { border: 1px solid var(--line, #d8d8d8); border-radius: 12px; padding: 12px 14px; margin: 12px 0; min-inline-size: 0; }
+.cr-textmode legend { padding: 0 6px; }
+.cr-textmode .cr-mode { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; cursor: pointer; }
+.cr-textmode .cr-mode input { margin-top: 4px; flex: none; }
