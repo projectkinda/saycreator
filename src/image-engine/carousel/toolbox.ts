@@ -156,7 +156,7 @@ function balancedLines(text: string, maxWidth: number, font: FontFamily, weight:
 /** Measures with the real font and returns a text layer whose box is exactly as tall as its text. */
 export function buildText(s: TextSpec): Built {
   const lh = s.lineHeight ?? 1.1;
-  let text = s.upper ? s.text.toUpperCase() : s.text;
+  let text = s.upper ? (s.text ?? '').toUpperCase() : (s.text ?? ''); // Round 18: a template slide with no body (one sentence of a pasted paragraph) must not stop the page
   const notes: string[] = [];
   const f = fitText({ text, font: s.font, weight: s.weight, maxSize: s.size, minSize: Math.min(s.minSize ?? s.size, s.size), lineHeight: lh, width: s.width, height: s.maxHeight ?? 10000 });
   if (f.size < s.size) notes.push(`"${text.slice(0, 28)}" was shrunk from ${s.size} to ${f.size} px to fit.`);

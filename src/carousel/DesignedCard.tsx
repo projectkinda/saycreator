@@ -1,5 +1,6 @@
 // What Designed code did for a deck (slides redesigned one by one, which fell back and why) and "Save this look as a pack"; also the card that lists
 // script words that are notes, not slide text ("edit this").
+import { plainWords } from './plainWords';
 import { useState } from 'react';
 import type { CarouselScript } from '../image-engine/carousel/types';
 import { blankStyle } from '../reference/blank';
@@ -65,7 +66,7 @@ export function DesignedCard({ doc }: { doc: Doc }) {
           {fell.map(([i, why]) => <li key={i}>Slide {Number(i) + 1}: {why}</li>)}
         </ul>
       )}
-      {d.notes.map((x, i) => <p key={i} className="small muted">{x}</p>)}
+      {d.notes.map((x, i) => <p key={i} className="small muted">{plainWords(x)}</p>)}
       <div className="row-actions">
         <input className="input" aria-label="Name for the saved look" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
         <button type="button" className="btn btn-outline" disabled={ok === 0} onClick={save}>Save this look as a pack</button>

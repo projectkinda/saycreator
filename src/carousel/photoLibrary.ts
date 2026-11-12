@@ -21,6 +21,8 @@ export interface PictureMeta {
   bytes: number;
   /** A screenshot or a photo, read from its pixels when it was added (the person can switch it). Missing on an older project: treated as a screenshot (safe by default, see contentOr). */
   content?: PictureContent;
+  /** Round 18: what the person says this picture is ("What is this?", at most 40 characters). Saved with the project; the code (and the writer) place the picture on the slide whose words match it. */
+  label?: string;
 }
 
 export const MAX_FILE_BYTES = 60 * 1024 * 1024;

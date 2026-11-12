@@ -4,6 +4,8 @@
 // tick and cross badges ...): never an empty box. The writer is only offered these layouts when the deck has a picture. No text is ever drawn over a picture, so no scrim is needed.
 import { CARD_PAD, Draw, accentInk, lineTexts, measure, nearestWeight, S } from './draw';
 import { measureWidth } from '../../image-engine/draw/text';
+import { chromeFor } from './chrome';
+import { chromeBoxes } from './chromeAvoid';
 import { arr, layoutDef, mk, place, str, withAccent } from './library';
 import type { Cx, ImageSlotDef, LayoutDef, LayoutStyle, Orientation, PlanImage } from './types';
 
@@ -115,10 +117,15 @@ const SLIDE_W = 1080;
 /** The picture zone: between the handle row (y 109) and the page counter (y 1258), so no page chrome is ever over a picture. */
 const ZONE_TOP = 116;
 const ZONE_BOTTOM = 1250;
-const FULL_PIC_H = 880;
-const FULL_PANEL_H = ZONE_BOTTOM - ZONE_TOP - FULL_PIC_H;
-const HALF_W = 655;
-const HALF_H = 1114;
+/**
+ * Round 18: the top of the picture zone for THIS style. A style with a profile header (the avatar, the name and the handle, to about y 160) starts the zone below the header, so a picture is planned to
+ * the room it really has and nothing is trimmed afterwards. Other styles start at 116 as before.
+ */
+const zoneTopOf = (st: LayoutStyle): number => {
+  const rec = chromeFor({ handle: '@x', index: 1, total: 3, profile: !!st.devices.profileHeader, font: st.fonts.body, deco: st.deco, site: st.site ?? '' });
+  const header = chromeBoxes(rec as never).filter((b) => b.y + b.h / 2 < 675);
+  return Math.max(ZONE_TOP, Math.ceil(Math.max(0, ...header.map((b) => b.y + b.h))));
+};
 const HALF_BAND_H = 675;
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 /** The picture panel of a split: 61% of the width. */
@@ -579,6 +586,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       short: { headline: 'Meet Quick Flip' },
     },
     plan(f, v, st, cx) {
+      const ZONE_TOP = zoneTopOf(st);
       const img = imageOf(f.image);
       const head = str(f, 'headline');
       const line = str(f, 'line');
@@ -587,20 +595,23 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       // Round 16: with 12 words or fewer the caption headline is at least 64 px and the body at least 40 px (never under 32); the caption panel grows, and the picture shrinks, to make room
       const short = `${head} ${line}`.split(/\s+/).filter(Boolean).length <= 12;
       const d = place(st, cx, 'top', (d) => {
-        const texts = (t: Draw) => {
-          t.text('title', head, { size: 76, max: 84, weight: 800, font: 'h', lines: 2, min: short ? 64 : 48, gap: line ? 10 : 0 });
-          if (line) t.text('body', line, { size: 44, max: 48, fill: '$muted', lines: 1, min: 40 });
+        // cap: the largest headline size (the body follows it); 76 / 44 normally
+        const textsAt = (cap: number) => (t: Draw) => {
+          t.text('title', head, { size: Math.min(76, cap), max: Math.min(84, cap), weight: 800, font: 'h', lines: 2, min: short ? 64 : 48, gap: line ? 10 : 0 });
+          if (line) t.text('body', line, { size: Math.min(44, Math.max(40, Math.round(cap * 0.58))), max: Math.min(48, Math.max(40, Math.round(cap * 0.58))), fill: '$muted', lines: 1, min: 40 });
         };
+        const room = v === 0 ? 72 : 64;
+        const texts = textsAt(76);
         const th = heightOf(d, texts);
-        // the text must end by y 1205 (the engine clamps boxes at 1207) and start 40 px below the header when the panel is on top: the panel is as tall as the text needs, plus that room
-        const panelH = Math.min(560, Math.max(FULL_PANEL_H, th + (v === 0 ? 72 : 64)));
+        // the panel is as tall as the text needs (at least 254 px); a style with a profile header has the same panel under a picture that starts below its header, so its picture is the header's height shorter
+        const panelH = Math.min(560, Math.max(254, th + room));
         const picH = ZONE_BOTTOM - ZONE_TOP - panelH;
         // the picture takes the rest of the picture zone; the caption panel (the card colour) at least 254 px
         const picY = v === 0 ? ZONE_TOP : ZONE_TOP + panelH;
         const panelY = v === 0 ? ZONE_TOP + picH : ZONE_TOP;
         d.image(img, 0, picY, SLIDE_W, picH, { rx: 0 });
         d.rect(0, panelY, SLIDE_W, panelH, '$surface', { rx: 0 });
-        d.y = v === 0 ? panelY + 24 + Math.max(0, Math.round((panelH - 72 - th) / 2)) : panelY + 40 + Math.max(0, Math.round((panelH - 64 - th) / 2));
+        d.y = v === 0 ? panelY + 24 + Math.max(0, Math.round((panelH - room - th) / 2)) : panelY + 40 + Math.max(0, Math.round((panelH - room - th) / 2));
         texts(d);
       });
       return mk(d, { noBalance: true, type: 'content', fitAs: 'statement-card', slide: withAccent({ type: 'content', headline: head, body: line }, head, f, st) });
@@ -616,6 +627,10 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       short: { headline: 'The flip', body: 'One zip, ten seconds, no bag to pack.' },
     },
     plan(f, v, st, cx) {
+      const ZONE_TOP = zoneTopOf(st);
+      // the side half is as tall as the zone is; its width keeps it at 50% of the slide (655 px of 1114 normally)
+      const HALF_H = ZONE_BOTTOM - ZONE_TOP - 20;
+      const HALF_W = ZONE_TOP === 116 ? 655 : Math.round((SLIDE_W * 1350 * 0.5) / HALF_H);
       const img = imageOf(f.image);
       const head = str(f, 'headline');
       const body = str(f, 'body');
@@ -678,6 +693,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       const line = str(f, 'line');
       if (!img) return layoutDef('statement')!.plan({ headline: head, ...(line ? { caption: line } : {}) }, v, st, cx);
       const level = Math.max(0, Math.min(3, cx.scrim ?? 0));
+      const ZONE_TOP = zoneTopOf(st);
       const d = place(st, cx, 'top', (d) => {
         d.image(img, 0, ZONE_TOP, SLIDE_W, ZONE_BOTTOM - ZONE_TOP, { rx: 0 });
         const texts = (t: Draw) => {
@@ -859,6 +875,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       // no picture: the plain numbered list of the same words
       if (!img) return layoutDef('numbered-list')!.plan({ title, items }, v, st, cx);
       const mode = listMarks(title, items, v);
+      const ZONE_TOP = zoneTopOf(st);
       const d = place(st, cx, 'top', (d) => {
         const tw = d.w - MARK_W[mode];
         // rows at 44 px; the band is 40% of the slide (540 px) and gives up height (down to 300 px) only when title and rows need the room under it
@@ -887,6 +904,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       const img = imageOf(f.image);
       const title = str(f, 'title');
       const items = arr(f, 'items').slice(0, 5);
+      const ZONE_TOP = zoneTopOf(st);
       const sh = img ? shapeOf(img) : null;
       if (!img || !sh || !(sh.kind === 'tall' || sh.kind === 'portrait')) return layoutDef('numbered-list')!.plan({ title, items }, v, st, cx);
       const mode = listMarks(title, items, 0);
@@ -964,6 +982,8 @@ export interface PicInfo {
   height: number;
   /** What the pixels (or the person) say: a screenshot never goes behind text and is never the cover unless pinned there. Missing: a photo. */
   content?: 'screenshot' | 'photo';
+  /** The person's name for the picture (Round 18). */
+  label?: string;
 }
 export const isScreenshot = (p: { content?: string }): boolean => p.content === 'screenshot';
 /** The layouts that set text OVER the picture (with a scrim): a screenshot is never placed in them, its own text would show through behind the headline. */

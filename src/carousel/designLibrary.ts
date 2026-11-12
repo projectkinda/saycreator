@@ -23,6 +23,7 @@ import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImag
 import { pictureUseOf, placeImages } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { settleScrim } from './scrim';
+import { namePass } from './pictureNames';
 import { heroPass, picturePass, screenshotPass, separatePictureRuns, type PictureSwap } from './picturePass';
 import { TONES } from './writerPrompt';
 import { inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
@@ -364,9 +365,9 @@ const NEW_PICTURE_NOTES: [string, string][] = [
   ['phone-frame', '1 tall or portrait screenshot in a phone outline'],
 ];
 /** The writer's picture rules: metadata only (id, orientation, shape, pixel size), never pixels. */
-export function imageRules(images: { id: string; width: number; height: number; content?: 'screenshot' | 'photo' }[], slides = 7): string[] {
+export function imageRules(images: { id: string; width: number; height: number; content?: 'screenshot' | 'photo'; label?: string }[], slides = 7): string[] {
   const ratio = (p: { width: number; height: number }) => (p.width >= p.height ? `${(p.width / p.height).toFixed(2)}:1` : `1:${(p.height / p.width).toFixed(2)}`);
-  const list = images.map((p, i) => `image ${i + 1}: ${picOrientation(p)}, ${ratio(p)}, ${p.width}x${p.height} px${p.content === 'screenshot' ? ', SCREENSHOT' : ''}`);
+  const list = images.map((p, i) => `image ${i + 1}: ${picOrientation(p)}, ${ratio(p)}, ${p.width}x${p.height} px${p.content === 'screenshot' ? ', SCREENSHOT' : ''}${p.label?.trim() ? `, named "${p.label.trim().replace(/"/g, "'").slice(0, 40)}"` : ''}`);
   const nl = (IMAGE_LAYOUT_IDS as readonly string[]).filter((id) => hasEnoughPictures(id, images));
   return [
     `- Pictures available (metadata only, you never see them and never write a picture field): ${list.join('; ')}.`,
@@ -470,6 +471,7 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     '- Prose: "prose" is the ONLY layout that takes whole paragraphs. Aim for 35 to 50 words in all (the heading and the pull line included); use up to 70 only when the source text truly needs it. 70 is a hard limit (the handle and the page number are not counted; 300 characters per paragraph at most), and the code cuts anything past it. Prefer ONE short paragraph plus a bold one-line takeaway (the "pull" field) to three paragraphs. Use prose for a slide that needs explaining in sentences; its heading is optional and, when present, reads on its own as a full title. Every other layout stays short: never put a paragraph into a statement, list or card layout.',
     '- Long passages: if the text for ONE slide would run past 70 words, split it across two slides, a prose slide and then a statement, bullet-list or numbered-list slide for the rest, instead of cramming it into one. The number of slides is fixed (see above): split only when another slide of your plan can be spared for it (a slide that would only repeat or pad); when every slide is needed, tighten the prose to 70 words or fewer instead.',
     ...(look.images?.length ? imageRules(look.images, n) : []),
+    ...(look.images?.some((p) => p.label?.trim()) ? ['- If a picture has a name, put it on the slide whose words it matches best: give that slide "picture": the number of that picture (for example "picture": 2). Use each named picture at most once. A picture without a name is placed by shape as before (leave "picture" out). Never add words to a slide because of a picture name.'] : []),
     '- Forms: "statement-stacked" is 2 to 4 words (one per line); "statement-pill" needs a short caption (at most 40 characters) that is set in a pill; "statement-question" is one question or thought; "numbered-stagger" is 2 or 3 sentences; "bullet-list" and "pill-stagger" are short lines (at most 46 and 36 characters); "headline-card" has ONE key paragraph (the card) under a headline; "cta-pair" has two buttons with a short line each.',
     '- Use "step-numeral" only when at least two slides in the deck are steps of one sequence (step 1, step 2 ...); with a single step, use "split-text" or "statement" instead.',
     '- Variety: no two consecutive slides use the same layout, and no layout is used more than twice. Use "stepper" for 2 to 5 ordered steps, "stat-bar" or "big-stat" for a figure, "checklist" for benefits, "comparison" for two things set against each other, "quote" only for words that are in the text.',
@@ -506,6 +508,10 @@ export interface SlideSpec {
   pin?: { variant?: 0 | 1; cut?: Cut; invert?: false | 'full' | 'tint'; /** The picture picker: "none", or the id of the picture the person chose (their choice is never moved or removed). */ picture?: string; /** The slide as the deck's own placement made it, kept while a picture is pinned so "Auto" can bring it back. */ auto?: { layout: string; fields: Fields; accents: string[] } };
   /** A text slide the code turned into a picture layout because a picture was left unused: the pictures the writer's own picture layouts need are placed first. */
   pictureUpgrade?: boolean;
+  /** Round 18: the writer's suggestion for a NAMED picture (its number, 1-based). The code keeps it only when the layout rules allow it. */
+  hint?: number;
+  /** Round 18: the id of the NAMED picture the code put on this slide by its name; the placement leaves the slide alone (the person's own pick is `pin.picture`, which wins). */
+  named?: string;
 }
 export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 export function toSpec(raw: unknown): SlideSpec | null {
@@ -522,6 +528,7 @@ export function toSpec(raw: unknown): SlideSpec | null {
     ...(raw.density === 'statement' ? { density: 'statement' as const } : {}),
     ...(typeof raw.cut === 'string' && (cuts as string[]).includes(raw.cut) ? { cut: raw.cut as Cut } : {}),
     ...(raw.invert === true ? { invert: true } : {}),
+    ...(Number.isInteger(Number(raw.picture)) && Number(raw.picture) >= 1 && Number(raw.picture) <= 12 && raw.picture !== null && raw.picture !== '' ? { hint: Number(raw.picture) } : {}),
   };
 }
 export function parseLibraryAnswer(text: string): { title: string; note: string | null; slides: SlideSpec[]; errors: string[] } {
@@ -1323,10 +1330,14 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   // pictures the writer left unused get a slide (a deterministic swap to a picture layout of the slide's own meaning, no text lost)
   let pictureSwaps: PictureSwap[] = [];
   if (look.images?.length) {
+    // Round 18: a picture the person NAMED goes to the slide whose words match its name (the writer's suggestion first, where the rules allow it); no model call
+    const np = namePass(specs, look);
+    specs = np.specs;
+    pictureSwaps = [...np.swaps];
     // a screenshot is never under text: the slides the writer put in such a layout move to one that shows it whole (same words)
     const ss = screenshotPass(specs, look);
     specs = ss.specs;
-    pictureSwaps = [...ss.swaps];
+    pictureSwaps = [...pictureSwaps, ...ss.swaps];
     const pp = picturePass(specs, look);
     specs = pp.specs;
     pictureSwaps.push(...pp.swaps);

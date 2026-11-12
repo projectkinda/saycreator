@@ -174,7 +174,7 @@ test('the picker at 390 px: reachable, nothing overflows the page; the screensho
 });
 
 // Round 16 F: at 390 px the Picture row wraps (two lines at most for 3 pictures) with Auto first; it never scrolls sideways; Auto and None are always in view.
-test('the picker row at 390 px wraps to two lines with Auto first, no sideways scroll, Auto and None visible (out/round-16/picker-phone.png)', async ({ page }) => {
+test('the picker at 390 px: Auto and None are the first row, the thumbnails wrap below two to a row, no sideways scroll, all in view (out/round-16/picker-phone.png; Round 18: bigger thumbnails)', async ({ page }) => {
   await setup(page);
   await openEdit(page, 2);
   await page.setViewportSize({ width: 390, height: 900 });
@@ -184,7 +184,8 @@ test('the picker row at 390 px wraps to two lines with Auto first, no sideways s
   await expect(picker).toBeVisible();
   const m = await page.evaluate(() => {
     const row = document.querySelector('[data-testid="picker-1"] .cr-pick-row') as HTMLElement;
-    const kids = [...row.children] as HTMLElement[];
+    // Round 18: Auto and None are the first row (their own box), the thumbnails wrap below it
+    const kids = [...(row.querySelector('.cr-pick-modes')!.children), ...row.querySelectorAll('.cr-pick-thumb')] as HTMLElement[];
     const rects = kids.map((k) => k.getBoundingClientRect());
     const rows = new Set(rects.map((r) => Math.round(r.top / 10))).size;
     return {
@@ -199,7 +200,7 @@ test('the picker row at 390 px wraps to two lines with Auto first, no sideways s
   expect(m.secondText).toBe('None');
   expect(m.overflowX).not.toBe('auto');
   expect(m.scrollW, 'the row does not scroll sideways').toBeLessThanOrEqual(m.clientW + 1);
-  expect(m.rows, 'two lines').toBe(2);
+  expect(m.rows, 'Auto and None, then the 3 pictures two to a row: three lines').toBe(3);
   expect(m.inView).toEqual([true, true]);
   expect(m.allInView).toBe(true);
   expect(m.page).toBeLessThanOrEqual(1);

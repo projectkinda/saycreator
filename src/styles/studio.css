@@ -265,8 +265,35 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
 .cr-pick { min-width: 0; max-width: 100%; }
 .cr-pick-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; padding: 2px; } /* wraps, never scrolls sideways: Auto and None are always in view (Round 16) */
 .cr-pick-row .chip-btn { flex: none; }
-.cr-pick-thumb { flex: none; width: 56px; height: 56px; padding: 0; border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: var(--surface, #eee); cursor: pointer; }
-@media (max-width: 520px) { .cr-pick-thumb { width: 48px; height: 48px; } }
 .cr-pick-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cr-pick-thumb[aria-pressed="true"] { border-color: var(--ink, #111); }
 .cr-chip-row { display: flex; gap: 8px; align-items: center; }
+
+/* Round 18: picture thumbnails big enough to tell apart (Content step and the Slides-step picker) */
+.cr-thumb { position: relative; display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.cr-thumb-box { position: relative; display: flex; align-items: center; justify-content: center; width: var(--tw, 96px); min-width: 96px; height: 120px; min-height: 120px; border-radius: 10px; overflow: hidden; background: var(--surface, #eee); border: 1px solid var(--line, #ddd); box-sizing: border-box; }
+.cr-thumb-box img { width: 100%; height: 100%; object-fit: contain; display: block; } /* the picture's own shape: never squashed, never cropped */
+.cr-thumb-num { position: absolute; top: 4px; left: 4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--ink, #111); color: var(--page, #fff); font: 700 12px/22px var(--font-sans, system-ui, sans-serif); text-align: center; box-sizing: border-box; }
+.cr-thumb-badge { max-width: var(--tw, 96px); min-width: 96px; font-size: 11px; line-height: 1.25; color: var(--muted, #555); white-space: normal; text-align: left; }
+.cr-thumb-pre { position: fixed; z-index: 60; width: 280px; max-height: 380px; display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 12px; background: var(--page, #fff); border: 1px solid var(--line, #ccc); box-shadow: 0 8px 28px rgba(0,0,0,.28); pointer-events: none; }
+.cr-thumb-pre img { width: 100%; max-height: 330px; object-fit: contain; display: block; border-radius: 8px; }
+.cr-pick-row { flex-direction: column; align-items: stretch; }
+.cr-pick-modes { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-height: 40px; }
+.cr-pick-modes .chip-btn { min-height: 40px; min-width: 56px; }
+.cr-pick-thumbs { display: flex; flex-wrap: wrap; gap: 10px; }
+.cr-pick-thumb { flex: none; display: flex; align-items: flex-start; padding: 2px; border: 2px solid transparent; border-radius: 12px; background: transparent; cursor: pointer; text-align: left; }
+.cr-pick-thumb[aria-pressed="true"] { border-color: var(--ink, #111); }
+.cr-pic-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 14px; }
+.cr-pic-item { display: flex; flex-direction: column; gap: 6px; max-width: 190px; }
+.cr-pic-item .cr-pic-name input { width: 100%; min-height: 40px; box-sizing: border-box; }
+@media (max-width: 520px) {
+  .cr-pick-thumbs, .cr-pic-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .cr-pick { margin-inline: -12px; width: calc(100% + 24px); max-width: none; } /* the picker takes the room of the card's side padding: two 140 px thumbnails need about 290 px */
+  .cr-pick-thumbs { gap: 6px; }
+  .cr-pick-thumb { min-width: 140px; width: 100%; padding: 0; border: 0; }
+  .cr-pick-thumb[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--ink, #111); }
+  .cr-thumb { width: 100%; }
+  .cr-thumb-box { width: 100%; min-width: 140px; height: 160px; }
+  .cr-thumb-badge { max-width: 100%; min-width: 0; }
+  .cr-pic-item { max-width: none; min-width: 140px; }
+}

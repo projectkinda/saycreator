@@ -4,13 +4,14 @@
 import { useRef, useState } from 'react';
 import { orientationOf } from './layouts/images';
 import { prepareForSlots } from './imagePrep';
-import { urlOf, type PictureMeta } from './photoLibrary';
+import type { PictureMeta } from './photoLibrary';
+import { PictureThumb } from './PictureThumb';
 import type { AddFiles } from './PhotoControls';
 import { contentOr } from './pictureKind';
 
 const LABEL = { portrait: 'Portrait', landscape: 'Landscape', square: 'Square' } as const;
 
-export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, disabled }: {
+export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, onLabel, disabled }: {
   /** The project's pictures (photos only are listed here). */
   pictures: PictureMeta[];
   addFiles: AddFiles;
@@ -19,6 +20,8 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, d
   onMove: (id: string, dir: -1 | 1) => void;
   /** Switches a picture between a screenshot and a photo. */
   onContent?: (id: string, content: 'screenshot' | 'photo') => void;
+  /** Round 18: sets what the person calls a picture ("What is this?", at most 40 characters). */
+  onLabel?: (id: string, label: string) => void;
   disabled?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -65,12 +68,16 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, d
       </div>
       <input ref={input} type="file" multiple accept="image/*" className="visually-hidden" tabIndex={-1} aria-label="Choose images for the slides" onChange={(e) => { void go([...(e.target.files ?? [])]); e.target.value = ''; }} />
       {photos.length > 0 && (
-        <ul className="cr-strip-list" aria-label={`${photos.length} image${photos.length === 1 ? '' : 's'} for the slides`} data-testid="images-list">
+        <ul className="cr-pic-list" aria-label={`${photos.length} image${photos.length === 1 ? '' : 's'} for the slides`} data-testid="images-list">
           {photos.map((p, i) => {
             const o = orientationOf(p.width, p.height);
             return (
-              <li key={p.id} className="cr-strip-item" data-testid={`image-${i}`} data-orientation={o} aria-label={`Image ${i + 1}, ${LABEL[o]}`}>
-                {urlOf(p.id) ? <img src={urlOf(p.id)!} alt="" draggable={false} /> : <span className="cr-strip-gone small">Not in storage</span>}
+              <li key={p.id} className="cr-pic-item" data-testid={`image-${i}`} data-orientation={o} aria-label={`Picture ${i + 1}, ${LABEL[o]}`}>
+                <PictureThumb meta={p} number={i + 1} />
+                <label className="cr-pic-name small">
+                  <span className="visually-hidden">What is picture {i + 1}?</span>
+                  <input type="text" maxLength={40} value={p.label ?? ''} placeholder="What is this?" data-testid={`image-${i}-label`} disabled={disabled || !onLabel} onChange={(e) => onLabel?.(p.id, e.target.value.slice(0, 40))} />
+                </label>
                 <span className="small" data-testid={`image-${i}-orientation`}>{LABEL[o]} · {p.width}×{p.height}</span>
                 <button type="button" className="chip-btn" data-testid={`image-${i}-content`} data-content={contentOr(p.content) === 'screenshot' ? 'screenshot' : 'photo'} aria-label={contentOr(p.content) === 'screenshot' ? `Image ${i + 1} is a screenshot. Switch it to a photo.` : `Image ${i + 1} is a photo. Switch it to a screenshot.`} title={contentOr(p.content) === 'screenshot' ? 'A screenshot never goes behind text. Click to make it a photo.' : 'Click if this is a screenshot: a screenshot never goes behind text.'} disabled={disabled || !onContent} onClick={() => onContent?.(p.id, contentOr(p.content) === 'screenshot' ? 'photo' : 'screenshot')}>{contentOr(p.content) === 'screenshot' ? 'Screenshot' : 'Photo'}</button>
                 <span className="row-actions">
@@ -83,6 +90,7 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, d
           })}
         </ul>
       )}
+      {photos.length > 0 && <p className="small muted" data-testid="images-name-hint">Name each picture in words from your slide, for example: pick a look. A named picture goes on the slide with those words.</p>}
       {status && <p className="small" role="status" aria-live="polite" data-testid="images-status">{status}</p>}
     </div>
   );

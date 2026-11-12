@@ -23,6 +23,7 @@ import { svgToPng } from '../reference/faithful';
 import { cardSlides, previewDeck, PREVIEW_COUNT } from './stylePreview';
 import { choiceOf, pickPicture } from './picturePick';
 import { SlidePicker } from './SlidePicker';
+import { plainWords } from './plainWords';
 import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
 import { LayoutGallery } from './LayoutGallery';
 import { profileWebsite } from './profileSite';
@@ -431,7 +432,7 @@ export default function CarouselPage() {
   const pictures = doc.photos ?? [];
   // the writer and the picker are told only the pictures' metadata (id and pixel size), never the pixels
   // what the code knows about each picture: its size and whether it is a screenshot or a photo (metadata only, never pixels)
-  const photoInfos = pictures.filter((p) => p.kind === 'photo').map((p) => ({ id: p.id, width: p.width, height: p.height, content: contentOr(p.content) }));
+  const photoInfos = pictures.filter((p) => p.kind === 'photo').map((p) => ({ id: p.id, width: p.width, height: p.height, content: contentOr(p.content), ...(p.label?.trim() ? { label: p.label.trim() } : {}) }));
   // (a deck whose pictures are all screenshots still has pictures: picture layouts are allowed; only the person's-own-photo layout is refused, see slideProblems)
   const hasPhotoLook = pictures.length > 0;
   const libVersion = useLibraryVersion();
@@ -671,6 +672,7 @@ export default function CarouselPage() {
   const usedOn = (id: string) => slides.filter((s) => s.plan.meta?.photoSlots?.some((p) => p.photo === id)).length + Object.values(doc.choices).filter((c) => c.object?.id === id).length;
   /** Puts a picture one place earlier or later (the order is the order the code tries the pictures in when it places them). */
   /** The chip on a picture: switch it between "Screenshot" and "Photo" (what the code does with it follows). */
+  const setLabel = (id: string, label: string) => setPhotos((before) => before.map((p) => (p.id === id ? { ...p, label: label.slice(0, 40) } : p)));
   const setContent = (id: string, content: 'screenshot' | 'photo') => setPhotos((before) => before.map((p) => (p.id === id ? { ...p, content } : p)));
   const moveImage = (id: string, dir: -1 | 1) =>
     setPhotos((before) => {
@@ -860,7 +862,7 @@ export default function CarouselPage() {
     job.end('apply', pick ? `style: ${pick.name}` : undefined);
     {
       const sw = designedOut?.library?.flavour?.swaps ?? [];
-      if (sw.length) setNotice(`Flavour: ${sw.length} layout${sw.length === 1 ? '' : 's'} changed to suit ${styleByName(presetUsed ?? '')?.spec.title ?? 'the style'}: ${sw.map((w) => `slide ${w.slide} ${w.from} to ${w.to}`).join('; ')}. Undo takes back the whole carousel; the layout picker changes any slide.`);
+      if (sw.length) setNotice(`Flavour: ${sw.length} layout${sw.length === 1 ? '' : 's'} changed to suit ${styleByName(presetUsed ?? '')?.spec.title ?? 'the style'}: ${sw.map((w) => plainWords(`slide ${w.slide} ${w.from} to ${w.to}`)).join('; ')}. Undo takes back the whole carousel; the layout picker changes any slide.`);
     }
     job.begin('draw');
     setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…`, styleWhy: (presetUsed ? pickPre : pick)?.why, extra: designedOut ? ` Designed mode: ${Object.keys(designedOut.slides).length} slides designed, ${Object.keys(designedOut.fallbacks).length} fell back, ${designedOut.calls} model call${designedOut.calls === 1 ? '' : 's'}.` : '' });
@@ -975,6 +977,12 @@ export default function CarouselPage() {
     const free = new Set(unusedPictures(specs, photoInfos).map((p) => p.id));
     return pictures.filter((p) => p.kind === 'photo' && free.has(p.id));
   })();
+  /** For each picture, the slides (1-based) that show it now. */
+  const pictureUsage: Record<string, number[]> = (() => {
+    const out: Record<string, number[]> = {};
+    (doc.designed?.library?.plan?.specs ?? []).forEach((sp, i) => usedIds(sp.fields).forEach((id) => { const a = (out[id] ??= []); if (!a.includes(i + 1)) a.push(i + 1); }));
+    return out;
+  })();
   const slotChoices: SlotChoice[] = (() => {
     const lib = doc.designed?.library;
     if (!lib?.plan) return [];
@@ -989,12 +997,12 @@ export default function CarouselPage() {
     const spec = lib?.plan?.specs[i];
     if (!lib?.plan || !spec) return 'This deck has no stored plan to draw from.';
     const r = pickPicture(spec, i, choice, photoInfos, pickLook);
-    if (!r.ok) return r.offer ? { msg: r.why, offer: r.offer } : r.why;
+    if (!r.ok) return r.offer ? { msg: plainWords(r.why), offer: r.offer } : plainWords(r.why);
     if (choice === 'auto' && spec.pin?.picture === undefined) return r.note;
     const redraw = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, { layout: r.spec.layout as LayoutId, fields: r.spec.fields, accents: r.spec.accents, pin: { picture: r.spec.pin?.picture, auto: r.spec.pin?.auto } });
-    if (!redraw.ok) return `Could not redraw slide ${i + 1}: ${redraw.reasons[0]} The slide is unchanged.`;
+    if (!redraw.ok) return plainWords(`Could not redraw slide ${i + 1}: ${redraw.reasons[0]} The slide is unchanged.`);
     const bad = putSlide(i, redraw, choice === 'auto' ? `Slide ${i + 1}: picture on Auto` : choice === 'none' ? `Slide ${i + 1}: no picture` : `Slide ${i + 1}: pick a picture`);
-    return bad ?? r.note;
+    return bad ? plainWords(bad) : r.note;
   };
   const pickRewrite = async (i: number, words: string): Promise<string> => {
     const lib = doc.designed?.library;
@@ -1058,7 +1066,7 @@ export default function CarouselPage() {
       const designedOut = { ...d.designed, notes, slides: out.slides, layouts: out.layouts, library: { ...out.library, source: name === ACTIVE_STYLE ? 'reference' : name, ...(fp.swaps.length || fp.kept.length ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : { flavour: undefined }) } };
       const done = apply({ label: `Change style to ${title}`, ops: [{ path: ['style'], value: name }, { path: ['designed'], value: designedOut }, { path: ['route'], value: { route: route.route, reason: route.reason + ' The deck was drawn again from its stored plan in this style: no model call.' } }, ...(script !== d.script ? [{ path: ['script'], value: script }] : [])] });
       if (done.ok) setNotice('Style changed. Slides redrawn, no model call.');
-      else setNotice(done.reasons[0]);
+      else setNotice(plainWords(done.reasons[0]));
     } catch (e) {
       setNotice('The style could not be changed: ' + (e as Error).message);
     }
@@ -1289,7 +1297,7 @@ export default function CarouselPage() {
         rewriteBox={doc.designed?.library?.plan ? <LayoutGallery section="rewrite" index={i} model={pickModel(i)} draw={pickDraw(i)} onChoose={(c) => pickChoose(i, c)} onRewrite={(w) => pickRewrite(i, w)} /> : undefined}
         libraryText={doc.designed?.library?.plan?.specs[i] ? { layout: doc.designed.library.plan.specs[i].layout, fields: doc.designed.library.plan.specs[i].fields, accents: doc.designed.library.plan.specs[i].accents, unmarked: doc.designed.library.plan.specs[i].accents.length > 0 && !((doc.designed.slides?.[String(i)]?.built?.layers ?? []) as { kind?: string; highlight?: unknown; runs?: unknown[] }[]).some((l) => l.kind === 'text' && (l.highlight || (l.runs && l.runs.length))) } : undefined}
         onTextCommit={textCommit(i)}
-        pickerBox={doc.designed?.library?.plan ? <SlidePicker index={i} pictures={pictures} current={choiceOf(doc.designed.library.plan.specs[i] ?? {})} onPick={(c) => pickSlidePicture(i, c)} /> : undefined}
+        pickerBox={doc.designed?.library?.plan ? <SlidePicker index={i} pictures={pictures} current={choiceOf(doc.designed.library.plan.specs[i] ?? {})} shown={usedIds(doc.designed.library.plan.specs[i]?.fields ?? {})[0]} usage={pictureUsage} onPick={(c) => pickSlidePicture(i, c)} /> : undefined}
         unusedBox={unusedList.length > 0 ? <UnusedPictures unused={unusedList} slots={slotChoices} onPut={(id, slide, field) => slotChange(slide, field, { picture: id })} /> : undefined}
         fineTuneBox={<DetectedStyleBox pack={presetPackFor(doc.style)} onChange={(ov) => void handleOverrides(ov)} hasDeck={!!doc.designed?.library?.plan} />}
         onImageText={(text) => {
@@ -1497,7 +1505,7 @@ export default function CarouselPage() {
 
       <div hidden={editOn} className="cr-wiz-body">
         <div hidden={step !== 1} data-step="1">
-          <MakeIt part="content" {...makeProps} images={<ImagesField pictures={pictures} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onMove={moveImage} onContent={setContent} disabled={busy} />} scriptBox={scriptBox} scriptMode={scriptMode} onScriptMode={setScriptMode} />
+          <MakeIt part="content" {...makeProps} images={<ImagesField pictures={pictures} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onMove={moveImage} onContent={setContent} onLabel={setLabel} disabled={busy} />} scriptBox={scriptBox} scriptMode={scriptMode} onScriptMode={setScriptMode} />
           <div className="row-actions cr-wiz-nav"><button type="button" className="btn btn-dark btn-lg" onClick={() => goStep(2)}>Next: Format</button></div>
         </div>
         <div hidden={step !== 2} data-step="2">

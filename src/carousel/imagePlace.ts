@@ -11,9 +11,11 @@ export interface PlaceableSpec {
   fields: Fields;
   /** The person's choice of picture for this slide (the picker): "none" or a picture id. A pinned slide is never changed by the placement or the passes. */
   pin?: { picture?: string };
+  /** Round 18: the id of a picture the code put here by its NAME: the placement and the passes leave the slide as it is. */
+  named?: string;
 }
 /** A slide whose picture the person chose (a picture, or none). */
-export const pinnedPicture = (sp: { pin?: { picture?: string } }): boolean => sp.pin?.picture !== undefined;
+export const pinnedPicture = (sp: { pin?: { picture?: string }; named?: string }): boolean => sp.pin?.picture !== undefined || !!sp.named;
 const cost = (p: PicInfo, aspect: number, accepts: string[], orientation: string, maxAspect?: number) => Math.abs(Math.log(picAspect(p) / aspect)) + (accepts.includes(picOrientation(p)) && !(maxAspect && picAspect(p) > maxAspect) ? 0 : 5) + (picOrientation(p) === orientation ? 0 : 0.15);
 /** How far a picture's shape may be from its slot's before the cover crop is called bad: ln(ratio) 0.6 keeps at least 55% of the picture. */
 export const CROP_OK = 0.6;

@@ -88,6 +88,7 @@ test('every new layout draws in all 15 styles with every shape it allows: inside
     const draw = (window as any).__draw;
     const T: any = await import('/src/image-engine/draw/text.ts');
     const bad: string[] = [];
+    const CAP: Record<string, number[]> = {};
     let drawn = 0;
     for (const style of STYLES) for (const id of NEW) for (const [pid] of SHAPES) {
       // title-over-photo measures the real picture (a raster per slide): three shapes of it in every style
@@ -105,7 +106,7 @@ test('every new layout draws in all 15 styles with every shape it allows: inside
       if (imgs.some((p) => p.circle)) bad.push(`${tag}: a circle crop`);
       const texts = (b.layers as any[]).filter((l) => l.kind === 'text' && l.text && !String(l.name).startsWith('recurring'));
       for (const l of texts) {
-        const min = l.name === 'title' ? 48 : l.name === 'body' ? 44 : 0;
+        const min = l.name === 'title' ? 48 : l.name === 'body' ? (id === 'photo-full-caption' ? 40 : 44) : 0; // the caption's body floor is 40 px (Round 16: 64 px headline, 40 px body)
         if (l.style.size < min) bad.push(`${tag}: ${l.name} "${String(l.text).slice(0, 18)}" is ${Math.round(l.style.size)} px (< ${min})`);
         if (l.x < 47 || l.x + l.width > 1037.5) bad.push(`${tag}: ${l.name} leaves the margin (${Math.round(l.x)}..${Math.round(l.x + l.width)})`);
       }
@@ -113,15 +114,20 @@ test('every new layout draws in all 15 styles with every shape it allows: inside
       for (const p of imgs) if (p.y < 112 || p.y + p.h > 1252) bad.push(`${tag}: a picture reaches the page chrome (${Math.round(p.y)}..${Math.round(p.y + p.h)})`);
       const share = (p: any) => (p.w * p.h) / (1080 * 1350);
       const total = imgs.reduce((a, p) => a + share(p), 0);
-      // Round 16: the caption panel grows for a two-line headline (the picture may be 60% of the slide, not 65%, 57% under the profile header strip), and a picture keeps clear of the profile header (a half may lose up to 4% to that strip)
+      // photo-full-caption: the picture is at least 57% of the slide, not 65% as before Round 16: the caption panel grows to fit 64 px / 40 px text (a two-line headline with a line under it), and a style with a profile header plans its zone below the header (Round 18), with the picture starting below the header, so the picture is the header's height smaller than in the other styles (a smaller panel would press the headline against the clamp at y 1207)
       if (id === 'photo-full-caption' && Math.max(...imgs.map(share)) < 0.57) bad.push(`${tag}: the picture is ${Math.round(Math.max(...imgs.map(share)) * 1000) / 10}% of the slide (< 57%)`);
-      if (id === 'split-half' && (total > 0.502 || total < 0.5 - 0.04)) bad.push(`${tag}: the picture is ${Math.round(total * 1000) / 10}% of the slide (not half)`);
+      if (id === 'photo-full-caption') (CAP[style] ??= []).push(Math.max(...imgs.map(share)));
+      // split-half is exactly half of the slide in every style (within 0.2%), the profile-header style included (Round 18: the zone is planned below the header)
+      if (id === 'split-half' && Math.abs(total - 0.5) > 0.002) bad.push(`${tag}: the picture is ${Math.round(total * 1000) / 10}% of the slide (not half)`);
       if (id === 'photo-grid' && imgs.length < 3) bad.push(`${tag}: ${imgs.length} tiles`);
       if (id === 'twin-photos' && imgs.length !== 2) bad.push(`${tag}: ${imgs.length} pictures`);
       // a tall picture shows its top in every tile
       if (pid === 'tall') for (const p of imgs) if (String(p.src).includes('picture:tall') && !/fy=0\.1/.test(String(p.src))) bad.push(`${tag}: a tall picture without its top focus`);
       void f; void T;
     }
+    // the caption layout's picture share: the same in every style but the profile-header one, which has the header's 45 px less (3.3% of the slide): within 3.5% of the others, nothing trimmed afterwards
+    const ref = Math.max(...Object.values(CAP).flat());
+    for (const [s, v] of Object.entries(CAP)) for (const x of v) if (ref - x > 0.035) bad.push(`${s}/photo-full-caption: the picture is ${Math.round(x * 1000) / 10}% of the slide, the other styles up to ${Math.round(ref * 1000) / 10}% (more than 3.5% apart)`);
     return { bad, drawn };
   }, { STYLES, NEW, SHAPES });
   expect(r.drawn).toBeGreaterThan(300);

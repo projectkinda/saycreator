@@ -181,3 +181,55 @@ test('the picture picker (pick, None, Auto) and a restyle after it: ZERO more wr
   await settle(page);
   expect(f.calls, 'the picker and a restyle: no new writer call').toBe(afterDeck);
 });
+
+// Round 18: naming a picture, changing a name and placing it again (a pick in the picker, a restyle) are code only: ZERO writer calls after the deck exists. The deck itself is still ONE call.
+test('naming a picture, changing a name, picking it for a slide and a restyle after that: ZERO more writer calls', async ({ page }) => {
+  const plan = { title: 'Say Creator', slides: [
+    { layout: 'statement', fields: { headline: "Most creators don't have a design problem." }, accents: [] },
+    { layout: 'split-text', fields: { headline: 'You write a good post', paragraph: 'Then the evening goes to dragging text boxes.' }, accents: [] },
+    { layout: 'headline-card', fields: { headline: 'Pick a look from 15 styles.', card: 'Switch the style and your words stay put.' }, accents: [] },
+    { layout: 'statement-card', fields: { headline: 'You can add your own pictures too.' }, accents: [] },
+    { layout: 'cta-button', fields: { headline: 'Try it on your next post.', button: 'Comment slides', sub: "I'll send you the link." }, accents: [] },
+  ] };
+  const f = await counting(page, plan);
+  await page.goto('/images/carousel');
+  const files: { name: string; mimeType: string; buffer: Buffer }[] = [];
+  for (let i = 0; i < 2; i++) {
+    const b64 = await page.evaluate(async (i) => {
+      const c = document.createElement('canvas'); c.width = 1500; c.height = 1000; const g = c.getContext('2d')!; g.fillStyle = `hsl(${i * 120},60%,45%)`; g.fillRect(0, 0, 1500, 1000);
+      const blob: Blob = await new Promise((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.8)); const u = new Uint8Array(await blob.arrayBuffer()); let t = ''; for (const x of u) t += String.fromCharCode(x); return btoa(t);
+    }, i);
+    files.push({ name: `p${i}.jpg`, mimeType: 'image/jpeg', buffer: Buffer.from(b64, 'base64') });
+  }
+  await page.getByLabel('Choose images for the slides').setInputFiles(files);
+  await expect(page.getByTestId(/^image-\d+$/)).toHaveCount(2, { timeout: 60_000 });
+  // naming before the deck: the name goes to the writer in the same single call
+  await page.getByTestId('image-0-label').fill('style step');
+  await page.getByTestId('image-1-label').fill('text box');
+  await page.getByLabel('Your text or topic').fill('Most creators do not have a design problem. You write a good post. Then the evening goes to dragging text boxes. Pick a look from 15 styles. Switch the style and your words stay put. You can add your own pictures too. Try it on your next post. Comment "slides" and I will send you the link.');
+  await toStep(page, 3);
+  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat/ }).first().click();
+  await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
+  await deckDrawn(page, 5);
+  await settle(page);
+  expect(f.calls, 'the deck: one call').toBe(1);
+  const afterDeck = f.calls;
+  // naming and renaming after the deck exists
+  await toStep(page, 1);
+  await page.getByTestId('image-0-label').fill('phone');
+  await page.getByTestId('image-1-label').fill('slides step');
+  await page.getByTestId('image-0-label').fill('styles');
+  await settle(page);
+  expect(f.calls, 'naming and renaming a picture: no call').toBe(afterDeck);
+  // placing it again: a pick for a slide, then a restyle
+  await openTab(page, 'Layout', 2);
+  await page.getByTestId('pick-1-0').click();
+  await page.waitForTimeout(800);
+  await page.getByTestId('pick-1-1').click();
+  await page.waitForTimeout(800);
+  await toStep(page, 3);
+  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Quiet dark minimal/ }).first().click();
+  await page.waitForTimeout(2000);
+  await settle(page);
+  expect(f.calls, 'naming, renaming, a pick and a restyle: no new writer call').toBe(afterDeck);
+});
