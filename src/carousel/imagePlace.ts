@@ -10,14 +10,14 @@ export interface PlaceableSpec {
   layout: string;
   fields: Fields;
 }
-const cost = (p: PicInfo, aspect: number, accepts: string[], orientation: string) => Math.abs(Math.log(picAspect(p) / aspect)) + (accepts.includes(picOrientation(p)) ? 0 : 5) + (picOrientation(p) === orientation ? 0 : 0.15);
+const cost = (p: PicInfo, aspect: number, accepts: string[], orientation: string, maxAspect?: number) => Math.abs(Math.log(picAspect(p) / aspect)) + (accepts.includes(picOrientation(p)) && !(maxAspect && picAspect(p) > maxAspect) ? 0 : 5) + (picOrientation(p) === orientation ? 0 : 0.15);
 /** How far a picture's shape may be from its slot's before the cover crop is called bad: ln(ratio) 0.6 keeps at least 55% of the picture. */
 export const CROP_OK = 0.6;
 /** A picture this tall (aspect 0.5 or less, like a phone screenshot) shows its top and goes to a one-picture layout. */
 export const TALL = 0.5;
 /** The multi-picture layouts that take a tall picture in a tile (it shows its top). */
 const TALL_OK = new Set(['twin-photos', 'photo-grid']);
-const acceptable = (p: PicInfo, s: { aspect: number; accepts: string[] }) => s.accepts.includes(picOrientation(p)) && Math.abs(Math.log(picAspect(p) / s.aspect)) <= CROP_OK;
+const acceptable = (p: PicInfo, s: { aspect: number; accepts: string[]; maxAspect?: number }) => s.accepts.includes(picOrientation(p)) && !(s.maxAspect && picAspect(p) > s.maxAspect) && Math.abs(Math.log(picAspect(p) / s.aspect)) <= CROP_OK;
 
 /** The fields of a slide without its picture fields. */
 export const withoutImages = (f: Fields): Fields => Object.fromEntries(Object.entries(f).filter(([k]) => !(IMAGE_KEYS as readonly string[]).includes(k))) as Fields;
@@ -43,7 +43,7 @@ export function placeOne(layout: string, variant: 0 | 1, free0: PicInfo[]): Fiel
     for (const s of slots) {
       let best = left.find((p) => acceptable(p, s));
       if (!best) {
-        const ranked = left.map((p, order) => ({ p, order, c: cost(p, s.aspect, s.accepts, s.orientation) })).filter((q) => q.c < 5).sort((x, y) => x.c - y.c || x.order - y.order);
+        const ranked = left.map((p, order) => ({ p, order, c: cost(p, s.aspect, s.accepts, s.orientation, s.maxAspect) })).filter((q) => q.c < 5).sort((x, y) => x.c - y.c || x.order - y.order);
         best = ranked[0]?.p;
       }
       if (!best) break;

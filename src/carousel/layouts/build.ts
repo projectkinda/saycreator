@@ -11,6 +11,7 @@ import { resolveSvgTokens } from '../../reference/faithful';
 import { balanceVertical, clampSlots, finalGuards, fitSlots, readingOrder, recurringLayers, recurringMarkup, resolveCollisions, stepperSvg } from '../designed';
 import { avatarMarkup, chromeFor } from './chrome';
 import { cropRect, parseRef } from './images';
+import { containRect, edgeColour, needsContain } from './pictureFit';
 import { artDevices } from './artDevices';
 import { centreButtons } from './buttons';
 import { accentDevices, behindDevices, insetGround, overDevices, shapeBoxesOf, siteText, type Box, type DeviceCtx, type PlacedDevice } from './devices';
@@ -378,13 +379,23 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   // The pictures (an image field): clipped to their slots and drawn behind the text, right after the ground
   const pics = plan.images ?? [];
   if (pics.length) {
+    // the crop budget: a picture a cover-crop would cut by more than 10% is drawn whole, on a panel in its own average edge colour
+    const whole = new Map<number, { rect: { x: number; y: number; w: number; h: number }; bg: string }>();
+    for (const [i, p] of pics.entries()) {
+      const ref = parseRef(p.src);
+      if (p.circle || !ref || !needsContain(p, ref)) continue;
+      whole.set(i, { rect: containRect(p, ref, p.rx), bg: (await edgeColour(p.src)) ?? '#808080' });
+      notes.push(`picture ${i + 1}: a cover-crop would cut more than 10% of it, so it is drawn whole on a panel of its edge colour.`);
+    }
     const markupOf = (list: { p: PlanImage; i: number }[]) => list.map(({ p, i }) => {
       const id = `pic${o.index}x${i}`;
       const clip = p.circle ? `<circle cx="${p.x + p.w / 2}" cy="${p.y + p.h / 2}" r="${p.w / 2}"/>` : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}"/>`;
       // a project picture (a reference with its natural size) is cropped here, with its focus point and zoom; any other picture is cropped by the browser (centred)
-      const cr = cropRect(p, parseRef(p.src));
+      const w0 = whole.get(i);
+      const cr = w0 ? { x: w0.rect.x, y: w0.rect.y, w: w0.rect.w, h: w0.rect.h } : cropRect(p, parseRef(p.src));
+      const panel = w0 ? `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" fill="${w0.bg}"/>` : '';
       const box = cr ? `x="${Math.round(cr.x * 10) / 10}" y="${Math.round(cr.y * 10) / 10}" width="${Math.round(cr.w * 10) / 10}" height="${Math.round(cr.h * 10) / 10}" preserveAspectRatio="none"` : `x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" preserveAspectRatio="xMidYMid slice"`;
-      return `<clipPath id="${id}">${clip}</clipPath><image href="${p.src.replace(/&/g, '&amp;')}" ${box} clip-path="url(#${id})"/>`;
+      return `<clipPath id="${id}">${w0 ? `<rect x="${w0.rect.x}" y="${w0.rect.y}" width="${w0.rect.w}" height="${w0.rect.h}"/>` : clip}</clipPath>${panel}<image href="${p.src.replace(/&/g, '&amp;')}" ${box} clip-path="url(#${id})"/>`;
     }).join('');
     const indexed = pics.map((p, i) => ({ p, i }));
     // a picture goes right after the ground (the layout's badges and shapes sit over it); a `front` one goes above the plane shapes and cards, below the text

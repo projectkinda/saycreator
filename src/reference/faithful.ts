@@ -111,6 +111,8 @@ let pictureResolver: ((ref: string) => Promise<string | null>) | null = null;
 export const setPictureResolver = (fn: ((ref: string) => Promise<string | null>) | null) => {
   pictureResolver = fn;
 };
+/** The data: URL of a project picture reference (null when it is not available): used to read a picture's edge colour. */
+export const resolvePictureRef = async (ref: string): Promise<string | null> => (pictureResolver ? pictureResolver(ref).catch(() => null) : null);
 export async function svgToPng(svg: string, width: number, fit?: { w: number; h: number; bg: string }): Promise<Blob> {
   await loadFonts();
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');

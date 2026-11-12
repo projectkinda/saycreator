@@ -70,6 +70,37 @@ export function wordingCheckOf(source: string, slideTexts: string[]): { totalWor
   });
   return { totalWords: total, matchPercent: total && have.size ? Math.round((match / total) * 1000) / 10 : null, wordsNotInSource: notIn, slidesWithChangedWording: changed, perSlide };
 }
+/** Fields that are not words of the text: a button (an action, checked by the closing rule), numerals and positions, pictures, the accent list. */
+const NOT_WORDS = new Set(['button', 'button1', 'button2', 'step', 'num', 'numeral', 'number', 'numbers', 'position', 'bar', 'accent', 'url', 'brand', 'current']);
+/**
+ * Phrase level (Round 13, measure only): for every slide field (kicker, headline, caption, sub, a card, each list item ...), whether its words, in order, are a CONTIGUOUS run of the source text
+ * (case, punctuation, list numbers ignored). A field that is not (a kicker or a headline the writer made up, a reordered sentence) is listed with its slide and field name.
+ */
+export function fieldsNotInSourceOf(source: string, specs: { fields: Record<string, unknown> }[]): { slide: number; field: string; text: string }[] {
+  const src = wordsOfText(source.replace(/^[ \t]*(?:\d{1,2}[.)]|[-*\u2022])[ \t]+/gm, ''));
+  const contiguous = (ws: string[]) => {
+    if (!ws.length) return true;
+    for (let i = 0; i + ws.length <= src.length; i++) {
+      let k = 0;
+      while (k < ws.length && src[i + k] === ws[k]) k++;
+      if (k === ws.length) return true;
+    }
+    return false;
+  };
+  const out: { slide: number; field: string; text: string }[] = [];
+  specs.forEach((sp, i) => {
+    for (const [k, v] of Object.entries(sp.fields ?? {})) {
+      if (NOT_WORDS.has(k) || /^image\d?$/.test(k)) continue;
+      for (const t of Array.isArray(v) ? v : [v]) {
+        if (typeof t !== 'string' || !t.trim()) continue;
+        const ws = wordsOfText(t);
+        if (!ws.length || ws.every((w) => /^\d+$/.test(w))) continue;
+        if (!contiguous(ws)) out.push({ slide: i + 1, field: k, text: t.trim() });
+      }
+    }
+  });
+  return out;
+}
 /** The visible words of a composed slide's layers: every text except the page counter, the swipe cue, the handle and decoration. */
 export const visibleTextOf = (layers: unknown[]): string =>
   (layers as { kind?: string; visible?: boolean; id?: string; name?: string; role?: string; text?: string }[])
@@ -107,8 +138,10 @@ export async function buildReport(o: ReportOptions): Promise<{ json: string; com
     route: o.doc.route?.route ?? (o.doc.designed ? 'designed' : 'pack'),
     /** The text the person typed, as the writer received it. */
     sourceText: o.doc.topic ?? '',
+    /** Round 13: the project's pictures and what became of them in the final deck. */
+    pictures: o.doc.designed?.library?.pictureUse ?? null,
     /** Round 12: every visible word of every slide compared with the source text (measure only, nothing is changed). */
-    wordingCheck: wordingCheckOf(o.doc.topic ?? '', composed.slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? []))),
+    wordingCheck: { ...wordingCheckOf(o.doc.topic ?? '', composed.slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? []))), fieldsNotInSource: o.doc.designed?.library?.plan?.specs ? fieldsNotInSourceOf(o.doc.topic ?? '', o.doc.designed.library.plan.specs as { fields: Record<string, unknown> }[]) : [] },
     routeReason: o.doc.route?.reason ?? (o.doc.designed ? 'Designed slides are present (the route was not recorded).' : 'No route was recorded for this project: the style templates are assumed to have filled the slides.'),
     designedCalls: o.doc.designed?.calls ?? null,
     designed: o.doc.designed ? { calls: o.doc.designed.calls, tokens: o.doc.designed.tokens ?? null, layouts: o.doc.designed.layouts ?? null, fallbacks: o.doc.designed.fallbacks, notes: o.doc.designed.notes, requestBytes: o.doc.designed.requestBytes ?? null, library: o.doc.designed.library ?? null, model: 'DRAW_MODEL, else CAROUSEL_MODEL, else sonnet (server setting)' } : o.doc.route?.error ? { failed: true, error: o.doc.route.error, requestBytes: o.doc.route.requestBytes ?? null } : null,

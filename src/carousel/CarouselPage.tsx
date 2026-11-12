@@ -1431,6 +1431,9 @@ export default function CarouselPage() {
           {hasWork && ready && !exporting && failing === 0 && ` ${warned === 0 ? 'All slides pass the phone-size check.' : `${slides.length - warned} slide${slides.length - warned === 1 ? '' : 's'} pass, ${warned} ${warned === 1 ? 'has' : 'have'} a warning.`}`}
           {hasWork && ready && !exporting && failing > 0 && <span className="cr-problem"> {failingText}</span>}
         </p>
+        {hasWork && ready && (doc.designed?.library?.pictureUse?.unused.length ?? 0) > 0 && (
+          <p className="small muted" data-testid="pictures-unused">{doc.designed!.library!.pictureUse!.unused.length} of {doc.designed!.library!.pictureUse!.uploaded} pictures {doc.designed!.library!.pictureUse!.unused.length === 1 ? 'is' : 'are'} not on a slide.</p>
+        )}
 
             <PreviewStage overlay={previewSlots && previewSlots.length ? <SlotOverlay index={si} slots={previewSlots} open={slotOpen} onOpen={(field) => { setSlotOpen(field); if (field) { setEditTab('pictures'); setStep(4); setEditView(true); } }} onChange={(field, change) => slotChange(si, field, change)} /> : undefined} count={hasWork ? slides.length : 0} items={slides.map((_, i) => views[i] ?? { status: 'drawing' })} selected={sel} onSelect={setSel} onOpen={setOpen} />
             {hasWork && style && (

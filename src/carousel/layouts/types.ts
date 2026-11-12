@@ -193,6 +193,8 @@ export interface ImageSlotDef {
   orientation: Orientation;
   /** The orientations of a picture that crop well in it. */
   accepts: Orientation[];
+  /** A picture wider than this (width / height) is never put in this slot (a phone takes only a screenshot, 0.62 or narrower). */
+  maxAspect?: number;
 }
 export interface LayoutDef {
   id: LayoutId;

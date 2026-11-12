@@ -18,8 +18,8 @@ import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
 import { layoutOptionsFor } from './layoutMap';
-import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
-import { placeImages } from './imagePlace';
+import { IMAGE_LAYOUT_IDS, shapeOfAspect, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
+import { placeImages, usedIds as usedPictureIds } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { settleScrim } from './scrim';
 import { heroPass, picturePass, separatePictureRuns, type PictureSwap } from './picturePass';
@@ -468,9 +468,10 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     '- Use "step-numeral" only when at least two slides in the deck are steps of one sequence (step 1, step 2 ...); with a single step, use "split-text" or "statement" instead.',
     '- Variety: no two consecutive slides use the same layout, and no layout is used more than twice. Use "stepper" for 2 to 5 ordered steps, "stat-bar" or "big-stat" for a figure, "checklist" for benefits, "comparison" for two things set against each other, "quote" only for words that are in the text.',
     '- Stats: the "label" of big-stat and stat-bar is the continuation of the number, so "number label" reads as one phrase: "30%" + "off for early backers" (never a label that starts a new sentence, such as "Early backers save" under a 30%). split-text: the paragraph is ONE idea in at most 14 words.',
+    '- A kicker is only allowed if that exact phrase is in the person\'s text; otherwise omit it. Headlines must be words from the person\'s text in their order; you may drop words but not add or reorder them.',
     '- Wording: the person\'s own sentences are the copy. A sentence that already fits its layout is used word for word (same words, same order); shorten only what is over a limit, by cutting words, never by rewording; never add a word, claim or example that is not in the text.',
     '- Facts: use only facts, claims and numbers that are in the text. Never invent statistics, names, quotes, dates or results. If a slide would want a figure the text does not give, use a layout without one. A big-stat or stat-bar number must be a real figure from the text.',
-    `- "accents": up to 3 phrases copied EXACTLY from the slide's headline, question or quote text, the words that carry the meaning (never filler such as the, a, and, of, to). Highlight 1 or 2 words, the ones that carry the point (never more than half of the headline). The code sets them in the accent colour or on a marker bar.`,
+    `- "accents": up to 3 phrases copied EXACTLY from the slide's HEADLINE (its headline, title, question or quote text) and from nothing else: never from the kicker, a caption, a sub line, the body or a list item. They are the words that carry the meaning (never filler such as the, a, and, of, to). Highlight 1 or 2 words, the ones that carry the point (never more than half of the headline). The code sets them in the accent colour or on a marker bar.`,
     '- "density": "statement" is optional and ONLY for a statement, big-question or cta-button whose headline is 4 words or fewer: the code then drops the secondary copy and sets the headline huge. Otherwise leave it out.',
     style.devices.planes ? '- "cut": optional suggestion, one of plain, edge-h, angle, curve (a colour plane the slide is cut by). "invert": optional suggestion (true swaps field and plane colours). The code may override both to keep the deck varied.' : '- This style is flat (no colour planes): "cut" and "invert" are not needed.',
     '- "variant" is optional (1 or 2) and only a suggestion: the code alternates variants.',
@@ -767,7 +768,15 @@ export function settleClosing(specs: SlideSpec[], text: string): { specs: SlideS
     }
   }
   for (const k of SUB_FIELDS[s.layout] ?? []) {
-    const v = s.fields[k];
+    let v = s.fields[k];
+    // the rest of a sentence the button took ("Comment slides" + "and I'll send you the link."): the leading "and" goes and the next letter is capital. Nothing else changes.
+    if (typeof v === 'string' && /^and\s+\S/i.test(v.trim())) {
+      const rest = v.trim().replace(/^and\s+/i, '');
+      const fixed = rest.charAt(0).toUpperCase() + rest.slice(1);
+      s = { ...s, fields: { ...s.fields, [k]: fixed } as Fields };
+      trims.push({ slide: i + 1, field: 'closing sub line start', from: v, to: fixed, max: 0 });
+      v = fixed;
+    }
     if (typeof v !== 'string' || !v.trim() || inSource(v, text)) continue;
     s = { ...s, fields: Object.fromEntries(Object.entries(s.fields).filter(([n]) => n !== k)) as Fields };
     trims.push({ slide: i + 1, field: 'closing sub line', from: v, to: '(not in the text)', max: 0 });
@@ -796,6 +805,22 @@ const HIGHLIGHT_HEAD = ['headline', 'title', 'question', 'quote', 'heading', 'le
  * A highlight carries the point, so it is short: at most 2 words (3 when the headline has 8 or more words), and never more than half of the headline's words. A longer one the writer gave keeps
  * its LAST words ("keeps things running" in "Your brain keeps things running" becomes "things running"). Only for a written deck: a highlight the person typed is never changed.
  */
+/** An accent is a phrase of the slide's HEADLINE (headline, title, question, quote, heading, lead or statement). One that is not inside it is dropped: the second value says which, for the report. */
+export function dropForeignAccents(specs: SlideSpec[]): { specs: SlideSpec[]; notes: string[] } {
+  const norm = (t: string) => ' ' + t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim() + ' ';
+  const notes: string[] = [];
+  const out = specs.map((sp, i) => {
+    if (!sp.accents.length) return sp;
+    const heads = HIGHLIGHT_HEAD.map((k) => sp.fields[k]).filter((v): v is string => typeof v === 'string' && !!v.trim()).map(norm);
+    const keep = sp.accents.filter((a) => {
+      const ok = heads.some((h) => h.includes(norm(a)));
+      if (!ok) notes.push(`slide ${i + 1}: accent "${a}" is not in the headline, not drawn`);
+      return ok;
+    });
+    return keep.length === sp.accents.length ? sp : { ...sp, accents: keep };
+  });
+  return { specs: out, notes };
+}
 export function clampAccents(specs: SlideSpec[]): { specs: SlideSpec[]; trims: Trim[] } {
   const trims: Trim[] = [];
   const out = specs.map((s, i) => {
@@ -1028,6 +1053,8 @@ export interface LibraryReport {
   flavour?: { swaps: FlavourSwap[]; kept: FlavourKept[] };
   /** Slides changed to a picture layout because pictures were left unused (slide, from, to, why). */
   pictureSwaps?: PictureSwap[];
+  /** The project's pictures and what became of them in the final deck (Round 13). */
+  pictureUse?: { uploaded: number; used: number; unused: string[]; whyUnused: string };
   /** What the deck was drawn from: a built-in preset's name, or 'reference' (the active reference style). The style toggles redraw it only for the same source. */
   source?: string;
   /** The palette-rhythm ground of each slide (an index into the style's rhythm, -1 = the closing ground, null = no rhythm). */
@@ -1199,6 +1226,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   }
   if (!own && (parsed.errors.length || parsed.slides.length < lo)) throw new WriterError('invalid', 'The writer answered twice, but neither answer could be used as a slide list.', parsed.errors.map((message) => ({ severity: 'error' as const, path: '', message })));
   let specs = own ? parsed.slides : parsed.slides.slice(0, hi);
+  const accentNotes: string[] = [];
   // the closing exactly as the writer gave it, before the code changed anything (the downloadable report shows it)
   const writerClosing = !own && specs.length ? { layout: specs[specs.length - 1].layout, headline: str(specs[specs.length - 1].fields.headline), button: str(specs[specs.length - 1].fields.button ?? specs[specs.length - 1].fields.caption), sub: str(specs[specs.length - 1].fields.sub ?? specs[specs.length - 1].fields.line) } : undefined;
   // optional one-line texts a little over their limit are trimmed by the code (no retry call for a kicker one character long)
@@ -1214,6 +1242,10 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     const pw = trimProse(specs);
     specs = pw.specs;
     tr.trims.push(...pw.trims);
+    // an accent is a word of the HEADLINE: one that is not in the slide's headline is not drawn (and the report says so)
+    const fa = dropForeignAccents(specs);
+    specs = fa.specs;
+    accentNotes.push(...fa.notes);
     // a highlight is 1 or 2 words (3 on a long headline), never half the headline
     const ca = clampAccents(specs);
     specs = ca.specs;
@@ -1348,7 +1380,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   }
   // Slides still failing: a plain version of the SAME layout (fields trimmed to their budgets), never the old template look.
   const fallbacks: LibraryReport['fallbacks'] = [];
-  const adjustments: string[] = [];
+  const adjustments: string[] = [...accentNotes];
   for (const [i, why] of failing()) {
     const sp = specs[i];
     const reason = why.join(' | ').slice(0, 300);
@@ -1410,6 +1442,21 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     designed.layouts![String(i)] = s.layout;
   });
   const seconds = Math.round((performance.now() - t0) / 100) / 10;
+  // the pictures of the project and what became of them in the FINAL deck
+  const allPics = (look.images ?? []) as { id: string; width: number; height: number }[];
+  const usedNow = new Set(specs.flatMap((sp) => usedPictureIds(sp.fields)));
+  const leftOver = allPics.filter((p) => !usedNow.has(p.id));
+  const pictureUse: LibraryReport['pictureUse'] = allPics.length
+    ? {
+        uploaded: allPics.length,
+        used: allPics.length - leftOver.length,
+        unused: leftOver.map((p) => p.id),
+        whyUnused: leftOver.length
+          ? 'No slide could take ' + (leftOver.length === 1 ? 'it' : 'them') + ' without losing words or breaking a layout rule (a picture layout is not used on two slides in a row or on more than two slides, a layout takes only the picture shapes its slot accepts: a phone only a screenshot 0.62 wide or narrower). ' +
+          leftOver.map((p) => p.id + ': ' + p.width + 'x' + p.height + ' (' + shapeOfAspect(p.width / p.height) + ')').join('; ') + '.'
+          : '',
+      }
+    : undefined;
   const report: LibraryReport = {
     route: 'library',
     drawVersion: DRAW_VERSION,
@@ -1433,6 +1480,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     grounds: rot.cuts.map((c) => c.ground ?? null),
     ...(fp ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : {}),
     ...(pictureSwaps.length ? { pictureSwaps } : {}),
+    ...(pictureUse ? { pictureUse } : {}),
     ...(own?.marks?.some(Boolean) ? { ownMarks: own.marks } : {}),
     ...(tr.trims.length ? { trims: tr.trims } : {}),
     ...(writerClosing ? { writerClosing } : {}),

@@ -772,6 +772,8 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       const body = str(f, 'body');
       const sh = img ? shapeOf(img) : null;
       // only a tall or portrait picture goes in a phone: anything else is the text-only form
+      // a phone holds a screenshot (0.62 wide or narrower): a wider picture takes the half-and-half layout instead (the same words, the same picture)
+      if (img && sh && sh.kind === 'portrait' && sh.aspect > 0.62) return layoutDef('split-half')!.plan(f, v, st, cx);
       if (!img || !sh || !(sh.kind === 'tall' || sh.kind === 'portrait')) return body ? layoutDef('split-text')!.plan({ headline: head, paragraph: body }, v, st, cx) : layoutDef('statement')!.plan({ headline: head }, v, st, cx);
       const slide = withAccent({ type: 'content', headline: head, body }, head, f, st);
       const d = place(st, cx, 'top', (d) => {
@@ -820,7 +822,8 @@ const SLOTS: Record<string, { min: number; slots: (v: 0 | 1) => ImageSlotDef[] }
   'title-over-photo': { min: 1, slots: () => [slot('image', 1080 / 1134, ANY)] },
   'twin-photos': { min: 2, slots: () => [slot('image', 0.8, ANY), slot('image2', 0.8, ANY)] },
   'photo-grid': { min: 3, slots: () => ['image', 'image2', 'image3', 'image4'].map((k) => slot(k, 1.2, ANY)) },
-  'phone-frame': { min: 1, slots: () => [slot('image', 0.46, ['portrait'], 'portrait')] },
+  // a phone holds a screenshot: a picture wider than 0.62 (a desktop crop, a portrait photo) goes to another layout
+  'phone-frame': { min: 1, slots: () => [{ ...slot('image', 0.46, ['portrait'], 'portrait'), maxAspect: 0.62 }] },
   'do-dont': { min: 2, slots: (v) => [slot('image', v === 0 ? 475 / 400 : 340 / 250, ANY), slot('image2', v === 0 ? 475 / 400 : 340 / 250, ANY)] },
 };
 IMAGE_LAYOUTS.forEach((l) => { const s = SLOTS[l.id]; l.imageSlots = s.slots; l.minImages = s.min; });
@@ -839,7 +842,7 @@ export const picAspect = (p: PicInfo): number => p.width / p.height;
 /** How many of the pictures fit a layout's slots (their orientation is one the slot accepts). */
 export const fittingPictures = (layout: string, pics: PicInfo[], variant: 0 | 1 = 0): number => {
   const slots = imageSlotsOf(layout, variant);
-  return slots.length ? pics.filter((p) => slots.some((s) => s.accepts.includes(picOrientation(p)))).length : 0;
+  return slots.length ? pics.filter((p) => slots.some((s) => s.accepts.includes(picOrientation(p)) && (!s.maxAspect || picAspect(p) <= s.maxAspect))).length : 0;
 };
 /** Whether a layout can draw its picture form with these pictures (enough of them, of orientations its slots accept). */
 export const hasEnoughPictures = (layout: string, pics: PicInfo[] | undefined, variant: 0 | 1 = 0): boolean => !!pics && fittingPictures(layout, pics, variant) >= imagesNeeded(layout);
