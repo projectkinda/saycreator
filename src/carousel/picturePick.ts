@@ -38,7 +38,7 @@ export function pickPicture(spec: SlideSpec, index: number, choice: PickChoice, 
   if (choice === 'none') return { ok: true, spec: pinned({ ...spec, fields: withoutImages(spec.fields) as Fields }), note: 'No picture on this slide.' };
   const pic = pics.find((p) => p.id === choice);
   if (!pic) return { ok: false, why: 'That picture is not in the project.' };
-  const ref = makeRef({ id: pic.id, w: pic.width, h: pic.height, ...(pic.width / pic.height <= 0.5 ? { fy: 0.1 } : {}) });
+  const ref = makeRef({ id: pic.id, w: pic.width, h: pic.height, ...(pic.width / pic.height <= 0.5 ? { fy: 0.1 } : {}), ...(pic.content === 'photo' ? { photo: true } : {}) });
   const slots = imageSlotsOf(spec.layout);
   // the slide's own layout takes the picture (its shape, and not under text for a screenshot): put it in the first picture slot, the others keep what they have
   if (slots.length && fittingPictures(spec.layout, [pic]) === 1) {

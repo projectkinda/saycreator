@@ -4,6 +4,8 @@ import { resolvePictureRef } from '../../reference/faithful';
 import type { PicRef } from './images';
 
 export const CROP_BUDGET = 0.1;
+/** A photo (not a screenshot) may lose more: 25%. Beyond it the whole photo is shown on a blurred, darkened copy of itself (no flat bars). */
+export const PHOTO_CROP_BUDGET = 0.25;
 type Slot = { x: number; y: number; w: number; h: number };
 /** The share of the picture's width and height that a cover-crop at zoom 1 removes (0 when the picture has the slot's shape). Null for a picture with no known size. */
 export function coverLoss(slot: Slot, ref: PicRef | null): { w: number; h: number } | null {
@@ -15,7 +17,7 @@ export function coverLoss(slot: Slot, ref: PicRef | null): { w: number; h: numbe
 export const needsContain = (slot: Slot, ref: PicRef | null): boolean => {
   if (!ref || ref.z > 1) return false;
   const l = coverLoss(slot, ref);
-  return !!l && Math.max(l.w, l.h) > CROP_BUDGET + 1e-6;
+  return !!l && Math.max(l.w, l.h) > (ref.photo ? PHOTO_CROP_BUDGET : CROP_BUDGET) + 1e-6;
 };
 /** The picture drawn whole inside the slot, centred. `rx` is the slot's corner radius: the picture keeps inside it by 30% of the radius on every side, so a rounded corner never cuts one of its corners. */
 export function containRect(slot0: Slot, ref: PicRef, rx = 0): Slot {

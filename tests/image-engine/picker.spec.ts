@@ -172,3 +172,37 @@ test('the picker at 390 px: reachable, nothing overflows the page; the screensho
   fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(`${OUT}/slides-step-picker.png`, Buffer.from(both, 'base64'));
 });
+
+// Round 16 F: at 390 px the Picture row wraps (two lines at most for 3 pictures) with Auto first; it never scrolls sideways; Auto and None are always in view.
+test('the picker row at 390 px wraps to two lines with Auto first, no sideways scroll, Auto and None visible (out/round-16/picker-phone.png)', async ({ page }) => {
+  await setup(page);
+  await openEdit(page, 2);
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.waitForTimeout(500);
+  const picker = page.getByTestId('picker-1');
+  await picker.scrollIntoViewIfNeeded();
+  await expect(picker).toBeVisible();
+  const m = await page.evaluate(() => {
+    const row = document.querySelector('[data-testid="picker-1"] .cr-pick-row') as HTMLElement;
+    const kids = [...row.children] as HTMLElement[];
+    const rects = kids.map((k) => k.getBoundingClientRect());
+    const rows = new Set(rects.map((r) => Math.round(r.top / 10))).size;
+    return {
+      overflowX: getComputedStyle(row).overflowX, scrollW: row.scrollWidth, clientW: row.clientWidth, rows,
+      firstText: kids[0].textContent, secondText: kids[1].textContent,
+      inView: rects.slice(0, 2).map((r) => r.left >= 0 && r.right <= window.innerWidth),
+      allInView: rects.every((r) => r.left >= 0 && r.right <= window.innerWidth + 1),
+      page: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+  expect(m.firstText).toBe('Auto');
+  expect(m.secondText).toBe('None');
+  expect(m.overflowX).not.toBe('auto');
+  expect(m.scrollW, 'the row does not scroll sideways').toBeLessThanOrEqual(m.clientW + 1);
+  expect(m.rows, 'two lines').toBe(2);
+  expect(m.inView).toEqual([true, true]);
+  expect(m.allInView).toBe(true);
+  expect(m.page).toBeLessThanOrEqual(1);
+  fs.mkdirSync('out/round-16', { recursive: true });
+  await page.screenshot({ path: 'out/round-16/picker-phone.png', clip: { x: 0, y: Math.max(0, ((await picker.boundingBox())?.y ?? 0) - 200), width: 390, height: 520 } });
+});

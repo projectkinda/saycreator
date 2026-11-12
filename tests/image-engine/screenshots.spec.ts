@@ -225,3 +225,51 @@ test('the Content step: each picture shows a "Screenshot" or "Photo" chip from i
   await chip1.click();
   await expect(chip1).toHaveText('Screenshot');
 });
+
+// Round 16 D: no picture overlaps the handle, the avatar, the page counter or the footer (every picture layout x 3 styles x every shape x both variants), with the profile header on and off.
+test('chrome: no picture overlaps the handle, avatar, name, page counter or footer in any picture layout (3 styles, profile header on and off)', async ({ page }) => {
+  await page.route('**/api/carousel/status', (r) => r.fulfill({ json: { available: false } }));
+  await page.goto('/images/carousel');
+  await page.evaluate(HELP);
+  const r: any = await page.evaluate(async (styles) => {
+    const H = (window as any).__H;
+    const L: any = await import('/src/carousel/layouts/index.ts');
+    const IM: any = await import('/src/carousel/layouts/images.ts');
+    const CH: any = await import('/src/carousel/layouts/chrome.ts');
+    const T: any = await import('/src/image-engine/draw/text.ts');
+    const bad: string[] = [];
+    let checked = 0, shrunk = 0;
+    for (const style of styles) for (const profile of [true, false]) {
+      const st0 = H.D.styleFromPack(H.PR.presetPackFor(style, false)).style;
+      const st = { ...st0, devices: { ...st0.devices, profileHeader: profile } };
+      for (const id of IM.IMAGE_LAYOUT_IDS as string[]) {
+        const def = L.layoutDef(id);
+        const keys = def.fields.filter((q: any) => q.image).map((q: any) => q.name);
+        for (const pic of ['landscape', 'portrait', 'square', 'tall', 'wide']) for (const v of [0, 1] as const) for (const index of [0, 3, 6]) {
+          const s = H.SHAPES[pic];
+          const f: any = { ...def.samples.normal };
+          keys.forEach((k: string) => { f[k] = H.IM.makeRef({ id: pic, w: s[0], h: s[1], ...(s[0] / s[1] <= 0.5 ? { fy: 0.1 } : {}) }); });
+          const d = await H.D.drawOne({ layout: id, fields: f, accents: [] }, v, st, { handle: '@maya.designs', name: 'Maya Designs', index, total: 7, cut: 'plain', invert: false, density: 'normal' });
+          if (!d.built) continue;
+          // the chrome as the builder draws it, measured with the engine's own text widths (not the builder's estimate)
+          const rec: any[] = CH.chromeFor({ handle: '@maya.designs', name: 'Maya Designs', index, total: 7, profile, font: st.fonts.body, deco: st.deco, site: st.site });
+          const boxes = rec.map((c) => {
+            if (c.shape) return { n: c.shape, x: c.x - c.size, y: c.y - c.size, w: 2 * c.size, h: 2 * c.size };
+            const w = T.measureWidth(c.text, c.font || st.fonts.body, c.weight ?? 500, c.size);
+            const x0 = c.anchor === 'end' ? c.x - w : c.anchor === 'middle' ? c.x - w / 2 : c.x;
+            return { n: c.text, x: x0, y: c.y - c.size * 0.8, w, h: c.size * 1.0 };
+          });
+          checked++;
+          for (const im of (d.built.images ?? []) as any[]) {
+            if (im.circle) continue;
+            for (const b of boxes) if (b.x < im.x + im.w && b.x + b.w > im.x && b.y < im.y + im.h && b.y + b.h > im.y) bad.push(`${style} profile=${profile} ${id} v${v + 1} ${pic} slide ${index + 1}: the picture (${Math.round(im.x)},${Math.round(im.y)} ${Math.round(im.w)}x${Math.round(im.h)}) overlaps "${b.n}"`);
+          }
+        }
+      }
+    }
+    return { bad, checked, shrunk };
+  }, STYLES);
+  console.log('CHROME checked', r.checked, 'overlaps', r.bad.length);
+  expect(r.checked).toBeGreaterThan(500);
+  expect(r.bad.slice(0, 15)).toEqual([]);
+});

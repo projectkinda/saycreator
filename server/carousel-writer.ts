@@ -83,6 +83,13 @@ export interface WriteImage {
   mime: 'image/jpeg' | 'image/png';
   base64: string;
 }
+/** What the command line says about one call besides the tokens: how many turns it took, the API time, and the effort setting used. */
+export interface WriteMeta {
+  numTurns: number | null;
+  durationApiMs: number | null;
+  effort: string;
+}
+export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export interface WriteUsage {
   input: number;
   output: number;
@@ -118,7 +125,7 @@ export function killTree(pid: number | undefined) {
 }
 
 /** Runs `claude -p` once with the prompt on stdin. No tools, no saved session, in an empty temp folder so no project files are read. */
-export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, timeoutMs = CLI_TIMEOUT_MS, launcher?: { bin: string; args: string[] }, kind: WriteKind = 'write', images: WriteImage[] = []): Promise<{ text: string; ms: number; usage?: WriteUsage }> {
+export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, timeoutMs = CLI_TIMEOUT_MS, launcher?: { bin: string; args: string[] }, kind: WriteKind = 'write', images: WriteImage[] = [], effort?: string): Promise<{ text: string; ms: number; usage?: WriteUsage; meta?: WriteMeta }> {
   const bin = launcher?.bin ?? findClaudeCli(env);
   if (!bin) return Promise.reject(new WriterFailure(503, 'unavailable', cliStatus(env).reason!));
   const t0 = Date.now();
@@ -126,7 +133,7 @@ export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.Pr
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'carousel-writer-'));
     for (const i of images) fs.writeFileSync(path.join(cwd, i.name), Buffer.from(i.base64, 'base64'));
     // `launcher` is a test seam: a stand-in program instead of the real command line.
-    const args = launcher?.args ?? ['-p', '--output-format', 'json', '--no-session-persistence', ...(images.length ? ['--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'dontAsk'] : ['--tools', '']), '--system-prompt', SYSTEM_PROMPT, '--model', modelFor(kind, env)];
+    const args = launcher?.args ?? ['-p', '--output-format', 'json', '--no-session-persistence', ...(images.length ? ['--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'dontAsk'] : ['--tools', '']), '--system-prompt', SYSTEM_PROMPT, '--model', modelFor(kind, env), ...(effort ? ['--effort', effort] : [])];
     const child = spawn(bin, args, { cwd, env: { ...env, CLAUDE_CODE_ENTRYPOINT: 'carousel-writer' }, windowsHide: true, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
@@ -154,7 +161,7 @@ export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.Pr
     child.on('error', (e) => finish(() => reject(new WriterFailure(503, 'unavailable', `Claude Code could not be started: ${e.message}`))));
     child.on('close', (code) =>
       finish(() => {
-        let parsed: { result?: unknown; is_error?: boolean; subtype?: string; usage?: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } } | null = null;
+        let parsed: { num_turns?: number; duration_api_ms?: number; result?: unknown; is_error?: boolean; subtype?: string; usage?: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } } | null = null;
         try {
           parsed = JSON.parse(out);
         } catch {
@@ -165,7 +172,7 @@ export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.Pr
           return reject(new WriterFailure(502, 'failed', `Claude Code did not return a script${code ? ` (exit code ${code})` : ''}${detail ? `: ${detail}` : '.'}`));
         }
         const u = parsed.usage;
-        resolve({ text: parsed.result, ms: Date.now() - t0, ...(u ? { usage: { input: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0), output: u.output_tokens ?? 0 } } : {}) });
+        resolve({ text: parsed.result, ms: Date.now() - t0, meta: { numTurns: typeof parsed.num_turns === 'number' ? parsed.num_turns : null, durationApiMs: typeof parsed.duration_api_ms === 'number' ? parsed.duration_api_ms : null, effort: effort ?? 'default (the command line own default)' }, ...(u ? { usage: { input: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0), output: u.output_tokens ?? 0 } } : {}) });
       }),
     );
     child.stdin.on('error', () => undefined);
@@ -245,7 +252,10 @@ export function carouselHandler(provider: Provider, opts: { env?: NodeJS.Process
       const ctl = new AbortController();
       res.on('close', () => !res.writableEnded && ctl.abort());
       try {
-        const body = JSON.parse(await readBody(req)) as { prompt?: unknown; kind?: unknown; images?: unknown };
+        const body = JSON.parse(await readBody(req)) as { prompt?: unknown; kind?: unknown; images?: unknown; effort?: unknown };
+        // an effort level the request names (or WRITER_EFFORT on the server); anything else is the command line's own default
+        const effortIn = typeof body.effort === 'string' ? body.effort : env.WRITER_EFFORT;
+        const effort = (EFFORT_LEVELS as readonly string[]).includes(effortIn ?? '') ? effortIn : undefined;
         const kind: WriteKind = body.kind === 'draw' ? 'draw' : 'write';
         if (typeof body.prompt !== 'string' || body.prompt.trim() === '') throw new WriterFailure(400, 'failed', 'The request has no prompt.');
         const raw = Array.isArray(body.images) ? body.images.slice(0, 3) : [];
@@ -254,7 +264,7 @@ export function carouselHandler(provider: Provider, opts: { env?: NodeJS.Process
           const png = i.mime === 'image/png';
           return { name: `ref${n + 1}.${png ? 'png' : 'jpg'}`, mime: png ? 'image/png' : 'image/jpeg', base64: i.base64 };
         });
-        const r = provider === 'dev-cli' ? await writeWithCli(body.prompt, ctl.signal, env, undefined, undefined, kind, images) : await writeWithApi(body.prompt, ctl.signal, env, opts.fetchImpl, undefined, kind, images);
+        const r = provider === 'dev-cli' ? await writeWithCli(body.prompt, ctl.signal, env, undefined, undefined, kind, images, effort) : await writeWithApi(body.prompt, ctl.signal, env, opts.fetchImpl, undefined, kind, images);
         return send(res, 200, r);
       } catch (e) {
         if (e instanceof WriterFailure) return send(res, e.status, { error: e.message, kind: e.kind });

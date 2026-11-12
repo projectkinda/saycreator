@@ -113,8 +113,9 @@ test('every new layout draws in all 15 styles with every shape it allows: inside
       for (const p of imgs) if (p.y < 112 || p.y + p.h > 1252) bad.push(`${tag}: a picture reaches the page chrome (${Math.round(p.y)}..${Math.round(p.y + p.h)})`);
       const share = (p: any) => (p.w * p.h) / (1080 * 1350);
       const total = imgs.reduce((a, p) => a + share(p), 0);
-      if (id === 'photo-full-caption' && Math.max(...imgs.map(share)) < 0.65) bad.push(`${tag}: the picture is ${Math.round(Math.max(...imgs.map(share)) * 1000) / 10}% of the slide (< 65%)`);
-      if (id === 'split-half' && Math.abs(total - 0.5) > 0.002) bad.push(`${tag}: the picture is ${Math.round(total * 1000) / 10}% of the slide (not half)`);
+      // Round 16: the caption panel grows for a two-line headline (the picture may be 60% of the slide, not 65%, 57% under the profile header strip), and a picture keeps clear of the profile header (a half may lose up to 4% to that strip)
+      if (id === 'photo-full-caption' && Math.max(...imgs.map(share)) < 0.57) bad.push(`${tag}: the picture is ${Math.round(Math.max(...imgs.map(share)) * 1000) / 10}% of the slide (< 57%)`);
+      if (id === 'split-half' && (total > 0.502 || total < 0.5 - 0.04)) bad.push(`${tag}: the picture is ${Math.round(total * 1000) / 10}% of the slide (not half)`);
       if (id === 'photo-grid' && imgs.length < 3) bad.push(`${tag}: ${imgs.length} tiles`);
       if (id === 'twin-photos' && imgs.length !== 2) bad.push(`${tag}: ${imgs.length} pictures`);
       // a tall picture shows its top in every tile

@@ -15,7 +15,7 @@ import { libraryDeckFromScript, scriptText } from './libraryFromScript';
 import type { CarouselScript } from '../image-engine/carousel/types';
 import { clearPageState } from './resetState';
 import { DetectedStyleBox } from './DetectedStyle';
-import { DRAW_VERSION, legacySvgRoute, redrawLibraryDeck, scriptSlideOf, slideProblems, styleFromPack, templateRoute } from './designLibrary';
+import { DRAW_VERSION, flavourNotes, legacySvgRoute, redrawLibraryDeck, scriptSlideOf, slideProblems, styleFromPack, templateRoute } from './designLibrary';
 import { coverKeyOf, styleIdOf, flavourPass } from './flavour';
 import { canSplitLayout, splitSpec } from './splitSlide';
 import { presetKey, presetPackFor, presetThumbSvg } from './presets';
@@ -961,7 +961,7 @@ export default function CarouselPage() {
     } else if (change.picture) {
       const meta = added ?? pictures.find((p) => p.id === change.picture);
       if (!meta) return 'That picture is not in the project.';
-      fields[field] = makeRef({ id: meta.id, w: meta.width, h: meta.height });
+      fields[field] = makeRef({ id: meta.id, w: meta.width, h: meta.height, ...(meta.content === 'photo' ? { photo: true } : {}) });
     } else fields[field] = withCrop(String(fields[field] ?? ''), change);
     const r = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, { fields });
     if (!r.ok) return `Could not redraw slide ${i + 1}: ${r.reasons[0]} The slide is unchanged.`;
@@ -1052,8 +1052,11 @@ export default function CarouselPage() {
         const sc = scriptWithSlide(script, i, scriptSlideOf(spec.layout, spec.fields), d.format);
         if (sc.ok) script = sc.script;
       }
-      const designedOut = { ...d.designed, slides: out.slides, layouts: out.layouts, library: { ...out.library, source: name === ACTIVE_STYLE ? 'reference' : name, ...(fp.swaps.length || fp.kept.length ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : { flavour: undefined }) } };
-      const done = apply({ label: `Change style to ${title}`, ops: [{ path: ['style'], value: name }, { path: ['designed'], value: designedOut }, ...(script !== d.script ? [{ path: ['script'], value: script }] : [])] });
+      // Round 16: what the report says about the deck is rebuilt from the CURRENT style: the notes (flavour swaps of the new style, the picture moves, the redraw's own adjustments) and the route reason never name the old style
+      const notes = [...(lib.pictureSwaps ?? []).map((w) => `Pictures: slide ${w.slide} ${w.from} -> ${w.to} (${w.why})`), ...flavourNotes(fp.swaps), ...out.library.codeAdjustments];
+      const route = chooseRoute({ style: name, activeStyle: ACTIVE_STYLE, pack: name === ACTIVE_STYLE ? pack : null, presetPack: name === ACTIVE_STYLE ? null : pack, format: d.format });
+      const designedOut = { ...d.designed, notes, slides: out.slides, layouts: out.layouts, library: { ...out.library, source: name === ACTIVE_STYLE ? 'reference' : name, ...(fp.swaps.length || fp.kept.length ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : { flavour: undefined }) } };
+      const done = apply({ label: `Change style to ${title}`, ops: [{ path: ['style'], value: name }, { path: ['designed'], value: designedOut }, { path: ['route'], value: { route: route.route, reason: route.reason + ' The deck was drawn again from its stored plan in this style: no model call.' } }, ...(script !== d.script ? [{ path: ['script'], value: script }] : [])] });
       if (done.ok) setNotice('Style changed. Slides redrawn, no model call.');
       else setNotice(done.reasons[0]);
     } catch (e) {

@@ -1087,6 +1087,8 @@ export interface LibraryReport {
   /** Slides changed to a picture layout because pictures were left unused (slide, from, to, why). */
   pictureSwaps?: PictureSwap[];
   /** Round 15: slides that failed one of the phone checks when drawn and were drawn again by the code (never a model call): what failed, and what the slide is now. */
+  /** Round 16: one row per writer call: what was sent and what it cost (null where the provider does not say). */
+  writes?: { call: number; promptChars: number; promptBytes: number; requestBytes: number | null; numTurns: number | null; durationApiMs: number | null; effort: string | null; inputTokens: number | null; outputTokens: number | null; seconds: number }[];
   repairs?: { slide: number; from: string; to: string; failed: string[]; result: 'repaired' | 'not repaired' }[];
   /** The project's pictures and what became of them in the final deck (Round 13). */
   pictureUse?: { uploaded: number; used: number; unused: string[]; whyUnused: string };
@@ -1106,6 +1108,11 @@ export const stubPack = (style: LayoutStyle, name: string): StylePack => {
   return { name, palette: { bg: style.palette.bg, text: style.palette.text, accent: style.palette.accent, muted: style.palette.muted, surface: style.palette.surface, onAccent: c.F.onAccent }, fonts: { ...style.fonts }, motifs: [], designs: {}, canvas: { w: 1080, h: 1350 }, notes: ['Drawn by the layout library: no pack designs.'] };
 };
 
+/** A test seam: an extra check run on every drawn slide besides the phone checks (a deliberately failing one lets a spec drive the repair path). Null in the app. */
+let slideCheckHook: ((layers: unknown[], spec: { layout: string; fields: Record<string, unknown> }) => string[]) | null = null;
+export const setSlideCheckHook = (f: typeof slideCheckHook) => {
+  slideCheckHook = f;
+};
 export interface Drawn {
   built: Built | null;
   cut: Cut;
@@ -1244,10 +1251,13 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   let calls = 0;
   let ms = 0;
   const tokens = { input: 0, output: 0 };
+  const writes: NonNullable<LibraryReport['writes']> = [];
   const ask = async (prompt: string) => {
     onPhase(calls === 0 ? 'writing' : 'retrying');
     const a = await p.write(prompt, signal, 'write');
     calls += 1;
+    // the evidence for one call: the exact prompt the app sent (characters and bytes), the request body, the turns, the API time, the effort setting and the tokens
+    writes.push({ call: calls, promptChars: prompt.length, promptBytes: new TextEncoder().encode(prompt).length, requestBytes: a.requestBytes ?? null, numTurns: a.meta?.numTurns ?? null, durationApiMs: a.meta?.durationApiMs ?? null, effort: a.meta?.effort ?? null, inputTokens: a.usage?.input ?? null, outputTokens: a.usage?.output ?? null, seconds: Math.round(a.ms / 100) / 10 });
     ms += a.ms;
     tokens.input += a.usage?.input ?? 0;
     tokens.output += a.usage?.output ?? 0;
@@ -1472,7 +1482,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   const phoneFailures = (d: Drawn | undefined, sp: SlideSpec): string[] => {
     if (!d?.built) return [];
     const type = String(scriptSlideOf(sp.layout, sp.fields).type ?? 'content');
-    return faithfulChecks(d.built.layers as never, { canvas: { w: 1080, h: 1350 }, bg: d.built.fieldBg ?? style.palette.bg, k: 1, slideType: type, prose: /data-layout="prose"/.test(d.built.svg) }).filter((q) => !q.pass).map((q) => q.id + ': ' + q.reason);
+    return faithfulChecks(d.built.layers as never, { canvas: { w: 1080, h: 1350 }, bg: d.built.fieldBg ?? style.palette.bg, k: 1, slideType: type, prose: /data-layout="prose"/.test(d.built.svg) }).filter((q) => !q.pass).map((q) => q.id + ': ' + q.reason).concat(slideCheckHook ? slideCheckHook(d.built.layers as unknown[], sp) : []);
   };
   if (!own) {
     for (let i = 0; i < specs.length; i++) {
@@ -1507,7 +1517,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   }
   if (!v.script && !own) throw new WriterError('invalid', 'The slides could not be turned into a script.', v.errors);
   const script: CarouselScript = own ? { ...own.script, brand: { ...own.script.brand, handle: handle.trim() || own.script.brand.handle } } : { ...v.script!, brand: { ...v.script!.brand, handle: handle.trim() || v.script!.brand.handle } };
-  const designed: Designed = { slides: {}, fallbacks: {}, notes: [], calls, ms, layouts: {}, ...(tokens.input || tokens.output ? { tokens } : {}) };
+  const designed: Designed = { slides: {}, fallbacks: {}, notes: [], calls, ms, layouts: {}, ...(tokens.input || tokens.output ? { tokens } : {}), ...(writes.length ? { requestBytes: { images: [], prompt: writes[0].promptChars, body: writes[0].requestBytes ?? writes[0].promptBytes } } : {}) };
   specs.forEach((s, i) => {
     const d = drawn.get(i);
     if (!d?.built) return;
@@ -1542,6 +1552,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     ...(fp ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : {}),
     ...(pictureSwaps.length ? { pictureSwaps } : {}),
     ...(repairs.length ? { repairs } : {}),
+    ...(writes.length ? { writes } : {}),
     ...(pictureUse ? { pictureUse } : {}),
     ...(own?.marks?.some(Boolean) ? { ownMarks: own.marks } : {}),
     ...(tr.trims.length ? { trims: tr.trims } : {}),
@@ -1556,6 +1567,9 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   designed.notes.push(...retries.map((r) => `Retry for slide ${r.slide}: ${r.reasons.join('; ')}`), ...fallbacks.map((f) => `Slide ${f.slide} fell back to a ${f.level}: ${f.reason}`), ...adjustments);
   return { script, style: null, note: parsed.note, attempts: calls > 1 ? 2 : 1, ms, warnings: v.warnings, provider: p.id, designed };
 }
+
+/** The report notes for a preset's flavour swaps (shared by a new deck and by a style switch). */
+export const flavourNotes = (swaps: FlavourSwap[]): string[] => swaps.map((w) => `Flavour: slide ${w.slide} ${w.from} -> ${w.to} (${w.why})${w.droppedOptional.length ? '; leaves out ' + w.droppedOptional.map((t) => '"' + t.slice(0, 24) + '"').join(', ') : ''}.`);
 
 /** One slide in a plain version of its own layout (fields trimmed to their budgets), else the plain statement layout. Used when the deck is drawn again. */
 async function plainSameLayout(sp: SlideSpec, v: 0 | 1, style: LayoutStyle, o: { handle: string; index: number; total: number }, hasPhoto: boolean): Promise<{ d: Drawn; spec: SlideSpec }> {

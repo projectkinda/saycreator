@@ -2,7 +2,7 @@
 // The picture is a field ("image", "image2" ...): a data: URL of a picture the person supplied (there is no upload yet, so nothing sets it by itself). With a picture the layout draws it
 // cropped to its slot (cover fit, corners rounded like the preset's cards); WITHOUT one the layout draws its own text-only form (a prose page, a statement, number discs, a comparison with
 // tick and cross badges ...): never an empty box. The writer is only offered these layouts when the deck has a picture. No text is ever drawn over a picture, so no scrim is needed.
-import { CARD_PAD, Draw, measure, nearestWeight, S } from './draw';
+import { CARD_PAD, Draw, lineTexts, measure, nearestWeight, S } from './draw';
 import { measureWidth } from '../../image-engine/draw/text';
 import { arr, layoutDef, mk, place, str, withAccent } from './library';
 import type { Cx, ImageSlotDef, LayoutDef, LayoutStyle, Orientation, PlanImage } from './types';
@@ -24,6 +24,8 @@ export const imageProblem = (v: unknown): string | null => (typeof v === 'string
 /** What a picture reference carries. */
 export interface PicRef {
   id: string;
+  /** A photo (not a screenshot): the crop budget is 25% and a photo shown whole sits on a blurred copy of itself. Written "k=p" in the reference. */
+  photo?: boolean;
   /** The natural size of the picture (needed to crop with a focus point and a zoom). */
   w?: number;
   h?: number;
@@ -33,7 +35,7 @@ export interface PicRef {
   /** The zoom, 1 to 4 (1 = the picture just covers the slot). */
   z: number;
 }
-export const makeRef = (r: { id: string; w: number; h: number; fx?: number; fy?: number; z?: number }): string => `picture:${r.id}#w=${Math.round(r.w)}&h=${Math.round(r.h)}&fx=${Math.round((r.fx ?? 0.5) * 1000) / 1000}&fy=${Math.round((r.fy ?? 0.5) * 1000) / 1000}&z=${Math.round((r.z ?? 1) * 100) / 100}`;
+export const makeRef = (r: { id: string; w: number; h: number; fx?: number; fy?: number; z?: number; photo?: boolean }): string => `picture:${r.id}#w=${Math.round(r.w)}&h=${Math.round(r.h)}&fx=${Math.round((r.fx ?? 0.5) * 1000) / 1000}&fy=${Math.round((r.fy ?? 0.5) * 1000) / 1000}&z=${Math.round((r.z ?? 1) * 100) / 100}${r.photo ? '&k=p' : ''}`;
 const frag = (s: string) => Object.fromEntries((s.split('#')[1] ?? '').split('&').filter(Boolean).map((kv) => kv.split('=') as [string, string]));
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 /** A project picture reference (null for a data: URL or anything else). */
@@ -42,12 +44,12 @@ export function parseRef(v: unknown): PicRef | null {
   const s = v.trim();
   const f = frag(s);
   const num = (k: string, d: number) => (Number.isFinite(Number(f[k])) && f[k] !== undefined ? Number(f[k]) : d);
-  return { id: s.slice('picture:'.length).split('#')[0], ...(f.w && f.h ? { w: num('w', 0), h: num('h', 0) } : {}), fx: clamp(num('fx', 0.5), 0, 1), fy: clamp(num('fy', 0.5), 0, 1), z: clamp(num('z', 1), 1, 4) };
+  return { id: s.slice('picture:'.length).split('#')[0], ...(f.k === 'p' ? { photo: true } : {}), ...(f.w && f.h ? { w: num('w', 0), h: num('h', 0) } : {}), fx: clamp(num('fx', 0.5), 0, 1), fy: clamp(num('fy', 0.5), 0, 1), z: clamp(num('z', 1), 1, 4) };
 }
 /** The same reference with a new focus point and zoom. */
 export const withCrop = (ref: string, c: { fx?: number; fy?: number; z?: number }): string => {
   const r = parseRef(ref);
-  return r && r.w && r.h ? makeRef({ id: r.id, w: r.w, h: r.h, fx: c.fx ?? r.fx, fy: c.fy ?? r.fy, z: c.z ?? r.z }) : ref;
+  return r && r.w && r.h ? makeRef({ id: r.id, w: r.w, h: r.h, fx: c.fx ?? r.fx, fy: c.fy ?? r.fy, z: c.z ?? r.z, ...(r.photo ? { photo: true } : {}) }) : ref;
 };
 /**
  * Where the whole picture sits so that it covers the slot (cover fit), at the reference's zoom, with the focus point as near the slot's middle as the picture allows. Pure, so the engine
@@ -150,6 +152,24 @@ function heroBand(d: Draw, img: string, texts: (t: Draw) => void): void {
 }
 /** The headline size of the other headline-left layouts of a style (a statement is set at 140 px, up to 150): the headline of a split is at least 85% of it. */
 const HEAD_REF = 140;
+/**
+ * The headline size in a column beside a picture (phone-frame, the tall-picture half of split-half), Round 16: from `normal` down to 70% of it, the first size at which the headline wraps to at
+ * most 4 lines (balanced, as the engine sets it) and has no line of one small word ("and", "a"); then the first that gives 4 lines even with such a word; only then a fifth line, down to
+ * `floor` (never under it). A word wider than the column at a size rules that size out.
+ */
+export function sideHeadSize(head: string, st: LayoutStyle, tw: number, normal: number, floor = 72): number {
+  const wt = nearestWeight(st.fonts.headline, 800);
+  const words = head.split(/\s+/).filter(Boolean);
+  const fits = (s: number) => words.every((x) => measureWidth(x, st.fonts.headline, wt, s) <= tw * 0.98);
+  const lines = (s: number) => lineTexts(head, st.fonts.headline, wt, s, tw, 1.05, { phrases: [], marker: false });
+  const weak = (ls: string[]) => ls.length > 1 && ls.some((l) => { const w = l.trim().split(/\s+/).filter(Boolean); return w.length === 1 && w[0].length <= 3; });
+  const lo = Math.max(floor, Math.round((normal * 0.7) / 4) * 4);
+  for (let s = normal; s >= lo; s -= 4) if (fits(s) && lines(s).length <= 4 && !weak(lines(s))) return s;
+  for (let s = normal; s >= lo; s -= 4) if (fits(s) && lines(s).length <= 4) return s;
+  for (let s = lo - 4; s >= floor; s -= 4) if (fits(s) && lines(s).length <= 5) return s;
+  return 0; // no size fits the words in the column
+}
+
 /**
  * The size the headline takes beside a tall picture: the largest from the reference size down to 85% of it at which it wraps to at most 4 lines in the text column (the picture panel is at most 45% of the
  * width) with no word wider than the column. Null when it does not fit: the slide is then the stacked version (the picture below the text).
@@ -542,19 +562,23 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       const line = str(f, 'line');
       // no picture: the text-only form is a statement (the line is its caption)
       if (!img) return layoutDef('statement')!.plan({ headline: head, ...(line ? { caption: line } : {}) }, v, st, cx);
-      const PAD = 24;
+      // Round 16: with 12 words or fewer the caption headline is at least 64 px and the body at least 40 px (never under 32); the caption panel grows, and the picture shrinks, to make room
+      const short = `${head} ${line}`.split(/\s+/).filter(Boolean).length <= 12;
       const d = place(st, cx, 'top', (d) => {
-        // the picture takes 65% of the slide (1080 x 880); the caption panel (the card colour) the rest of the picture zone
-        const picY = v === 0 ? ZONE_TOP : ZONE_TOP + FULL_PANEL_H;
-        const panelY = v === 0 ? ZONE_TOP + FULL_PIC_H : ZONE_TOP;
-        d.image(img, 0, picY, SLIDE_W, FULL_PIC_H, { rx: 0 });
-        d.rect(0, panelY, SLIDE_W, FULL_PANEL_H, '$surface', { rx: 0 });
         const texts = (t: Draw) => {
-          t.text('title', head, { size: 76, max: 84, weight: 800, font: 'h', lines: 2, min: 72, gap: line ? 10 : 0 });
+          t.text('title', head, { size: 76, max: 84, weight: 800, font: 'h', lines: 2, min: short ? 64 : 48, gap: line ? 10 : 0 });
           if (line) t.text('body', line, { size: 44, max: 48, fill: '$muted', lines: 1, min: 40 });
         };
         const th = heightOf(d, texts);
-        d.y = panelY + Math.max(PAD, Math.round((FULL_PANEL_H - th) / 2));
+        // the text must end by y 1205 (the engine clamps boxes at 1207) and start 40 px below the header when the panel is on top: the panel is as tall as the text needs, plus that room
+        const panelH = Math.min(560, Math.max(FULL_PANEL_H, th + (v === 0 ? 72 : 64)));
+        const picH = ZONE_BOTTOM - ZONE_TOP - panelH;
+        // the picture takes the rest of the picture zone; the caption panel (the card colour) at least 254 px
+        const picY = v === 0 ? ZONE_TOP : ZONE_TOP + panelH;
+        const panelY = v === 0 ? ZONE_TOP + picH : ZONE_TOP;
+        d.image(img, 0, picY, SLIDE_W, picH, { rx: 0 });
+        d.rect(0, panelY, SLIDE_W, panelH, '$surface', { rx: 0 });
+        d.y = v === 0 ? panelY + 24 + Math.max(0, Math.round((panelH - 72 - th) / 2)) : panelY + 40 + Math.max(0, Math.round((panelH - 64 - th) / 2));
         texts(d);
       });
       return mk(d, { noBalance: true, type: 'content', fitAs: 'statement-card', slide: withAccent({ type: 'content', headline: head, body: line }, head, f, st) });
@@ -581,9 +605,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       if (side) {
         const tw = SLIDE_W - HALF_W - 48 - 32;
         const wt = nearestWeight(st.fonts.headline, 800);
-        const words = head.split(/\s+/).filter(Boolean);
-        let z = 0;
-        for (let s = 120; s >= 72; s -= 4) if (words.every((x) => measureWidth(x, st.fonts.headline, wt, s) <= tw * 0.98) && measure(head, st.fonts.headline, wt, s, tw, 1.05).n <= 5) { z = s; break; }
+        const z = sideHeadSize(head, st, tw, 120);
         // the headline and the body must both fit the narrow column (inside the half's height, with room above and below); otherwise the picture takes a top or bottom half and the text a full-width band
         const colH = z ? measure(head, st.fonts.headline, wt, z, tw, 1.05).h + 24 + measure(body, st.fonts.body, 400, 44, tw, 1.3).h : 0;
         if (z && colH <= HALF_H - 160) {
@@ -788,10 +810,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         d.path(`M ${px + PW / 2 - 44} ${py + 40} L ${px + PW / 2 + 44} ${py + 40}`, { stroke: '$text', sw: 22, cap: true, y0: py + 28, y1: py + 52 });
         const tw = d.w - PW - 48;
         const tx = left ? d.x0 + PW + 48 : d.x0;
-        const wt = nearestWeight(st.fonts.headline, 800);
-        const words = head.split(/\s+/).filter(Boolean);
-        let z = 72;
-        for (let s = 112; s >= 72; s -= 4) if (words.every((x) => measureWidth(x, st.fonts.headline, wt, s) <= tw * 0.98) && measure(head, st.fonts.headline, wt, s, tw, 1.05).n <= 5) { z = s; break; }
+        const z = sideHeadSize(head, st, tw, 112) || 72;
         const texts = (t: Draw) => {
           t.text('title', head, { x: tx, w: tw, size: z, max: z, weight: 800, font: 'h', lines: 6, min: 72, gap: body ? 24 : 0 });
           if (body) t.text('body', body, { x: tx, w: tw, size: 48, max: 52, lines: 8, min: 44, lh: 1.3 });

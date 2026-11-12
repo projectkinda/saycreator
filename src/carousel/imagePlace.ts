@@ -55,7 +55,7 @@ export function placeOne(layout: string, variant: 0 | 1, free0: PicInfo[]): Fiel
       if (!best) break;
       left.splice(left.indexOf(best), 1);
       // a very tall picture shows its TOP (the focus is near the top), never its middle
-      fields[s.field] = makeRef({ id: best.id, w: best.width, h: best.height, ...(picAspect(best) <= TALL ? { fy: 0.1 } : {}) });
+      fields[s.field] = makeRef({ id: best.id, w: best.width, h: best.height, ...(picAspect(best) <= TALL ? { fy: 0.1 } : {}), ...(best.content === 'photo' ? { photo: true } : {}) });
       picked.push(best.id);
     }
     return { picked, fields };
