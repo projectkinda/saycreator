@@ -984,12 +984,12 @@ export default function CarouselPage() {
    * The picture picker of a slide (Auto / None / a picture): drawn again in the browser, no model call. The person's pick is pinned on the slide (a restyle, a text edit and the passes keep it);
    * a slide whose layout cannot take the picture is moved to one that can with every word kept.
    */
-  const pickSlidePicture = async (i: number, choice: string): Promise<string> => {
+  const pickSlidePicture = async (i: number, choice: string): Promise<string | { msg: string; offer: string }> => {
     const lib = docRef.current.designed?.library;
     const spec = lib?.plan?.specs[i];
     if (!lib?.plan || !spec) return 'This deck has no stored plan to draw from.';
     const r = pickPicture(spec, i, choice, photoInfos, pickLook);
-    if (!r.ok) return r.why;
+    if (!r.ok) return r.offer ? { msg: r.why, offer: r.offer } : r.why;
     if (choice === 'auto' && spec.pin?.picture === undefined) return r.note;
     const redraw = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, { layout: r.spec.layout as LayoutId, fields: r.spec.fields, accents: r.spec.accents, pin: { picture: r.spec.pin?.picture, auto: r.spec.pin?.auto } });
     if (!redraw.ok) return `Could not redraw slide ${i + 1}: ${redraw.reasons[0]} The slide is unchanged.`;

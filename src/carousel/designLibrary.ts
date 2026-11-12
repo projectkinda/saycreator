@@ -328,6 +328,8 @@ const GOOD_FOR: Record<LayoutId, string> = {
   'headline-body-image': 'a headline and 1 to 2 lines of text with a picture the person supplied (the picture field is never written by you)',
   'image-row': 'a headline, a row of 1 to 3 supplied pictures and a paragraph under them',
   'thumb-rows': '3 or 4 short rows, each with a small supplied picture',
+  'list-under-band': 'a title and 2 to 5 short items under a supplied picture band (not offered to the writer: the picker and the picture pass use it)',
+  'list-beside-picture': 'a title and 2 to 5 short items beside a supplied tall picture (not offered to the writer: the picker and the picture pass use it)',
   'cover-art': 'a hook with one big supplied picture (round or wide)',
   'photo-cover': 'a hook, an intro line and one wide supplied photo',
   'portrait-closing': 'a closing with a supplied portrait of a person: a band title, a heading, paragraphs and a link',
@@ -350,6 +352,8 @@ const FIELD_NOTE: Record<string, string> = {
   author: 'only when the text names who said it (a person or a source); otherwise leave the field out. Never write a label such as "The text"',
   callouts: 'exactly 3',
 };
+/** Layouts only the code uses (the picture pass and the picker): the writer's menu and notes never list them, so the writer prompt is unchanged. */
+export const WRITER_HIDDEN: readonly string[] = ['list-under-band', 'list-beside-picture'];
 /** The six picture layouts of Round 9, as the writer is told about them (count and shape only). */
 const NEW_PICTURE_NOTES: [string, string][] = [
   ['photo-full-caption', '1 picture of any shape, 65% of the slide with a caption panel'],
@@ -441,7 +445,7 @@ export function flavourCoverLine(fl: NonNullable<LayoutStyle['flavour']>): strin
 export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutStyle, brief: string, n: number, handle?: string): string {
   const tone = TONES.find((t) => t.id === req.tone)!;
   // photo-led needs a photo; a layout with picture slots needs enough pictures that fit its slots (the metadata list below); without a list, any photo will do
-  const ids = LAYOUT_IDS.filter((id) => !isCoverLayout(id)).filter((id) => (id === 'photo-led' ? !!look.hasPhoto : (IMAGE_LAYOUT_IDS as readonly string[]).includes(id) ? (look.images ? hasEnoughPictures(id, look.images) : !!look.hasPhoto) : true));
+  const ids = LAYOUT_IDS.filter((id) => !isCoverLayout(id)).filter((id) => !WRITER_HIDDEN.includes(id)).filter((id) => (id === 'photo-led' ? !!look.hasPhoto : (IMAGE_LAYOUT_IDS as readonly string[]).includes(id) ? (look.images ? hasEnoughPictures(id, look.images) : !!look.hasPhoto) : true));
   const example = { title: 'Short name of this carousel', note: 'optional, only if the text is thin', slides: [{ layout: 'statement', variant: 1, fields: { kicker: 'Small line', headline: 'The big promise in a few words', caption: 'One line that makes people swipe.' }, accents: ['big promise'], density: 'normal', cut: 'edge-h' }, { layout: 'checklist', fields: { title: 'Before you start', items: ['Short item', 'Short item', 'Short item'] }, accents: [] }] };
   return [
     '[carousel:library]',
@@ -1033,7 +1037,7 @@ export function scriptSlideOf(layout: string, f: Fields): Record<string, unknown
     case 'spotlight': return { type: 'checklist', headline: s('subject'), items: a('callouts'), ...tags };
     case 'headline-body-image': return { type: 'content', headline: s('headline'), body: s('body'), ...tags };
     case 'image-row': return { type: 'content', headline: s('headline'), body: [s('subline'), s('paragraph')].filter(Boolean).join(' '), ...tags };
-    case 'thumb-rows': return { type: 'checklist', headline: s('title') || 'In short', items: a('items'), ...tags };
+    case 'thumb-rows': case 'list-under-band': case 'list-beside-picture': return { type: 'checklist', headline: s('title') || 'In short', items: a('items'), ...tags };
     case 'cover-art': return { type: 'cover', headline: s('headline'), ...(s('subtitle') ? { sub: s('subtitle') } : {}), ...tags };
     case 'photo-cover': return { type: 'cover', headline: s('headline'), sub: s('intro'), ...tags };
     case 'portrait-closing': return { type: 'closing', headline: s('headline'), cta: s('url') || 'Get in touch', ...tags };

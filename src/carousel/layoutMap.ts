@@ -65,7 +65,7 @@ export function toCanon(layout: string, f: Fields): Canon {
     case 'headline-card': return { ...c, head: txt(f, 'headline'), sub: txt(f, 'subline'), body: txt(f, 'card'), own: { layout, fields: f } };
     case 'headline-body-image': return { ...c, head: txt(f, 'headline'), body: txt(f, 'body') };
     case 'image-row': return { ...c, head: txt(f, 'headline'), body: txt(f, 'paragraph'), sub: txt(f, 'subline') };
-    case 'thumb-rows': return { ...c, head: txt(f, 'title'), items: lst(f, 'items') };
+    case 'thumb-rows': case 'list-under-band': case 'list-beside-picture': return { ...c, head: txt(f, 'title'), items: lst(f, 'items') };
     case 'cover-art': return { ...c, head: txt(f, 'headline'), sub: txt(f, 'subtitle') };
     case 'photo-full-caption': case 'title-over-photo': return { ...c, head: txt(f, 'headline'), sub: txt(f, 'line') };
     case 'split-half': case 'phone-frame': return { ...c, head: txt(f, 'headline'), body: txt(f, 'body') };
@@ -118,6 +118,7 @@ export function fromCanon(layout: string, c: Canon, hasPhoto: boolean, images?: 
     case 'headline-body-image': if (!(c.body || c.sub)) return null; put(o, 'headline', head); put(o, 'body', c.body || c.sub); break;
     case 'image-row': if (!(c.body || c.sub)) return null; put(o, 'headline', head); put(o, 'paragraph', c.body || c.sub); if (c.body && c.sub) put(o, 'subline', c.sub); break;
     case 'thumb-rows': if (c.items.length < 3 || c.items.length > 4) return null; put(o, 'title', head); put(o, 'items', c.items); break;
+    case 'list-under-band': case 'list-beside-picture': if (c.items.length < 2 || c.items.length > 5 || !head || c.body || c.sub) return null; put(o, 'title', head); put(o, 'items', c.items); break;
     case 'cover-art': put(o, 'headline', head); put(o, 'subtitle', c.sub); break;
     case 'photo-full-caption': case 'title-over-photo': if (head.length > 48) return null; put(o, 'headline', head); put(o, 'line', c.sub || (words(c.body) <= 8 ? c.body : '')); break;
     case 'split-half': if (!(c.body || c.sub)) return null; put(o, 'headline', head); put(o, 'body', c.body || c.sub); break;

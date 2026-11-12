@@ -41,7 +41,7 @@ export const FAMILY: Partial<Record<LayoutId, string>> = {
   'step-numeral': 'numeral', 'listicle-numeral': 'numeral',
   'cover-centred': 'hero', 'cover-index': 'hero', 'cover-block': 'hero', 'cover-sticker': 'hero', 'cover-word': 'hero', 'cover-ruled': 'hero',
   'statement-stacked': 'hero', 'statement-card': 'hero', 'statement-pill': 'hero', 'statement-question': 'hero', 'contact-closing': 'hero', 'cta-pair': 'hero',
-  'headline-body-image': 'photo', 'photo-full-caption': 'photo', 'split-half': 'photo', 'title-over-photo': 'photo', 'twin-photos': 'photo', 'photo-grid': 'photo', 'phone-frame': 'photo', 'image-row': 'photo', 'thumb-rows': 'photo', 'cover-art': 'photo', 'photo-cover': 'photo', 'portrait-closing': 'photo', 'art-side-text': 'photo', 'do-dont': 'photo',
+  'headline-body-image': 'photo', 'photo-full-caption': 'photo', 'split-half': 'photo', 'title-over-photo': 'photo', 'twin-photos': 'photo', 'photo-grid': 'photo', 'phone-frame': 'photo', 'list-under-band': 'photo', 'list-beside-picture': 'photo', 'image-row': 'photo', 'thumb-rows': 'photo', 'cover-art': 'photo', 'photo-cover': 'photo', 'portrait-closing': 'photo', 'art-side-text': 'photo', 'do-dont': 'photo',
   prose: 'text', 'headline-card': 'text', 'numbered-stagger': 'list', 'bullet-list': 'list', 'pill-stagger': 'list',
 };
 export const familyOf = (l: string): string => FAMILY[l as LayoutId] ?? l;

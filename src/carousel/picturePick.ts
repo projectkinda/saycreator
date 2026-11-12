@@ -11,15 +11,20 @@ import type { Fields } from './layouts';
 import { fittingPictures, hasEnoughPictures, imageSlotsOf, imagesNeeded, makeRef, parseRef, type PicInfo } from './layouts/images';
 
 export type PickChoice = 'auto' | 'none' | string;
-export type PickResult = { ok: true; spec: SlideSpec; note: string } | { ok: false; why: string };
+/** `offer`: the id of another project picture that this slide CAN show with every word kept (the person may take it with one button). */
+export type PickResult = { ok: true; spec: SlideSpec; note: string } | { ok: false; why: string; offer?: string };
 
 /** What the slide's pin says: auto, none, or the picture's id. */
 export const choiceOf = (spec: { pin?: { picture?: string } }): PickChoice => spec.pin?.picture ?? 'auto';
 
 /** The layouts a slide may take to show ONE picture, best first: its own meaning's targets, the alternatives of its picture layout, then the general ones. */
 const CANDIDATES = ['phone-frame', 'split-half', 'photo-full-caption', 'headline-body-image', 'art-side-text', 'photo-cover', 'cover-art', 'title-over-photo'];
-function candidatesFor(layout: string, index: number): string[] {
-  return [...new Set([layout, ...targetsFor(layout, index), ...(ALTERNATIVES[layout] ?? []), ...CANDIDATES])];
+/** The slides that are a short list: a picture goes with them in a list layout (Round 17), not by dropping any word. */
+const LIST_SLIDES = ['stepper', 'numbered-list', 'checklist', 'numbered-stagger', 'bullet-list', 'pill-stagger', 'list-under-band', 'list-beside-picture'];
+function candidatesFor(layout: string, index: number, pic?: PicInfo): string[] {
+  // a tall or portrait picture sits beside the list, any other above it
+  const lists = LIST_SLIDES.includes(layout) ? (pic && pic.width / pic.height < 0.9 ? ['list-beside-picture', 'list-under-band'] : ['list-under-band', 'list-beside-picture']) : [];
+  return [...new Set([...(lists.length ? [] : [layout]), ...lists, ...targetsFor(layout, index), ...(ALTERNATIVES[layout] ?? []), ...CANDIDATES])];
 }
 
 export function pickPicture(spec: SlideSpec, index: number, choice: PickChoice, pics: PicInfo[], look: Look): PickResult {
@@ -41,7 +46,7 @@ export function pickPicture(spec: SlideSpec, index: number, choice: PickChoice, 
   const ref = makeRef({ id: pic.id, w: pic.width, h: pic.height, ...(pic.width / pic.height <= 0.5 ? { fy: 0.1 } : {}), ...(pic.content === 'photo' ? { photo: true } : {}) });
   const slots = imageSlotsOf(spec.layout);
   // the slide's own layout takes the picture (its shape, and not under text for a screenshot): put it in the first picture slot, the others keep what they have
-  if (slots.length && fittingPictures(spec.layout, [pic]) === 1) {
+  if (slots.length && !LIST_SLIDES.includes(spec.layout) && fittingPictures(spec.layout, [pic]) === 1) {
     const have = Object.keys(spec.fields).filter((k) => parseRef(spec.fields[k])).length;
     if (imagesNeeded(spec.layout) <= 1 || have >= imagesNeeded(spec.layout)) {
       return { ok: true, spec: pinned({ ...spec, fields: { ...spec.fields, [slots[0].field]: ref } as Fields }), note: 'This picture is on the slide.' };
@@ -50,7 +55,7 @@ export function pickPicture(spec: SlideSpec, index: number, choice: PickChoice, 
   // another layout that shows every word and takes this picture
   const look1: Look = { ...look, images: [pic], hasPhoto: true };
   const base: SlideSpec = { ...spec, fields: withoutImages(spec.fields) as Fields };
-  for (const to of candidatesFor(spec.layout, index)) {
+  for (const to of candidatesFor(spec.layout, index, pic)) {
     if (imagesNeeded(to) !== 1 || !hasEnoughPictures(to, [pic])) continue;
     const f = to === spec.layout ? base.fields : fieldsFor(base, to, look1);
     if (!f || !keepsText(base.fields, f)) continue;
@@ -58,5 +63,11 @@ export function pickPicture(spec: SlideSpec, index: number, choice: PickChoice, 
     if (!slot) continue;
     return { ok: true, spec: pinned({ ...spec, layout: to, fields: { ...f, [slot.field]: ref } as Fields, density: undefined }), note: to === spec.layout ? 'This picture is on the slide.' : `This slide now shows the picture as "${to}": every word is kept.` };
   }
-  return { ok: false, why: `Slide ${index + 1} cannot show this picture without losing words. The slide is unchanged.` };
+  // no layout takes THIS picture with every word: is there another picture of the project that this slide can show?
+  const offer = pics.find((q) => q.id !== choice && candidatesFor(spec.layout, index, q).some((to) => {
+    if (imagesNeeded(to) !== 1 || !hasEnoughPictures(to, [q])) return false;
+    const f = to === spec.layout ? base.fields : fieldsFor(base, to, { ...look, images: [q], hasPhoto: true });
+    return !!f && keepsText(base.fields, f) && imageSlotsOf(to).length > 0;
+  }));
+  return { ok: false, why: `This slide cannot show this picture without losing words, so it is unchanged.${offer ? ' Another picture fits it.' : ' No layout with a picture carries all of its words: edit the text or pick another slide.'}`, ...(offer ? { offer: offer.id } : {}) };
 }

@@ -2,7 +2,7 @@
 // The picture is a field ("image", "image2" ...): a data: URL of a picture the person supplied (there is no upload yet, so nothing sets it by itself). With a picture the layout draws it
 // cropped to its slot (cover fit, corners rounded like the preset's cards); WITHOUT one the layout draws its own text-only form (a prose page, a statement, number discs, a comparison with
 // tick and cross badges ...): never an empty box. The writer is only offered these layouts when the deck has a picture. No text is ever drawn over a picture, so no scrim is needed.
-import { CARD_PAD, Draw, lineTexts, measure, nearestWeight, S } from './draw';
+import { CARD_PAD, Draw, accentInk, lineTexts, measure, nearestWeight, S } from './draw';
 import { measureWidth } from '../../image-engine/draw/text';
 import { arr, layoutDef, mk, place, str, withAccent } from './library';
 import type { Cx, ImageSlotDef, LayoutDef, LayoutStyle, Orientation, PlanImage } from './types';
@@ -11,7 +11,7 @@ import type { Cx, ImageSlotDef, LayoutDef, LayoutStyle, Orientation, PlanImage }
 export const IMAGE_KEYS = ['image', 'image2', 'image3', 'image4'] as const;
 export const isImageKey = (k: string) => (IMAGE_KEYS as readonly string[]).includes(k);
 /** The layouts that draw a picture when the slide has one (the writer is offered them only for a deck with a picture). */
-export const IMAGE_LAYOUT_IDS = ['headline-body-image', 'image-row', 'thumb-rows', 'cover-art', 'photo-cover', 'portrait-closing', 'art-side-text', 'do-dont', 'photo-full-caption', 'split-half', 'title-over-photo', 'twin-photos', 'photo-grid', 'phone-frame'] as const;
+export const IMAGE_LAYOUT_IDS = ['headline-body-image', 'image-row', 'thumb-rows', 'cover-art', 'photo-cover', 'portrait-closing', 'art-side-text', 'do-dont', 'photo-full-caption', 'split-half', 'title-over-photo', 'twin-photos', 'photo-grid', 'phone-frame', 'list-under-band', 'list-beside-picture'] as const;
 const DATA_IMAGE = /^data:image\/(?:png|jpe?g|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+(?:#[\w.=&-]*)?$/;
 const PICTURE_REF = /^picture:[A-Za-z0-9_-]{1,40}(?:#[\w.=&-]*)?$/;
 /**
@@ -184,6 +184,28 @@ const panelHeadSize = (st: LayoutStyle, text: string): number | null => {
   return null;
 };
 const IMG = (name: string, note: string) => ({ name, required: false as const, max: 12_000_000, image: true as const, note });
+
+
+// ----- the rows of a list that sits with a picture (list-under-band, list-beside-picture; Round 17) -----
+/** A list's marks: numerals in the accent colour (variant 1), or small dots (variant 2, and always when the numerals would push the slide over the phone's 50-word check). */
+const listMarks = (title: string, items: string[], v: 0 | 1): 'numerals' | 'dots' => {
+  const n = (t: string) => t.split(/\s+/).filter(Boolean).length;
+  return v === 0 && n(title) + items.reduce((a, t) => a + n(t), 0) + items.length + 6 <= 46 ? 'numerals' : 'dots';
+};
+const MARK_W = { numerals: 120, dots: 48 } as const;
+const ROW_GAP = 14;
+const LIST_BS = 44;
+const listRowH = (st: LayoutStyle, it: string, tw: number): number => Math.max(measure(it, st.fonts.body, nearestWeight(st.fonts.body, 500), LIST_BS, tw, 1.2).h + 2, 60);
+/** The items of a list as rows at the draw cursor: a numeral (or a dot) and the item's words. `x0`/`w` are the column. */
+function listRows(d: Draw, st: LayoutStyle, items: string[], x0: number, w: number, mode: 'numerals' | 'dots'): void {
+  const tw = w - MARK_W[mode];
+  items.forEach((it, i) => {
+    const h = listRowH(st, it, tw);
+    if (mode === 'numerals') d.text('body', String(i + 1), { x: x0, w: MARK_W.numerals, size: LIST_BS, max: LIST_BS, weight: 800, font: 'h', fill: accentInk(st), align: 'left', lines: 1, min: 44, at: d.y, boxH: h });
+    else d.circle(x0 + 14, d.y + h / 2, 14, '$accent');
+    d.text('body', it, { x: x0 + MARK_W[mode], w: tw, size: LIST_BS, max: LIST_BS, lines: 4, min: 44, lh: 1.2, boxH: h, gap: i < items.length - 1 ? ROW_GAP : 0 });
+  });
+}
 
 export const IMAGE_LAYOUTS: LayoutDef[] = [
   // headline-body-image --------------------------------------------------------------------------------------------------------------
@@ -821,6 +843,88 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       return mk(d, { noBalance: true, type: 'content', fitAs: 'art-side-text', slide, ...(body ? { stack: { gap: 24, y0: d.fy0 + Math.round((d.fy1 - d.fy0 - 860) / 2), y1: d.fy0 + Math.round((d.fy1 - d.fy0 - 860) / 2) + 860 } } : {}) });
     },
   },
+  // list-under-band (Round 17) ---------------------------------------------------------------------------------------------------------
+  {
+    id: 'list-under-band', label: 'List under a picture band', shapes: ['list', 'process', 'photo'], variants: ['numerals', 'dots'],
+    fields: [{ name: 'title', required: true, max: 50 }, { name: 'items', required: true, max: 80, list: { min: 2, max: 5 } }, IMG('image', 'a picture band across the top of the slide (any shape; a screenshot is shown whole)')],
+    samples: {
+      normal: { title: 'How it works', items: ['Paste your text', 'Pick a look from 15 styles', 'Get slides you can edit'] },
+      long: { title: 'Five steps from post to slides', items: ['Paste the post you already wrote today', 'Pick one of the fifteen looks you like', 'Add the pictures you want on the slides', 'Edit any headline and nothing reruns', 'Download the slides and post them'] },
+      short: { title: 'Three steps', items: ['Paste', 'Pick', 'Post'] },
+    },
+    plan(f, v, st, cx) {
+      const img = imageOf(f.image);
+      const title = str(f, 'title');
+      const items = arr(f, 'items').slice(0, 5);
+      // no picture: the plain numbered list of the same words
+      if (!img) return layoutDef('numbered-list')!.plan({ title, items }, v, st, cx);
+      const mode = listMarks(title, items, v);
+      const d = place(st, cx, 'top', (d) => {
+        const tw = d.w - MARK_W[mode];
+        // rows at 44 px; the band is 40% of the slide (540 px) and gives up height (down to 300 px) only when title and rows need the room under it
+        const rowsH = items.reduce((a, it, i) => a + listRowH(st, it, tw) + (i < items.length - 1 ? ROW_GAP : 0), 0);
+        const titleH = measure(title, st.fonts.headline, nearestWeight(st.fonts.headline, 800), 72, d.w, 1.05).h + 24;
+        let band = 540;
+        while (band > 300 && rowsH + titleH > 1190 - (ZONE_TOP + band) - 28) band -= 20;
+        d.image(img, 0, ZONE_TOP, SLIDE_W, band, { rx: 0 });
+        d.y = ZONE_TOP + band + 28;
+        d.text('title', title, { size: 72, max: 88, weight: 800, font: 'h', lines: 2, min: 64, gap: 24 });
+        listRows(d, st, items, d.x0, d.w, mode);
+      });
+      return mk(d, { noBalance: true, type: 'checklist', fitAs: 'numbered-list', slide: withAccent({ type: 'checklist', headline: title, items }, title, f, st) });
+    },
+  },
+  // list-beside-picture (Round 17) -----------------------------------------------------------------------------------------------------
+  {
+    id: 'list-beside-picture', label: 'List beside a tall picture', shapes: ['list', 'process', 'product'], variants: ['picture right', 'picture left'],
+    fields: [{ name: 'title', required: true, max: 50 }, { name: 'items', required: true, max: 80, list: { min: 2, max: 5 } }, IMG('image', 'a tall or portrait picture on one side (a phone screenshot sits in a phone outline)')],
+    samples: {
+      normal: { title: 'How it works', items: ['Paste your text', 'Pick a look from 15 styles', 'Get slides you can edit'] },
+      long: { title: 'Five steps from post to slides', items: ['Paste the post you already wrote today', 'Pick one of the fifteen looks you like', 'Add the pictures you want on the slides', 'Edit any headline and nothing reruns', 'Download the slides and post them'] },
+      short: { title: 'Three steps', items: ['Paste', 'Pick', 'Post'] },
+    },
+    plan(f, v, st, cx) {
+      const img = imageOf(f.image);
+      const title = str(f, 'title');
+      const items = arr(f, 'items').slice(0, 5);
+      const sh = img ? shapeOf(img) : null;
+      if (!img || !sh || !(sh.kind === 'tall' || sh.kind === 'portrait')) return layoutDef('numbered-list')!.plan({ title, items }, v, st, cx);
+      const mode = listMarks(title, items, 0);
+      const d = place(st, cx, 'top', (d) => {
+        const GAP = 40;
+        const phone = sh.aspect <= 0.62;
+        const hw = nearestWeight(st.fonts.headline, 800);
+        // the picture takes about 40% of the width (432 px, the picture on the right); it gives up width (down to 340 px) only when the list needs the room
+        const colH = (pw: number) => {
+          const tw = SLIDE_W - 96 - pw - GAP;
+          const z = sideHeadSize(title, st, tw, 96, 56) || 56;
+          return measure(title, st.fonts.headline, hw, z, tw, 1.05).h + 28 + items.reduce((a, it, i) => a + listRowH(st, it, tw - MARK_W[mode]) + (i < items.length - 1 ? ROW_GAP : 0), 0);
+        };
+        let pw = 432;
+        while (pw > 340 && colH(pw) > 1060 - 60) pw -= 20;
+        const right = v === 0;
+        const px = right ? SLIDE_W - pw - 48 : 48;
+        const tx0 = right ? 48 : px + pw + GAP;
+        const tw0 = SLIDE_W - 96 - pw - GAP;
+        if (phone) {
+          const B = 14;
+          const PH = Math.min(1060, Math.round(pw / 0.5));
+          const py = ZONE_TOP + Math.round((1060 - PH) / 2);
+          d.image(img, px + B, py + B, pw - 2 * B, PH - 2 * B, { rx: 44 });
+          const r0 = 56;
+          d.path(`M ${px + r0} ${py} L ${px + pw - r0} ${py} Q ${px + pw} ${py} ${px + pw} ${py + r0} L ${px + pw} ${py + PH - r0} Q ${px + pw} ${py + PH} ${px + pw - r0} ${py + PH} L ${px + r0} ${py + PH} Q ${px} ${py + PH} ${px} ${py + PH - r0} L ${px} ${py + r0} Q ${px} ${py} ${px + r0} ${py} Z`, { stroke: '$text', sw: B, cap: true, y0: py, y1: py + PH });
+        } else d.image(img, px, ZONE_TOP, pw, 1060, { rx: rad(st) });
+        const z = sideHeadSize(title, st, tw0, 96, 56) || 56;
+        const texts = (t: Draw) => {
+          t.text('title', title, { x: tx0, w: tw0, size: z, max: z, weight: 800, font: 'h', lines: 5, min: 56, gap: 28 });
+          listRows(t, st, items, tx0, tw0, mode);
+        };
+        d.y = ZONE_TOP + Math.max(0, Math.round((1060 - heightOf(d, texts)) / 2));
+        texts(d);
+      });
+      return mk(d, { noBalance: true, type: 'checklist', fitAs: 'numbered-list', slide: withAccent({ type: 'checklist', headline: title, items }, title, f, st) });
+    },
+  },
 ];
 // The picture slots of each layout (from the geometry the plans use): how many, the shape of each (width / height) and which picture orientations crop well in it. A layout is drawn in its
 // picture form only when at least `min` pictures fit; otherwise the slide uses the layout's text-only form (never an empty box).
@@ -843,6 +947,9 @@ const SLOTS: Record<string, { min: number; slots: (v: 0 | 1) => ImageSlotDef[] }
   'photo-grid': { min: 3, slots: () => ['image', 'image2', 'image3', 'image4'].map((k) => slot(k, 1.2, ANY)) },
   // a phone holds a screenshot: a picture wider than 0.62 (a desktop crop, a portrait photo) goes to another layout
   'phone-frame': { min: 1, slots: () => [{ ...slot('image', 0.46, ['portrait'], 'portrait'), maxAspect: 0.62 }] },
+  // a list under a picture band (any shape) and a list beside a tall or portrait picture (Round 17)
+  'list-under-band': { min: 1, slots: () => [slot('image', 1080 / 540, ANY)] },
+  'list-beside-picture': { min: 1, slots: () => [slot('image', 0.46, ['portrait'], 'portrait')] },
   'do-dont': { min: 2, slots: (v) => [slot('image', v === 0 ? 475 / 400 : 340 / 250, ANY), slot('image2', v === 0 ? 475 / 400 : 340 / 250, ANY)] },
 };
 IMAGE_LAYOUTS.forEach((l) => { const s = SLOTS[l.id]; l.imageSlots = s.slots; l.minImages = s.min; });

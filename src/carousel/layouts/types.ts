@@ -8,7 +8,8 @@ export type LayoutId =
   | 'prose' | 'statement-stacked' | 'statement-card' | 'statement-pill' | 'statement-question' | 'contact-closing' | 'cta-pair' | 'numbered-stagger' | 'bullet-list' | 'pill-stagger' | 'headline-card'
   | 'cover-centred' | 'cover-index' | 'cover-block' | 'cover-sticker' | 'cover-word' | 'cover-ruled'
   | 'photo-full-caption' | 'split-half' | 'title-over-photo' | 'twin-photos' | 'photo-grid' | 'phone-frame'
-  | 'headline-body-image' | 'image-row' | 'thumb-rows' | 'cover-art' | 'photo-cover' | 'portrait-closing' | 'art-side-text' | 'do-dont';
+  | 'headline-body-image' | 'image-row' | 'thumb-rows' | 'cover-art' | 'photo-cover' | 'portrait-closing' | 'art-side-text' | 'do-dont'
+  | 'list-under-band' | 'list-beside-picture';
 
 export type ContentShape =
   | 'claim' | 'hook' | 'story' | 'question' | 'explainer' | 'number' | 'metric' | 'process' | 'step' | 'benefits' | 'list' | 'ranking'

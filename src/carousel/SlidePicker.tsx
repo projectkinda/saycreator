@@ -10,14 +10,17 @@ export function SlidePicker({ index, pictures, current, onPick }: {
   /** "auto", "none" or the id of the pinned picture. */
   current: string;
   /** Says what happened in plain words. */
-  onPick: (choice: string) => Promise<string>;
+  onPick: (choice: string) => Promise<string | { msg: string; offer: string }>;
 }) {
   const [msg, setMsg] = useState('');
+  const [offer, setOffer] = useState('');
   const [busy, setBusy] = useState(false);
   const pick = async (choice: string) => {
     if (busy) return;
     setBusy(true);
-    setMsg(await onPick(choice));
+    const r = await onPick(choice);
+    setMsg(typeof r === 'string' ? r : r.msg);
+    setOffer(typeof r === 'string' ? '' : r.offer);
     setBusy(false);
   };
   const photos = pictures.filter((p) => p.kind === 'photo');
@@ -35,6 +38,7 @@ export function SlidePicker({ index, pictures, current, onPick }: {
         ))}
       </div>
       {msg && <p className="small muted" role="status" data-testid={`pick-${index}-msg`}>{msg}</p>}
+      {offer && <button type="button" className="btn btn-outline btn-sm" disabled={busy} data-testid={`pick-${index}-offer`} onClick={() => void pick(offer)}>Use a layout with a picture</button>}
     </div>
   );
 }
