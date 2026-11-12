@@ -46,6 +46,7 @@ import { MatchPanel } from '../reference/MatchPanel';
 import { ACTIVE_STYLE, activeReference, clearActiveReference, useActiveReference } from '../reference/active';
 import { cancelJob } from '../live/jobs';
 import { sizeOf as sizeOfPic, urlOf as urlOfPic } from './photoLibrary';
+import { contentOr } from './pictureKind';
 import { ensureTemplatesLoaded, isUserStyle, targetWarning, useTemplatesVersion } from '../reference/templates';
 import { platformOf, platformWarning } from './platform';
 import { PhotosStrip } from './PhotosStrip';
@@ -430,7 +431,7 @@ export default function CarouselPage() {
   const pictures = doc.photos ?? [];
   // the writer and the picker are told only the pictures' metadata (id and pixel size), never the pixels
   // what the code knows about each picture: its size and whether it is a screenshot or a photo (metadata only, never pixels)
-  const photoInfos = pictures.filter((p) => p.kind === 'photo').map((p) => ({ id: p.id, width: p.width, height: p.height, ...(p.content ? { content: p.content } : {}) }));
+  const photoInfos = pictures.filter((p) => p.kind === 'photo').map((p) => ({ id: p.id, width: p.width, height: p.height, content: contentOr(p.content) }));
   // (a deck whose pictures are all screenshots still has pictures: picture layouts are allowed; only the person's-own-photo layout is refused, see slideProblems)
   const hasPhotoLook = pictures.length > 0;
   const libVersion = useLibraryVersion();

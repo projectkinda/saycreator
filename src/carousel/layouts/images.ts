@@ -551,7 +551,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         d.rect(0, panelY, SLIDE_W, FULL_PANEL_H, '$surface', { rx: 0 });
         const texts = (t: Draw) => {
           t.text('title', head, { size: 76, max: 84, weight: 800, font: 'h', lines: 2, min: 72, gap: line ? 10 : 0 });
-          if (line) t.text('body', line, { size: 44, max: 48, fill: '$muted', lines: 1, min: 44 });
+          if (line) t.text('body', line, { size: 44, max: 48, fill: '$muted', lines: 1, min: 40 });
         };
         const th = heightOf(d, texts);
         d.y = panelY + Math.max(PAD, Math.round((FULL_PANEL_H - th) / 2));
@@ -638,7 +638,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         d.image(img, 0, ZONE_TOP, SLIDE_W, ZONE_BOTTOM - ZONE_TOP, { rx: 0 });
         const texts = (t: Draw) => {
           t.text('title', head, { size: 112, max: 120, weight: 800, font: 'h', lines: 3, min: 72, gap: line ? 18 : 0 });
-          if (line) t.text('body', line, { size: 48, max: 52, lines: 1, min: 44 });
+          if (line) t.text('body', line, { size: 48, max: 52, lines: 1, min: 40 });
         };
         const th = heightOf(d, texts);
         const low = v === 0;

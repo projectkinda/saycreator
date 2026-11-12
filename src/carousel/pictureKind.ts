@@ -1,10 +1,12 @@
-// Screenshot or photo (Round 14), decided from the picture's own pixels when it is added. The rule (documented here, simple on purpose):
+// Screenshot or photo, decided from the picture's own pixels when it is added. SAFE BY DEFAULT (Round 15): a wrong "screenshot" is harmless (the picture just never goes under text), a wrong "photo" breaks a slide
+// (text over a screenshot's own text). So a picture is a PHOTO only when it is clearly one; everything else, and everything we cannot read, is a SCREENSHOT.
 //   1. the picture is looked at on a copy of at most 160 px on its long side;
-//   2. each pixel is put in a colour bucket (4 bits per channel: 4096 buckets); `top16` is the share of all pixels that fall in the 16 most common buckets;
-//   3. `flat` is the share of 4x4 blocks whose three channels each vary by 6 or less (a flat area: a window, a card, a page background);
-//   4. `edges` is the share of pixels that sit on a sharp horizontal or vertical edge (the luminance jumps by more than 40 to the next pixel to the right or below).
-// A picture is a SCREENSHOT when top16 > 0.60, or when flat >= 0.50 and edges >= 0.02 (large flat areas with many sharp straight edges). Everything else is a PHOTO: a photo's smooth gradients and noise
-// spread its pixels over hundreds of buckets, and a photo has few perfectly flat blocks. The numbers are returned so they can be shown and tested.
+//   2. `top16` = share of pixels in the 16 most common colour buckets (4 bits per channel); `buckets` = number of distinct buckets used;
+//   3. `flat` = share of 4x4 blocks whose three channels each vary by 6 or less (a window, a card, a page background);
+//   4. `edges` = share of pixels on a sharp horizontal or vertical edge (luminance jumps by more than 40 to the next pixel);
+//   5. `grain` = share of neighbouring pixel pairs whose luminance differs by a small, non-zero amount (1 to 12): the texture of a camera sensor. A screenshot is exactly flat (0) or a hard jump.
+// PHOTO only when ALL hold: top16 < 0.50, flat < 0.12, buckets >= 150 and grain >= 0.30. A PNG must be clearer still (top16 < 0.40, flat < 0.06, grain >= 0.45), because a PNG is far more often a screenshot.
+// A picture whose content is unknown (added before this rule, or unreadable) counts as a screenshot: see `contentOr`. The numbers are returned so they can be shown and tested.
 export type PictureContent = 'screenshot' | 'photo';
 export interface ContentReading {
   content: PictureContent;
@@ -12,14 +14,17 @@ export interface ContentReading {
   flat: number;
   edges: number;
   buckets: number;
+  grain: number;
 }
-export const SCREENSHOT_TOP16 = 0.6;
-export const SCREENSHOT_FLAT = 0.5;
-export const SCREENSHOT_EDGES = 0.02;
+/** The limits a picture must be inside on every number to count as a photo (a PNG uses the second set). */
+export const PHOTO_LIMITS = { top16: 0.5, flat: 0.12, buckets: 150, grain: 0.3 };
+export const PHOTO_LIMITS_PNG = { top16: 0.4, flat: 0.06, buckets: 150, grain: 0.45 };
+/** Unknown content is a screenshot (safe by default). */
+export const contentOr = (c?: PictureContent | null): PictureContent => (c === 'photo' ? 'photo' : 'screenshot');
 const lum = (d: Uint8ClampedArray, i: number) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
 
-/** The reading of RGBA pixel data (w x h). Pure, so tests and the app agree. */
-export function readContent(d: Uint8ClampedArray, w: number, h: number): ContentReading {
+/** The reading of RGBA pixel data (w x h). Pure, so tests and the app agree. `png`: the file is a PNG (a stricter test for "photo"). */
+export function readContent(d: Uint8ClampedArray, w: number, h: number, png = false): ContentReading {
   const counts = new Map<number, number>();
   let n = 0;
   for (let i = 0; i < w * h; i++) {
@@ -29,27 +34,32 @@ export function readContent(d: Uint8ClampedArray, w: number, h: number): Content
     n++;
   }
   const sorted = [...counts.values()].sort((a, b) => b - a);
-  const top16 = n ? sorted.slice(0, 16).reduce((a, b) => a + b, 0) / n : 0;
+  const top16 = n ? sorted.slice(0, 16).reduce((a, b) => a + b, 0) / n : 1;
   let blocks = 0, flatBlocks = 0;
   for (let by = 0; by + 4 <= h; by += 4) for (let bx = 0; bx + 4 <= w; bx += 4) {
-    let lo = [255, 255, 255], hi = [0, 0, 0];
+    const lo = [255, 255, 255], hi = [0, 0, 0];
     for (let y = by; y < by + 4; y++) for (let x = bx; x < bx + 4; x++) for (let c = 0; c < 3; c++) { const v = d[(y * w + x) * 4 + c]; if (v < lo[c]) lo[c] = v; if (v > hi[c]) hi[c] = v; }
     blocks++;
     if (hi[0] - lo[0] <= 6 && hi[1] - lo[1] <= 6 && hi[2] - lo[2] <= 6) flatBlocks++;
   }
-  const flat = blocks ? flatBlocks / blocks : 0;
-  let edgePx = 0;
+  const flat = blocks ? flatBlocks / blocks : 1;
+  let edgePx = 0, grainPx = 0;
   for (let y = 0; y < h - 1; y++) for (let x = 0; x < w - 1; x++) {
     const i = (y * w + x) * 4;
-    if (Math.abs(lum(d, i) - lum(d, i + 4)) > 40 || Math.abs(lum(d, i) - lum(d, i + w * 4)) > 40) edgePx++;
+    const dx = Math.abs(lum(d, i) - lum(d, i + 4)), dy = Math.abs(lum(d, i) - lum(d, i + w * 4));
+    if (dx > 40 || dy > 40) edgePx++;
+    if ((dx >= 1 && dx <= 12) || (dy >= 1 && dy <= 12)) grainPx++;
   }
-  const edges = edgePx / Math.max(1, (w - 1) * (h - 1));
-  const content: PictureContent = top16 > SCREENSHOT_TOP16 || (flat >= SCREENSHOT_FLAT && edges >= SCREENSHOT_EDGES) ? 'screenshot' : 'photo';
-  return { content, top16: Math.round(top16 * 1000) / 1000, flat: Math.round(flat * 1000) / 1000, edges: Math.round(edges * 1000) / 1000, buckets: counts.size };
+  const pairs = Math.max(1, (w - 1) * (h - 1));
+  const edges = edgePx / pairs, grain = grainPx / pairs;
+  const lim = png ? PHOTO_LIMITS_PNG : PHOTO_LIMITS;
+  const clearlyPhoto = top16 < lim.top16 && flat < lim.flat && counts.size >= lim.buckets && grain >= lim.grain;
+  const r3 = (v: number) => Math.round(v * 1000) / 1000;
+  return { content: clearlyPhoto ? 'photo' : 'screenshot', top16: r3(top16), flat: r3(flat), edges: r3(edges), buckets: counts.size, grain: r3(grain) };
 }
 
-/** Reads a picture (any image source the canvas can draw) at 160 px and classifies it. */
-export function readContentOf(src: CanvasImageSource & { width?: number; height?: number }, width: number, height: number): ContentReading {
+/** Reads a picture (any image source the canvas can draw) at 160 px and classifies it. Unreadable: a screenshot. */
+export function readContentOf(src: CanvasImageSource & { width?: number; height?: number }, width: number, height: number, png = false): ContentReading {
   const k = Math.min(1, 160 / Math.max(width, height));
   const w = Math.max(8, Math.round(width * k)), h = Math.max(8, Math.round(height * k));
   const c = document.createElement('canvas');
@@ -58,5 +68,5 @@ export function readContentOf(src: CanvasImageSource & { width?: number; height?
   const g = c.getContext('2d', { willReadFrequently: true })!;
   g.imageSmoothingEnabled = true;
   g.drawImage(src, 0, 0, w, h);
-  return readContent(g.getImageData(0, 0, w, h).data, w, h);
+  return readContent(g.getImageData(0, 0, w, h).data, w, h, png);
 }

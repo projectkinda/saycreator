@@ -6,7 +6,7 @@ import type { Look } from './designed';
 import type { SlideSpec } from './designLibrary';
 import { layoutOptionsFor, flat } from './layoutMap';
 import { pinnedPicture, placeImages, usedIds, withoutImages } from './imagePlace';
-import { HERO_BAND_H, IMAGE_LAYOUT_IDS, PANEL_H, PANEL_W, fittingPictures, hasEnoughPictures, imagesNeeded, isScreenshot, shapeOf, type PicInfo } from './layouts/images';
+import { HERO_BAND_H, IMAGE_LAYOUT_IDS, TEXT_OVER_PICTURE, PANEL_H, PANEL_W, fittingPictures, hasEnoughPictures, imagesNeeded, isScreenshot, shapeOf, type PicInfo } from './layouts/images';
 import type { Fields } from './layouts';
 
 export interface PictureSwap {
@@ -188,4 +188,56 @@ export function heroPass(specs0: SlideSpec[], look: Look): { specs: SlideSpec[];
     }
   }
   return { specs, swaps, hero: null };
+}
+
+// ----- Round 15: a screenshot is never under text. The code (not the writer) moves such a slide to a layout that shows the screenshot whole, keeping every word. -----
+/** A picture this narrow (width / height) fits the phone. */
+export const PHONE_ASPECT = 0.62;
+/**
+ * A slide in a layout that puts text OVER its picture (title-over-photo) gets no picture when only screenshots are left for it (imagePlace never puts a screenshot there). Rather than
+ * leave a screenshot unused, the slide moves to a layout that shows it whole, with the same words: a tall screenshot (0.62 wide or narrower) to the phone (when the deck has no phone slide yet),
+ * a wide or square one to a hero band (headline-body-image, "picture above") or a full photo with a caption panel. The cover is the exception: it never takes a screenshot, so a cover
+ * in such a layout becomes a plain text cover. Every move is logged as a swap with the reason "screenshot never goes under text".
+ */
+export function screenshotPass(specs0: SlideSpec[], look: Look): { specs: SlideSpec[]; swaps: PictureSwap[] } {
+  const imgs = (look.images ?? []) as PicInfo[];
+  let specs = specs0.map((s) => ({ ...s }));
+  const swaps: PictureSwap[] = [];
+  if (!imgs.some(isScreenshot)) return { specs, swaps };
+  const WHY = 'screenshot never goes under text';
+  for (let guard = 0; guard < 8; guard++) {
+    const placed = placeImages(specs, specs.map(() => 0 as 0 | 1), imgs);
+    const usedNow = new Set(placed.flatMap((s) => usedIds(s.fields)));
+    const unusedShots = imgs.filter((p) => isScreenshot(p) && !usedNow.has(p.id));
+    const i = !unusedShots.length ? -1 : specs.findIndex((sp, k) => !pinnedPicture(sp) && TEXT_OVER_PICTURE.includes(sp.layout) && !usedIds(placed[k].fields).length);
+    if (i < 0) break;
+    const sp = specs[i];
+    const base = { ...sp, fields: withoutImages(sp.fields) };
+    const move = (to: string, variant?: 0 | 1, why = WHY): boolean => {
+      const fields = fieldsFor(base, to, { ...look, images: unusedShots });
+      if (!fields || !keepsText(base.fields, fields)) return false;
+      swaps.push({ slide: i + 1, from: sp.layout, to, why });
+      specs = specs.map((s, k) => (k === i ? { ...s, layout: to, fields, accents: s.accents, density: undefined, variant: undefined, ...(variant !== undefined ? { pin: { ...s.pin, variant } } : {}) } as SlideSpec : s));
+      return true;
+    };
+    const neighbourOk = (to: string) => specs[i - 1]?.layout !== to && specs[i + 1]?.layout !== to && specs.filter((q) => q.layout === to).length < 2;
+    let done = false;
+    if (i > 0 && unusedShots.length) {
+      const hasPhone = specs.some((s, k) => k !== i && s.layout === 'phone-frame');
+      const tall = unusedShots.find((p) => p.width / p.height <= PHONE_ASPECT);
+      const flat = unusedShots.find((p) => p.width / p.height > PHONE_ASPECT);
+      const order: [string, 0 | 1 | undefined][] = tall && !hasPhone ? [['phone-frame', undefined]] : flat ? [['headline-body-image', 1], ['photo-cover', 1], ['photo-full-caption', undefined], ['split-half', undefined], ['art-side-text', undefined], ['cover-art', undefined]] : tall ? [['split-half', undefined]] : [];
+      for (const [to, v] of order) {
+        const pool = to === 'phone-frame' ? [tall!] : flat ? [flat] : unusedShots;
+        if (!neighbourOk(to) || !hasEnoughPictures(to, pool)) continue;
+        if (move(to, v)) { done = true; break; }
+      }
+    }
+    if (!done) {
+      // no screenshot to give (or none fits): a plain text slide with the same words; the cover always ends here
+      const why = i === 0 ? 'screenshot never goes under text or on the cover' : 'no picture left that may go under text';
+      if (!['statement', 'split-text', 'lead-statement'].some((to) => move(to, undefined, why))) break;
+    }
+  }
+  return { specs, swaps };
 }

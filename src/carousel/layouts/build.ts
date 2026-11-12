@@ -19,7 +19,7 @@ import { CUT_RATIO, RAKE, coloursFor, geometry, type Geometry, type Roles } from
 import { contrast, esc, setWeights } from './draw';
 import { cutsOf, layoutDef, withAccent } from './library';
 import { validateSlideContent } from './pick';
-import { textFitProblems } from './textFits';
+import { textFitProblems, tightenBox } from './textFits';
 import type { Cut, Cx, Fields, Gradient, LayoutStyle, Plan, PlaneTone, PlanImage, Slot } from './types';
 
 export interface BuildOpts {
@@ -338,6 +338,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   }
   const r = packSlide(pack, plan.type, slide, o.handle);
   if (!r.faithful) return fail(['the drawing could not be made: ' + r.notes.join(' ')]);
+  r.layers = r.layers.map((l) => tightenBox(l as never) as never) as typeof r.layers; // a box past the margin that the words do not need is cut back (see tightenBox)
   // A stacked headline + body: when their REAL heights (marker padding, a word too wide) differ from the estimate, stack them again with the real ones.
   if (plan.stack && stackEst && !o.stackReal) {
     const t3 = r.layers.find((l) => l.kind === 'text' && l.name === 'title');

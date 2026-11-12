@@ -14,6 +14,7 @@ import { contrast } from './layouts/draw';
 import { sourceBrands } from './layouts/build';
 import { isCoverLayout } from './layouts/coverIds';
 import { withoutSwitches } from '../reference/deco';
+import { faithfulChecks } from '../reference/faithfulChecks';
 import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
@@ -22,7 +23,7 @@ import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImag
 import { pictureUseOf, placeImages } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { settleScrim } from './scrim';
-import { heroPass, picturePass, separatePictureRuns, type PictureSwap } from './picturePass';
+import { heroPass, picturePass, screenshotPass, separatePictureRuns, type PictureSwap } from './picturePass';
 import { TONES } from './writerPrompt';
 import { inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
 
@@ -822,6 +823,36 @@ export function dropForeignAccents(specs: SlideSpec[]): { specs: SlideSpec[]; no
   });
   return { specs: out, notes };
 }
+const ACCENT_STOP = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'of', 'to', 'in', 'on', 'at', 'by', 'for', 'with', 'as', 'is', 'are', 'was', 'be', 'it', 'its', "it's", 'that', 'this', 'these', 'those', 'i', 'you', 'we', 'they', 'he', 'she', 'me', 'my', 'your', 'our', 'not', 'so', 'if', 'then', 'than', "here's", "there's", "that's", "what's", "let's", "i'll", "i'm", "i've", "i'd", "you'll", "you're", "you've", "we'll", "we're", "they're", "don't", "doesn't", "can't", "won't", "isn't", 'here', 'there']);
+const stopKey = (w: string) => w.toLowerCase().replace(/[\u2019`]/g, "'").replace(/^[^\p{L}\p{N}']+|[^\p{L}\p{N}']+$/gu, '');
+/**
+ * An accent that is a lone stop-word or contraction ("Here's", "the", "I'll") highlights nothing: it is replaced by the last one or two non-stop words of the slide's headline, as the span of the
+ * headline from the first of them to the last ("Here's how it works" -> "how it works"; the usual clamp then applies). A headline with no such words loses the accent. Never a word the headline does not have.
+ * The second value says what changed, for the report (codeAdjustments).
+ */
+export function fixStopAccents(specs: SlideSpec[]): { specs: SlideSpec[]; notes: string[] } {
+  const notes: string[] = [];
+  const out = specs.map((sp, i) => {
+    if (!sp.accents.length) return sp;
+    const hk = HIGHLIGHT_HEAD.find((k) => typeof sp.fields[k] === 'string' && String(sp.fields[k]).trim());
+    const head = hk ? String(sp.fields[hk]).trim() : '';
+    let changed = false;
+    const next: string[] = [];
+    for (const a of sp.accents) {
+      const ws = a.trim().split(/\s+/).filter(Boolean);
+      if (ws.length !== 1 || !ACCENT_STOP.has(stopKey(ws[0]))) { next.push(a); continue; }
+      const hw = head.split(/\s+/).filter(Boolean);
+      const idx = hw.map((w, k) => (ACCENT_STOP.has(stopKey(w)) || !stopKey(w) ? -1 : k)).filter((k) => k >= 0);
+      changed = true;
+      if (!idx.length) { notes.push(`slide ${i + 1}: accent "${a}" is a stop-word and the headline has no other word, so it is not drawn`); continue; }
+      const span = hw.slice(idx[Math.max(0, idx.length - 2)], idx[idx.length - 1] + 1).join(' ').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+      notes.push(`slide ${i + 1}: accent "${a}" is a stop-word, so the accent is "${span}" (the last words of the headline)`);
+      next.push(span);
+    }
+    return changed ? { ...sp, accents: [...new Set(next)] } : sp;
+  });
+  return { specs: out, notes };
+}
 export function clampAccents(specs: SlideSpec[]): { specs: SlideSpec[]; trims: Trim[] } {
   const trims: Trim[] = [];
   const out = specs.map((s, i) => {
@@ -1055,6 +1086,8 @@ export interface LibraryReport {
   flavour?: { swaps: FlavourSwap[]; kept: FlavourKept[] };
   /** Slides changed to a picture layout because pictures were left unused (slide, from, to, why). */
   pictureSwaps?: PictureSwap[];
+  /** Round 15: slides that failed one of the phone checks when drawn and were drawn again by the code (never a model call): what failed, and what the slide is now. */
+  repairs?: { slide: number; from: string; to: string; failed: string[]; result: 'repaired' | 'not repaired' }[];
   /** The project's pictures and what became of them in the final deck (Round 13). */
   pictureUse?: { uploaded: number; used: number; unused: string[]; whyUnused: string };
   /** What the deck was drawn from: a built-in preset's name, or 'reference' (the active reference style). The style toggles redraw it only for the same source. */
@@ -1248,6 +1281,10 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     const fa = dropForeignAccents(specs);
     specs = fa.specs;
     accentNotes.push(...fa.notes);
+    // an accent that is a lone stop-word or contraction ("Here's") moves to the last words of the headline
+    const sa = fixStopAccents(specs);
+    specs = sa.specs;
+    accentNotes.push(...sa.notes);
     // a highlight is 1 or 2 words (3 on a long headline), never half the headline
     const ca = clampAccents(specs);
     specs = ca.specs;
@@ -1272,9 +1309,13 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   // pictures the writer left unused get a slide (a deterministic swap to a picture layout of the slide's own meaning, no text lost)
   let pictureSwaps: PictureSwap[] = [];
   if (look.images?.length) {
+    // a screenshot is never under text: the slides the writer put in such a layout move to one that shows it whole (same words)
+    const ss = screenshotPass(specs, look);
+    specs = ss.specs;
+    pictureSwaps = [...ss.swaps];
     const pp = picturePass(specs, look);
     specs = pp.specs;
-    pictureSwaps = pp.swaps;
+    pictureSwaps.push(...pp.swaps);
     // never the same picture layout twice in a row; and a hero: one picture over more than half of the slide
     const sr = separatePictureRuns(specs, look);
     specs = sr.specs;
@@ -1425,6 +1466,37 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     fallbacks.push({ slide: i + 1, layout: specs[i].layout, level, reason });
     if (done) drawn.set(i, done);
   }
+  // Round 15: the phone checks the person sees (size, edges, words, overlap, contrast) are run on every drawn slide. A slide that fails one is drawn again by the code in another layout that shows
+  // every word (never a cut word, never a model call) and the change is logged as a repair; a slide no layout can repair stays as it is and is reported as "not repaired", never silently.
+  const repairs: NonNullable<LibraryReport['repairs']> = [];
+  const phoneFailures = (d: Drawn | undefined, sp: SlideSpec): string[] => {
+    if (!d?.built) return [];
+    const type = String(scriptSlideOf(sp.layout, sp.fields).type ?? 'content');
+    return faithfulChecks(d.built.layers as never, { canvas: { w: 1080, h: 1350 }, bg: d.built.fieldBg ?? style.palette.bg, k: 1, slideType: type, prose: /data-layout="prose"/.test(d.built.svg) }).filter((q) => !q.pass).map((q) => q.id + ': ' + q.reason);
+  };
+  if (!own) {
+    for (let i = 0; i < specs.length; i++) {
+      const failed = phoneFailures(drawn.get(i), specs[i]);
+      if (!failed.length) continue;
+      const sp = specs[i];
+      let fixed: { d: Drawn; spec: SlideSpec } | null = null;
+      for (const opt of layoutOptionsFor(sp, look)) {
+        if (opt.current || opt.dropped.length || opt.droppedCore.length) continue;
+        if (IMAGE_LAYOUT_IDS.includes(opt.layout as never) && !look.images?.length) continue;
+        for (const v of [rot.variants[i], (1 - rot.variants[i]) as 0 | 1]) {
+          const spec2 = { ...sp, layout: opt.layout, fields: opt.fields, density: undefined } as SlideSpec;
+          const d = await drawOne(spec2, v, style, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
+          if (d.built && !d.problems.length && !phoneFailures(d, spec2).length) { fixed = { d, spec: spec2 }; break; }
+        }
+        if (fixed) break;
+      }
+      if (fixed) {
+        specs = specs.map((x, k) => (k === i ? fixed!.spec : x));
+        drawn.set(i, fixed.d);
+        repairs.push({ slide: i + 1, from: sp.layout, to: fixed.spec.layout, failed, result: 'repaired' });
+      } else repairs.push({ slide: i + 1, from: sp.layout, to: sp.layout, failed, result: 'not repaired' });
+    }
+  }
   for (const d of drawn.values()) adjustments.push(...d.adjustments);
   // the script (the app's own slide types) the editor, the exports and the report use; the slides are drawn from the library
   const raw = { title: parsed.title || 'Carousel', brand: { handle }, slides: specs.map((s) => scriptSlideOf(s.layout, s.fields)) };
@@ -1469,6 +1541,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     grounds: rot.cuts.map((c) => c.ground ?? null),
     ...(fp ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : {}),
     ...(pictureSwaps.length ? { pictureSwaps } : {}),
+    ...(repairs.length ? { repairs } : {}),
     ...(pictureUse ? { pictureUse } : {}),
     ...(own?.marks?.some(Boolean) ? { ownMarks: own.marks } : {}),
     ...(tr.trims.length ? { trims: tr.trims } : {}),
@@ -1477,6 +1550,8 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   designed.library = report;
   report.codeAdjustments.unshift(...tr.trims.map(trimNote));
   designed.notes.push(...pictureSwaps.map((w) => `Pictures: slide ${w.slide} ${w.from} -> ${w.to} (${w.why})`));
+  report.codeAdjustments.push(...repairs.map((r) => `slide ${r.slide}: ${r.from}${r.result === 'repaired' ? ' -> ' + r.to : ''} (${r.result}: ${r.failed.join('; ')})`));
+  report.codeAdjustments.push(...pictureSwaps.filter((w) => w.why.startsWith('screenshot never') || w.why.startsWith('no picture left')).map((w) => `slide ${w.slide}: ${w.from} -> ${w.to} (${w.why})`));
   if (fp) designed.notes.push(...fp.swaps.map((w) => `Flavour: slide ${w.slide} ${w.from} -> ${w.to} (${w.why})${w.droppedOptional.length ? '; leaves out ' + w.droppedOptional.map((t) => '"' + t.slice(0, 24) + '"').join(', ') : ''}.`));
   designed.notes.push(...retries.map((r) => `Retry for slide ${r.slide}: ${r.reasons.join('; ')}`), ...fallbacks.map((f) => `Slide ${f.slide} fell back to a ${f.level}: ${f.reason}`), ...adjustments);
   return { script, style: null, note: parsed.note, attempts: calls > 1 ? 2 : 1, ms, warnings: v.warnings, provider: p.id, designed };

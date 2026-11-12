@@ -82,7 +82,9 @@ export function placeImages<T extends PlaceableSpec>(specs: T[], variants: (0 | 
   // slide order, as before; only the slides the code upgraded to a picture layout (pictureUpgrade) come last
   // (the layouts the writer chose come before the slides the code upgraded to a picture layout)
   const up = (i: number) => ((specs[i] as { pictureUpgrade?: boolean }).pictureUpgrade ? 1 : 0);
-  const order = specs.map((_, i) => i).sort((a, b) => up(a) - up(b) || a - b);
+  // the phone comes first: a tall picture goes to a phone-frame slide before another slide can take it (a phone never stays empty while a tall picture is free)
+  const ph = (i: number) => (specs[i].layout === 'phone-frame' ? 0 : 1);
+  const order = specs.map((_, i) => i).sort((a, b) => ph(a) - ph(b) || up(a) - up(b) || a - b);
   for (const i of order) {
     const sp = specs[i];
     if (pinnedPicture(sp)) continue; // the person's choice stays exactly as it is
