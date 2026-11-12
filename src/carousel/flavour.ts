@@ -10,7 +10,7 @@ import type { LayoutId, LayoutStyle } from './layouts';
 import { layoutDef, validateSlideContent } from './layouts';
 import type { SlideSpec } from './designLibrary';
 import { accentsIn, flat, layoutOptionsFor, toCanon } from './layoutMap';
-import { IMAGE_LAYOUT_IDS, hasEnoughPictures } from './layouts/images';
+import { IMAGE_LAYOUT_IDS, hasEnoughPictures, isScreenshot } from './layouts/images';
 import { COVER_FORMS, isCoverLayout } from './layouts/coverIds';
 import { wordCoverFits } from './layouts/covers';
 
@@ -157,7 +157,9 @@ export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look,
     // the cover family: the style lists the covers it allows; the deck takes one of them by a stable rule (its key and the style name), a picture cover too when the person added pictures
     const cl0 = style.coverLayouts;
     const avoidC = new Set<string>((cl0.avoid ?? []) as string[]);
-    const pool = [...(cl0.layouts as string[]), ...(look.images?.length ? ['photo-cover', 'cover-art', 'title-over-photo', 'photo-full-caption'].filter((p) => hasEnoughPictures(p, look.images!)) : [])].filter((l, i, a) => !avoidC.has(l) && a.indexOf(l) === i);
+    // (a screenshot is never a cover, and a cover the person pinned keeps its picture choice: only photos count for a picture cover)
+    const coverPics = specs[0].pin?.picture !== undefined ? [] : (look.images ?? []).filter((q) => !isScreenshot(q));
+    const pool = [...(cl0.layouts as string[]), ...(coverPics.length ? ['photo-cover', 'cover-art', 'title-over-photo', 'photo-full-caption'].filter((p) => hasEnoughPictures(p, coverPics)) : [])].filter((l, i, a) => !avoidC.has(l) && a.indexOf(l) === i);
     const h = stableHash(deckKey || coverKeyOf('', specs, name));
     // the covers that can take this headline (a word cover needs three words and no other text, a stacked one two to four words ...): the choice is among them, so a deck is never moved to a cover that cannot show it
     // (the word cover sets the LAST word huge and highlights it: a headline whose highlight is another word is not given that cover)

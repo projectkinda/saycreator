@@ -59,7 +59,7 @@ const TABS: { id: EditTab; label: string }[] = [
 ];
 
 /** The editor of ONE slide, as four tabs: Layout | Text | Pictures | Fine-tune. There is no second preview here: the big preview and the thumbnail strip stay on the left. */
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, ownNote, onSplit, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, pickerBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, ownNote, onSplit, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -89,6 +89,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   onTextCommit?: OnTextCommit;
   /** The unused-pictures tray (library decks). */
   unusedBox?: React.ReactNode;
+  /** The Picture control of this slide: Auto / None / the pictures (library decks with pictures). */
+  pickerBox?: React.ReactNode;
   /** The Detected style toggles for the whole deck. */
   fineTuneBox?: React.ReactNode;
   tab: EditTab;
@@ -274,6 +276,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
         {ownNote && <p className={`small ${ownNote.kind === 'warn' ? 'cr-warn' : 'muted'}`} role="status" data-testid="own-note">{ownNote.kind === 'warn' && <span aria-hidden="true">⚠ </span>}{ownNote.text}</p>}
         {view?.error && <p className="small cr-problem" role="alert">{view.error}</p>}
       </div>
+      {pickerBox}
       <div className="cr-tabs" role="tablist" aria-label={`Edit slide ${index + 1}`}>
         {TABS.map((t) => (
           <button key={t.id} type="button" role="tab" id={`cr-tab-${t.id}`} className="cr-tab" aria-selected={tab === t.id} aria-controls="cr-tabpanel" tabIndex={tab === t.id ? 0 : -1} data-testid={`tab-${t.id}`} onClick={() => onTab(t.id)}

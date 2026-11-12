@@ -108,7 +108,7 @@ export interface Look {
   /** The person has a photo of their own to put in the slides. Without one, no slide uses the photo-led layout and no empty picture frame is drawn. */
   hasPhoto?: boolean;
   /** The project's pictures as metadata only (id, pixel size): no pixels. The layouts with picture slots are offered only when enough of them fit; the code places them. */
-  images?: { id: string; width: number; height: number }[];
+  images?: { id: string; width: number; height: number; content?: 'screenshot' | 'photo' }[];
   /** The website set in the profile / brand settings (shown in the footer; none set: no website line). */
   site?: string;
   /** A sample deck (the style cards, the Preview, the Pick-for-me picture): the cover is the style's signature cover, not the one its hash would pick. */

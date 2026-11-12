@@ -18,8 +18,8 @@ import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
 import { layoutOptionsFor } from './layoutMap';
-import { IMAGE_LAYOUT_IDS, shapeOfAspect, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
-import { placeImages, usedIds as usedPictureIds } from './imagePlace';
+import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
+import { pictureUseOf, placeImages } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { settleScrim } from './scrim';
 import { heroPass, picturePass, separatePictureRuns, type PictureSwap } from './picturePass';
@@ -359,12 +359,13 @@ const NEW_PICTURE_NOTES: [string, string][] = [
   ['phone-frame', '1 tall or portrait screenshot in a phone outline'],
 ];
 /** The writer's picture rules: metadata only (id, orientation, shape, pixel size), never pixels. */
-export function imageRules(images: { id: string; width: number; height: number }[], slides = 7): string[] {
+export function imageRules(images: { id: string; width: number; height: number; content?: 'screenshot' | 'photo' }[], slides = 7): string[] {
   const ratio = (p: { width: number; height: number }) => (p.width >= p.height ? `${(p.width / p.height).toFixed(2)}:1` : `1:${(p.height / p.width).toFixed(2)}`);
-  const list = images.map((p, i) => `image ${i + 1}: ${picOrientation(p)}, ${ratio(p)}, ${p.width}x${p.height} px`);
+  const list = images.map((p, i) => `image ${i + 1}: ${picOrientation(p)}, ${ratio(p)}, ${p.width}x${p.height} px${p.content === 'screenshot' ? ', SCREENSHOT' : ''}`);
   const nl = (IMAGE_LAYOUT_IDS as readonly string[]).filter((id) => hasEnoughPictures(id, images));
   return [
     `- Pictures available (metadata only, you never see them and never write a picture field): ${list.join('; ')}.`,
+    ...(images.some((p) => p.content === 'screenshot') ? ['- A picture marked SCREENSHOT never goes under text: never "title-over-photo", and it is never the cover of the deck. Use it in "phone-frame" (a tall one), "split-half", "photo-full-caption", "twin-photos", "photo-grid" or beside the text of a card.'] : []),
     `- PICTURE SLIDES: use at least ${Math.max(1, Math.min(images.length, Math.floor(slides / 2)))} picture slide${Math.max(1, Math.min(images.length, Math.floor(slides / 2))) === 1 ? '' : 's'} (the smaller of the number of pictures and half the slides), a DIFFERENT picture layout each time, never the same one on two slides in a row. Match the picture's shape: a portrait or tall picture (a phone screenshot) takes a split layout ("headline-body-image", "photo-cover", "art-side-text" or "cover-art" set it beside the text); a landscape or wide picture takes a full-width layout ("photo-cover", "headline-body-image" or the wide "cover-art"); a square picture takes "cover-art" (a circle) or a card layout. If there are no more pictures than slides, use every picture exactly once.`,
     `- Picture layouts for these pictures (the code places them; you see only counts and shapes): ${NEW_PICTURE_NOTES.filter(([id]) => nl.includes(id)).map(([id, note]) => `"${id}" (${note})`).join('; ')}. Use them where they suit the slide, a different one each time.`,
     '- Pictures were supplied: USE THEM. Choose a picture layout for at least one slide for every group of pictures that fits one (a single picture can head a text slide or the cover, two can be a comparison, three or more can be a row or thumbnails); a deck that ignores the pictures is wrong. The code places them.',
@@ -497,7 +498,7 @@ export interface SlideSpec {
   /** A slide of the person's own script whose text is longer than the layout can show: its words are kept exactly as written and the code never trims them (it is drawn with the style's template until the text is shortened). */
   keepAsWritten?: boolean;
   /** What the person chose for this slide in the layout picker: the deck rotation and the style toggles keep it. */
-  pin?: { variant?: 0 | 1; cut?: Cut; invert?: false | 'full' | 'tint' };
+  pin?: { variant?: 0 | 1; cut?: Cut; invert?: false | 'full' | 'tint'; /** The picture picker: "none", or the id of the picture the person chose (their choice is never moved or removed). */ picture?: string; /** The slide as the deck's own placement made it, kept while a picture is pinned so "Auto" can bring it back. */ auto?: { layout: string; fields: Fields; accents: string[] } };
   /** A text slide the code turned into a picture layout because a picture was left unused: the pictures the writer's own picture layouts need are placed first. */
   pictureUpgrade?: boolean;
 }
@@ -924,6 +925,7 @@ export function slideProblems(s: SlideSpec, look: Look, ctx?: CtaCtx): string[] 
   const id = s.layout;
   if (!layoutDef(id)) return [`"${s.layout}" is not a layout (use one of: ${LAYOUT_IDS.join(', ')}).`];
   if (id === 'photo-led' && !look.hasPhoto) return ['photo-led is only for the person\'s own photo and there is none: choose another layout.'];
+  if (id === 'photo-led' && look.images?.length && look.images.every((p) => p.content === 'screenshot')) return ['photo-led is for the person\'s own photo and every picture is a screenshot (a screenshot never goes under text): choose another layout.'];
   return [...validateSlideContent(id, fieldsOf(s)).errors, ...buttonProblems(s, ctx)];
 }
 /**
@@ -1443,20 +1445,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   });
   const seconds = Math.round((performance.now() - t0) / 100) / 10;
   // the pictures of the project and what became of them in the FINAL deck
-  const allPics = (look.images ?? []) as { id: string; width: number; height: number }[];
-  const usedNow = new Set(specs.flatMap((sp) => usedPictureIds(sp.fields)));
-  const leftOver = allPics.filter((p) => !usedNow.has(p.id));
-  const pictureUse: LibraryReport['pictureUse'] = allPics.length
-    ? {
-        uploaded: allPics.length,
-        used: allPics.length - leftOver.length,
-        unused: leftOver.map((p) => p.id),
-        whyUnused: leftOver.length
-          ? 'No slide could take ' + (leftOver.length === 1 ? 'it' : 'them') + ' without losing words or breaking a layout rule (a picture layout is not used on two slides in a row or on more than two slides, a layout takes only the picture shapes its slot accepts: a phone only a screenshot 0.62 wide or narrower). ' +
-          leftOver.map((p) => p.id + ': ' + p.width + 'x' + p.height + ' (' + shapeOfAspect(p.width / p.height) + ')').join('; ') + '.'
-          : '',
-      }
-    : undefined;
+  const pictureUse: LibraryReport['pictureUse'] = look.images?.length ? pictureUseOf(specs, look.images) : undefined;
   const report: LibraryReport = {
     route: 'library',
     drawVersion: DRAW_VERSION,

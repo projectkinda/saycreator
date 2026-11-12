@@ -260,3 +260,12 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
 .cr-textmode legend { padding: 0 6px; }
 .cr-textmode .cr-mode { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; cursor: pointer; }
 .cr-textmode .cr-mode input { margin-top: 4px; flex: none; }
+
+/* The per-slide picture picker: Auto, None and the thumbnails in one row that scrolls sideways inside its box (never wider than the card, also at 390 px) */
+.cr-pick { min-width: 0; max-width: 100%; }
+.cr-pick-row { display: flex; align-items: center; gap: 8px; overflow-x: auto; max-width: 100%; padding: 2px 2px 6px; }
+.cr-pick-row .chip-btn { flex: none; }
+.cr-pick-thumb { flex: none; width: 56px; height: 56px; padding: 0; border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: var(--surface, #eee); cursor: pointer; }
+.cr-pick-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cr-pick-thumb[aria-pressed="true"] { border-color: var(--ink, #111); }
+.cr-chip-row { display: flex; gap: 8px; align-items: center; }

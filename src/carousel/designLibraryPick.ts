@@ -23,6 +23,8 @@ export interface PickChoice {
   variant?: 0 | 1;
   cut?: Cut;
   invert?: false | 'full' | 'tint';
+  /** Changes to the slide's pin (the picture picker: the pinned picture and the slide as the deck made it). A key set to undefined is removed. */
+  pin?: Partial<NonNullable<SlideSpec['pin']>>;
 }
 export interface PickTile {
   kind: 'layout' | 'cut' | 'variant' | 'invert';
@@ -159,9 +161,12 @@ export async function redrawLibrarySlide(lib: LibraryReport, look: Look, handle:
   let accents = cur.accents;
   if (layout !== cur.layout) {
     const opt = layoutOptions(cur, look).find((o) => o.layout === layout);
-    if (!opt) return { ok: false, reasons: [`The text of slide ${i + 1} cannot be moved to "${layout}" without making text up.`] };
-    fields = opt.fields;
-    accents = accentsIn(cur.accents, fields);
+    // (a caller that hands over the fields itself, like the picture picker, has already kept every word)
+    if (!opt && !ch.fields) return { ok: false, reasons: [`The text of slide ${i + 1} cannot be moved to "${layout}" without making text up.`] };
+    if (opt) {
+      fields = opt.fields;
+      accents = accentsIn(cur.accents, fields);
+    }
   }
   if (ch.fields) {
     fields = ch.fields;
@@ -184,7 +189,10 @@ export async function redrawLibrarySlide(lib: LibraryReport, look: Look, handle:
   if (problems.length) return { ok: false, reasons: problems };
   const d = await drawOne(spec, variant, style, { handle, index: i, total: lib.plan.specs.length, cut, invert, density, ...(lib.grounds?.[i] != null ? { ground: lib.grounds[i]! } : {}) });
   if (!d.built) return { ok: false, reasons: d.problems };
-  const pinned: SlideSpec = { ...spec, pin: { variant, cut: d.cut, invert: d.invert ? invert || 'full' : false } };
+  // (a picture the person pinned stays pinned through any later redraw of the slide: the pin is merged, never replaced)
+  const pinObj = { ...cur.pin, ...ch.pin, variant, cut: d.cut, invert: d.invert ? invert || 'full' : false } as NonNullable<SlideSpec['pin']>;
+  for (const k of Object.keys(pinObj) as (keyof typeof pinObj)[]) if (pinObj[k] === undefined) delete pinObj[k];
+  const pinned: SlideSpec = { ...spec, pin: pinObj };
   const specs = lib.plan.specs.map((s, k) => (k === i ? pinned : s));
   const arr = <T,>(a: T[], v: T) => a.map((x, k) => (k === i ? v : x));
   const library: LibraryReport = {

@@ -5,8 +5,8 @@
 import type { Look } from './designed';
 import type { SlideSpec } from './designLibrary';
 import { layoutOptionsFor, flat } from './layoutMap';
-import { placeImages, usedIds, withoutImages } from './imagePlace';
-import { HERO_BAND_H, IMAGE_LAYOUT_IDS, PANEL_H, PANEL_W, fittingPictures, hasEnoughPictures, imagesNeeded, shapeOf, type PicInfo } from './layouts/images';
+import { pinnedPicture, placeImages, usedIds, withoutImages } from './imagePlace';
+import { HERO_BAND_H, IMAGE_LAYOUT_IDS, PANEL_H, PANEL_W, fittingPictures, hasEnoughPictures, imagesNeeded, isScreenshot, shapeOf, type PicInfo } from './layouts/images';
 import type { Fields } from './layouts';
 
 export interface PictureSwap {
@@ -36,7 +36,7 @@ export function targetsFor(layout: string, index: number): string[] {
 const changeRank = (layout: string): number => (TEXT_SLIDES.includes(layout) || COVERS.includes(layout) ? 0 : LISTS.includes(layout) || layout === 'quote' || layout === 'comparison' ? 1 : 2);
 const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
 /** Every word of the old slide's text is in the new fields. */
-const keepsText = (oldF: Fields, newF: Fields) => {
+export const keepsText = (oldF: Fields, newF: Fields) => {
   const have = new Set(flat(newF).flatMap(norm));
   return flat(oldF).flatMap(norm).every((w) => have.has(w));
 };
@@ -54,7 +54,7 @@ function comparisonToDoDont(f: Fields): Fields | null {
   return { title, wrong, right };
 }
 
-function fieldsFor(spec: SlideSpec, target: string, look: Look): Fields | null {
+export function fieldsFor(spec: SlideSpec, target: string, look: Look): Fields | null {
   if (spec.layout === 'comparison') return target === 'do-dont' ? comparisonToDoDont(spec.fields) : null;
   const opt = layoutOptionsFor(spec, look).find((o) => o.layout === target);
   if (!opt || opt.droppedCore.length || opt.dropped.length) return null;
@@ -74,15 +74,18 @@ export function picturePass(specs0: SlideSpec[], look: Look): { specs: SlideSpec
     const look2: Look = { ...look, images: unused };
     let best: { i: number; to: string; fields: Fields; take: number; rank: number } | null = null;
     specs.forEach((sp, i) => {
+      if (pinnedPicture(sp)) return; // the person's choice (a picture or none) is never changed by this pass
+      // the cover never takes a screenshot (unless the person pinned it): its pool is the photos
+      const pool = i === 0 ? unused.filter((p) => !isScreenshot(p)) : unused;
       // a picture layout the deck does not have yet comes first (variety), then the ones it has once
       const ordered = targetsFor(sp.layout, i).map((t, k) => ({ t, k, u: specs.filter((q) => q.layout === t).length })).sort((x, y) => x.u - y.u || x.k - y.k).map((x) => x.t);
       for (const to of ordered) {
-        if (!hasEnoughPictures(to, unused)) continue;
+        if (!hasEnoughPictures(to, pool)) continue;
         // no neighbour in the same layout, no layout more than twice
         if (specs[i - 1]?.layout === to || specs[i + 1]?.layout === to || specs.filter((q) => q.layout === to).length >= 2) continue;
         const fields = fieldsFor(sp, to, look2);
         if (!fields || !keepsText(sp.fields, fields)) continue;
-        const take = Math.min(fittingPictures(to, unused), imagesNeeded(to) === 1 ? 1 : fittingPictures(to, unused));
+        const take = Math.min(fittingPictures(to, pool), imagesNeeded(to) === 1 ? 1 : fittingPictures(to, pool));
         const rank = changeRank(sp.layout);
         if (!best || take > best.take || (take === best.take && (rank < best.rank || (rank === best.rank && i < best.i)))) best = { i, to, fields, take, rank };
       }
@@ -97,7 +100,7 @@ export function picturePass(specs0: SlideSpec[], look: Look): { specs: SlideSpec
 
 // ----- the other passes: the same picture layout twice in a row, and the hero (a picture over half of the slide) -----
 /** The picture layouts a slide may take instead of its own (the same words), when two neighbours would have the same one. */
-const ALTERNATIVES: Record<string, string[]> = {
+export const ALTERNATIVES: Record<string, string[]> = {
   'headline-body-image': ['photo-cover', 'art-side-text'], 'photo-cover': ['headline-body-image', 'art-side-text'], 'art-side-text': ['headline-body-image', 'photo-cover'],
   'cover-art': ['photo-cover', 'headline-body-image', 'photo-full-caption'], 'thumb-rows': ['image-row'], 'image-row': ['thumb-rows'],
   'split-half': ['headline-body-image', 'art-side-text'], 'photo-full-caption': ['title-over-photo', 'cover-art'], 'title-over-photo': ['photo-full-caption', 'cover-art'],
@@ -114,7 +117,7 @@ export function separatePictureRuns(specs0: SlideSpec[], look: Look): { specs: S
   if (!imgs.length) return { specs, swaps };
   for (let i = 1; i < specs.length; i++) {
     const cur = specs[i].layout;
-    if (!isPictureLayout(cur) || specs[i - 1].layout !== cur) continue;
+    if (pinnedPicture(specs[i]) || !isPictureLayout(cur) || specs[i - 1].layout !== cur) continue;
     for (const to of ALTERNATIVES[cur] ?? []) {
       if (specs[i - 1].layout === to || specs[i + 1]?.layout === to || !hasEnoughPictures(to, imgs)) continue;
       const base = { ...specs[i], fields: withoutImages(specs[i].fields) };
@@ -171,6 +174,7 @@ export function heroPass(specs0: SlideSpec[], look: Look): { specs: SlideSpec[];
   }
   // a picture slide of another layout moves to a hero layout when its words fit
   for (const i of withPic) {
+    if (pinnedPicture(specs[i])) continue;
     for (const to of ['photo-cover', 'headline-body-image', 'art-side-text']) {
       if (to === specs[i].layout || specs[i - 1]?.layout === to || specs[i + 1]?.layout === to) continue;
       const base = { ...specs[i], fields: withoutImages(specs[i].fields) };

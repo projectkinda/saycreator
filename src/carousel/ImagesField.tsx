@@ -9,13 +9,15 @@ import type { AddFiles } from './PhotoControls';
 
 const LABEL = { portrait: 'Portrait', landscape: 'Landscape', square: 'Square' } as const;
 
-export function ImagesField({ pictures, addFiles, onRemove, onMove, disabled }: {
+export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, disabled }: {
   /** The project's pictures (photos only are listed here). */
   pictures: PictureMeta[];
   addFiles: AddFiles;
   onRemove: (id: string) => void;
   /** Moves a picture one place earlier (-1) or later (+1). */
   onMove: (id: string, dir: -1 | 1) => void;
+  /** Switches a picture between a screenshot and a photo. */
+  onContent?: (id: string, content: 'screenshot' | 'photo') => void;
   disabled?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -69,6 +71,7 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, disabled }: 
               <li key={p.id} className="cr-strip-item" data-testid={`image-${i}`} data-orientation={o} aria-label={`Image ${i + 1}, ${LABEL[o]}`}>
                 {urlOf(p.id) ? <img src={urlOf(p.id)!} alt="" draggable={false} /> : <span className="cr-strip-gone small">Not in storage</span>}
                 <span className="small" data-testid={`image-${i}-orientation`}>{LABEL[o]} · {p.width}×{p.height}</span>
+                <button type="button" className="chip-btn" data-testid={`image-${i}-content`} data-content={p.content === 'screenshot' ? 'screenshot' : 'photo'} aria-label={p.content === 'screenshot' ? `Image ${i + 1} is a screenshot. Switch it to a photo.` : `Image ${i + 1} is a photo. Switch it to a screenshot.`} title={p.content === 'screenshot' ? 'A screenshot never goes behind text. Click to make it a photo.' : 'Click if this is a screenshot: a screenshot never goes behind text.'} disabled={disabled || !onContent} onClick={() => onContent?.(p.id, p.content === 'screenshot' ? 'photo' : 'screenshot')}>{p.content === 'screenshot' ? 'Screenshot' : 'Photo'}</button>
                 <span className="row-actions">
                   <button type="button" className="btn btn-outline btn-sm" disabled={i === 0} onClick={() => onMove(p.id, -1)} aria-label={`Move image ${i + 1} earlier`}>←</button>
                   <button type="button" className="btn btn-outline btn-sm" disabled={i === photos.length - 1} onClick={() => onMove(p.id, 1)} aria-label={`Move image ${i + 1} later`}>→</button>

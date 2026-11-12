@@ -6,6 +6,7 @@ import { loadSaved, timingTable } from '../live/jobs';
 import { activeReference } from './active';
 import { bitmapFromUrl } from './images';
 import { layoutText } from '../image-engine/draw/text';
+import { pictureUseOf } from '../carousel/imagePlace';
 import type { TextLayer } from '../image-engine/types';
 
 export type SlideVerdict = 'good' | 'meh' | 'bad';
@@ -139,7 +140,7 @@ export async function buildReport(o: ReportOptions): Promise<{ json: string; com
     /** The text the person typed, as the writer received it. */
     sourceText: o.doc.topic ?? '',
     /** Round 13: the project's pictures and what became of them in the final deck. */
-    pictures: o.doc.designed?.library?.pictureUse ?? null,
+    pictures: o.doc.designed?.library?.plan?.specs ? pictureUseOf(o.doc.designed.library.plan.specs, (o.doc.photos ?? []).filter((p) => p.kind === 'photo').map((p) => ({ id: p.id, width: p.width, height: p.height, ...(p.content ? { content: p.content } : {}) }))) : null,
     /** Round 12: every visible word of every slide compared with the source text (measure only, nothing is changed). */
     wordingCheck: { ...wordingCheckOf(o.doc.topic ?? '', composed.slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? []))), fieldsNotInSource: o.doc.designed?.library?.plan?.specs ? fieldsNotInSourceOf(o.doc.topic ?? '', o.doc.designed.library.plan.specs as { fields: Record<string, unknown> }[]) : [] },
     routeReason: o.doc.route?.reason ?? (o.doc.designed ? 'Designed slides are present (the route was not recorded).' : 'No route was recorded for this project: the style templates are assumed to have filled the slides.'),

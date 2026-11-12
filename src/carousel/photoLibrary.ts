@@ -8,6 +8,7 @@ import { THRESHOLDS } from '../image-engine/lint/thumbnail-lint';
 import type { ObjectInput } from '../image-engine/photo/objects';
 import type { PhotoInput } from '../image-engine/photo/zones';
 import { setPictureResolver } from '../reference/faithful';
+import { readContentOf, type ContentReading, type PictureContent } from './pictureKind';
 import { deletePicture, getPicture, isQuotaError, putPicture, storageRoom, type StoredPicture } from './photoStore';
 
 /** What the project remembers about a picture (the picture itself is in the browser's storage). */
@@ -18,6 +19,8 @@ export interface PictureMeta {
   width: number;
   height: number;
   bytes: number;
+  /** A screenshot or a photo, read from its pixels when it was added (the person can switch it). Missing on an older project: a photo. */
+  content?: PictureContent;
 }
 
 export const MAX_FILE_BYTES = 60 * 1024 * 1024;
@@ -33,11 +36,22 @@ export interface Prepared {
   stored: StoredPicture;
   /** Plain notes (for example a photo that is small, or an object with no transparent parts). */
   notes: string[];
+  /** What the pixels say: a screenshot or a photo, with the numbers (a photo kind only). */
+  reading?: ContentReading;
 }
 
 const newId = () => 'p-' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3);
 
 const canvasBlob = (c: HTMLCanvasElement, type: string, q?: number) => new Promise<Blob>((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new PictureError('This browser could not make a copy of the picture.'))), type, q));
+
+/** The screenshot-or-photo reading of the working copy (nothing when the canvas cannot be read: the picture stays a photo). */
+function readingOf(c: HTMLCanvasElement, w: number, h: number): { reading?: ContentReading } {
+  try {
+    return { reading: readContentOf(c, w, h) };
+  } catch {
+    return {};
+  }
+}
 
 /** Turns a file into a stored picture. Throws PictureError with a plain message when the file cannot be used. */
 export async function prepare(file: File, kind: 'photo' | 'object'): Promise<Prepared> {
@@ -83,7 +97,7 @@ export async function prepare(file: File, kind: 'photo' | 'object'): Promise<Pre
     }
     const work = kind === 'photo' ? await canvasBlob(c, 'image/jpeg', 0.92) : await canvasBlob(c, 'image/png');
     if (kind === 'photo' && Math.min(width, height) < 700) notes.push(`"${file.name}" is small (${width} by ${height} pixels), so it will look soft on a full slide.`);
-    return { stored: { id: newId(), kind, name: file.name.replace(/\.[^.]+$/, '').slice(0, 60) || 'picture', original: file, work, width, height, workWidth: ww, workHeight: wh, addedAt: Date.now() }, notes };
+    return { stored: { id: newId(), kind, name: file.name.replace(/\.[^.]+$/, '').slice(0, 60) || 'picture', original: file, work, width, height, workWidth: ww, workHeight: wh, addedAt: Date.now() }, notes, ...(kind === 'photo' ? readingOf(c, ww, wh) : {}) };
   } finally {
     bm.close();
   }
@@ -128,7 +142,7 @@ function toLive(p: StoredPicture, memoryOnly: boolean): Live {
 
 /** Adds a picture. Resolves with its meta, whether the browser kept it, and notes; rejects with a PictureError for an unusable file. */
 export async function addPicture(file: File, kind: 'photo' | 'object'): Promise<{ meta: PictureMeta; kept: boolean; notes: string[] }> {
-  const { stored, notes } = await prepare(file, kind);
+  const { stored, notes, reading } = await prepare(file, kind);
   let kept = true;
   try {
     await putPicture(stored);
@@ -137,6 +151,7 @@ export async function addPicture(file: File, kind: 'photo' | 'object'): Promise<
     storageProblem = isQuotaError(e) ? 'This browser has no room left for your pictures, so they will be lost when you refresh. Remove some, or free space, and add them again.' : 'This browser would not keep your pictures, so they will be lost when you refresh. The project still works here.';
   }
   const l = toLive(stored, !kept);
+  if (reading) l.meta.content = reading.content;
   if (kind === 'photo') l.stats = await statsOf(stored.work).catch(() => undefined);
   live.set(stored.id, l);
   bump();

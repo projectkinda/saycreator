@@ -836,13 +836,19 @@ export interface PicInfo {
   id: string;
   width: number;
   height: number;
+  /** What the pixels (or the person) say: a screenshot never goes behind text and is never the cover unless pinned there. Missing: a photo. */
+  content?: 'screenshot' | 'photo';
 }
+export const isScreenshot = (p: { content?: string }): boolean => p.content === 'screenshot';
+/** The layouts that set text OVER the picture (with a scrim): a screenshot is never placed in them, its own text would show through behind the headline. */
+export const TEXT_OVER_PICTURE: readonly string[] = ['title-over-photo'];
 export const picOrientation = (p: PicInfo): Orientation => orientationOf(p.width, p.height);
 export const picAspect = (p: PicInfo): number => p.width / p.height;
 /** How many of the pictures fit a layout's slots (their orientation is one the slot accepts). */
 export const fittingPictures = (layout: string, pics: PicInfo[], variant: 0 | 1 = 0): number => {
   const slots = imageSlotsOf(layout, variant);
-  return slots.length ? pics.filter((p) => slots.some((s) => s.accepts.includes(picOrientation(p)) && (!s.maxAspect || picAspect(p) <= s.maxAspect))).length : 0;
+  const textOver = TEXT_OVER_PICTURE.includes(layout);
+  return slots.length ? pics.filter((p) => !(textOver && isScreenshot(p))).filter((p) => slots.some((s) => s.accepts.includes(picOrientation(p)) && (!s.maxAspect || picAspect(p) <= s.maxAspect))).length : 0;
 };
 /** Whether a layout can draw its picture form with these pictures (enough of them, of orientations its slots accept). */
 export const hasEnoughPictures = (layout: string, pics: PicInfo[] | undefined, variant: 0 | 1 = 0): boolean => !!pics && fittingPictures(layout, pics, variant) >= imagesNeeded(layout);
