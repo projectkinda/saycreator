@@ -50,11 +50,14 @@ test('a writer answer with a kicker one character over is trimmed with no retry;
     return { kickerOver, headOver };
   });
   expect(r.kickerOver.calls, 'no retry for a kicker one character over').toBe(1);
-  expect(r.kickerOver.trims.length).toBe(1);
+  // Round C: the writer calls were always 1 (checked: the three "calls" of the old report were three TRIMS). Later rounds trim two more things in this deck (an attribution the text does not name, a closing button
+  // that is not the action the text asks for), so only the kicker's own trim is counted here.
+  expect(r.kickerOver.trims.filter((x: any) => x.field === 'kicker').length).toBe(1);
   expect(r.kickerOver.kicker).toBe('Kickstarter project');
   expect(r.kickerOver.adj.length).toBe(1);
   expect(r.kickerOver.adj[0]).toContain('trimmed to "Kickstarter project"');
   expect(r.kickerOver.retries).toEqual([]);
   expect(r.headOver.calls, 'a headline over its limit is asked for again').toBe(2);
-  expect(r.headOver.trims).toEqual([]);
+  // a headline over its limit is never trimmed by the code (the other trims of this deck, see above, are not headline trims)
+  expect(r.headOver.trims.filter((x: any) => x.field === 'headline' || x.field === 'kicker')).toEqual([]);
 });
