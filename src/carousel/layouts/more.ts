@@ -142,8 +142,10 @@ export const MORE_LAYOUTS: LayoutDef[] = [
         d.y = y0 + ph;
       });
       // an accent colour on an accent card would vanish: the card variant in the accent colour keeps the headline plain. A content slide (not a cover): a cover would be set across the whole width.
+      // Round B: `accent: []` is explicit: without it the builder puts the writer's accent phrase back from the fields, and on a light ground the accent card is the accent colour, so the phrase
+      // was set in the card's own colour (1.0:1, an invisible word)
       const slide = { type: 'content', kicker: kick, headline: head, body: cap };
-      return mk(d, { type: 'content', fitAs: 'statement-card', noBalance: true, slide: v === 1 ? slide : withAccent(slide, head, f, st) });
+      return mk(d, { type: 'content', fitAs: 'statement-card', noBalance: true, slide: v === 1 ? { ...slide, accent: [] } : withAccent(slide, head, f, st) });
     },
   },
   // statement-pill ------------------------------------------------------------------------------------------------------------------

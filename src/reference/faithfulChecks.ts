@@ -70,7 +70,10 @@ export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: num
     // directly behind it: the bar's colour for a word on a bar, else the flat colour under the slot.
     const read = (name: string, ink: string, back: string) => {
       const c = contrastRgb(parseColor(ink).rgb, parseColor(back).rgb);
-      if (c < L.minContrast) bad.push(name + ' (' + c.toFixed(1) + ':1)');
+      // Round B: display text (96 px and up) has to reach 3:1 only, the rule the layout library already follows for a big headline's accent (4.5:1 for anything smaller). Asking 4.5:1 of a 140 px word
+      // made the Round 15 repair stage move good slides to other layouts, and drop their highlight, for a colour the library had chosen on purpose.
+      const need = Number(t.style.size) >= 96 ? Math.min(3, L.minContrast) : L.minContrast;
+      if (c < need) bad.push(name + ' (' + c.toFixed(1) + ':1)');
     };
     const hl = t.highlight;
     const hlBg = hexOf(hl?.color);
