@@ -76,8 +76,9 @@ test('marker bars stop before trailing punctuation and keep 12 px clear of the w
 test('accent phrases lose a leading article; the name is Title Case', async ({ page }) => {
   await page.goto('/images/carousel');
   const r = await page.evaluate(async (packs) => {
-    const L = await import('/src/carousel/layouts/library.ts');
+    // Round B: index.ts first, as the app does: layouts/library.ts and layouts/images.ts import each other, and loading library.ts first fails with "IMAGE_LAYOUTS before initialization" when the page has not loaded them yet (a flaky failure)
     const L2 = await import('/src/carousel/layouts/index.ts');
+    const L = await import('/src/carousel/layouts/library.ts');
     const Dz = await import('/src/carousel/designed.ts');
     const { STYLE } = new Function(packs + ' return { STYLE };')();
     const b = await L2.buildSlide('statement', 0, { headline: 'Lead with a result', accent: ['a result'] }, STYLE, { handle: '@harsh.parekh', index: 1, total: 7 });
