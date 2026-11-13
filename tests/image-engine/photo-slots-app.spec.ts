@@ -33,7 +33,9 @@ async function flat(page: Page, name: string, w: number, h: number, color: strin
   const b64 = await page.evaluate(async ({ w, h, color }) => {
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const g = c.getContext('2d')!; g.fillStyle = color; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#fff'; g.fillRect(w * 0.3, h * 0.3, w * 0.4, h * 0.4);
+    // photo-like (a gradient with many small marks, as makePic busy does), not flat colour blocks: a flat picture counts as a screenshot, and a screenshot is never the cover (Round 14)
+    if (c.width * c.height <= 4000000) { let seed = 7; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296); const gr = g.createLinearGradient(0, 0, c.width, c.height); gr.addColorStop(0, color); gr.addColorStop(1, '#ffe9c4'); g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height); for (let i = 0; i < 6000; i++) { g.fillStyle = 'hsla(' + Math.floor(rnd() * 360) + ', 60%, ' + (20 + rnd() * 60) + '%, 0.55)'; const s = (0.004 + rnd() * 0.03) * Math.min(c.width, c.height); g.fillRect(rnd() * c.width, rnd() * c.height, s, s); } }
+    g.fillStyle = '#fff'; g.fillRect(w * 0.4, h * 0.4, w * 0.2, h * 0.2); // a small mark: a big flat block would make the picture a screenshot
     const blob: Blob = await new Promise((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.85));
     const buf = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (const x of buf) s += String.fromCharCode(x);
     return btoa(s);

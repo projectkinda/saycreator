@@ -162,6 +162,7 @@ test('B: cards, panels and scrims use the style\'s own colours (or the ground), 
       const st = H.D.styleFromPack(pack).style;
       const pal = new Set<string>(((st.rhythm ?? []) as any[]).flatMap((g) => [g.bg, g.text, g.muted, g.accent, g.surface, g.onAccent]).concat(Object.values(pack.palette ?? {}) as string[]).filter((c: any) => typeof c === 'string').map((c: string) => c.toUpperCase().slice(0, 7)));
       const bad: string[] = [];
+      let seen = 0; // the big coloured shapes the check really looked at
       for (const [id, pic] of [['headline-card', null], ['photo-full-caption', 'landscape']] as [string, string | null][]) {
         const def = (await import('/src/carousel/layouts/index.ts')).layoutDef(id);
         const f: any = { ...def.samples.normal };
@@ -169,9 +170,10 @@ test('B: cards, panels and scrims use the style\'s own colours (or the ground), 
         for (let gi = 0; gi < (st.rhythm?.length ?? 1); gi++) {
           const d = await H.D.drawOne({ layout: id, fields: f, accents: [] }, 0, st, { handle: '@h', index: gi, total: 7, cut: 'plain', invert: false, density: 'normal' });
           const ground = ((st.rhythm ?? [])[d.rot?.ground ?? 0] ?? (st.rhythm ?? [])[0] ?? { bg: '#FFFFFF' }).bg ?? '#FFFFFF';
-          for (const l of d.layers ?? []) {
+          for (const l of d.built?.layers ?? []) { // Round B: was d.layers, which a drawOne result does not have (the loop never ran)
             if (l.kind !== 'shape' || typeof l.fill !== 'string' || !/^#[0-9a-f]{6}/i.test(l.fill) || l.width * l.height < 60000) continue;
             const fill = l.fill.toUpperCase().slice(0, 7);
+            seen++;
             const [h, s, lt] = hsl(fill);
             if (pal.has(fill) || s < 0.12) continue; // a palette colour, or a neutral overlay
             // anything else must keep the ground's hue and not be darker than the ground when the ground is a lively light colour
@@ -182,12 +184,13 @@ test('B: cards, panels and scrims use the style\'s own colours (or the ground), 
           }
         }
       }
-      out.push({ style, bad: [...new Set(bad)] });
+      out.push({ style, bad: [...new Set(bad)], seen });
     }
     return out;
   }, STYLES);
   console.log('B', JSON.stringify(r.filter((x: any) => x.bad.length)));
   for (const x of r) expect(x.bad, x.style).toEqual([]);
+  expect(r.reduce((a: number, x: any) => a + x.seen, 0), 'the check looked at some card shapes (it once read a property that does not exist and looked at none)').toBeGreaterThan(0);
 });
 
 test('B: editorial-collage cover card is not a darkened yellow', async ({ page }) => {

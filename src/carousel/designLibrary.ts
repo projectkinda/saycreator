@@ -825,12 +825,19 @@ export function dropForeignAccents(specs: SlideSpec[]): { specs: SlideSpec[]; no
   const out = specs.map((sp, i) => {
     if (!sp.accents.length) return sp;
     const heads = HIGHLIGHT_HEAD.map((k) => sp.fields[k]).filter((v): v is string => typeof v === 'string' && !!v.trim()).map(norm);
-    const keep = sp.accents.filter((a) => {
-      const ok = heads.some((h) => h.includes(norm(a)));
-      if (!ok) notes.push(`slide ${i + 1}: accent "${a}" is not in the headline, not drawn`);
-      return ok;
+    // Round B: a phrase the writer gave with a leading article ("the hoodie" for the headline "Flip your hoodie") is the phrase without it, as the library has always set accents; it is not dropped
+    const inHead = (p: string) => heads.some((h) => h.includes(norm(p)));
+    const keep = sp.accents.flatMap((a) => {
+      if (inHead(a)) return [a];
+      const bare = a.trim().replace(/^(the|a|an)\s+/i, '');
+      if (bare !== a.trim() && bare && inHead(bare)) {
+        notes.push(`slide ${i + 1}: accent "${a}" is "${bare}" (a leading article is left out)`);
+        return [bare];
+      }
+      notes.push(`slide ${i + 1}: accent "${a}" is not in the headline, not drawn`);
+      return [];
     });
-    return keep.length === sp.accents.length ? sp : { ...sp, accents: keep };
+    return keep.length === sp.accents.length && keep.every((k, n) => k === sp.accents[n]) ? sp : { ...sp, accents: keep };
   });
   return { specs: out, notes };
 }

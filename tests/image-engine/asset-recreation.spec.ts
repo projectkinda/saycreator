@@ -92,16 +92,19 @@ test('SHIPPABLE: every element-rich style, every deck, every slide as its own fi
 });
 
 test('elements did not make slides worse: no check fails that did not already fail without them', () => {
+  let compared = 0; // Round B: how many slides had a baseline to compare with (with none the test used to pass having checked nothing)
   for (const style of STYLES)
     for (const deck of DECKS)
       for (let i = 1; i <= 7; i++) {
         const n = String(i).padStart(2, '0');
         const before = path.join(BASE, style, deck.id, `slide-${n}.lint.json`);
         if (!fs.existsSync(before)) continue;
+        compared++;
         const was = new Set((JSON.parse(fs.readFileSync(before, 'utf8')).lint as Lint[]).filter((l) => !l.pass).map((l) => l.id));
         const now = (JSON.parse(fs.readFileSync(path.join(OUT, style, 'shippable', deck.id, `slide-${n}.lint.json`), 'utf8')).lint as Lint[]).filter((l) => !l.pass);
         for (const f of now) expect(was.has(f.id), `${style}/${deck.id}/slide-${n}: new failure ${f.id}: ${f.reason}`).toBe(true);
       }
+  test.skip(compared === 0, `no baseline files (slide-NN.lint.json under ${BASE}): nothing was compared, so this is a skip, not a pass`);
 });
 
 test('TEST ASSETS: your private pictures are placed the same way and labelled; skipped when the folder is empty', async ({ page }) => {
@@ -109,7 +112,7 @@ test('TEST ASSETS: your private pictures are placed the same way and labelled; s
   const files = realTestAssets();
   if (files.length === 0) {
     write('test-assets-skipped.json', JSON.stringify({ skipped: true, reason: 'test-assets/ has no pictures yet, so there is no TEST version to render.', checkedAt: new Date().toISOString() }, null, 2));
-    test.info().annotations.push({ type: 'skipped', description: 'test-assets/ is empty' });
+    test.skip(true, 'test-assets/ is empty: there are no private pictures to place');
     return;
   }
   fs.rmSync(path.join(OUT, 'test-assets-skipped.json'), { force: true });

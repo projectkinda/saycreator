@@ -99,6 +99,8 @@ test('hot-flat through the library: 1 writer call, the flavour line in the promp
   expect(f.calls[0].prompt).toContain('[carousel:library]');
   expect(f.calls[0].prompt).toContain('This look suits');
   expect(f.calls[0].prompt).not.toMatch(/<svg|data-slide/);
+  // Round B: the project is saved a moment after the deck is drawn: wait for the saved project to hold the library plan instead of reading it at once (the flaky read)
+  await expect.poll(async () => (await project(page))?.lib?.grounds?.length, { timeout: 30_000 }).toBe(8);
   const p0 = await project(page);
   expect(p0).toMatchObject({ style: 'hot-flat', route: 'designed', designed: true });
   expect(p0!.lib).toMatchObject({ source: 'hot-flat', rhythm: 3, caseStyle: 'upper' });
@@ -114,7 +116,7 @@ test('hot-flat through the library: 1 writer call, the flavour line in the promp
   await expect(page.getByText(/^Style devices changed/).first()).toBeVisible({ timeout: 60_000 });
   await expect.poll(async () => (await imgs()).filter((s, i) => s !== before[i]).length, { timeout: 30_000 }).toBeGreaterThan(0);
   expect(f.calls.length, 'a toggle makes no model call').toBe(1);
-  expect((await project(page))!.lib!.devices.underline).toBe(true);
+  await expect.poll(async () => (await project(page))?.lib?.devices.underline, { timeout: 30_000 }).toBe(true);
   // one undo step
   await page.locator('body').click({ position: { x: 5, y: 5 } });
   await page.keyboard.press('Control+z');

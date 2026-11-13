@@ -51,7 +51,8 @@ test('A: every writer call is recorded with the exact prompt (characters and byt
   expect(JSON.parse(sent[0]).effort, 'the effort setting is sent').toBe('low');
   const w = r.writes[0];
   expect(w).toMatchObject({ call: 1, promptChars: r.prompt.chars, promptBytes: r.prompt.bytes, requestBytes: new TextEncoder().encode(sent[0]).length, numTurns: 1, durationApiMs: 3861, effort: 'low', inputTokens: 6486, outputTokens: 531 });
-  expect(w.seconds).toBeGreaterThanOrEqual(0);
+  // the seconds of the call are recorded as a number of the fake call's own size (>= 0 was true for any number)
+  expect(typeof w.seconds === 'number' && Number.isFinite(w.seconds) && w.seconds < 60).toBe(true);
   expect(r.requestBytes).toMatchObject({ prompt: r.prompt.chars, body: w.requestBytes });
 });
 

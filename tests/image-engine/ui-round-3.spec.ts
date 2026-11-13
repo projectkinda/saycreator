@@ -157,7 +157,7 @@ test('A5/A6: Fine-tune has no big gap; the picture slot has an "Upload a new pic
   ] }));
   await p.goto('/images/carousel');
   const b64 = await p.evaluate(async () => {
-    const c = document.createElement('canvas'); c.width = 1500; c.height = 1000; const g = c.getContext('2d')!; g.fillStyle = '#c0392b'; g.fillRect(0, 0, 1500, 1000);
+    const c = document.createElement('canvas'); c.width = 1500; c.height = 1000; const g = c.getContext('2d')!; g.fillStyle = '#c0392b'; g.fillRect(0, 0, 1500, 1000); if (c.width * c.height <= 4000000) { let seed = 7; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296); const gr = g.createLinearGradient(0, 0, c.width, c.height); gr.addColorStop(0, '#c0392b'); gr.addColorStop(1, '#ffe9c4'); g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height); for (let i = 0; i < 6000; i++) { g.fillStyle = 'hsla(' + Math.floor(rnd() * 360) + ', 60%, ' + (20 + rnd() * 60) + '%, 0.55)'; const s = (0.004 + rnd() * 0.03) * Math.min(c.width, c.height); g.fillRect(rnd() * c.width, rnd() * c.height, s, s); } }
     const blob: Blob = await new Promise((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.85)); const buf = new Uint8Array(await blob.arrayBuffer()); let t = ''; for (const x of buf) t += String.fromCharCode(x); return btoa(t);
   });
   const jpg = { name: 'land.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(b64, 'base64') };
@@ -332,7 +332,7 @@ test('screenshots: the highlight, the header line, the phone sticky preview, the
     ] }));
     await p.goto('/images/carousel');
     const b64 = await p.evaluate(async () => {
-      const c = document.createElement('canvas'); c.width = 1500; c.height = 1000; const g = c.getContext('2d')!; g.fillStyle = '#c0392b'; g.fillRect(0, 0, 1500, 1000); g.fillStyle = '#fff'; g.fillRect(450, 300, 600, 400);
+      const c = document.createElement('canvas'); c.width = 1500; c.height = 1000; const g = c.getContext('2d')!; g.fillStyle = '#c0392b'; g.fillRect(0, 0, 1500, 1000); if (c.width * c.height <= 4000000) { let seed = 7; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296); const gr = g.createLinearGradient(0, 0, c.width, c.height); gr.addColorStop(0, '#c0392b'); gr.addColorStop(1, '#ffe9c4'); g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height); for (let i = 0; i < 6000; i++) { g.fillStyle = 'hsla(' + Math.floor(rnd() * 360) + ', 60%, ' + (20 + rnd() * 60) + '%, 0.55)'; const s = (0.004 + rnd() * 0.03) * Math.min(c.width, c.height); g.fillRect(rnd() * c.width, rnd() * c.height, s, s); } } g.fillStyle = '#fff'; g.fillRect(650, 400, 200, 200);
       const blob: Blob = await new Promise((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.85)); const buf = new Uint8Array(await blob.arrayBuffer()); let t = ''; for (const x of buf) t += String.fromCharCode(x); return btoa(t);
     });
     await p.getByLabel('Choose images for the slides').setInputFiles([{ name: 'land.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(b64, 'base64') }]);

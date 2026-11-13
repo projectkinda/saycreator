@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { pickStyle } from '../../src/carousel/pickStyle';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const STYLE_COUNT = fs.readdirSync(path.join(ROOT, 'src/image-engine/styles'), { withFileTypes: true }).filter((e) => e.isDirectory()).length; // Round B: read from the style folders, not written in the test
 const OUT = path.join(ROOT, 'out/image-engine/step10');
 const BEFORE = path.join(ROOT, 'out/image-engine/step10-before');
 const DECKS = fs.readdirSync(path.join(ROOT, 'tests/image-engine/carousels')).filter((f) => f.endsWith('.json')).sort().map((f) => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/image-engine/carousels', f), 'utf8')));
@@ -191,7 +192,8 @@ const TEXTS: { id: string; tone: 'clear' | 'bold' | 'friendly' | 'expert'; text:
 
 test('"Pick for me": 8 different texts, which style each picks and why; it does not always pick the same one', async ({ page }) => {
   const styles = (await call<{ styles: { spec: unknown }[] }>(page, 'styleList')).styles as { spec: { name: string; title: string; suits?: unknown } }[];
-  expect(styles.length).toBe(7); // four stored styles and the three photo styles of Step 11
+  expect(styles.length).toBe(STYLE_COUNT);
+  expect(STYLE_COUNT).toBeGreaterThan(0);
   for (const st of styles) expect(st.spec.suits, `${st.spec.name} says what it suits`).toBeDefined();
   const rows = TEXTS.map((t) => {
     const p = pickStyle({ text: t.text, tone: t.tone, slideTypes: t.types, styles: styles as never });

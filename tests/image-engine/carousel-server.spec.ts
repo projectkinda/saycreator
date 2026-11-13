@@ -25,7 +25,8 @@ test.describe('the dev provider (Claude Code on this computer), with a stand-in 
     const l = fakeCli(`let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(JSON.stringify({result:'got:'+s.length+':'+s.slice(0,5),is_error:false})))`);
     const r = await writeWithCli('hello world', never, {}, 20_000, l);
     expect(r.text).toBe('got:11:hello');
-    expect(r.ms).toBeGreaterThanOrEqual(0);
+    // the time the call took: a whole number of milliseconds, and short of the 20 s limit it was given (>= 0 was true for any number)
+    expect(Number.isInteger(r.ms) && r.ms < 20_000).toBe(true);
   });
   test('a program that fails says so in plain words, with its first line', async () => {
     const l = fakeCli(`process.stderr.write('Not logged in\\nmore');process.exit(1)`);

@@ -95,5 +95,7 @@ test('Step 10 Results section', async () => {
       { title: 'What is still weak', items: findings.map((x, i) => ({ id: `f${i}`, title: x.title, tag: x.tag, images: [], facts: [x.note] })) },
     ],
   });
-  expect(true).toBe(true);
+  // Round B: the page of results was written and has its groups (this test used to end with expect(true).toBe(true))
+  const written = JSON.parse(fs.readFileSync(path.join(ROOT, 'out/image-engine/results/step10.json'), 'utf8'));
+  expect(written.groups.length).toBeGreaterThan(0);
 });

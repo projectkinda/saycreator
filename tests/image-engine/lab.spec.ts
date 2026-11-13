@@ -9,6 +9,7 @@ import { goView, openResults, scriptList, styleList } from './lab-nav';
 import { RESULTS_DIR, writeStepResults } from './results';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const STYLE_COUNT = fs.readdirSync(path.join(ROOT, 'src/image-engine/styles'), { withFileTypes: true }).filter((e) => e.isDirectory()).length; // Round B: the number of styles is read from the style folders, not written in the test
 const OUT = path.join(ROOT, 'out/image-engine/results-screen');
 const IMAGES = fs.readdirSync(path.join(ROOT, 'test-images')).filter((f) => /\.(jpe?g|png|webp)$/i.test(f));
 const PRIVATE = path.join(ROOT, 'test-assets');
@@ -71,9 +72,10 @@ test('Overview: a card per area with a status chip, one sentence and what is wai
 test('Styles: one card per stored style with its reference deck beside a sample of ours; a verdict on the whole style', async ({ page }) => {
   await openResults(page, 'Styles');
   const styles = fs.readdirSync(path.join(ROOT, 'src/image-engine/styles'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
-  expect(styles).toHaveLength(7);
+  expect(styles.length).toBe(STYLE_COUNT);
+  expect(STYLE_COUNT).toBeGreaterThan(0);
   const cards = page.locator('.res-style-card');
-  await expect(cards).toHaveCount(7);
+  await expect(cards).toHaveCount(STYLE_COUNT);
   const first = cards.first();
   await expect(first.locator('h3')).not.toBeEmpty();
   await expect(first.locator('p').first()).not.toBeEmpty(); // the one-line description
@@ -92,22 +94,22 @@ test('Styles: one card per stored style with its reference deck beside a sample 
 test('Needs my verdict: the filter shows only what is not rated yet, and the counts follow', async ({ page }) => {
   await openResults(page, 'Styles');
   const nav = page.getByRole('navigation', { name: 'Sections of this page' }).getByRole('link', { name: /^Styles/ });
-  await expect(nav).toContainText('7');
+  await expect(nav).toContainText(String(STYLE_COUNT));
   const cards = page.locator('.res-style-card');
   await cards.first().getByRole('button', { name: 'off', exact: true }).click();
-  await expect(nav).toContainText('6');
-  await expect(cards).toHaveCount(7);
+  await expect(nav).toContainText(String(STYLE_COUNT - 1));
+  await expect(cards).toHaveCount(STYLE_COUNT);
   await page.getByLabel('Needs my verdict').check();
-  await expect(page.locator('.res-style-card:not(.res-hide)')).toHaveCount(6);
+  await expect(page.locator('.res-style-card:not(.res-hide)')).toHaveCount(STYLE_COUNT - 1);
   await page.getByLabel('Needs my verdict').uncheck();
-  await expect(page.locator('.res-style-card:not(.res-hide)')).toHaveCount(7);
+  await expect(page.locator('.res-style-card:not(.res-hide)')).toHaveCount(STYLE_COUNT);
 });
 
 test('Slides: pick a style and a script, every slide is its own card with its check in plain words and a verdict, full size on click', async ({ page }) => {
   await openResults(page, 'Slides');
   const style = styleList(page);
   const script = scriptList(page);
-  await expect(style.locator('option')).toHaveCount(7);
+  await expect(style.locator('option')).toHaveCount(STYLE_COUNT);
   await style.selectOption('hot-flat');
   await script.selectOption('howto-linkedin');
   const cards = page.locator('.res-pane:not([hidden]) .res-rec-card');
