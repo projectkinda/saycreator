@@ -1,6 +1,7 @@
 // Shared by the Photos-in-the-app specs: make pictures in the page (no private photos are used), open the editor with a script
 // in a photo style, and read the saved project.
 import { expect, type Page } from '@playwright/test';
+import { enableDevTools, useOwnScript } from './ui';
 
 export interface Pic {
   name: string;
@@ -60,6 +61,9 @@ export function withExifOrientation6(jpeg: Buffer): Buffer {
 }
 
 export const openEditor = async (page: Page) => {
+  await enableDevTools(page); // the older photo tools of a slide show with Developer tools on
+  // the photo slots, hints and controls of a slide belong to the template route, which a built-in style uses only with this flag (as carousel-app does)
+  await page.addInitScript(() => { try { localStorage.setItem('creator.templateRoute', '1'); } catch { /* storage blocked */ } });
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel', exact: true })).toBeVisible();
 };
@@ -81,23 +85,27 @@ export const photoScript = () => ({
 
 /** Opens the Advanced fold, pastes a script, uses it, and picks a style by its title. */
 export async function useScriptInStyle(page: Page, script: unknown, styleTitle: string) {
-  const d = page.locator('details', { hasText: 'Advanced: write the script yourself' });
-  if (!(await d.evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByText('Advanced: write the script yourself').click();
-  await page.getByLabel('Paste the script Claude wrote (JSON)').fill(JSON.stringify(script));
-  await expect(page.getByText(/This script looks good/)).toBeVisible();
-  await page.getByRole('button', { name: 'Use this script' }).click();
-  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: new RegExp(styleTitle) }).click();
+  // Round C: the shared helper of ui.ts (the old "Advanced: write the script yourself" fold is gone)
+  await useOwnScript(page, script, styleTitle, { goto: false });
   await allDrawn(page, 7);
 }
 
+/** Every slide has a thumbnail in the film strip (Round C: there is no card per slide any more: one slide is edited at a time, see showSlide). */
 export const allDrawn = async (page: Page, count = 7) => {
-  await expect(page.locator('.cr-card')).toHaveCount(count, { timeout: 40_000 });
-  await expect(page.locator('.cr-card').getByText(/^Phone check:/)).toHaveCount(count, { timeout: 60_000 });
-  // Every card has finished drawing (a card that is being drawn again says so).
-  await expect(page.locator('.cr-card[data-status="ready"]')).toHaveCount(count, { timeout: 60_000 });
+  await expect(page.locator('.cr-film li')).toHaveCount(count, { timeout: 40_000 });
+  await expect(page.locator('.cr-film img')).toHaveCount(count, { timeout: 60_000 });
 };
 
-export const card = (page: Page, n: number) => page.getByRole('listitem', { name: new RegExp(`^Slide ${n} of`) });
+/** Opens the Edit slides view on slide n (the card of that slide is then the only `.cr-card` on the page). */
+export const showSlide = async (page: Page, n: number) => {
+  const view = page.getByTestId('edit-view');
+  if (!(await view.isVisible())) await page.getByTestId('edit-slides').click();
+  await page.getByRole('button', { name: `Show slide ${n}`, exact: true }).click();
+  await expect(page.getByRole('heading', { name: new RegExp(`^Edit slide ${n} of`) })).toBeVisible();
+};
+
+/** The card of the slide that is open in the Edit slides view (call showSlide first). */
+export const card = (page: Page, _n: number) => page.locator('.cr-card');
 
 /** The saved project (what a refresh will bring back). */
 export const savedDoc = (page: Page) =>

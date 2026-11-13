@@ -4,6 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { openResults } from './lab-nav';
 import { fakeReader, labelsAnswer, makeReference, openStyleFromReferences, readAnswer, refineAnswer, refInput, REF_OUT, ROOT } from './reference-helpers';
+import { enableDevTools } from './ui';
+
+// Round C: the developer tools (Match a reference, Recreate, packs, Live view, report) show only with Developer tools on: set it before every page loads
+test.beforeEach(async ({ page }) => { await enableDevTools(page); });
 
 test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1300, height: 1000 } });
@@ -22,7 +26,9 @@ const usual = (kind: string, n: number) => {
 const openExample = async (page: import('@playwright/test').Page) => {
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
-  if (!(await page.locator('details.cr-advanced').evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByText('Advanced: write the script yourself').click();
+  // Round C: the script tools are behind "I already have a script" in step 1 (the Advanced fold is gone)
+  const own = page.getByRole('button', { name: 'I already have a script' });
+  if ((await own.getAttribute('aria-pressed')) !== 'true') await own.click();
   await page.getByRole('button', { name: 'Try an example script' }).click();
 };
 const live = (page: import('@playwright/test').Page) => page.getByRole('complementary', { name: 'Live view' });

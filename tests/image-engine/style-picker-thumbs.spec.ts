@@ -1,6 +1,7 @@
 // The Pick-a-style cards show a thumbnail drawn by the layout library for every built-in preset (ZERO model calls; static). Screenshot: out/presets-v7/picker.png
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
+import { stylesDrawn, toStep } from './ui';
 
 test.setTimeout(120_000);
 test.use({ viewport: { width: 1280, height: 900 } });
@@ -9,6 +10,8 @@ test('every built-in preset card shows a library-drawn thumbnail', async ({ page
   let calls = 0;
   await page.route('**/*carousel/write', (r) => { calls++; return r.abort(); });
   await page.goto('/images/carousel');
+  await toStep(page, 3); // the Styles list is on step 3 since UI Round 1
+  await stylesDrawn(page); // the cards draw when they come into view
   const list = page.getByRole('list', { name: 'Styles' });
   await expect(list).toBeVisible();
   const imgs = list.locator('img[alt^="Preview of the"]');

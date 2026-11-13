@@ -1,6 +1,10 @@
 // Whole-slide "Read references" (mocked reader, no model): single slides are never split, a real mosaic still is, every slide gets its own read, a failed read is reported and
 // not replaced, variants hold all of them while designs point at the first of each type, and the report fields are there.
 import { expect, test } from '@playwright/test';
+import { enableDevTools } from './ui';
+
+// Round C: the developer tools (Match a reference, Recreate, packs, Live view, report) show only with Developer tools on: set it before every page loads
+test.beforeEach(async ({ page }) => { await enableDevTools(page); });
 
 test.setTimeout(120_000);
 

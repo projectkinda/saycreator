@@ -54,3 +54,28 @@ export const openFineTune = async (page: Page, n = 1) => {
   await openTab(page, 'Fine-tune', n);
   await expect(page.getByTestId('detected-style')).toBeVisible();
 };
+
+/**
+ * Round C: the developer tools (Match a reference, Recreate, packs, the Live view chip, the report, Replay) sit behind the "Developer tools" checkbox of the carousel page since UI Round 1.
+ * Call this BEFORE the page loads (it sets the localStorage key `creator.devtools` on every load of the page), as pack-fixes.spec.ts always did.
+ */
+export const enableDevTools = async (page: Page) => {
+  await page.addInitScript(() => { try { localStorage.setItem('creator.devtools', '1'); } catch { /* storage blocked */ } });
+};
+
+/**
+ * Round C: enters a script the way the current Content step takes one. The old "Advanced: write the script yourself" fold is gone: a style is chosen on step 3, then on step 1 the button
+ * "I already have a script" opens the box "Paste the script Claude wrote (JSON)" and "Use this script" loads it (0 model calls). `script` is the JSON text or an object.
+ * With `goto: false` the page is already open. Returns once the script is loaded; drawing is left to the caller.
+ */
+export const useOwnScript = async (page: Page, script: unknown, style: string | RegExp = /Hot flat/, o: { goto?: boolean } = {}) => {
+  if (o.goto !== false) await page.goto('/images/carousel');
+  await expect(page.getByRole('heading', { name: 'Make a carousel', exact: true })).toBeVisible();
+  await toStep(page, 3);
+  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: style instanceof RegExp ? style : new RegExp(style) }).first().click();
+  await toStep(page, 1);
+  const own = page.getByRole('button', { name: 'I already have a script' });
+  if ((await own.getAttribute('aria-pressed')) !== 'true') await own.click();
+  await page.getByLabel('Paste the script Claude wrote (JSON)').fill(typeof script === 'string' ? script : JSON.stringify(script));
+  await page.getByRole('button', { name: 'Use this script' }).click();
+};

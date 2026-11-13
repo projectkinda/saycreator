@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { allDrawn, card, makePic, openEditor, photoScript, savedDoc, useScriptInStyle, whenSaved, type Pic } from './photos-app-helpers';
+import { allDrawn, card, showSlide, makePic, openEditor, photoScript, savedDoc, useScriptInStyle, whenSaved, type Pic } from './photos-app-helpers';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const FLOW = path.join(ROOT, 'out/image-engine/photos-app-flow');
@@ -69,20 +69,24 @@ test('using the app with ten photos: screenshots and timings', async ({ page }) 
   await shot('02-photos-strip');
 
   // The slides now fill their photo slots (and the other slides of this style use photo layouts too).
+  await showSlide(page, 1);
   await card(page, 1).scrollIntoViewIfNeeded();
   await shot('03-slide-with-photo');
 
   // Redraw timing: a treatment change on slide 1.
   await watchDrawing(page);
+  await showSlide(page, 1);
   await card(page, 1).getByRole('radiogroup', { name: 'Treatment' }).getByRole('radio', { name: 'Duotone', exact: true }).click();
   await whenSaved(page, (d) => d.choices['0'].photo?.treatment === 'duotone');
   times['redrawAfterTreatmentChangeMs'] = await drawMs(page);
   await shot('04-treatment');
 
   // The crop point.
+  await showSlide(page, 1);
   const focal = card(page, 1).locator('.cr-focal');
   await focal.scrollIntoViewIfNeeded();
   const box = (await focal.boundingBox())!;
+  await showSlide(page, 1);
   const dot = (await card(page, 1).getByRole('button', { name: /^Crop point/ }).boundingBox())!;
   await watchDrawing(page);
   await page.mouse.move(dot.x + 11, dot.y + 11);
@@ -95,8 +99,10 @@ test('using the app with ten photos: screenshots and timings', async ({ page }) 
 
   // An object on slide 2.
   await page.getByLabel('Choose transparent objects to add').setInputFiles(await makePic(page, { name: 'sticker.png', w: 800, h: 800, type: 'image/png', hue: 300, transparent: true }));
+  await showSlide(page, 2);
   await card(page, 2).getByLabel('Use one of your objects on slide 2').selectOption({ index: 1 });
   await whenSaved(page, (d) => !!d.choices['1']?.object);
+  await showSlide(page, 2);
   await card(page, 2).scrollIntoViewIfNeeded();
   await shot('06-object');
 

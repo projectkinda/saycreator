@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { allDrawn, card, dragOnto, dropFiles, makePic, openEditor, photoScript, savedDoc, useScriptInStyle, whenSaved, withExifOrientation6 } from './photos-app-helpers';
+import { allDrawn, card, showSlide, dragOnto, dropFiles, makePic, openEditor, photoScript, savedDoc, useScriptInStyle, whenSaved, withExifOrientation6 } from './photos-app-helpers';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const OUT = path.join(ROOT, 'out/image-engine/photos-app');
@@ -35,6 +35,7 @@ test.beforeEach(async ({ page }) => {
 
 test('a slide with a photo hint has a photo slot with the hint as helper text; a style with no photo layouts has no photo control', async ({ page }) => {
   await useScriptInStyle(page, photoScript(), STYLE);
+  await showSlide(page, 1);
   const c1 = card(page, 1);
   await expect(c1.getByRole('region', { name: 'Photo for slide 1' })).toBeVisible();
   await expect(c1.getByText('Ideal photo: a city street at dusk')).toBeVisible();
@@ -42,7 +43,9 @@ test('a slide with a photo hint has a photo slot with the hint as helper text; a
   // The empty slot is drawn as a placeholder, with a note, and the checks still pass.
   await expect(c1.getByText(/^Phone check: all \d+ pass/)).toBeVisible();
   // A slide with no hint and no photo is not turned into a photo slide: it says so, and a photo can still be added to it.
+  await showSlide(page, 2);
   await expect(card(page, 2).getByText('This slide has no photo slot. Add a photo, and it switches to a photo layout.')).toBeVisible();
+  await showSlide(page, 2);
   await expect(card(page, 2).getByText(/^Ideal photo:/)).toHaveCount(0);
   // A style with no photo layouts: no photo control anywhere, and the strip says why.
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat colour/ }).click();
@@ -71,8 +74,10 @@ test('upload with the button, replace, remove: each is one undo step, and the pi
   expect(withB).not.toBe(withA);
   expect((await savedDoc(page))!.photos).toHaveLength(2);
   // Remove it: the slot is empty on purpose and stays empty.
+  await showSlide(page, 1);
   await card(page, 1).getByRole('button', { name: 'Remove photo' }).click();
   await whenSaved(page, (d) => d.choices['0'].photo?.id === null);
+  await showSlide(page, 1);
   await expect(card(page, 1).getByText('No photo on this slide.')).toBeVisible();
   expect((await savedDoc(page))!.choices['0'].photo!.id).toBeNull();
   // Undo and redo cover all three.
@@ -109,7 +114,9 @@ test('the crop point: drag the dot, the slide is drawn again with the new crop; 
   await slideInput(page, 1).setInputFiles(await makePic(page, { name: 'wide.jpg', w: 2400, h: 1200, hue: 40, mark: [0.15, 0.5] }));
   await settled(page);
   const before = await srcOf(page, 1);
+  await showSlide(page, 1);
   const focal = card(page, 1).locator('.cr-focal');
+  await showSlide(page, 1);
   const dot = card(page, 1).getByRole('button', { name: /^Crop point of the photo on slide 1/ });
   await focal.scrollIntoViewIfNeeded();
   const box = (await focal.boundingBox())!;
@@ -137,8 +144,10 @@ test('treatment: each choice changes the slide, there is a live preview, and und
   await settled(page);
   const seen = new Set<string>();
   seen.add((await srcOf(page, 1))!);
+  await showSlide(page, 1);
   const group = card(page, 1).getByRole('radiogroup', { name: 'Treatment' });
   await expect(group.getByRole('radio')).toHaveCount(8);
+  await showSlide(page, 1);
   await expect(card(page, 1).locator('.cr-treat-prev')).toBeVisible();
   for (const name of ['None', 'Black and white', 'Duotone', 'Halftone', 'Grain', 'Blur', 'Tint']) {
     await group.getByRole('radio', { name, exact: true }).click();
@@ -159,6 +168,7 @@ test('frame and shape pickers appear only on layouts that have them', async ({ p
   await useScriptInStyle(page, photoScript(), 'Film photo and paper');
   await slideInput(page, 3).setInputFiles(await makePic(page, { name: 'frame.jpg', w: 1400, h: 1400, hue: 60 }));
   await settled(page);
+  await showSlide(page, 3);
   const c3 = card(page, 3);
   const layout = await c3.getByRole('combobox', { name: 'Layout', exact: true }).inputValue();
   if (layout === 'content-photo-frame') {
@@ -173,6 +183,7 @@ test('frame and shape pickers appear only on layouts that have them', async ({ p
     expect((await savedDoc(page))!.choices['2'].photo!.frame).toBe('polaroid');
   }
   // The cover has a shape picker when its layout is the cut-out one; a full-bleed cover has none.
+  await showSlide(page, 1);
   const c1 = card(page, 1);
   await slideInput(page, 1).setInputFiles(await makePic(page, { name: 'cover.jpg', w: 1400, h: 1400, hue: 90 }));
   await settled(page);
@@ -191,6 +202,7 @@ test('an object: a transparent PNG with size, turn, position and an effect; undo
   const before = await srcOf(page, 2);
   await page.getByLabel('Choose transparent objects to add').setInputFiles(await makePic(page, { name: 'ball.png', w: 600, h: 600, type: 'image/png', hue: 280, transparent: true }));
   await expect.poll(async () => (await savedDoc(page))?.photos?.some((p) => p.kind === 'object')).toBe(true);
+  await showSlide(page, 2);
   const c2 = card(page, 2);
   await c2.getByLabel('Use one of your objects on slide 2').selectOption({ index: 1 });
   await whenSaved(page, (d) => !!d.choices['1']?.object);
@@ -299,6 +311,7 @@ test('the check "Object stays off the words" fails on a deliberately bad variant
   await useScriptInStyle(page, photoScript(), STYLE);
   await page.getByLabel('Choose transparent objects to add').setInputFiles(await makePic(page, { name: 'ball.png', w: 600, h: 600, type: 'image/png', hue: 280, transparent: true }));
   await expect.poll(async () => (await savedDoc(page))?.photos?.some((p) => p.kind === 'object')).toBe(true);
+  await showSlide(page, 2);
   const c = card(page, 2);
   await c.getByLabel('Use one of your objects on slide 2').selectOption({ index: 1 });
   await whenSaved(page, (d) => !!d.choices['1']?.object);
@@ -324,6 +337,7 @@ test('refresh: the project comes back with its photos, their treatment and crop,
   await useScriptInStyle(page, photoScript(), STYLE);
   await slideInput(page, 1).setInputFiles(await makePic(page, { name: 'keep.jpg', w: 1800, h: 1200, hue: 150, mark: [0.7, 0.3] }));
   await settled(page);
+  await showSlide(page, 1);
   await card(page, 1).getByRole('radiogroup', { name: 'Treatment' }).getByRole('radio', { name: 'Duotone', exact: true }).click();
   await settled(page);
   await expect(page.getByText(/Saved in this browser/)).toBeVisible();
@@ -336,6 +350,7 @@ test('refresh: the project comes back with its photos, their treatment and crop,
   await allDrawn(page, 7);
   await expect(page.getByRole('listitem', { name: 'Photo keep' })).toBeVisible();
   await expect(page.getByRole('listitem', { name: 'Photo keep' }).locator('img')).toBeVisible();
+  await showSlide(page, 1);
   const c1 = card(page, 1);
   await expect(c1.getByRole('radio', { name: 'Duotone', exact: true })).toHaveAttribute('aria-checked', 'true');
   await expect(c1.locator('.cr-focal img')).toBeVisible();
@@ -379,6 +394,7 @@ test('export: the zip has every slide at full size, drawn with the photos', asyn
 
 test('a HEIC file on a slide card gives the plain message right beside that photo control', async ({ page }) => {
   await useScriptInStyle(page, photoScript(), STYLE);
+  await showSlide(page, 1);
   const c = card(page, 1);
   await c.getByLabel('Choose a photo for slide 1').setInputFiles({ name: 'iphone.heic', mimeType: 'image/heic', buffer: Buffer.from('heic bytes') });
   await expect(c.getByRole('status').filter({ hasText: 'This is an HEIC photo. Convert it to JPG or PNG, then add it again.' })).toBeVisible();
@@ -425,6 +441,7 @@ test('a very large photo is scaled down for drawing but its original size is kep
   expect(worked.w).toBeGreaterThan(1350);
   // A small photo: warned about, in the strip and on the slide.
   await slideInput(page, 3).setInputFiles(await makePic(page, { name: 'tiny.jpg', w: 400, h: 300, hue: 250 }));
+  await showSlide(page, 3);
   await expect(card(page, 3).getByText(/After cropping, the photo is only \d+ px wide and is stretched/)).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/"tiny.jpg" is small \(400 by 300 pixels\)/).first()).toBeVisible();
 });
@@ -448,6 +465,7 @@ test('browser storage that fails: the person is told, the project keeps working 
   await slideInput(page, 1).setInputFiles(await makePic(page, { name: 'nostore.jpg', w: 1200, h: 900, hue: 330 }));
   await expect(page.getByRole('alert').filter({ hasText: 'This browser has no room left for your pictures' })).toBeVisible();
   await settled(page);
+  await showSlide(page, 1);
   await expect(card(page, 1).locator('.cr-focal img')).toBeVisible(); // it still works in this tab
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();

@@ -4,6 +4,7 @@
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { toStep } from './ui';
 
 test.setTimeout(10 * 60_000);
 const ART = path.resolve(process.cwd(), 'src/image-engine/art');
@@ -134,8 +135,9 @@ test('in the app: the style panel has a switch for the art; flipping it redraws 
   await page.route('**/api/carousel/write', write);
   await page.goto('/images/carousel');
   await expect(page.getByRole('heading', { name: 'Make a carousel', exact: true })).toBeVisible();
+  await page.getByLabel('Your text or topic').fill('Quick Flip is a hoodie that flips into a backpack in ten seconds. We sewed a bag into the hood, so one layer does both jobs.'); // step 1
+  await toStep(page, 3); // the Styles list is on step 3 since UI Round 1
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Pink serif/ }).first().click();
-  await page.getByLabel('Your text or topic').fill('Quick Flip is a hoodie that flips into a backpack in ten seconds. We sewed a bag into the hood, so one layer does both jobs.');
   await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
   await expect(page.locator('[data-signature]')).toHaveCount(7, { timeout: 120_000 });
   const artCount = () => page.evaluate(() => {

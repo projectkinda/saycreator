@@ -5,6 +5,10 @@ import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fakeReader, labelsAnswer, makeReference, openStyleFromReferences, readAnswer, refineAnswer, refInput, ROOT, storedTemplates } from './reference-helpers';
+import { enableDevTools } from './ui';
+
+// Round C: the developer tools (Match a reference, Recreate, packs, Live view, report) show only with Developer tools on: set it before every page loads
+test.beforeEach(async ({ page }) => { await enableDevTools(page); });
 
 test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1400, height: 1000 } });

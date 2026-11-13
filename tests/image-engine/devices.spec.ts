@@ -5,6 +5,7 @@
 //   - light closing slides keep 4.5:1 on every run
 //   - devices are OFF when the preset does not ask for them (the 7 older presets, a style with every switch turned off in the panel)
 import { expect, test } from '@playwright/test';
+import { toStep } from './ui';
 
 test.setTimeout(10 * 60_000);
 test.use({ viewport: { width: 1300, height: 1000 } });
@@ -135,6 +136,7 @@ test('devices are off when a preset does not ask for them, and when the panel sw
 
 test('the style panel shows a switch for each device of the chosen preset and keeps it off', async ({ page }) => {
   await page.goto('/images/carousel');
+  await toStep(page, 3); // the Styles list is on step 3 since UI Round 1
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Pink serif stickers/ }).first().click();
   const pen = page.getByRole('checkbox', { name: 'Pen circle round the accent word' });
   await expect(pen).toBeVisible();
@@ -142,15 +144,18 @@ test('the style panel shows a switch for each device of the chosen preset and ke
   await expect(page.getByRole('checkbox', { name: 'Emoji stickers' })).toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Offset shadow on cards and pills' })).toBeChecked();
   // a style without the device does not show its switch
+  await toStep(page, 3); // the Styles list is on step 3 since UI Round 1
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Black holographic/ }).first().click();
   await expect(page.getByRole('checkbox', { name: 'Pen circle round the accent word' })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: 'Gradient headline' })).toBeChecked();
+  await toStep(page, 3); // the Styles list is on step 3 since UI Round 1
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Pink serif stickers/ }).first().click();
   await page.getByRole('checkbox', { name: 'Pen circle round the accent word' }).uncheck();
   await expect(page.getByRole('checkbox', { name: 'Pen circle round the accent word' })).not.toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Emoji stickers' })).toBeChecked();
   // kept: the choice is stored with the preset and shows again
   await page.reload();
+  await toStep(page, 3); // the Styles list is on step 3 since UI Round 1
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Pink serif stickers/ }).first().click();
   await expect(page.getByRole('checkbox', { name: 'Pen circle round the accent word' })).not.toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Emoji stickers' })).toBeChecked();

@@ -4,6 +4,10 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fakeReader, makeReference, refineAnswer, ROOT, storedTemplates } from './reference-helpers';
+import { enableDevTools } from './ui';
+
+// Round C: the developer tools (Match a reference, Recreate, packs, Live view, report) show only with Developer tools on: set it before every page loads
+test.beforeEach(async ({ page }) => { await enableDevTools(page); });
 
 test.setTimeout(180_000);
 const EXAMPLE = fs.readFileSync(path.join(ROOT, 'docs', 'recreate-example.svg'), 'utf8');

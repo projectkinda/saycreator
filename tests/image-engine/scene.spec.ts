@@ -1,6 +1,10 @@
 // Step 14g: the holistic read. The parsing, the snapping to measured boxes, the dropping of noise, the APPROX layers and the relationships are tested
 // on a made-up detection and a made-up answer. No reader, no model.
 import { expect, test } from '@playwright/test';
+import { enableDevTools } from './ui';
+
+// Round C: the developer tools (Match a reference, Recreate, packs, Live view, report) show only with Developer tools on: set it before every page loads
+test.beforeEach(async ({ page }) => { await enableDevTools(page); });
 
 test('a scene answer is validated, snapped to the measured boxes, noise dropped, relationships enforced', async ({ page }) => {
   await page.goto('/images/styles/new');
