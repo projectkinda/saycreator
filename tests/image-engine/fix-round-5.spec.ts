@@ -59,14 +59,17 @@ test('the picture post-pass: with 1, 2, 3 and 5 pictures and a writer that picks
     console.log('PP ' + name + ' ' + JSON.stringify({ swaps: x.swaps.map((w: any) => w.slide + ':' + w.from + '>' + w.to), layouts: x.layouts, used: x.used }));
     expect([...new Set(x.used)].sort(), `${name}: every picture is on a slide`).toEqual([...x.ids].sort());
     expect(x.used.length, `${name}: each picture once`).toBe(new Set(x.used).size);
-    expect(x.swaps.length, `${name}: the post-pass did the work (the writer chose no picture layout)`).toBeGreaterThan(0);
+    // Round C: since Round 6 the cover rule (flavour.ts) can give a picture to the cover before the post-pass runs, so the post-pass may have nothing left to swap: what counts is that the writer chose no
+    // picture layout and a picture layout is on a slide now (placed by the post-pass or by the cover rule)
+    expect(x.swaps.length > 0 || x.layouts.some((l: string) => ['photo-cover', 'photo-full-caption', 'cover-art', 'headline-body-image', 'art-side-text', 'split-half', 'title-over-photo', 'twin-photos', 'photo-grid', 'phone-frame', 'image-row', 'thumb-rows', 'do-dont', 'portrait-closing', 'list-under-band', 'list-beside-picture'].includes(l)), `${name}: a picture layout was put on a slide (the writer chose none)`).toBe(true);
     expect(x.lost, `${name}: no text lost`).toEqual([]);
     expect(x.empty, `${name}: no empty slot`).toEqual([]);
     expect(x.drawn, `${name}: a picture is drawn for every placed picture`).toBe(x.used.length);
     // meaning: only the allowed pairs
-    for (const w of x.swaps) expect(['statement>photo-cover', 'statement>cover-art', 'split-text>headline-body-image', 'split-text>art-side-text', 'split-text>photo-cover', 'prose>headline-body-image', 'prose>art-side-text', 'prose>photo-cover', 'checklist>thumb-rows', 'checklist>image-row', 'comparison>do-dont'], `${name}: ${w.from} -> ${w.to}`).toContain(`${w.from}>${w.to}`);
+    for (const w of x.swaps) expect(['statement>photo-cover', 'statement>cover-art', 'split-text>headline-body-image', 'split-text>art-side-text', 'split-text>photo-cover', 'prose>headline-body-image', 'prose>art-side-text', 'split-text>split-half', 'prose>split-half', 'statement>photo-full-caption', 'split-text>photo-full-caption', 'prose>photo-full-caption', 'prose>photo-cover', 'checklist>thumb-rows', 'checklist>image-row', 'comparison>do-dont'], `${name}: ${w.from} -> ${w.to}`).toContain(`${w.from}>${w.to}`);
   }
-  expect(r.two.swaps.some((w: any) => w.to === 'do-dont') || r.two.swaps.length === 2, 'two pictures: a comparison as do-dont or two single swaps').toBe(true);
+  // Round C: one of the two pictures may now go to the cover by the cover rule (Round 6), so one swap plus the cover also places both
+  expect(r.two.swaps.some((w: any) => w.to === 'do-dont') || r.two.swaps.length === 2 || (r.two.swaps.length === 1 && r.two.used.length === 2), 'two pictures: a comparison as do-dont, two single swaps, or one swap and the cover').toBe(true);
   console.log('PICTURE PASS ' + JSON.stringify(Object.fromEntries(Object.entries<any>(r).map(([k, x]) => [k, x.swaps.map((w: any) => `${w.slide}:${w.from}>${w.to}`)]))));
 });
 
@@ -80,12 +83,16 @@ test('without pictures nothing changes; the pass leaves a slide whose text would
     // a quote, a stat and a closing are never turned into a picture slide
     const fixed = [{ layout: 'quote', fields: { quote: 'Words in the text.', author: 'Someone' }, accents: [] }, { layout: 'big-stat', fields: { number: '68%', label: 'would take a pay cut' }, accents: [] }, { layout: 'contact-closing', fields: { headline: 'Questions?', contacts: ['a@b.c', 'b.c'] }, accents: [] }];
     const p2 = P.picturePass(fixed as any, { images: [{ id: 'a', width: 1600, height: 900 }] } as any);
-    return { none: none.swaps.length, same: JSON.stringify(none.specs) === JSON.stringify(DECK), p1: p1.swaps.map((w: any) => w.to), p2: p2.swaps.length };
+    return { none: none.swaps.length, same: JSON.stringify(none.specs) === JSON.stringify(DECK), p1: p1.swaps.map((w: any) => w.to), p2: p2.swaps.length, p2s: p2.swaps.map((w: any) => w.slide + ':' + w.from + '>' + w.to) };
   }, DECK);
   expect(r.none).toBe(0);
   expect(r.same).toBe(true);
-  expect(r.p1, 'a text slide takes the picture').toEqual(['headline-body-image']);
-  expect(r.p2, 'a quote, a figure and a contact closing keep their layout').toBe(0);
+  // Round C: a text slide takes the picture in a layout that shows every word; split-half (Round 9) is now preferred to headline-body-image for a landscape picture
+  expect(r.p1.length, 'a text slide takes the picture').toBe(1);
+  expect(['headline-body-image', 'split-half'], 'in a picture layout that keeps its words').toContain(r.p1[0]);
+  // Round C: a quote may carry a picture as a last resort (picturePass.ts: the same words in a headline and a line beside the picture), so it is no longer listed as never swapped; a figure (slide 2)
+  // and a contact closing (slide 3) still keep their layout
+  expect(r.p2s.filter((s: string) => !s.startsWith('1:quote>')), 'a figure and a contact closing keep their layout').toEqual([]);
 });
 
 test('stat-grid: every drawn label is the one for its figure (the label is directly under its own figure), on every preset, both variants', async ({ page }) => {
@@ -222,7 +229,8 @@ test('a pill, caption or sub that repeats the headline is taken out (a trim, nev
   expect(r.dr.fields[2], 'the repeating sub goes, the button stays').toEqual(['headline', 'button']);
   expect(r.dr.trims).toBe(2);
   expect(r.calls, 'no retry call').toBe(1);
-  expect(r.first).toBe('statement');
+  // Round C: the first slide is the plain statement the pill became, or the style's own cover form of it (Round 6: a cover is chosen per deck and style; style-7 gives cover-sticker)
+  expect(r.first).toMatch(/^(statement|cover-[a-z-]+)$/);
   expect(r.firstFields.caption).toBeUndefined();
   expect(r.notes.join(' ')).toContain('repeats the headline');
 });
