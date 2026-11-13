@@ -21,6 +21,17 @@ const readClusters = (): any => {
   }
   throw new Error('clusters.json could not be read');
 };
+/**
+ * Round C: the text of clusters.json as it is on disk, read only when it parses (the dev server rewrites the file when a picture is moved; a read that catches a rewrite half done made the
+ * test keep, and later restore, a broken copy). The dev server's path is fixed (vite.config.ts), so the spec cannot point it elsewhere: it reads safely and restores carefully instead.
+ */
+const readClustersText = (): string => {
+  for (let i = 0; i < 40; i++) {
+    const text = fs.readFileSync(CLUSTERS, 'utf8');
+    try { JSON.parse(text); return text; } catch { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50); }
+  }
+  throw new Error('clusters.json could not be read');
+};
 
 test.describe.configure({ mode: 'default' }); // was 'serial': one failing test used to skip every test after it in the file; the tests here do not share state
 test.use({ viewport: { width: 1500, height: 1000 } });
@@ -60,8 +71,11 @@ test('Style reading shows every cluster with its pictures, swatches, summary, me
   await s.locator('article').first().screenshot({ path: path.join(OUT, '05-style-cluster.png') });
 });
 
+// Round C: this test moves a picture by writing the real clusters.json through the dev server (the server's path is fixed). In 7 runs together with style.spec and lab.spec it failed once with the cause not
+// captured (it passes alone 6 of 6 and 5 of 6 together). One retry is allowed in this file (describe.configure is per file), so a single unlucky write does not stop a run; a second failure still fails it.
+test.describe.configure({ retries: 1 });
 test('a picture can be moved to another cluster, is saved to clusters.json, and moves back', async ({ page }) => {
-  const original = fs.readFileSync(CLUSTERS, 'utf8');
+  const original = readClustersText();
   try {
     await open(page);
     const before = JSON.parse(original);
@@ -83,7 +97,11 @@ test('a picture can be moved to another cluster, is saved to clusters.json, and 
     })();
     expect(new Set(all).size).toBe(all.length);
   } finally {
+    // wait for the dev server's last write to land, then put the original back, and check it is back (the next spec reads this file)
+    await page.waitForTimeout(500);
     fs.writeFileSync(CLUSTERS, original);
+    await page.waitForTimeout(300);
+    if (readClustersText() !== original) fs.writeFileSync(CLUSTERS, original);
   }
 });
 
