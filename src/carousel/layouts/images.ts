@@ -838,14 +838,16 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       const slide = withAccent({ type: 'content', headline: head, body }, head, f, st);
       const d = place(st, cx, 'top', (d) => {
         const PW = 430, PH = 860, B = 14;
+        // Round F: the top bezel is deeper than the sides (56 px against 14) so the speaker slot sits in the bezel and nothing of the screenshot is under it: the screen starts at TOPB
+        const TOPB = 56;
         const left = v === 0;
         const px = left ? d.x0 : d.x0 + d.w - PW;
         const py = d.fy0 + Math.round((d.fy1 - d.fy0 - PH) / 2);
         // the phone: a rounded outline (generic, no marks), the picture inside it, a small speaker slot at the top
-        d.image(img, px + B, py + B, PW - 2 * B, PH - 2 * B, { rx: 50 });
+        d.image(img, px + B, py + TOPB, PW - 2 * B, PH - TOPB - B, { rx: 44 });
         const r0 = 64;
         d.path(`M ${px + r0} ${py} L ${px + PW - r0} ${py} Q ${px + PW} ${py} ${px + PW} ${py + r0} L ${px + PW} ${py + PH - r0} Q ${px + PW} ${py + PH} ${px + PW - r0} ${py + PH} L ${px + r0} ${py + PH} Q ${px} ${py + PH} ${px} ${py + PH - r0} L ${px} ${py + r0} Q ${px} ${py} ${px + r0} ${py} Z`, { stroke: '$text', sw: B, cap: true, y0: py, y1: py + PH });
-        d.path(`M ${px + PW / 2 - 44} ${py + 40} L ${px + PW / 2 + 44} ${py + 40}`, { stroke: '$text', sw: 22, cap: true, y0: py + 28, y1: py + 52 });
+        d.path(`M ${px + PW / 2 - 44} ${py + 34} L ${px + PW / 2 + 44} ${py + 34}`, { stroke: '$text', sw: 22, cap: true, y0: py + 22, y1: py + 46 });
         const tw = d.w - PW - 48;
         const tx = left ? d.x0 + PW + 48 : d.x0;
         const z = sideHeadSize(head, st, tw, 112) || 72;
