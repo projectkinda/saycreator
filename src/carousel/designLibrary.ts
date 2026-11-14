@@ -228,6 +228,22 @@ export function fixGround(g: PackGround, notes: string[]): NonNullable<LayoutSty
   void inkOn;
   return { bg: bgFinal, text, muted, accent, surface, onAccent, ...(stops ? { gradient: { angle: g.gradient!.angle, stops } } : {}) };
 }
+/**
+ * Round G: the style with every ground's ink made readable on its own ground (text 4.5:1 by the better of the ink, white and black, the muted ink and the ink on the accent re-derived),
+ * the ground and the accent unchanged. Used by the repair stage for a contrast failure, so the layout stays. null when nothing would change.
+ */
+export function readableStyle(style: LayoutStyle): LayoutStyle | null {
+  const fix = <G extends { bg: string; text: string; muted: string; accent: string; surface: string; onAccent?: string }>(g: G): G => {
+    const text = contrast(g.text, g.bg) >= 4.5 ? g.text : readableInk(g.bg, [g.text, '#FFFFFF', '#000000']);
+    if (text === g.text) return g;
+    return { ...g, text, muted: quietOn(text, [g.bg, g.surface], mixHex(text, g.bg, 0.4), 4.5), onAccent: readableInk(g.accent, [g.onAccent ?? text, text, g.bg, '#FFFFFF', '#000000']) };
+  };
+  const palette = fix(style.palette);
+  const rhythm = style.rhythm?.map(fix);
+  const closing = style.closing ? fix(style.closing) : undefined;
+  const changed = palette !== style.palette || (rhythm ?? []).some((g, k) => g !== style.rhythm![k]) || (closing !== undefined && closing !== style.closing);
+  return changed ? { ...style, palette, ...(rhythm ? { rhythm } : {}), ...(closing ? { closing } : {}) } : null;
+}
 export function styleFromPack(pack: StylePack | null | undefined): { style: LayoutStyle; notes: string[] } {
   if (!pack) return { style: DEFAULT_STYLE, notes: ['No reference style: a neutral light style is used.'] };
   const notes: string[] = [];
@@ -1107,7 +1123,7 @@ export interface LibraryReport {
   /** Round 15: slides that failed one of the phone checks when drawn and were drawn again by the code (never a model call): what failed, and what the slide is now. */
   /** Round 16: one row per writer call: what was sent and what it cost (null where the provider does not say). */
   writes?: { call: number; promptChars: number; promptBytes: number; requestBytes: number | null; numTurns: number | null; durationApiMs: number | null; effort: string | null; inputTokens: number | null; outputTokens: number | null; seconds: number }[];
-  repairs?: { slide: number; from: string; to: string; failed: string[]; result: 'repaired' | 'not repaired' }[];
+  repairs?: { slide: number; from: string; to: string; failed: string[]; result: 'repaired' | 'not repaired'; /** Round G: 'colour' = a contrast failure fixed by a colour on the same layout; 'layout' = another layout (size, edges, words, overlap). */ how?: 'colour' | 'layout' }[];
   /** The project's pictures and what became of them in the final deck (Round 13). */
   pictureUse?: { uploaded: number; used: number; unused: string[]; whyUnused: string };
   /** What the deck was drawn from: a built-in preset's name, or 'reference' (the active reference style). The style toggles redraw it only for the same source. */
@@ -1507,26 +1523,51 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     return faithfulChecks(d.built.layers as never, { canvas: { w: 1080, h: 1350 }, bg: d.built.fieldBg ?? style.palette.bg, k: 1, slideType: type, prose: /data-layout="prose"/.test(d.built.svg) }).filter((q) => !q.pass).map((q) => q.id + ': ' + q.reason).concat(slideCheckHook ? slideCheckHook(d.built.layers as unknown[], sp) : []);
   };
   if (!own) {
+    const isContrast = (q: string) => q.startsWith('contrast:');
     for (let i = 0; i < specs.length; i++) {
-      const failed = phoneFailures(drawn.get(i), specs[i]);
+      let failed = phoneFailures(drawn.get(i), specs[i]);
       if (!failed.length) continue;
-      const sp = specs[i];
+      let sp = specs[i];
+      // Round G: a failed contrast check is fixed by changing a COLOUR on the same layout (the ink that reads on the ground, the weak accent as a marker bar), never by moving the slide to another layout.
+      // The layout is changed only for the other checks (size, edges, words, overlap).
+      let styleUse = style;
+      let how: 'colour' | 'layout' = 'layout';
+      if (failed.some(isContrast)) {
+        const fixedStyle = readableStyle(style);
+        if (fixedStyle) {
+          const dc = await drawOne(sp, rot.variants[i], fixedStyle, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
+          if (dc.built && !dc.problems.length) {
+            const after = phoneFailures(dc, sp);
+            if (after.filter(isContrast).length < failed.filter(isContrast).length) {
+              drawn.set(i, dc);
+              styleUse = fixedStyle;
+              how = 'colour';
+              repairs.push({ slide: i + 1, from: sp.layout, to: sp.layout, failed: failed.filter(isContrast), result: after.some(isContrast) ? 'not repaired' : 'repaired', how: 'colour' });
+              failed = after;
+            }
+          }
+        }
+        if (how !== 'colour') repairs.push({ slide: i + 1, from: sp.layout, to: sp.layout, failed: failed.filter(isContrast), result: 'not repaired', how: 'colour' });
+        failed = failed.filter((q) => !isContrast(q));
+      }
+      if (!failed.length) continue;
       let fixed: { d: Drawn; spec: SlideSpec } | null = null;
       for (const opt of layoutOptionsFor(sp, look)) {
         if (opt.current || opt.dropped.length || opt.droppedCore.length) continue;
         if (IMAGE_LAYOUT_IDS.includes(opt.layout as never) && !look.images?.length) continue;
         for (const v of [rot.variants[i], (1 - rot.variants[i]) as 0 | 1]) {
           const spec2 = { ...sp, layout: opt.layout, fields: opt.fields, density: undefined } as SlideSpec;
-          const d = await drawOne(spec2, v, style, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
-          if (d.built && !d.problems.length && !phoneFailures(d, spec2).length) { fixed = { d, spec: spec2 }; break; }
+          const d = await drawOne(spec2, v, styleUse, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
+          // the new layout has to pass every check but contrast (a colour failure is never a reason to choose a layout)
+          if (d.built && !d.problems.length && !phoneFailures(d, spec2).filter((q) => !isContrast(q)).length) { fixed = { d, spec: spec2 }; break; }
         }
         if (fixed) break;
       }
       if (fixed) {
         specs = specs.map((x, k) => (k === i ? fixed!.spec : x));
         drawn.set(i, fixed.d);
-        repairs.push({ slide: i + 1, from: sp.layout, to: fixed.spec.layout, failed, result: 'repaired' });
-      } else repairs.push({ slide: i + 1, from: sp.layout, to: sp.layout, failed, result: 'not repaired' });
+        repairs.push({ slide: i + 1, from: sp.layout, to: fixed.spec.layout, failed, result: 'repaired', how: 'layout' });
+      } else repairs.push({ slide: i + 1, from: sp.layout, to: sp.layout, failed, result: 'not repaired', how: 'layout' });
     }
   }
   for (const d of drawn.values()) adjustments.push(...d.adjustments);
