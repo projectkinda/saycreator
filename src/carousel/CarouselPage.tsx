@@ -426,6 +426,18 @@ function FullSize({ items, at, onClose, onMove }: { items: { url: string; alt: s
 
 // ---------- the page ----------
 
+/** Round I: what a phone-size check means for a person (the slide-level warning names the slide and says this). */
+const LINT_PLAIN: Record<string, string> = {
+  overlap: 'two lines of text may touch',
+  size: 'some text is small',
+  edges: 'some text is close to the edge',
+  margins: 'some text is close to the edge',
+  contrast: 'some words are hard to read',
+  words: 'there are a lot of words',
+  fit: 'some text may not fit',
+  orphan: 'a single word sits alone on a line',
+};
+
 export default function CarouselPage() {
   useDocumentTitle('Make a carousel');
   const proj = useProject(styleByName(DEFAULT_STYLE) ? DEFAULT_STYLE : getStyles().styles[0]?.spec.name ?? DEFAULT_STYLE);
@@ -718,7 +730,10 @@ export default function CarouselPage() {
   // a warning is not a failure: a slide with only warnings still passes the phone-size check
   const onlyWords = (i: number) => (views[i]?.rendered?.lint ?? []).filter((l) => !l.pass).every((l) => l.id === 'words');
   const failingWords = slides.filter((_, i) => views[i]?.rendered?.lint.some((l) => !l.pass) && onlyWords(i)).length;
-  const failingText = failingWords === failing ? `${failing} of ${slides.length} slides have too many words.` : failingWords ? `${failing} of ${slides.length} slides have something to fix at phone size (${failingWords} of them only because of too many words).` : `${failing} of ${slides.length} slides have something to fix at phone size.`;
+  const have = failing === 1 ? 'has' : 'have';
+  const failingText = failingWords === failing ? `${failing} of ${slides.length} slides ${have} too many words.` : failingWords ? `${failing} of ${slides.length} slides ${have} something to fix at phone size (${failingWords} of them only because of too many words).` : `${failing} of ${slides.length} slides ${have} something to fix at phone size.`;
+  // Round I: which slide and what, in plain words (the slide name selects that slide in the strip)
+  const failingDetail = slides.flatMap((_, i) => { const why = [...new Set((views[i]?.rendered?.lint ?? []).filter((l) => !l.pass).map((l) => LINT_PLAIN[l.id] ?? 'something may not read well'))]; return why.length ? [{ i, why }] : []; });
   const warned = slides.filter((_, i) => { const lint = views[i]?.rendered?.lint ?? []; return lint.every((l) => l.pass) && lint.some((l) => l.warn); }).length;
 
   const downloadOne = async (i: number) => {
@@ -1523,7 +1538,14 @@ export default function CarouselPage() {
         <p className="small muted" role="status" aria-live="polite">
           {exporting || (proj.saveFailed ? 'This browser would not save the project. Download your slides before you leave.' : proj.saved)}
           {hasWork && ready && !exporting && failing === 0 && ` ${warned === 0 ? 'All slides pass the phone-size check.' : `${slides.length - warned} slide${slides.length - warned === 1 ? '' : 's'} pass, ${warned} ${warned === 1 ? 'has' : 'have'} a warning.`}`}
-          {hasWork && ready && !exporting && failing > 0 && <span className="cr-problem"> {failingText}</span>}
+          {hasWork && ready && !exporting && failing > 0 && (
+            <span className="cr-problem" data-testid="phone-warning"> {failingText}{' '}
+              {failingDetail.slice(0, 3).map((d) => (
+                <span key={d.i}><button type="button" className="cr-slidelink" onClick={() => setSel(d.i)} data-testid={`phone-warning-slide-${d.i + 1}`}>Slide {d.i + 1}</button>: {d.why.join(' and ')} at phone size.{' '}</span>
+              ))}
+              {failingDetail.length > 3 && `${failingDetail.length - 3} more slides are marked in the strip.`}
+            </span>
+          )}
         </p>
         {hasWork && ready && !!doc.designed?.library?.plan && unusedList.length > 0 && (
           <p className="small muted" data-testid="pictures-unused">{unusedList.length} of {pictures.filter((p) => p.kind === 'photo').length} pictures {unusedList.length === 1 ? 'is' : 'are'} not on a slide.</p>

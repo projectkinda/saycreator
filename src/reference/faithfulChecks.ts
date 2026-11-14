@@ -65,11 +65,14 @@ export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: num
   if (WORDS_CHECKED_TYPES.includes(o.slideType)) res('words', 'Words on the slide', words <= wordsLimit, `${words} words on the slide.${words > warnAt ? " That is a lot for a phone." : ""}`, { warn: words > warnAt && words <= wordsLimit, measured: words, limit: wordsLimit });
 
   const hits: string[] = [];
+  const inkX = ({ t, b }: { t: TextLayer; b: ReturnType<typeof layoutText> }) => (b.lines.length ? { x0: t.x + Math.min(...b.lines.map((l) => l.x)), x1: t.x + Math.max(...b.lines.map((l) => l.x + l.width)) } : { x0: t.x, x1: t.x + t.width });
   for (let i = 0; i < laid.length; i++)
     for (let j = i + 1; j < laid.length; j++) {
       const a = laid[i];
       const b = laid[j];
-      const w = Math.min(a.t.x + a.t.width, b.t.x + b.t.width) - Math.max(a.t.x, b.t.x);
+      // Round I: two slots overlap when the TEXT drawn in them does. The box of a slot can be wider than its words (the fit stage widens a label's box to the edge of the row when the label is a touch bigger
+      // than its planned box), and boxes that overlap while the words are apart is not something a person sees. Measured the way the draw stage measures text: from the laid lines.
+      const w = Math.min(inkX(a).x1, inkX(b).x1) - Math.max(inkX(a).x0, inkX(b).x0);
       const h = Math.min(a.t.y + a.b.height, b.t.y + b.b.height) - Math.max(a.t.y, b.t.y);
       if (w > L.slackPx && h > L.slackPx) hits.push(`${a.t.name} and ${b.t.name}`);
     }
