@@ -17,6 +17,6 @@ export const COLOUR_COMBINATIONS: ColourCombination[] = [
   { id: 'midnight-violet', name: 'Midnight violet', colours: ['#1b1340', '#8b7cff', '#35e0c4'] },
   // Round I: three with a vivid, mid-tone main colour replace Sky and sand and Quiet stone, which looked like the dark ones on dark slides
   { id: 'teal-coral', name: 'Teal and coral', colours: ['#0f9b8e', '#ff6b5b'] },
-  { id: 'blue-lime', name: 'Blue and lime', colours: ['#2f6bff', '#c6f432'] },
+  { id: 'blue-lime', name: 'Blue and lime', colours: ['#2557d6', '#c6f432'] },
   { id: 'pink-mint', name: 'Pink and mint', colours: ['#ff4f9a', '#8fe3c0'] },
 ];
