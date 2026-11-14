@@ -1081,5 +1081,8 @@ export const contrastOf = (a: string, b: string): number => {
 export function markerInk(palette: Record<string, string>, accent: string): string {
   const cands = [palette.bg, palette.text, '#111111', '#FFFFFF'].filter(Boolean) as string[];
   const dark = cands.filter((c) => lum(c) < 0.3).sort((x, y) => lum(x) - lum(y)).find((c) => contrastOf(c, accent) >= 4.5);
-  return dark ?? cands.sort((x, y) => contrastOf(y, accent) - contrastOf(x, accent))[0];
+  if (dark) return dark;
+  const best = cands.sort((x, y) => contrastOf(y, accent) - contrastOf(x, accent))[0];
+  // Round G: when none of the palette's own inks reaches 4.5:1 on the accent, pure black is tried before the best of them (a mid-tone accent such as #2F6BFF: white reads 4.4999:1, black 4.7:1)
+  return contrastOf(best, accent) < 4.5 && contrastOf('#000000', accent) >= 4.5 ? '#000000' : best;
 }

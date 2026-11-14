@@ -28,7 +28,7 @@ export function gradientStopsOf(svg: string | undefined): string[] | null {
   return stops.length >= 2 ? stops : null;
 }
 /** The colours along a gradient, the stops and five steps between each pair (the worst point of the gradient is one of these). */
-const along = (stops: string[]): string[] => {
+export const along = (stops: string[]): string[] => {
   const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const out: string[] = [];
   for (let i = 0; i < stops.length - 1; i++)

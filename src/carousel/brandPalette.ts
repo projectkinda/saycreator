@@ -1,0 +1,217 @@
+// Round G part E: a brand (1 to 3 colours) applied to a style's palettes. Pure code: no UI, no storage, no model call.
+// `applyBrand(pack, brand)` takes the style's pack (presetPackFor) and returns the pack with the brand's colours in it, the list of changes the guard made (plain words, with the contrast
+// ratio that forced each) and, for each ground of the style's rhythm, which rule of the brand filled it. With no brand the pack is returned as it is (the same object).
+//
+// Reused from the existing colour code (not rewritten): `fixGround` (designLibrary.ts) makes every neutral ground readable (ink 4.5:1 on every colour of the ground, a muted ink and a card that read),
+// `readableInk` / `quietOn` / `lightenForText` / `accentRolesOf` / `toHsl` / `fromHsl` (layouts/cuts.ts) choose inks and say how an accent reads as text on a ground (lightened on a dark one, else a bar
+// of the accent colour with the ink on it: the "marker bar" the layouts already draw on the same layout). New here: the brand rules 1 to 7 below.
+import { contrast } from './layouts/draw';
+import { accentRolesOf, fromHsl, quietOn, readableInk, toHsl } from './layouts/cuts';
+import { fixGround, readableGradient } from './designLibrary';
+import type { PackGround, StylePack } from '../reference/pack';
+
+export interface Brand {
+  /** 1 to 3 colours as #RRGGBB (or #RGB): the first is the main colour, the second the secondary, the third the tertiary. */
+  colours: string[];
+  name?: string;
+}
+export interface BrandChange {
+  kind: 'ignored' | 'close' | 'ink' | 'accent-text' | 'secondary' | 'gradient' | 'derived';
+  /** The sentence for the person. */
+  text: string;
+  from?: string;
+  to?: string;
+  /** The contrast ratio that forced the change. */
+  ratio?: number;
+}
+export interface BrandGround {
+  /** Position in the style's rhythm (-1 = the closing ground). */
+  slot: number;
+  /** The style's own ground colour. */
+  was: string;
+  kind: 'light' | 'dark' | 'accent';
+  /** Which rule of the brand filled it (plain words). */
+  rule: string;
+  bg: string;
+}
+export interface BrandResult { pack: StylePack; changes: BrandChange[]; grounds: BrandGround[] }
+
+const HEX = /^#[0-9a-f]{6}$/i;
+const norm = (c: string): string | null => {
+  const t = String(c).trim();
+  if (/^#[0-9a-f]{3}$/i.test(t)) return ('#' + [...t.slice(1)].map((x) => x + x).join('')).toUpperCase();
+  return HEX.test(t) ? t.toUpperCase() : null;
+};
+const mix = (a: string, b: string, t: number): string => {
+  const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [pa, pb] = [p(a), p(b)];
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('').toUpperCase();
+};
+const r1 = (n: number) => (Math.round(n * 10) / 10).toString();
+const ratio = (a: string, b: string) => r1(contrast(a, b));
+const isDark = (c: string) => contrast('#FFFFFF', c) > contrast('#000000', c);
+
+/**
+ * Two brand colours too close to tell apart: they read under 1.25:1 against each other, or under 1.6:1 with hues within 25 degrees (two blues). A colour and white or black are never "close" by the
+ * hue rule (an achromatic colour has no hue), so neon green with white stays a pair.
+ */
+export function tooClose(a: string, b: string): boolean {
+  const c = contrast(a, b);
+  if (c < 1.25) return true;
+  const [h1, s1] = toHsl(a);
+  const [h2, s2] = toHsl(b);
+  if (s1 < 0.12 || s2 < 0.12) return false;
+  const hd = Math.min(Math.abs(h1 - h2), 360 - Math.abs(h1 - h2));
+  return c < 1.6 && hd < 25;
+}
+
+type Kind = 'light' | 'dark' | 'accent';
+/** What a ground of a style is: a lively mid-tone (saturated, not near white or black) is an accent ground, else light or dark by its luminance. */
+function kindOf(bg: string): Kind {
+  const [, s, l] = toHsl(bg);
+  if (s >= 0.45 && l > 0.15 && l < 0.85) return 'accent';
+  return isDark(bg) ? 'dark' : 'light';
+}
+
+export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
+  if (!brand || !brand.colours?.length) return { pack, changes: [], grounds: [] };
+  const changes: BrandChange[] = [];
+  const given = brand.colours.slice(0, 3).map(norm);
+  if (!given[0]) return { pack, changes: [{ kind: 'ignored', text: `"${brand.colours[0]}" is not a colour (use a hex colour such as #39FF14), so the style keeps its own colours.` }], grounds: [] };
+  const P = given[0]!;
+  let S = given[1] ?? null;
+  const T = given[2] ?? null;
+  brand.colours.slice(1, 3).forEach((c, i) => { if (!given[i + 1]) changes.push({ kind: 'ignored', text: `"${c}" is not a colour, so it was left out.` }); });
+  // rule 5: two colours too close to tell apart: the second is treated as missing
+  if (S && tooClose(P, S)) {
+    changes.push({ kind: 'close', from: S, ratio: contrast(P, S), text: `These two colours are very close (${ratio(P, S)}:1), so we used the first, ${P}, as your main colour.` });
+    S = null;
+  }
+  // rule 1: the secondary, when missing, is a lighter or darker step of the main colour
+  const derivedS = (() => { const [h, s, l] = toHsl(P); return fromHsl(h, s, Math.max(0.04, Math.min(0.96, l + (isDark(P) ? 0.22 : -0.22)))); })();
+  const second = S ?? derivedS;
+  if (!S) changes.push({ kind: 'derived', to: derivedS, text: `We made a second colour from your main one (${derivedS}) for cards and second accents.` });
+
+  // rule 2: the neutral grounds and their inks come from the neutrals, tinted a few percent toward the main colour
+  const LIGHT = mix('#FFFFFF', P, 0.05);
+  const DARK = mix('#0C0C0D', P, 0.07);
+  const INK_ON_LIGHT = mix('#141414', P, 0.05);
+  const INK_ON_DARK = mix('#F4F4F4', P, 0.05);
+  const markerAvailable = !pack.look?.deco?.penCircle;
+  const shifts = new Map<string, { to: string; from: number }>();
+  const neutral = (kind: 'light' | 'dark', gradient?: PackGround['gradient']): PackGround => {
+    const bg = kind === 'light' ? LIGHT : DARK;
+    const text = kind === 'light' ? INK_ON_LIGHT : INK_ON_DARK;
+    const surface = mix(bg, second, kind === 'light' ? 0.12 : 0.14);
+    const g: PackGround = { bg, text, muted: quietOn(text, [bg, surface], mix(text, bg, 0.4), 4.5), accent: P, surface, onAccent: readableInk(P, [bg, text, '#FFFFFF', '#000000']) };
+    // a style without the marker bar (the pen-circle style circles the word and sets it in the accent) cannot fall back to a bar: its accent is shifted, same hue, until it reads 4.5:1 on the ground and the card
+    if (!markerAvailable && Math.min(contrast(P, bg), contrast(P, surface)) < 4.5) {
+      const shifted = readableGradient([P], [bg, surface], 4.5)[0];
+      g.accent = shifted;
+      g.onAccent = readableInk(shifted, [bg, text, '#FFFFFF', '#000000']);
+      shifts.set(kind, { to: shifted, from: Math.min(contrast(P, bg), contrast(P, surface)) });
+    }
+    const fixed = fixGround(g, []);
+    if (!gradient) return fixed;
+    // a gradient ground keeps its angle and its stops' places; the colours are the neutral ground moving toward the main colour
+    const n = gradient.stops.length;
+    return { ...fixed, bg, gradient: { angle: gradient.angle, stops: gradient.stops.map((s, k) => ({ at: s.at, color: mix(bg, P, 0.06 + 0.16 * (n > 1 ? k / (n - 1) : 0)) })) } };
+  };
+  // rule 3: an accent ground is the main colour itself (a second accent ground, the secondary), with the ink that reads on it
+  const accentGround = (bg: string): { g: PackGround; note: BrandChange | null } => {
+    const text = readableInk(bg, [mix('#111111', bg, 0.05), mix('#F4F4F4', bg, 0.05)]);
+    const c = contrast(text, bg);
+    // keepBg: the ground IS the brand colour; the ground fix must not move it toward a 6:1 ink (the ink reaches 4.5:1 or is the better of black and white)
+    const g: PackGround = { bg, text, muted: quietOn(text, [bg], mix(text, bg, 0.35), 4.5), accent: text, surface: mix(bg, text, 0.12), onAccent: readableInk(text, [bg, '#FFFFFF', '#000000']), keepBg: true };
+    return { g, note: c < 4.5 ? { kind: 'ink', ratio: c, to: text, text: `Text on ${bg} is the best we can do, ${text} (${r1(c)}:1), which is under 4.5:1.` } : null };
+  };
+
+  const look = pack.look ?? {};
+  const slots: { slot: number; g: PackGround }[] = [...(look.rhythm ?? []).map((g, i) => ({ slot: i, g })), ...(look.closing ? [{ slot: -1, g: look.closing }] : [])];
+  if (!slots.length) slots.push({ slot: 0, g: { bg: pack.palette.bg, text: pack.palette.text, muted: pack.palette.muted ?? pack.palette.text, accent: pack.palette.accent, surface: pack.palette.surface ?? pack.palette.bg, onAccent: pack.palette.onAccent } });
+  const accentOrder: string[] = [];
+  for (const { g } of slots) if (kindOf(g.bg) === 'accent' && !accentOrder.includes(g.bg.toUpperCase())) accentOrder.push(g.bg.toUpperCase());
+  const grounds: BrandGround[] = [];
+  const made = new Map<string, PackGround>();
+  const noted = new Set<string>();
+  const out = slots.map(({ slot, g }) => {
+    const kind = kindOf(g.bg);
+    const key = kind + ':' + g.bg.toUpperCase() + (g.gradient ? 'g' : '');
+    let ng = made.get(key);
+    let rule = '';
+    if (kind === 'accent') {
+      const which = accentOrder.indexOf(g.bg.toUpperCase());
+      const bg = which === 0 ? P : second;
+      if (!ng) {
+        const r = accentGround(bg);
+        ng = r.g;
+        if (r.note && !noted.has(r.note.text)) { noted.add(r.note.text); changes.push(r.note); }
+      }
+      rule = which === 0 ? 'rule 3: your main colour is the ground; the ink is black or white by contrast' : 'rule 3: a second accent ground is your second colour; the ink is black or white by contrast';
+    } else {
+      ng ??= neutral(kind, g.gradient);
+      rule = `rule 2: ${kind === 'light' ? 'an off-white tinted toward your main colour' : 'a near-black tinted toward your main colour'}; ink and muted ink from the neutrals${g.gradient ? '; the gradient runs from that ground toward your main colour' : ''}`;
+    }
+    made.set(key, ng);
+    grounds.push({ slot, was: g.bg, kind, rule, bg: ng.bg });
+    return { slot, g: ng, kind };
+  });
+
+  // rule 4: what your main colour does as text on each neutral ground (the layouts already do this on the same layout; here it is said in words)
+  for (const kind of ['light', 'dark'] as const) {
+    const ng = out.find((o) => o.kind === kind)?.g;
+    if (!ng) continue;
+    const r = contrast(P, ng.bg);
+    const sh = shifts.get(kind);
+    if (sh) {
+      changes.push({ kind: 'accent-text', from: P, to: sh.to, ratio: sh.from, text: `Your main colour ${P} reads ${r1(sh.from)}:1 on your ${kind} slides and this style has no highlight bar, so words set in it are shown ${kind === 'dark' ? 'lighter' : 'darker'} (${sh.to}, ${ratio(sh.to, ng.bg)}:1), the same hue.` });
+      continue;
+    }
+    if (r >= 4.5) continue;
+    const roles = accentRolesOf(P, ng.bg, ng.text, [ng.surface]);
+    if (roles.accentText !== ng.text && roles.accentText.toUpperCase() !== P) {
+      changes.push({ kind: 'accent-text', from: P, to: roles.accentText, ratio: r, text: `Your main colour ${P} reads ${r1(r)}:1 on your ${kind} slides, so words set in it are shown a little ${kind === 'dark' ? 'lighter' : 'darker'} (${roles.accentText}, ${ratio(roles.accentText, ng.bg)}:1), the same hue.` });
+    } else {
+      const ink = readableInk(P, [ng.bg, ng.text, '#FFFFFF', '#000000']);
+      changes.push({ kind: 'accent-text', from: P, ratio: r, text: `Your main colour ${P} reads ${r1(r)}:1 on your ${kind} slides, so highlighted words sit on a bar of it with ${isDark(ink) ? 'black' : 'white'} text (${ratio(ink, P)}:1).` });
+    }
+  }
+  // the secondary as text on the main colour (a second colour that cannot be read on it is not used for text there)
+  if (S) {
+    const acc = out.find((o) => o.kind === 'accent')?.g;
+    if (acc && contrast(S, P) < 3) {
+      changes.push({ kind: 'secondary', from: S, to: acc.text, ratio: contrast(S, P), text: `Your second colour ${S} reads ${ratio(S, P)}:1 on your main colour ${P}, so text on slides with that background is ${isDark(acc.text) ? 'black' : 'white'} (${ratio(acc.text, P)}:1) and ${S} is kept for cards.` });
+    }
+  }
+
+  // the device roles of the three styles that had hard-coded colours (Round G part B)
+  const roles = look.roles ? { ...look.roles } : undefined;
+  if (roles) {
+    const neutralBgs = out.filter((o) => o.kind !== 'accent').map((o) => o.g.bg);
+    if (roles.glow) roles.glow = P;
+    if (roles.page) roles.page = LIGHT;
+    if (roles.gradient) {
+      const base = T ? [P, mix(P, second, 0.5), second, T] : [P, mix(P, second, 0.5), second];
+      // the ground, the card and the caption panel (the ground moved a fifth toward the ink) of every neutral ground
+      const grds = (out.filter((o) => o.kind !== 'accent').length ? out.filter((o) => o.kind !== 'accent') : out).flatMap((o) => [o.g.bg, o.g.surface, mix(o.g.bg, o.g.text, 0.2)]);
+      void neutralBgs;
+      const stops = readableGradient(base, grds, 4.5);
+      const moved = stops.map((c, k) => ({ from: base[k], to: c })).filter((m) => m.from !== m.to);
+      if (moved.length) {
+        const worst = Math.min(...moved.map((m) => Math.min(...grds.map((g) => contrast(m.from, g)))));
+        changes.push({ kind: 'gradient', ratio: worst, from: moved.map((m) => m.from).join(', '), to: moved.map((m) => m.to).join(', '), text: `The headline gradient (${moved.map((m) => m.from).join(', ')}) reads as little as ${r1(worst)}:1 on your background, so its colours are shown as ${moved.map((m) => m.to).join(', ')}, the same hues.` });
+      }
+      roles.gradient = stops;
+    }
+  }
+
+  const first = out[0].g;
+  const rhythm = out.filter((o) => o.slot >= 0).map((o) => o.g);
+  const closing = out.find((o) => o.slot === -1)?.g;
+  const next: StylePack = {
+    ...pack,
+    palette: { ...pack.palette, bg: first.bg, text: first.text, accent: first.accent, muted: first.muted, surface: first.surface, onAccent: first.onAccent ?? pack.palette.onAccent },
+    look: { ...look, ...(look.rhythm ? { rhythm } : {}), ...(closing ? { closing } : {}), ...(roles ? { roles } : {}), ...(look.gradient ? { gradient: first.gradient ?? undefined } : {}) },
+  };
+  return { pack: next, changes, grounds };
+}

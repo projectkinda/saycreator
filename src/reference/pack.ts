@@ -67,6 +67,8 @@ export interface PackGround {
   surface: string;
   onAccent?: string;
   gradient?: { angle: number; stops: { at: number; color: string }[] };
+  /** Round G: the ground colour is the brand's own and stays as it is (the ground fix does not move it for a 6:1 ink; the ink still reaches 4.5:1). */
+  keepBg?: boolean;
 }
 /** What a stored preset (style.json) asks for beyond one palette, carried to the layout library by styleFromPack. */
 export interface PackLook {

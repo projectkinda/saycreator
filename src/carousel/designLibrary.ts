@@ -14,7 +14,7 @@ import { contrast } from './layouts/draw';
 import { sourceBrands } from './layouts/build';
 import { isCoverLayout } from './layouts/coverIds';
 import { resolveDecoRoles, withoutSwitches } from '../reference/deco';
-import { faithfulChecks } from '../reference/faithfulChecks';
+import { along, faithfulChecks } from '../reference/faithfulChecks';
 import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
@@ -187,7 +187,7 @@ export function fixGround(g: PackGround, notes: string[]): NonNullable<LayoutSty
   // A ground whose ink reads under 6:1 (a mid-tone red with black ink: 4.6:1) is moved along its lightness, hue and saturation kept, until the ink reads at 6:1, so text on it is
   // comfortable and not borderline. Gradient grounds keep their stops (they are checked on every stop instead).
   let bgFinal = bg;
-  if (!stops && contrast(text, bg) < 6) {
+  if (!stops && !g.keepBg && contrast(text, bg) < 6) {
     const inkDark = contrast(text, '#FFFFFF') > contrast(text, '#000000');
     const [h, s, l0] = toHsl(bg);
     for (let k = 1; k <= 24; k++) {
@@ -245,23 +245,35 @@ export function readableStyle(style: LayoutStyle, grounds: string[] = []): Layou
   let deco = style.deco;
   const stops = style.deco?.gradientText;
   if (grounds.length && stops && stops.length >= 2) {
-    // every colour the headline sits on (the slide's ground and a panel under the title): the stop must read on all of them; the direction is the one of the hardest ground
-    const reads = (c: string) => grounds.every((g) => contrast(c, g) >= 4.5);
-    const hard = grounds.reduce((w, g) => (Math.max(contrast('#FFFFFF', g), contrast('#000000', g)) < Math.max(contrast('#FFFFFF', w), contrast('#000000', w)) ? g : w), grounds[0]);
-    const dark = contrast('#FFFFFF', hard) > contrast('#000000', hard);
-    const moved = stops.map((c) => {
-      if (reads(c)) return c;
-      const [h, s, l0] = toHsl(c);
-      for (let k = 1; k <= 97; k++) {
-        const n = fromHsl(h, s, Math.max(0, Math.min(1, l0 + (dark ? 1 : -1) * 0.01 * k)));
-        if (reads(n)) return n;
-      }
-      return dark ? '#FFFFFF' : '#000000';
-    });
+    const moved = readableGradient(stops, grounds, 4.5);
     if (moved.some((c, k) => c !== stops[k])) deco = { ...style.deco!, gradientText: moved };
   }
   const changed = palette !== style.palette || (rhythm ?? []).some((g, k) => g !== style.rhythm![k]) || (closing !== undefined && closing !== style.closing) || deco !== style.deco;
   return changed ? { ...style, palette, ...(rhythm ? { rhythm } : {}), ...(closing ? { closing } : {}), ...(deco ? { deco } : {}) } : null;
+}
+/**
+ * Gradient stops moved (same hue and saturation, 1% steps away from the ground's lightness) until every stop AND every colour between two stops reads `min`:1 on every ground; a gradient between two
+ * stops that each read can dip a little under in the middle, so the whole gradient is lifted until its worst point reads.
+ */
+export function readableGradient(stops: string[], grounds: string[], min = 4.5): string[] {
+  const worst = (st: string[]) => Math.min(...along(st).flatMap((c) => grounds.map((g) => contrast(c, g))));
+  if (!grounds.length || worst(stops) >= min) return stops;
+  const hard = grounds.reduce((w, g) => (Math.max(contrast('#FFFFFF', g), contrast('#000000', g)) < Math.max(contrast('#FFFFFF', w), contrast('#000000', w)) ? g : w), grounds[0]);
+  const up = contrast('#FFFFFF', hard) > contrast('#000000', hard);
+  const hsl = stops.map(toHsl);
+  for (let k = 0; k <= 97; k++) {
+    const moved = stops.map((c, i) => {
+      if (grounds.every((g) => contrast(c, g) >= min) && k === 0) return c;
+      const [h, s, l0] = hsl[i];
+      for (let j = Math.max(1, k); j <= 97; j++) {
+        const n = fromHsl(h, s, Math.max(0, Math.min(1, l0 + (up ? 1 : -1) * 0.01 * j)));
+        if (grounds.every((g) => contrast(n, g) >= min)) return n;
+      }
+      return up ? '#FFFFFF' : '#000000';
+    });
+    if (worst(moved) >= min) return moved;
+  }
+  return stops.map(() => (up ? '#FFFFFF' : '#000000'));
 }
 /** The flat colours a slide's title sits on: the slide's ground and the flat shapes (a caption panel, a card) under the middle of the title. */
 export function groundsUnderTitle(layers: Layer[] | undefined, bg: string): string[] {
