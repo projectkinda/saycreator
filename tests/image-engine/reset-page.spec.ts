@@ -92,7 +92,9 @@ test('a running job is cancelled by Reset: nothing is saved afterwards and the j
   await expect(read).toBeEnabled({ timeout: 60_000 });
   await read.click();
   await expect(quick.getByRole('button', { name: 'Cancel' })).toBeVisible({ timeout: 30_000 });
-  await expect.poll(async () => (await jobs(page)).now, { timeout: 30_000 }).toBe('running');
+  // Round E: the whole-picture read (the default) records no Live job, so there is no job to be 'running' here (checked by hand: the box says Reading with Cancel, window.__liveJobs stays empty). What Reset must do is unchanged and is checked below:
+  // the read is cancelled, nothing is saved afterwards, the page is fresh. (The old first check, a job in the 'running' state, only held for the older read path.)
+  await expect(quick.getByText(/Reading/).first()).toBeVisible();
 
   page.once('dialog', (d) => void d.accept());
   await page.getByRole('button', { name: 'Reset page' }).click();
