@@ -8,6 +8,7 @@ import type { PhotoChoice, TreatmentChoice } from './photoChoices';
 import type { PictureMeta } from './photoLibrary';
 import type { ImageRequest } from '../images/store';
 import type { Designed } from './designed';
+import type { ColourScheme } from './colourSchemes';
 
 export interface SlideChoice {
   layout?: string;
@@ -56,11 +57,13 @@ export interface Doc {
   designed?: Designed;
   /** Which route made the slides and why (for report.json): "designed" (one design call) or "pack" (template fill). */
   route?: { route: 'designed' | 'pack'; reason: string; /** Set when Designed mode failed: the real reason. */ error?: string; requestBytes?: import('./designed').RequestBytes };
+  /** Round H: the colours the slides are drawn with. Absent: the style's own colours (every older document). See colourSchemes.ts. */
+  scheme?: ColourScheme;
   script: CarouselScript | null;
   /** By slide number, "0" for the first slide. */
   choices: Record<string, SlideChoice>;
 }
-export const emptyDoc = (style: string): Doc => ({ version: 1, format: 'carousel', style, topic: '', script: null, choices: {} });
+export const emptyDoc = (style: string, scheme?: ColourScheme): Doc => ({ version: 1, format: 'carousel', style, topic: '', ...(scheme ? { scheme } : {}), script: null, choices: {} });
 
 export type Path = (string | number)[];
 export interface DocPatch {
@@ -147,8 +150,8 @@ export interface Project {
 export const COALESCE_MS = 1500;
 const MAX_HISTORY = 80;
 
-export function newProject(style: string): Project {
-  return { doc: emptyDoc(style), past: [], future: [] };
+export function newProject(style: string, scheme?: ColourScheme): Project {
+  return { doc: emptyDoc(style, scheme), past: [], future: [] };
 }
 
 /** Does a change. Returns the new project, or the reasons it was refused. */

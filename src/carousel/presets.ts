@@ -7,11 +7,27 @@ import { packFromStyle, type StylePack } from '../reference/pack';
 import { drawOne, styleFromPack, templateRoute } from './designLibrary';
 import { coverKeyOf, flavourPass } from './flavour';
 import { styleByName } from './render';
+import { applyBrand } from './brandPalette';
+import type { ColourScheme } from './colourSchemes';
 
 export const presetKey = (name: string) => 'preset:' + name;
 
-/** The library pack of a built-in preset, or null when the name is a saved reference template, the active reference, unknown, or the template route flag is on. */
-export function presetPackFor(name: string, withSaved = true): StylePack | null {
+// Round H: the colour scheme of the carousel on the page. The page sets it from the document on every render, so every redraw that asks for a preset's pack (a style switch, a text edit, the layout
+// picker ...) draws with the same colours. null: the style's own colours (the pack is returned untouched, pixel for pixel). The style cards and the editor's preview pass their own scheme.
+let currentScheme: ColourScheme | null = null;
+export const setCurrentScheme = (s: ColourScheme | null): void => { currentScheme = s; };
+export const getCurrentScheme = (): ColourScheme | null => currentScheme;
+
+/**
+ * The library pack of a built-in preset, or null when the name is a saved reference template, the active reference, unknown, or the template route flag is on.
+ * `scheme`: undefined = the page's current scheme, null = the style's own colours, or a scheme to draw with.
+ */
+export function presetPackFor(name: string, withSaved = true, scheme?: ColourScheme | null): StylePack | null {
+  const pack = presetPackBase(name, withSaved);
+  const sc = scheme === undefined ? currentScheme : scheme;
+  return pack && sc ? applyBrand(pack, { colours: sc.colours, name: sc.name }).pack : pack;
+}
+function presetPackBase(name: string, withSaved: boolean): StylePack | null {
   if (!name || name === 'mine-reference-active' || name.startsWith('mine-') || templateRoute() || isUserStyle(name)) return null;
   const st = styleByName(name);
   if (!st) return null;
@@ -23,7 +39,7 @@ export function presetPackFor(name: string, withSaved = true): StylePack | null 
 
 /** The cover of a built-in preset drawn by the layout library (the route the deck itself uses), as an SVG; null for a style that is not a built-in preset. No model call. */
 export async function presetThumbSvg(name: string): Promise<string | null> {
-  const pack = presetPackFor(name, false);
+  const pack = presetPackFor(name, false, null);
   if (!pack) return null;
   const { style } = styleFromPack(pack);
   // the cover the style gives a deck of this sample (the same rule as a real deck: one of the style's own covers, chosen from the deck and the style name), so the cards no longer all show the same cover

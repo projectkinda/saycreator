@@ -5,6 +5,7 @@ import { validateScript } from './script';
 import { styleByName } from './render';
 import { ACTIVE_STYLE } from '../reference/active';
 import type { PictureMeta } from './photoLibrary';
+import { cleanScheme, startScheme } from './colourSchemes';
 
 export const STORE_KEY = 'creator.carousel.project.v1';
 export const PASTE_KEY = 'creator.carousel.paste.v1';
@@ -36,6 +37,8 @@ export function loadSaved(defaultStyle: string): Project | null {
     const proj = p.project;
     if (!proj || proj.doc?.version !== 1) return null;
     const doc = proj.doc;
+    // Round H: a document without a scheme (or with one that does not fit) is drawn with the style's own colours, as before
+    if (doc.scheme !== undefined) { const sc = cleanScheme(doc.scheme); if (sc) doc.scheme = sc; else delete doc.scheme; }
     if (doc.format !== 'carousel' && doc.format !== 'quote') return null;
     // A template is read from the browser's storage a moment after the page opens, so its style is not known yet: keep the choice.
     // The active reference lives in memory only: after a reload it is gone, so a project that still points at it goes back to the default style.
@@ -70,7 +73,7 @@ export interface ProjectApi {
 }
 
 export function useProject(defaultStyle: string): ProjectApi {
-  const [project, setProject] = useState<Project>(() => loadSaved(defaultStyle) ?? newProject(defaultStyle));
+  const [project, setProject] = useState<Project>(() => loadSaved(defaultStyle) ?? newProject(defaultStyle, startScheme()));
   const ref = useRef(project);
   const [saved, setSaved] = useState('');
   const [saveFailed, setSaveFailed] = useState(false);
@@ -117,7 +120,7 @@ export function useProject(defaultStyle: string): ProjectApi {
   const setTopic = useCallback((topic: string) => set({ ...ref.current, doc: { ...ref.current.doc, topic } }), [set]);
   const setOptions = useCallback((o: Partial<GenerateOptions>) => set({ ...ref.current, doc: { ...ref.current.doc, options: { ...DEFAULT_OPTIONS, ...ref.current.doc.options, ...o } } }), [set]);
   const setPhotos = useCallback((change: (before: PictureMeta[]) => PictureMeta[]) => set({ ...ref.current, doc: { ...ref.current.doc, photos: change(ref.current.doc.photos ?? []) } }), [set]);
-  const startOver = useCallback((style: string) => set(newProject(style)), [set]);
+  const startOver = useCallback((style: string) => set(newProject(style, startScheme())), [set]);
 
   return { project, apply, undo, redo, setTopic, setOptions, setPhotos, startOver, saved, saveFailed };
 }

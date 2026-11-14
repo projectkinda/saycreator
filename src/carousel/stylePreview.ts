@@ -46,7 +46,7 @@ const CARD_PICKS: Record<string, [CardPick, CardPick]> = {
 
 /** A built-in style that has no entry above (a new preset): its first two liked body layouts. */
 const fallbackPicks = (name: string): [CardPick, CardPick] | null => {
-  const pack = presetPackFor(name, false);
+  const pack = presetPackFor(name, false, null);
   if (!pack) return null;
   const liked = ((styleFromPack(pack).style.flavour?.prefer ?? []) as string[]).filter((l) => (BODY_LAYOUTS as readonly string[]).includes(l));
   return liked.length >= 2 ? [P(liked[0]), P(liked[1])] : null;
@@ -92,7 +92,7 @@ export function slideTone(svg: string): number | null {
 
 /** The two small slides of a card as SVG (null for a slide that could not be drawn). */
 export async function cardSlides(name: string): Promise<(string | null)[]> {
-  const pack = presetPackFor(name, false);
+  const pack = presetPackFor(name, false, null);
   const picks = cardPicks(name);
   if (!pack || !picks) return [];
   const { style } = styleFromPack(pack);
@@ -127,7 +127,7 @@ export const PREVIEW_COUNT = PREVIEW_SCRIPT.slides.length;
 
 /** The seven sample slides of a style, drawn as a deck by the layout library (SVGs, in order). Empty for a style that is not a built-in preset. */
 export async function previewDeck(name: string): Promise<{ svg: string | null; layout: string }[]> {
-  const pack = presetPackFor(name, false);
+  const pack = presetPackFor(name, false, null);
   if (!pack) return [];
   // the cover of the sample deck: the signature cover needs the sample cover it can show (the word cover has no kicker and no sub line, the stacked cover a headline of 2 to 4 words)
   const sig = pack.look?.coverLayouts?.signature;
