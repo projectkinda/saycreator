@@ -201,6 +201,8 @@ The prompt (`src/carousel/writerPrompt.ts`) carries the person's text, the scrip
 
 `.env.example` lists the variables. `npm run check:secrets` (part of `npm run build`) fails if a key-shaped string, the name of the key variable or the `x-api-key` header appears in `src/`, `public/`, `dist/` or `index.html`, if a key appears in `server/` or `.env.example`, or if an env file is tracked by git.
 
+`npm run check:specs` lists the Playwright specs of every `tests/<folder>` (no test is run, no server is started, about 9 seconds) and fails if a spec file collects 0 tests or fails to load (a syntax error, a bad import): a spec that silently collects nothing would otherwise count as passing. Run it after editing a spec and before a batch of spec runs.
+
 Not in the contract yet: saving a finished carousel to the Images list or to a video project, more than one project at a time, brand colours and fonts from the Branding screen, server-side rendering, sharing for review, and a production server for the API writer.
 
 ### Photos (Step 11, engine only: the Images screen does not use them yet)

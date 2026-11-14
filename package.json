@@ -18,6 +18,7 @@
     "crello:fetch": "node scripts/crello-fetch.mjs",
     "crello:build": "node scripts/crello-build.mjs",
     "check:secrets": "node scripts/check-secrets.mjs",
+    "check:specs": "node scripts/check-specs.mjs",
     "cost:real": "node scripts/cost-real.mjs"
   },
   "dependencies": {
