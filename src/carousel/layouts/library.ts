@@ -441,12 +441,16 @@ const BASE_LIST: LayoutDef[] = [
       // the page instead of sitting in the middle of it; five long items keep the compact rows.
       const fh = cx.field.y1 - cx.field.y0;
       const few = items.length <= 3;
-      const SZ: [number, number, number][] = [[72, 160, 176], [64, 144, 156], [56, 128, 140], [52, 116, 128], [48, 104, 116], [44, 96, 108]];
+      // Round E: three items or fewer start from bigger sizes (items up to 96 px, numerals up to 192 px) and aim at 90% of the free height with wider gaps, so a short list is no longer left with the bottom third empty (it filled 0.70 of the height, the promise is 0.75)
+      const BASE: [number, number, number][] = [[72, 160, 176], [64, 144, 156], [56, 128, 140], [52, 116, 128], [48, 104, 116], [44, 96, 108]];
+      const SZ: [number, number, number][] = few ? [[96, 200, 240], [96, 192, 224], [88, 176, 208], ...BASE] : BASE;
+      const gapOf = few ? 72 : 24;
+      const aim = few ? 0.94 : 0.86;
       const fits = ([bs, ns, rowMin]: [number, number, number]) => {
         const nw = Math.round(ns * 0.72) + 24;
         const tw = cx.field.w - nw - 24;
-        const rows = items.reduce((a, it) => a + Math.max(measure(it, st.fonts.body, nearestWeight(st.fonts.body, 500), bs, tw, 1.25).h + 2, rowMin) + (few ? 40 : 24), 0);
-        return rows + 88 * 2.1 + 48 <= 0.86 * fh;
+        const rows = items.reduce((a, it) => a + Math.max(measure(it, st.fonts.body, nearestWeight(st.fonts.body, 500), bs, tw, 1.25).h + 2, rowMin) + gapOf, 0);
+        return rows + 88 * 2.1 + 48 <= aim * fh;
       };
       const [bs, ns, rowMin] = SZ.find(fits) ?? SZ[SZ.length - 1];
       const d = place(st, cx, 'center', (d) => {
@@ -463,7 +467,7 @@ const BASE_LIST: LayoutDef[] = [
           // the last two words stay together, so a wrapped item never leaves one word alone on its second line
           const glued = it.replace(/ (\S+)$/, ' $1');
           d.text('body', glued, { x: tx, w: d.x0 + d.w - tx, size: bs, max: 96, lines: 2, min: 44, boxH: h });
-          d.gap(few ? 40 : 24);
+          d.gap(gapOf);
         });
       });
       return mk(d, { type: 'checklist', fitAs: 'numbered-list', slide: { type: 'checklist', headline: str(f, 'title') } });
