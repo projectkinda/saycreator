@@ -30,7 +30,7 @@ export function chromeFor(o: { handle: string; name?: string; index: number; tot
     const nameW = measureWidth(name, o.font, 700, 40);
     out.push({ ...base, shape: 'avatar', x: 84, y: 96, size: 36, fill: '$fMuted', anchor: 'start', text: '' });
     out.push({ ...base, x: 140, y: 92, size: 40, weight: 700, fill: '$fText', anchor: 'start', text: name });
-    out.push({ ...base, shape: 'tick', x: Math.round(140 + nameW + 24), y: 78, size: 13, fill: '$fAccent', anchor: 'start', text: '' });
+    out.push({ ...base, shape: 'tick', x: Math.round(140 + nameW + 24), y: 78, size: 13, fill: '$fAccent', ink: '$fOnAccent', anchor: 'start', text: '' });
     out.push({ ...base, x: 140, y: 139, anchor: 'start', text: handle });
   } else if (row) {
     // handle | page | site: the page counter stays in the middle; a long handle is cut with an ellipsis, and the site (the least important) is left out when it would crowd the counter

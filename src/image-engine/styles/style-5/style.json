@@ -212,6 +212,7 @@
   },
   "assets": {},
   "library": {
+    "roles": { "page": "#FFFFFF" },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "flavour": {
       "cover": "statement-card",
@@ -240,7 +241,7 @@
     },
     "devices": {
       "insetCard": {
-        "page": "#FFFFFF",
+        "page": "$page",
         "margin": 28,
         "radius": 40
       },

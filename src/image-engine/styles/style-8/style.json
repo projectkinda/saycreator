@@ -194,6 +194,7 @@
   "assets": {},
   "library": {
     "byType": { "cover": { "layouts": ["cover-centred", "cover-word", "cover-ruled", "cover-block"], "signature": "cover-centred" } },
+    "roles": { "gradient": ["#D63DF2", "#F58FD6", "#6FA8F5", "#7FE8D2"] },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "flavour": {
       "cover": "statement",
@@ -224,10 +225,7 @@
     },
     "devices": {
       "gradientText": [
-        "#D63DF2",
-        "#F58FD6",
-        "#6FA8F5",
-        "#7FE8D2"
+        "$gradient"
       ],
       "rule": "lower-two-thirds",
       "footerRow": true,

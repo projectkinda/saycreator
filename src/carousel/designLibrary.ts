@@ -13,7 +13,7 @@ import { coloursFor, fromHsl, inkOn, lightenForText, quietOn, readableInk, toHsl
 import { contrast } from './layouts/draw';
 import { sourceBrands } from './layouts/build';
 import { isCoverLayout } from './layouts/coverIds';
-import { withoutSwitches } from '../reference/deco';
+import { resolveDecoRoles, withoutSwitches } from '../reference/deco';
 import { faithfulChecks } from '../reference/faithfulChecks';
 import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
@@ -274,7 +274,7 @@ export function styleFromPack(pack: StylePack | null | undefined): { style: Layo
     if (L.flavour) base.flavour = L.flavour as LayoutStyle['flavour'];
     if (L.closingLayout) base.closingLayout = L.closingLayout as LayoutStyle['closingLayout'];
     if (L.coverLayouts) base.coverLayouts = L.coverLayouts as LayoutStyle['coverLayouts'];
-    if (L.deco) base.deco = L.deco;
+    if (L.deco) base.deco = resolveDecoRoles(L.deco, L.roles);
     if (typeof L.radius === 'number') base.radius = L.radius;
     if (L.caseStyle && L.caseStyle !== 'none') base.caseStyle = L.caseStyle;
     if (L.caseExceptions?.length) base.caseExceptions = L.caseExceptions;

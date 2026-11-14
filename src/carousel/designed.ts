@@ -25,6 +25,8 @@ export interface Recurring {
   text: string;
   /** A drawn part of the profile header instead of text: the avatar circle or the verified tick (x, y is the centre, size the radius). */
   shape?: 'avatar' | 'tick';
+  /** The tick's own stroke colour (a role token such as "$fOnAccent": the ink that reads on the accent disc). Default white. */
+  ink?: string;
 }
 export interface DesignedSlide {
   pack: StylePack;
@@ -881,7 +883,7 @@ export function recurringMarkup(rec: Recurring[] | undefined, pack: StylePack): 
       if (r.shape === 'avatar')
         return '<circle cx="' + r.x + '" cy="' + r.y + '" r="' + q + '" fill="' + r.fill + '"/><circle cx="' + r.x + '" cy="' + Math.round(r.y - q * 0.2) + '" r="' + Math.round(q * 0.28) + '" fill="$bg" fill-opacity="0.55"/><ellipse cx="' + r.x + '" cy="' + Math.round(r.y + q * 0.55) + '" rx="' + Math.round(q * 0.55) + '" ry="' + Math.round(q * 0.38) + '" fill="$bg" fill-opacity="0.55"/>';
       if (r.shape === 'tick')
-        return '<circle cx="' + r.x + '" cy="' + r.y + '" r="' + q + '" fill="' + r.fill + '"/><path d="M ' + Math.round(r.x - q * 0.45) + ' ' + r.y + ' L ' + Math.round(r.x - q * 0.1) + ' ' + Math.round(r.y + q * 0.38) + ' L ' + Math.round(r.x + q * 0.48) + ' ' + Math.round(r.y - q * 0.34) + '" fill="none" stroke="#FFFFFF" stroke-width="' + Math.max(2, Math.round(q * 0.28)) + '" stroke-linecap="round" stroke-linejoin="round"/>';
+        return '<circle cx="' + r.x + '" cy="' + r.y + '" r="' + q + '" fill="' + r.fill + '"/><path d="M ' + Math.round(r.x - q * 0.45) + ' ' + r.y + ' L ' + Math.round(r.x - q * 0.1) + ' ' + Math.round(r.y + q * 0.38) + ' L ' + Math.round(r.x + q * 0.48) + ' ' + Math.round(r.y - q * 0.34) + '" fill="none" stroke="' + (r.ink ?? '#FFFFFF') + '" stroke-width="' + Math.max(2, Math.round(q * 0.28)) + '" stroke-linecap="round" stroke-linejoin="round"/>';
       return '<text x="' + r.x + '" y="' + r.y + '" font-size="' + r.size + '" font-family="' + (r.font || pack.fonts.body) + '" font-weight="' + r.weight + '" fill="' + r.fill + '" text-anchor="' + r.anchor + '">' + esc(r.text) + '</text>';
     })
     .join('');
@@ -903,7 +905,7 @@ export function recurringLayers(rec: Recurring[] | undefined, pack: StylePack, i
       out.push({ ...base, kind: 'shape', id: id + '-tick' + k, name: 'recurring-tick', shape: 'ellipse', x: r.x - q, y: r.y - q, width: 2 * q, height: 2 * q, fill: hex(r.fill) } as unknown as Layer);
       const w = q * 0.96;
       const h = q * 0.75;
-      out.push({ ...base, kind: 'path', id: id + '-tick-mark' + k, name: 'recurring-tick', x: r.x - q * 0.45, y: r.y - q * 0.38, width: w, height: h, d: 'M ' + (q * 0.02).toFixed(1) + ' ' + (q * 0.38).toFixed(1) + ' L ' + (q * 0.35).toFixed(1) + ' ' + (q * 0.76).toFixed(1) + ' L ' + (q * 0.93).toFixed(1) + ' ' + (q * 0.04).toFixed(1), stroke: { color: '#FFFFFF', width: Math.max(2, Math.round(q * 0.28)), cap: 'round', join: 'round' } } as unknown as Layer);
+      out.push({ ...base, kind: 'path', id: id + '-tick-mark' + k, name: 'recurring-tick', x: r.x - q * 0.45, y: r.y - q * 0.38, width: w, height: h, d: 'M ' + (q * 0.02).toFixed(1) + ' ' + (q * 0.38).toFixed(1) + ' L ' + (q * 0.35).toFixed(1) + ' ' + (q * 0.76).toFixed(1) + ' L ' + (q * 0.93).toFixed(1) + ' ' + (q * 0.04).toFixed(1), stroke: { color: hex(r.ink ?? '#FFFFFF'), width: Math.max(2, Math.round(q * 0.28)), cap: 'round', join: 'round' } } as unknown as Layer);
       return;
     }
     const font = ((FONT_NAMES as string[]).includes(r.font) ? r.font : pack.fonts.body) as FontFamily;

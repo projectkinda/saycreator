@@ -214,6 +214,7 @@
   "assets": {},
   "library": {
     "byType": { "cover": { "layouts": ["cover-ruled", "cover-centred", "cover-block", "statement"], "signature": "cover-ruled" } },
+    "roles": { "glow": "#FAECA8" },
     "note": "Tokens for the layout library (designLibrary.ts); the app template route ignores them.",
     "flavour": {
       "cover": "statement",
@@ -246,7 +247,7 @@
     "devices": {
       "glow": {
         "corner": "br",
-        "color": "#FAECA8"
+        "color": "$glow"
       },
       "sideLabel": true,
       "pageIndex": true,

@@ -61,6 +61,32 @@ export interface Deco {
   stickers?: boolean;
 }
 
+/** Round G: the colours a device takes from the style's roles (glow, page, gradient stops). */
+export interface DecoRoles { glow?: string; page?: string; gradient?: string[] }
+/**
+ * A device colour written as a role token ("$glow" in glow.color, "$page" in insetCard.page, "$gradient" in gradientText) takes its value from `roles`. A token with no value switches that
+ * device off (never a guessed colour). A device with a plain colour is unchanged.
+ */
+export function resolveDecoRoles(deco: Deco, roles: DecoRoles | undefined): Deco {
+  const out: Deco = { ...deco };
+  if (out.glow && out.glow.color.startsWith('$')) {
+    const v = out.glow.color === '$glow' ? roles?.glow : undefined;
+    if (v) out.glow = { ...out.glow, color: v };
+    else delete out.glow;
+  }
+  if (out.insetCard && out.insetCard.page.startsWith('$')) {
+    const v = out.insetCard.page === '$page' ? roles?.page : undefined;
+    if (v) out.insetCard = { ...out.insetCard, page: v };
+    else delete out.insetCard;
+  }
+  if (out.gradientText?.some((c) => c.startsWith('$'))) {
+    const stops = out.gradientText.flatMap((c) => (c === '$gradient' ? roles?.gradient ?? [] : c.startsWith('$') ? [] : [c]));
+    if (stops.length >= 2) out.gradientText = stops;
+    else delete out.gradientText;
+  }
+  return out;
+}
+
 /** The devices the style panel can switch, in plain words. */
 export const DECO_LABELS: Record<keyof Deco, string> = {
   profileHeader: 'Profile header',
