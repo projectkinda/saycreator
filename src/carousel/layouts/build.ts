@@ -23,6 +23,13 @@ import { validateSlideContent } from './pick';
 import { textFitProblems, tightenBox } from './textFits';
 import type { Cut, Cx, Fields, Gradient, LayoutStyle, Plan, PlaneTone, PlanImage, Slot } from './types';
 
+/**
+ * Round F: the feather of a photo shown whole over its blurred backdrop. The mask is the picture's rectangle moved `FEATHER_INSET` px in and blurred by `FEATHER_BLUR` (a Gaussian of that standard deviation):
+ * the picture goes from 10% to 90% visible over about 2.56 x 11 = 28 px at 1080 wide (it was 11 px with a blur of 5 and an inset of 4, which still read as a hard edge). The picture is not moved or
+ * resized and the backdrop (blur 30, a 42% black veil) is unchanged.
+ */
+export const FEATHER_BLUR = 11;
+export const FEATHER_INSET = 14;
 export interface BuildOpts {
   /** Second pass of a card layout: the real headline height measured on the first drawing (see Plan.hug). */
   hugged?: number;
@@ -403,7 +410,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       // Round E: a photo shown whole is feathered into its blurred backdrop: a mask (the picture's rectangle, 4 px in, blurred) fades the outer 10 px or so instead of cutting a hard edge. The picture is not moved or resized.
       const feather = !!(w0 && w0.photo);
       const r2 = (n: number) => Math.round(n * 10) / 10;
-      const maskDef = feather ? `<filter id="${id}f" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="5"/></filter><mask id="${id}m" maskUnits="userSpaceOnUse" x="${r2(w0!.rect.x - 30)}" y="${r2(w0!.rect.y - 30)}" width="${r2(w0!.rect.w + 60)}" height="${r2(w0!.rect.h + 60)}"><rect x="${r2(w0!.rect.x + 4)}" y="${r2(w0!.rect.y + 4)}" width="${r2(w0!.rect.w - 8)}" height="${r2(w0!.rect.h - 8)}" fill="#ffffff" filter="url(#${id}f)"/></mask>` : '';
+      const maskDef = feather ? `<filter id="${id}f" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="${FEATHER_BLUR}"/></filter><mask id="${id}m" maskUnits="userSpaceOnUse" x="${r2(w0!.rect.x - 50)}" y="${r2(w0!.rect.y - 50)}" width="${r2(w0!.rect.w + 100)}" height="${r2(w0!.rect.h + 100)}"><rect x="${r2(w0!.rect.x + FEATHER_INSET)}" y="${r2(w0!.rect.y + FEATHER_INSET)}" width="${r2(w0!.rect.w - 2 * FEATHER_INSET)}" height="${r2(w0!.rect.h - 2 * FEATHER_INSET)}" fill="#ffffff" filter="url(#${id}f)"/></mask>` : '';
       return `<clipPath id="${id}">${w0 ? `<rect x="${w0.rect.x}" y="${w0.rect.y}" width="${w0.rect.w}" height="${w0.rect.h}"/>` : clip}</clipPath>${maskDef}${panel}<image href="${p.src.replace(/&/g, '&amp;')}" ${box} ${feather ? `mask="url(#${id}m)"` : `clip-path="url(#${id})"`}/>`;
     }).join('');
     const indexed = pics.map((p, i) => ({ p, i }));
