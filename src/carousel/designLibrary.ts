@@ -232,7 +232,7 @@ export function fixGround(g: PackGround, notes: string[]): NonNullable<LayoutSty
  * Round G: the style with every ground's ink made readable on its own ground (text 4.5:1 by the better of the ink, white and black, the muted ink and the ink on the accent re-derived),
  * the ground and the accent unchanged. Used by the repair stage for a contrast failure, so the layout stays. null when nothing would change.
  */
-export function readableStyle(style: LayoutStyle): LayoutStyle | null {
+export function readableStyle(style: LayoutStyle, grounds: string[] = []): LayoutStyle | null {
   const fix = <G extends { bg: string; text: string; muted: string; accent: string; surface: string; onAccent?: string }>(g: G): G => {
     const text = contrast(g.text, g.bg) >= 4.5 ? g.text : readableInk(g.bg, [g.text, '#FFFFFF', '#000000']);
     if (text === g.text) return g;
@@ -241,8 +241,40 @@ export function readableStyle(style: LayoutStyle): LayoutStyle | null {
   const palette = fix(style.palette);
   const rhythm = style.rhythm?.map(fix);
   const closing = style.closing ? fix(style.closing) : undefined;
-  const changed = palette !== style.palette || (rhythm ?? []).some((g, k) => g !== style.rhythm![k]) || (closing !== undefined && closing !== style.closing);
-  return changed ? { ...style, palette, ...(rhythm ? { rhythm } : {}), ...(closing ? { closing } : {}) } : null;
+  // a gradient headline: every stop is moved (same hue and saturation, 1% steps, away from the ground's lightness) until it reads 4.5:1 on the ground of the slide
+  let deco = style.deco;
+  const stops = style.deco?.gradientText;
+  if (grounds.length && stops && stops.length >= 2) {
+    // every colour the headline sits on (the slide's ground and a panel under the title): the stop must read on all of them; the direction is the one of the hardest ground
+    const reads = (c: string) => grounds.every((g) => contrast(c, g) >= 4.5);
+    const hard = grounds.reduce((w, g) => (Math.max(contrast('#FFFFFF', g), contrast('#000000', g)) < Math.max(contrast('#FFFFFF', w), contrast('#000000', w)) ? g : w), grounds[0]);
+    const dark = contrast('#FFFFFF', hard) > contrast('#000000', hard);
+    const moved = stops.map((c) => {
+      if (reads(c)) return c;
+      const [h, s, l0] = toHsl(c);
+      for (let k = 1; k <= 97; k++) {
+        const n = fromHsl(h, s, Math.max(0, Math.min(1, l0 + (dark ? 1 : -1) * 0.01 * k)));
+        if (reads(n)) return n;
+      }
+      return dark ? '#FFFFFF' : '#000000';
+    });
+    if (moved.some((c, k) => c !== stops[k])) deco = { ...style.deco!, gradientText: moved };
+  }
+  const changed = palette !== style.palette || (rhythm ?? []).some((g, k) => g !== style.rhythm![k]) || (closing !== undefined && closing !== style.closing) || deco !== style.deco;
+  return changed ? { ...style, palette, ...(rhythm ? { rhythm } : {}), ...(closing ? { closing } : {}), ...(deco ? { deco } : {}) } : null;
+}
+/** The flat colours a slide's title sits on: the slide's ground and the flat shapes (a caption panel, a card) under the middle of the title. */
+export function groundsUnderTitle(layers: Layer[] | undefined, bg: string): string[] {
+  const out = new Set<string>([bg.toUpperCase()]);
+  const t = (layers ?? []).find((l) => l.kind === 'text' && (l as { name?: string }).name === 'title');
+  if (t) {
+    const cx = t.x + t.width / 2, cy = t.y + Math.min(t.height, 120) / 2;
+    for (const l of layers!) {
+      const fill = (l as { fill?: unknown }).fill;
+      if (l.kind === 'shape' && typeof fill === 'string' && /^#[0-9a-f]{6}$/i.test(fill) && l.visible !== false && cx >= l.x && cx <= l.x + l.width && cy >= l.y && cy <= l.y + l.height && l.width * l.height < 1080 * 1350 * 0.98) out.add(fill.toUpperCase());
+    }
+  }
+  return [...out];
 }
 export function styleFromPack(pack: StylePack | null | undefined): { style: LayoutStyle; notes: string[] } {
   if (!pack) return { style: DEFAULT_STYLE, notes: ['No reference style: a neutral light style is used.'] };
@@ -1520,7 +1552,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   const phoneFailures = (d: Drawn | undefined, sp: SlideSpec): string[] => {
     if (!d?.built) return [];
     const type = String(scriptSlideOf(sp.layout, sp.fields).type ?? 'content');
-    return faithfulChecks(d.built.layers as never, { canvas: { w: 1080, h: 1350 }, bg: d.built.fieldBg ?? style.palette.bg, k: 1, slideType: type, prose: /data-layout="prose"/.test(d.built.svg) }).filter((q) => !q.pass).map((q) => q.id + ': ' + q.reason).concat(slideCheckHook ? slideCheckHook(d.built.layers as unknown[], sp) : []);
+    return faithfulChecks(d.built.layers as never, { canvas: { w: 1080, h: 1350 }, bg: d.built.fieldBg ?? style.palette.bg, k: 1, slideType: type, prose: /data-layout="prose"/.test(d.built.svg), svg: d.built.svg, devices: d.built.devices }).filter((q) => !q.pass).map((q) => q.id + ': ' + q.reason).concat(slideCheckHook ? slideCheckHook(d.built.layers as unknown[], sp) : []);
   };
   if (!own) {
     const isContrast = (q: string) => q.startsWith('contrast:');
@@ -1533,7 +1565,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
       let styleUse = style;
       let how: 'colour' | 'layout' = 'layout';
       if (failed.some(isContrast)) {
-        const fixedStyle = readableStyle(style);
+        const fixedStyle = readableStyle(style, groundsUnderTitle(drawn.get(i)?.built?.layers as never, drawn.get(i)?.built?.fieldBg ?? style.palette.bg));
         if (fixedStyle) {
           const dc = await drawOne(sp, rot.variants[i], fixedStyle, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
           if (dc.built && !dc.problems.length) {

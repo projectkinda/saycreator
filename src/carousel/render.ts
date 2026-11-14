@@ -222,7 +222,7 @@ class Renderer {
     const same = Math.abs(W / H - fa.canvas.w / fa.canvas.h) < 0.005;
     const png = await svgToPng(fa.svg, W, same ? undefined : { w: W, h: H, bg: fa.bg });
     const k = same ? W / fa.canvas.w : Math.min(W / fa.canvas.w, H / fa.canvas.h);
-    const lint = faithfulChecks(fa.layers, { canvas: fa.canvas, bg: fa.bg, k, slideType: slide.type, prose: /data-layout="prose"/.test(fa.svg) });
+    const lint = faithfulChecks(fa.layers, { canvas: fa.canvas, bg: fa.bg, k, slideType: slide.type, prose: /data-layout="prose"/.test(fa.svg), svg: fa.svg });
     return { png, lint, warnings: [`Faithful drawing: these checks cannot run on it. ${UNCHECKED.join(' ')}`], repairs: [], ms: performance.now() - t0 };
   }
 

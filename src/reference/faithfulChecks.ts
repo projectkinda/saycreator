@@ -20,7 +20,29 @@ const flat = (l: Layer): string | null => {
 };
 
 /** `layers`: the filled layers in the design's own coordinates; `k`: output pixels per design pixel (a design fitted on a smaller card is below 1). */
-export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: number }; bg: string; k: number; slideType: string; /** A prose slide: its own, higher word limit, counted without the handle and the page number. */ prose?: boolean }): CarouselLintResult[] {
+/** Round G: the colour stops of a gradient headline (the slide's drawing fills the title with url(#htext)), or null when the slide has none. */
+export function gradientStopsOf(svg: string | undefined): string[] | null {
+  if (!svg || !/id="htext"/.test(svg)) return null;
+  const g = /<linearGradient[^>]*id="htext"[^>]*>([\s\S]*?)<\/linearGradient>/.exec(svg);
+  const stops = g ? [...g[1].matchAll(/stop-color="(#[0-9a-fA-F]{6})"/g)].map((m) => m[1]) : [];
+  return stops.length >= 2 ? stops : null;
+}
+/** The colours along a gradient, the stops and five steps between each pair (the worst point of the gradient is one of these). */
+const along = (stops: string[]): string[] => {
+  const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const out: string[] = [];
+  for (let i = 0; i < stops.length - 1; i++)
+    for (let k = 0; k < 5; k++) {
+      const a = rgb(stops[i]), b = rgb(stops[i + 1]);
+      out.push('#' + a.map((v, j) => Math.round(v + ((b[j] - v) * k) / 5).toString(16).padStart(2, '0')).join(''));
+    }
+  out.push(stops[stops.length - 1]);
+  return out;
+};
+/** A device the slide drew (see layouts/devices.ts): text over a piece of art is measured against the art's ink. */
+export interface CheckedDevice { id: string; kind: string; box: { x: number; y: number; w: number; h: number }; ink?: string; opacity?: number }
+
+export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: number }; bg: string; k: number; slideType: string; /** A prose slide: its own, higher word limit, counted without the handle and the page number. */ prose?: boolean; /** Round G: the slide's drawing, so a gradient headline is measured along its gradient. */ svg?: string; /** Round G: the devices the slide drew, so text over art is measured. */ devices?: CheckedDevice[] }): CarouselLintResult[] {
   const L = CAROUSEL_LIMITS;
   const texts = layers.filter((l): l is TextLayer => l.kind === 'text' && l.visible !== false && l.role !== 'decor' && !!l.text.trim());
   const out: CarouselLintResult[] = [];
@@ -56,6 +78,8 @@ export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: num
   // Contrast: the topmost flat block under the slot's centre, else the slide background; anything else is unknown and skipped.
   const bad: string[] = [];
   let known = 0;
+  const gradStops = gradientStopsOf(o.svg);
+  const gradT = gradStops ? laid.find((x) => x.t.name === 'title')?.t : undefined;
   for (const { t, b } of laid) {
     const cx = t.x + t.width / 2;
     const cy = t.y + Math.min(b.height, t.height) / 2;
@@ -69,11 +93,12 @@ export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: num
     // The slot's own colour, and every word that has a colour of its own: an accent run (set in the accent or on a marker) and a word on a marker bar. Each is measured against what is
     // directly behind it: the bar's colour for a word on a bar, else the flat colour under the slot.
     const read = (name: string, ink: string, back: string) => {
-      const c = contrastRgb(parseColor(ink).rgb, parseColor(back).rgb);
+      // Round G: the title of a gradient headline is the colour of its WORST point along the gradient against the ground behind it
+      const c = gradT === t && gradStops && ink === fg ? Math.min(...along(gradStops).map((g) => contrastRgb(parseColor(g).rgb, parseColor(back).rgb))) : contrastRgb(parseColor(ink).rgb, parseColor(back).rgb);
       // Round B: display text (96 px and up) has to reach 3:1 only, the rule the layout library already follows for a big headline's accent (4.5:1 for anything smaller). Asking 4.5:1 of a 140 px word
       // made the Round 15 repair stage move good slides to other layouts, and drop their highlight, for a colour the library had chosen on purpose.
       const need = Number(t.style.size) >= 96 ? Math.min(3, L.minContrast) : L.minContrast;
-      if (c < need) bad.push(name + ' (' + c.toFixed(1) + ':1)');
+      if (c < need) bad.push(name + (gradT === t && gradStops && ink === fg ? ' (gradient, worst point ' : ' (') + c.toFixed(1) + ':1)');
     };
     const hl = t.highlight;
     const hlBg = hexOf(hl?.color);
@@ -91,6 +116,22 @@ export function faithfulChecks(layers: Layer[], o: { canvas: { w: number; h: num
         seen.add(key);
         read((t.name ?? 'text') + (run || w.highlighted ? ' "' + w.text + '"' : ''), ink, back);
       }
+    }
+  }
+  // Round G: text drawn over a piece of art is measured against the art's ink (a soft glow, which has an opacity, is not art ink)
+  for (const dv of o.devices ?? []) {
+    if (!dv.id.startsWith('art:') || dv.opacity !== undefined || !dv.ink) continue;
+    const inks = dv.ink.split(',').filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
+    for (const { t, b } of laid) {
+      const fg = typeof t.style.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(t.style.color) ? t.style.color : null;
+      if (!fg || !inks.length) continue;
+      const w = Math.min(t.x + t.width, dv.box.x + dv.box.w) - Math.max(t.x, dv.box.x);
+      const h = Math.min(t.y + b.height, dv.box.y + dv.box.h) - Math.max(t.y, dv.box.y);
+      if (w <= L.slackPx || h <= L.slackPx) continue;
+      known++;
+      const worst = Math.min(...inks.map((ink) => contrastRgb(parseColor(fg).rgb, parseColor(ink).rgb)));
+      const need = Number(t.style.size) >= 96 ? Math.min(3, L.minContrast) : L.minContrast;
+      if (worst < need) bad.push((t.name ?? 'text') + ' over ' + dv.id.slice(4) + ' (' + worst.toFixed(1) + ':1)');
     }
   }
   res('contrast', 'Contrast', bad.length === 0, bad.length ? `Low contrast on a flat colour: ${bad.join(', ')}.` : `${known} text slot(s) with a known flat background have enough contrast.`, { limit: L.minContrast });
