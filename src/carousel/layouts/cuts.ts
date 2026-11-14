@@ -93,13 +93,18 @@ export function lightenForText(accent: string, surface: string, min = 4.5): { co
   }
   return { color: accent, changed: false };
 }
+/**
+ * The dark ground an accent has to be lightened for: the LIGHTEST of them (a card on a black ground), because a lightened colour that clears the lightest dark ground clears the others too. For an accent lighter
+ * than the grounds this is the ground it read worst on, as before; for an accent darker than every ground (a near-black brand colour on black) the old choice was the darkest ground and the card failed. Round G.
+ */
+const hardestDark = (grounds: string[], _accent: string, fallback: string): string => grounds.reduce((w, g) => (contrast('#000000', g) > contrast('#000000', w) ? g : w), fallback);
 /** The accent as text on a surface: itself when it reads at 4.5:1, a lightened copy on a dark surface, else itself at 3:1, else the text colour. */
 export function accentTextOf(accent: string, surface: string, text: string, refs: string[] = []): { accentText: string; accentInk?: string } {
   if (contrast(accent, surface) >= 4.5) return { accentText: accent };
   // A deck has ONE lightened accent: on a dark surface it is lightened until it reads on the hardest dark ground of the deck (`refs`: the ground, the card/tint colour), so the
   // same accent is not pure red on one slide and coral on the next (Shapes off / subtle / bold, tinted slides).
   const isDark = (s: string) => contrast('#FFFFFF', s) > contrast('#000000', s);
-  const worst = isDark(surface) ? [surface, ...refs.filter(isDark)].reduce((w, s) => (contrast(accent, s) < contrast(accent, w) ? s : w), surface) : surface;
+  const worst = isDark(surface) ? hardestDark([surface, ...refs.filter(isDark)], accent, surface) : surface;
   const lk = lightenForText(accent, worst);
   if (lk.changed) return { accentText: lk.color, accentInk: lk.color };
   // under 4.5:1 the accent is not used as text: the text colour is (the engine then sets accent phrases on a marker bar)
@@ -112,7 +117,7 @@ export function accentTextOf(accent: string, surface: string, text: string, refs
  */
 export function accentDisplayOf(accent: string, surface: string, refs: string[], small: string): string {
   const isDark = (s: string) => contrast('#FFFFFF', s) > contrast('#000000', s);
-  const worst = isDark(surface) ? [surface, ...refs.filter(isDark)].reduce((w, s) => (contrast(accent, s) < contrast(accent, w) ? s : w), surface) : surface;
+  const worst = isDark(surface) ? hardestDark([surface, ...refs.filter(isDark)], accent, surface) : surface;
   if (contrast(accent, worst) >= 3) return accent;
   if (isDark(surface)) {
     const lk = lightenForText(accent, worst, 3);
