@@ -68,6 +68,7 @@ test('a scene answer is validated, snapped to the measured boxes, noise dropped,
 });
 
 test('read mode toggle: whole picture first, the other way costs one more call, and switching back re-applies the cached read with no call', async ({ page }) => {
+  test.fixme(true, "QUARANTINED Round D: the \"Read references\" button and the \"5. How close it got\" step were replaced by the automatic whole-picture read. Covers: read mode toggle: whole picture first, the other way costs one more call, and switching back re-applies the cached read with no call.");
   const { fakeReader, labelsAnswer, makeReference, openStyleFromReferences, refInput, refineAnswer } = await import('./reference-helpers');
   const rec = await fakeReader(page, (kind: string, _n: number, prompt: string) => (kind === 'refine' ? refineAnswer() : labelsAnswer(prompt)));
   await openStyleFromReferences(page);
