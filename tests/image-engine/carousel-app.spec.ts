@@ -56,6 +56,13 @@ const editSlide = async (page: Page, n: number) => {
   if (!(await view.isVisible())) await page.getByTestId('edit-slides').click();
   await page.getByRole('button', { name: `Show slide ${n}`, exact: true }).click();
   await expect(page.getByRole('heading', { name: new RegExp(`^Edit slide ${n} of`) })).toBeVisible();
+  // Round D: the card's controls are split over the tabs of the Edit view (Layout, Text, Pictures, Fine-tune), one at a time: open the one a test needs with tab(); Text is the default here (the Headline field)
+  const text = page.getByRole('tab', { name: 'Text', exact: true });
+  if ((await text.getAttribute('aria-selected')) !== 'true') await text.click();
+};
+const tab = async (page: Page, name: 'Layout' | 'Text' | 'Pictures' | 'Fine-tune') => {
+  const t = page.getByRole('tab', { name, exact: true });
+  if ((await t.getAttribute('aria-selected')) !== 'true') await t.click();
 };
 const slideCard = (page: Page, _n: number) => page.locator('.cr-card');
 /** Every slide has been drawn and checked: a thumbnail for each, and the phone-check line above the preview has its answer. */
@@ -174,7 +181,7 @@ test('pasting a bad script says what is wrong and where, in plain words, and wil
   await expect(alert.locator('code').first()).toBeVisible();
   await expect(alert).toContainText('slides[2].headline');
   await expect(use).toBeDisabled();
-  await expect(page.getByText('No script yet')).toBeVisible();
+  await expect(page.getByText('Your slides appear here')).toBeVisible(); // Round D: the empty-state words of the preview ("No script yet" is gone)
   await shot(page, 'bad-script', 'A bad script', 'Each problem names the slide and the place (for example slides[2].headline) and says what to do. The script is not used.');
 });
 
@@ -184,8 +191,8 @@ test('pasting a good script (even inside a chat code block) loads it: seven slid
   await expect(page.getByText('This script looks good: 7 slides')).toBeVisible();
   await page.getByRole('button', { name: 'Use this script' }).click();
   await allDrawn(page);
-  await expect(page.getByText(/Script loaded: 7 slides/)).toBeAttached();
-  await expect(page.getByLabel('Paste the script Claude wrote (JSON)')).toBeHidden(); // the Advanced fold closes once a script is in use
+  await expect(page.getByText(/Script loaded: 7 slides/).first()).toBeAttached(); // Round D: the status line is in the page twice (shown and announced)
+  await expect(page.getByLabel('Paste the script Claude wrote (JSON)')).toHaveValue(''); // Round D: once a script is in use the paste box is emptied (there is no Advanced fold to close)
   await editSlide(page, 1);
   const first = slideCard(page, 1);
   await expect(first.getByLabel('Headline')).toHaveValue('Fix your profile in 15 minutes');
@@ -210,7 +217,7 @@ test('editing a headline redraws only that slide; undo and redo bring the old an
   await allDrawn(page);
   const after = await srcs(page);
   for (const i of [0, 2, 3, 4, 5, 6]) expect(after[i], `slide ${i + 1} should not have been redrawn`).toBe(before[i]);
-  await expect(undoBtn(page)).toContainText('Edit headline on slide 2');
+  await expect(undoBtn(page)).toHaveAttribute('aria-label', new RegExp('Edit headline on slide 2')); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
   await undoBtn(page).click();
   await expect(card.getByLabel('Headline')).toHaveValue('Rewrite your headline');
   await expect.poll(async () => (await srcs(page))[1], { timeout: 20_000 }).toBe(before[1]);
@@ -240,7 +247,7 @@ test('tags are chips: removing below two or adding above four is refused with a 
   await add.fill('money');
   await add.press('Enter');
   await expect(tags.getByRole('listitem')).toHaveCount(3);
-  await expect(undoBtn(page)).toContainText('Change tags on slide 3');
+  await expect(undoBtn(page)).toHaveAttribute('aria-label', new RegExp('Change tags on slide 3')); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
   await undoBtn(page).click();
   await expect(tags.getByRole('listitem')).toHaveCount(2);
 });
@@ -263,7 +270,7 @@ test('changing the style restyles the same script; undo goes back', async ({ pag
   await expect.poll(async () => (await srcs(page))[0], { timeout: 30_000 }).not.toBe(before[0]);
   await allDrawn(page);
   await expect(slideCard(page, 1).getByLabel('Headline')).toHaveValue('Fix your profile in 15 minutes'); // same words
-  await expect(undoBtn(page)).toContainText('Change style to');
+  await expect(undoBtn(page)).toHaveAttribute('aria-label', new RegExp('Change style to')); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
   await shot(page, 'style-switched', 'Another style, same script', `Switched from ${currentName.split('\n')[0]} to ${otherName.split('\n')[0]}. The words did not change.`);
   await undoBtn(page).click();
   await expect(current).toHaveAttribute('aria-pressed', 'true');
@@ -282,11 +289,11 @@ test('per-slide actions are patches: layout, shuffle, swap an element, regenerat
   const now = await layout.inputValue();
   await layout.selectOption(options.find((o) => o !== now)!);
   await expect.poll(async () => (await srcs(page))[1], { timeout: 20_000 }).not.toBe(start);
-  await expect(undoBtn(page)).toContainText('Change layout on slide 2');
+  await expect(undoBtn(page)).toHaveAttribute('aria-label', new RegExp('Change layout on slide 2')); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
   // shuffle
   const afterLayout = (await srcs(page))[1];
   await card.getByRole('button', { name: 'Shuffle elements' }).click();
-  await expect(undoBtn(page)).toContainText('Shuffle elements on slide 2');
+  await expect(undoBtn(page)).toHaveAttribute('aria-label', new RegExp('Shuffle elements on slide 2')); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
   await expect.poll(async () => (await srcs(page))[1], { timeout: 20_000 }).not.toBe(afterLayout);
   // swap
   await card.getByText(/Elements on this slide/).click();
@@ -295,20 +302,20 @@ test('per-slide actions are patches: layout, shuffle, swap an element, regenerat
   const afterShuffle = (await srcs(page))[1];
   const choice = (await swap.locator('option').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value).filter(Boolean)))[0];
   await swap.selectOption(choice);
-  await expect(undoBtn(page)).toContainText('Swap an element on slide 2');
+  await expect(undoBtn(page)).toHaveAttribute('aria-label', new RegExp('Swap an element on slide 2')); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
   await expect.poll(async () => (await srcs(page))[1], { timeout: 20_000 }).not.toBe(afterShuffle);
   await expect(card.getByText(choice, { exact: false }).first()).toBeVisible();
   // regenerate from the plan: back to the style's own choice, undoable
   await card.getByRole('button', { name: 'Regenerate from the plan' }).click();
-  await expect(undoBtn(page)).toContainText('Regenerate slide 2 from the plan');
+  await expect(undoBtn(page)).toHaveAttribute('aria-label', new RegExp('Regenerate slide 2 from the plan')); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
   await expect.poll(async () => (await srcs(page))[1], { timeout: 20_000 }).toBe(start);
   // undo all four
   for (const label of ['Regenerate slide 2', 'Swap an element on slide 2', 'Shuffle elements on slide 2', 'Change layout on slide 2']) {
-    await expect(undoBtn(page)).toContainText(label);
+    await expect(undoBtn(page)).toHaveAttribute('aria-label', new RegExp(label)); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
     await undoBtn(page).click();
   }
   await expect.poll(async () => (await srcs(page))[1], { timeout: 20_000 }).toBe(start);
-  await expect(redoBtn(page)).toContainText('Change layout on slide 2');
+  await expect(redoBtn(page)).toHaveAttribute('aria-label', new RegExp('Change layout on slide 2')); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
   await shot(page, 'slide-actions', 'Per-slide actions', 'Layout, shuffle, swap and regenerate are all undoable patches.');
 });
 
@@ -397,7 +404,7 @@ test('refresh and recover: the script, the edits, the style and the undo history
   await editSlide(page, 2);
   const card = slideCard(page, 2);
   await card.getByLabel('Headline').fill('Say who you help');
-  await expect(undoBtn(page)).toContainText('Edit headline on slide 2');
+  await expect(undoBtn(page)).toHaveAttribute('aria-label', new RegExp('Edit headline on slide 2')); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { pressed: false }).filter({ hasNotText: 'Pick for me' }).first().click();
   await allDrawn(page);
   const styleName = await page.getByRole('list', { name: 'Styles' }).getByRole('button', { pressed: true }).innerText();
@@ -407,7 +414,7 @@ test('refresh and recover: the script, the edits, the style and the undo history
   await expect(slideCard(page, 2).getByLabel('Headline')).toHaveValue('Say who you help');
   // The chosen style's button may still carry a passing "Drawing…" note right after a reload, so wait for the name rather than read it once.
   await expect.poll(async () => (await page.getByRole('list', { name: 'Styles' }).getByRole('button', { pressed: true }).innerText()).replace(/Drawing…s*/, '').trim()).toBe(styleName.replace(/Drawing…s*/, '').trim());
-  await expect(undoBtn(page)).toContainText('Change style to');
+  await expect(undoBtn(page)).toHaveAttribute('aria-label', new RegExp('Change style to')); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
   await undoBtn(page).click();
   await undoBtn(page).click();
   await expect(slideCard(page, 2).getByLabel('Headline')).toHaveValue('Rewrite your headline');
@@ -424,7 +431,7 @@ test('a broken or unknown saved project never crashes the page', async ({ page }
   await page.addInitScript(() => localStorage.setItem('creator.carousel.project.v1', JSON.stringify({ project: { doc: { version: 1, format: 'carousel', style: 'gone', topic: 'kept', script: { slides: [1, 2] }, choices: {} }, past: [], future: [] } })));
   await open(page);
   await expect(page.getByLabel('Your text or topic')).toHaveValue('kept');
-  await expect(page.getByText('No script yet')).toBeVisible();
+  await expect(page.getByText('Your slides appear here')).toBeVisible(); // Round D: the empty-state words of the preview ("No script yet" is gone)
   await page.addInitScript(() => localStorage.setItem('creator.carousel.project.v1', '{not json'));
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Make a carousel' })).toBeVisible();
@@ -434,8 +441,8 @@ test('quote cards: a different format, square, with its own example; changing fo
   await loadExample(page);
   await openAdvanced(page);
   await page.getByRole('button', { name: /^Quote card/ }).click();
-  await expect(page.getByText(/script was for the other format, so it was cleared/)).toBeAttached();
-  await expect(page.getByText('No script yet')).toBeVisible();
+  await expect(page.getByText(/script was for the other format, so it was cleared/).first()).toBeAttached(); // Round D: shown and announced
+  await expect(page.getByText('Your slides appear here')).toBeVisible(); // Round D: the empty-state words of the preview ("No script yet" is gone)
   await undoBtn(page).click();
   await allDrawn(page);
   await openAdvanced(page);
@@ -471,7 +478,7 @@ test('keyboard and screen readers: the whole flow works without a mouse, and con
   await expect(card.getByLabel('What the number means')).toBeVisible();
   // Undo with the keyboard outside a text field.
   await card.getByLabel('Big number').fill('4x');
-  await expect(undoBtn(page)).toContainText('Edit big number on slide 6');
+  await expect(undoBtn(page)).toHaveAttribute('aria-label', new RegExp('Edit big number on slide 6')); // Round D: the button says only Undo / Redo; what it undoes is in its aria-label
   await page.getByRole('heading', { name: 'Your slides' }).click();
   await page.keyboard.press('Control+z');
   await expect(card.getByLabel('Big number')).toHaveValue('3x');
