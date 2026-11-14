@@ -112,7 +112,6 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
   // Round G2: a primary dark enough for off-white text to reach 7:1 IS the dark ground (navy makes the dark slides navy); a lighter primary keeps the near-black tinted toward it
   const darkIsP = contrast(INK_ON_DARK, P) >= DARK_PRIMARY_INK;
   const DARK = darkIsP ? P : mix('#0C0C0D', P, 0.07);
-  if (darkIsP) changes.push({ kind: 'derived', to: P, text: `Your ${P} is dark enough to be the background of your dark slides (light text on it reads ${ratio(INK_ON_DARK, P)}:1), so it is.` });
   // Round G2: the accent of a ground (what a highlight bar, a pill or a marker is drawn in) is the first of: the main colour, the second colour (when the brand has one), a step of the main colour's lightness
   // (at most MAX_ACCENT_STEP, same hue) and the ground's own ink, that reaches ACCENT_FLOOR against the ground
   const picks = new Map<string, Pick>();
@@ -192,6 +191,7 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     return { slot, g: ng, kind };
   });
 
+  if (darkIsP && out.some((o) => o.kind === 'dark')) changes.push({ kind: 'derived', to: P, text: `Your ${P} is dark enough to be the background of your dark slides (light text on it reads ${ratio(INK_ON_DARK, P)}:1), so it is.` });
   // rule 4: what your main colour does as text on each neutral ground (the layouts already do this on the same layout; here it is said in words)
   for (const kind of ['light', 'dark'] as const) {
     const ng = out.find((o) => o.kind === kind)?.g;
@@ -219,7 +219,7 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     for (const [key, pk] of picks) {
       if (pk.how === 'primary') continue;
       if (pk.how === 'ink' && key.startsWith('accent:')) continue; // the ink on its own colour is what an accent ground always did
-      const name = key.startsWith('accent:') ? (pk.bg === P ? `slides that use your ${P} as the background` : `slides with your second colour as the background`) : `${key} slides`;
+      const name = key.startsWith('accent:') ? (pk.bg === P ? `the slides with your ${P} background` : `the slides with your second colour as the background`) : `your ${key} slides`;
       const gk = pk.how + pk.accent;
       const gr = groups.get(gk) ?? { how: pk.how, accent: pk.accent, names: [], bg: pk.bg, was: pk.was };
       gr.names.push(name);
@@ -228,9 +228,10 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     for (const gr of groups.values()) {
       const where = gr.names.join(' and ');
       const bad = r1(gr.was);
-      if (gr.how === 'secondary') changes.push({ kind: 'secondary', from: P, to: gr.accent, ratio: gr.was, text: `Your ${P} does not show on your ${where} (${bad}:1), so highlights use your ${gr.accent} there (${ratio(gr.accent, gr.bg)}:1).` });
-      else if (gr.how === 'step') changes.push({ kind: 'accent-text', from: P, to: gr.accent, ratio: gr.was, text: `Your ${P} does not show on your ${where} (${bad}:1), so highlights use ${isDark(gr.bg) ? 'a lighter' : 'a darker'} step of it there (${gr.accent}, ${ratio(gr.accent, gr.bg)}:1), the same hue.` });
-      else changes.push({ kind: 'accent-text', from: P, ratio: gr.was, text: `Your ${P} does not show on your ${where} (${bad}:1), and no step of it does, so highlights there are drawn in your text colour.` });
+      const onAccentGround = gr.names.every((n) => n.startsWith('the slides '));
+      if (gr.how === 'secondary') changes.push({ kind: 'secondary', from: P, to: gr.accent, ratio: gr.was, text: onAccentGround ? `On ${where}, your ${P} cannot be the highlight, so highlights use your ${gr.accent} (${ratio(gr.accent, gr.bg)}:1).` : `Your ${P} does not show on ${where} (${bad}:1), so highlights use your ${gr.accent} there (${ratio(gr.accent, gr.bg)}:1).` });
+      else if (gr.how === 'step') changes.push({ kind: 'accent-text', from: P, to: gr.accent, ratio: gr.was, text: `Your ${P} does not show on ${where} (${bad}:1), so highlights use ${isDark(gr.bg) ? 'a lighter' : 'a darker'} step of it there (${gr.accent}, ${ratio(gr.accent, gr.bg)}:1), the same hue.` });
+      else changes.push({ kind: 'accent-text', from: P, ratio: gr.was, text: `Your ${P} does not show on ${where} (${bad}:1), and no step of it does, so highlights there are drawn in your text colour.` });
     }
   }
   // the secondary as text on the main colour (a second colour that cannot be read on it is not used for text there)

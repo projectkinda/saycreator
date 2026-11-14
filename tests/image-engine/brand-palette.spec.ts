@@ -21,6 +21,7 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
     const PR: any = await import('/src/carousel/presets.ts');
     const BP: any = await import('/src/carousel/brandPalette.ts');
     const FC: any = await import('/src/reference/faithfulChecks.ts');
+    const DR: any = await import('/src/carousel/layouts/draw.ts');
     const names = ['dark-quiet', 'editorial-collage', 'film-paper', 'glass-gradient', 'hot-flat', 'mono-poster', 'object-neon', 'style-1', 'style-2', 'style-3', 'style-4', 'style-5', 'style-6', 'style-7', 'style-8'];
     const plan = [
       { layout: 'statement', fields: { headline: 'Most creators do not have a design problem.' }, accents: ['design problem'] },
@@ -39,6 +40,11 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
         const provider: any = { id: 'dev-cli', label: 'fake', async write() { calls++; return { text: JSON.stringify({ title: 'T', slides: plan }), ms: 1 }; } };
         const base = PR.presetPackFor(name, false);
         const applied = BP.applyBrand(structuredClone(base), brand);
+        // Round G2: every accent drawn as a shape reaches the floor on every ground of the style as the layouts see it (the palette, the rhythm and the closing ground)
+        const st = D.styleFromPack(applied.pack).style;
+        const gs = [st.palette, ...(st.rhythm ?? []), ...(st.closing ? [st.closing] : [])];
+        const floorMiss = brand ? gs.filter((g: any) => DR.contrast(g.accent, g.bg) < BP.ACCENT_FLOOR).map((g: any) => `accent ${g.accent} on ${g.bg}: ${DR.contrast(g.accent, g.bg).toFixed(2)}:1`) : [];
+        const darkBgs = applied.grounds.filter((g: any) => g.kind === 'dark').map((g: any) => g.bg.toUpperCase());
         const look = { pack: applied.pack, hasPhoto: false, images: [], brief: '', site: '' };
         const res = await D.designLibraryDeck({ text, slides: plan.length, tone: 'clear', format: 'carousel', styleChoice: name, styles: [] }, look, '@saycreator', provider, new AbortController().signal);
         const lib = res.designed.library;
@@ -61,7 +67,7 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
           redrawCalls = calls - 1;
           switched = Object.values(out.layouts) as string[];
         }
-        return { calls, layouts: lib.layouts as string[], missing, contrast, repairs: (lib.repairs ?? []).map((x: any) => `${x.slide}:${x.how}:${x.from}->${x.to}`), changes: applied.changes.map((c: any) => c.text), redrawCalls, switched };
+        return { floorMiss, darkBgs, calls, layouts: lib.layouts as string[], missing, contrast, repairs: (lib.repairs ?? []).map((x: any) => `${x.slide}:${x.how}:${x.from}->${x.to}`), changes: applied.changes.map((c: any) => c.text), redrawCalls, switched };
       };
       const control = await run(null);
       for (const b of brands) rows.push({ style: name, brand: b.id, control, got: await run({ colours: b.colours }) });
@@ -71,6 +77,7 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
   fs.mkdirSync('out/round-g', { recursive: true });
   fs.writeFileSync('out/round-g/brand-palette-results.json', JSON.stringify(r.map((x: any) => ({ style: x.style, brand: x.brand, layouts: x.got.layouts, same: JSON.stringify(x.got.layouts) === JSON.stringify(x.control.layouts), contrast: x.got.contrast, missing: x.got.missing, repairs: x.got.repairs, changes: x.got.changes, calls: x.got.calls, redrawCalls: x.got.redrawCalls })), null, 1));
   expect(r.length).toBe(75);
+  const MAIN: Record<string, string> = { yellow: '#FFE97A', neon: '#39FF14', navy: '#14213D', black: '#111111', blues: '#2F6BFF' };
   for (const x of r) {
     const who = `${x.style} + ${x.brand}`;
     expect(x.got.layouts, `${who}: the layouts of the deck without the brand`).toEqual(x.control.layouts);
@@ -79,6 +86,13 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
     expect(x.got.calls, `${who}: one fake writer call to make the deck`).toBe(1);
     expect(x.got.redrawCalls, `${who}: a brand switch makes 0 writer calls`).toBe(0);
     expect(x.got.switched, `${who}: a brand switch keeps the layouts`).toEqual(x.control.layouts);
+    // every accent drawn as a shape reaches the floor (3.6:1, the weakest built-in) on every ground
+    expect(x.got.floorMiss, `${who}: accent visibility`).toEqual([]);
+    // a dark primary (navy, near-black) is the dark ground itself; a light or mid one (pale yellow, neon, the blue) is not
+    for (const bg of x.got.darkBgs) {
+      if (x.brand === 'navy' || x.brand === 'black') expect(bg, `${who}: the dark ground is the primary`).toBe(MAIN[x.brand]);
+      else expect(bg, `${who}: a light or mid primary is not the dark ground`).not.toBe(MAIN[x.brand]);
+    }
     for (const c of x.got.changes) expect(c.length, `${who}: a change is written in words`).toBeGreaterThan(20);
     // a repair for a contrast failure is a colour repair, never a layout swap
     for (const rp of x.got.repairs) expect(rp, `${who}: repairs`).not.toMatch(/:layout:/);
@@ -90,6 +104,11 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
     return ['style-1', 'style-5', 'style-8'].map((n) => { const p = PR.presetPackFor(n, false); return BP.applyBrand(p, null).pack === p && BP.applyBrand(p, { colours: [] }).pack === p; });
   });
   expect(same).toEqual([true, true, true]);
+  // navy + orange: orange where navy cannot be seen (a navy dark ground), said in one line; pale yellow: no dark ground of its own colour
+  const navy = r.filter((y: any) => y.brand === 'navy');
+  expect(navy.filter((y: any) => y.got.changes.join(' ').includes('dark enough to be the background')).length, 'navy is the dark ground in every style that has a dark ground').toBe(navy.filter((y: any) => y.got.darkBgs.length > 0).length);
+  expect(navy.filter((y: any) => y.got.darkBgs.length > 0).length, 'most styles have a dark ground').toBeGreaterThan(9);
+  expect(navy.filter((y: any) => y.got.changes.join(' ').includes('so highlights use your #FCA311')).length, 'orange takes over where navy does not show').toBeGreaterThan(8);
   // the close pair is said in words
   for (const x of r.filter((y: any) => y.brand === 'blues')) expect(x.got.changes.join(' '), x.style).toContain('very close');
   // a style with an accent ground tells the person about white on neon
