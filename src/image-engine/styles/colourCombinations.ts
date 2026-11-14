@@ -15,6 +15,6 @@ export const COLOUR_COMBINATIONS: ColourCombination[] = [
   { id: 'forest-cream', name: 'Forest and cream', colours: ['#1f4d3a', '#f3ebd8', '#c8553d'] },
   { id: 'sunrise', name: 'Sunrise', colours: ['#f4553f', '#ffc857'] },
   { id: 'midnight-violet', name: 'Midnight violet', colours: ['#1b1340', '#8b7cff', '#35e0c4'] },
-  { id: 'sky-sand', name: 'Sky and sand', colours: ['#3f7fc9', '#efe3cc'] },
+  { id: 'sky-sand', name: 'Sky and sand', colours: ['#2a5d9f', '#efe3cc'] },
   { id: 'quiet-stone', name: 'Quiet stone', colours: ['#6f747a', '#e4e1db'] },
 ];

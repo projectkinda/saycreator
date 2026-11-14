@@ -141,3 +141,87 @@ test('calibration: the two floors let every shape that must show in and keep eve
   expect(r.floors).toEqual({ lum: 3.6, de: 0.12 });
   for (const c of r.cases) expect(c.visible, `${c.name} (${c.a} on ${c.g}, ${c.de.toFixed(3)} apart in colour)`).toBe(c.want);
 });
+
+// Round H part D: the eight ready-made colour combinations (src/image-engine/styles/colourCombinations.ts) go through the same checks as the stress brands, on all 15 styles. Add a combination that fails and this fails.
+test('colour combinations: every one on all 15 styles keeps the layouts, cuts no word, fails no contrast check (also after a switch from the stored plan) and shows every accent shape', async ({ page }) => {
+  await page.route('**/api/carousel/status', (r) => r.fulfill({ json: { available: false } }));
+  await page.goto('/images/carousel');
+  const r: any = await page.evaluate(async () => {
+    const D: any = await import('/src/carousel/designLibrary.ts');
+    const PR: any = await import('/src/carousel/presets.ts');
+    const BP: any = await import('/src/carousel/brandPalette.ts');
+    const FC: any = await import('/src/reference/faithfulChecks.ts');
+    const CC: any = await import('/src/image-engine/styles/colourCombinations.ts');
+    const names = ['dark-quiet', 'editorial-collage', 'film-paper', 'glass-gradient', 'hot-flat', 'mono-poster', 'object-neon', 'style-1', 'style-2', 'style-3', 'style-4', 'style-5', 'style-6', 'style-7', 'style-8'];
+    const plan = [
+      { layout: 'statement', fields: { headline: 'Most creators do not have a design problem.' }, accents: ['design problem'] },
+      { layout: 'split-text', fields: { headline: 'The idea took ten minutes', paragraph: 'The slides took the rest of the night.' }, accents: ['ten minutes'] },
+      { layout: 'checklist', fields: { title: 'Three steps', items: ['Paste your text', 'Pick a look', 'Get slides'] }, accents: [] },
+      { layout: 'big-stat', fields: { number: '15', label: 'styles to pick from', source: 'Switch the style and your words stay put.' }, accents: [] },
+      { layout: 'quote', fields: { quote: 'Change a headline and nothing reruns.', author: 'Say Creator' }, accents: ['nothing reruns'] },
+      { layout: 'cta-button', fields: { headline: 'Try it on your next post.', button: 'Comment slides', sub: 'I will send you the link.' }, accents: ['next post'] },
+    ];
+    const text = 'Most creators do not have a design problem. The idea took ten minutes. The slides took the rest of the night. Three steps: paste your text, pick a look, get slides. 15 styles to pick from. Switch the style and your words stay put. Change a headline and nothing reruns. Try it on your next post. Comment slides and I will send you the link.';
+    const words = (s: string) => s.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
+    const contrastOf = (slidesOf: (i: number) => any, lib: any) => {
+      const bad: string[] = [];
+      plan.forEach((p, i) => {
+        const b = slidesOf(i);
+        const type = String(D.scriptSlideOf(lib.layouts[i], lib.plan.specs[i].fields).type ?? 'content');
+        const q = FC.faithfulChecks(b.layers, { canvas: { w: 1080, h: 1350 }, bg: b.bg ?? '#FFFFFF', k: 1, slideType: type, prose: /data-layout="prose"/.test(b.svg), svg: b.svg, devices: b.devices }).find((x: any) => x.id === 'contrast');
+        if (q && !q.pass) bad.push(`${i + 1}: ${q.reason}`);
+      });
+      return bad;
+    };
+    const rows: any[] = [];
+    for (const name of names) {
+      const run = async (colours: string[] | null) => {
+        const provider: any = { id: 'dev-cli', label: 'fake', async write() { return { text: JSON.stringify({ title: 'T', slides: plan }), ms: 1 }; } };
+        const base = PR.presetPackFor(name, false, null);
+        const applied = colours ? BP.applyBrand(structuredClone(base), { colours }) : { pack: base, changes: [], grounds: [] };
+        const st = D.styleFromPack(applied.pack).style;
+        const gs = [st.palette, ...(st.rhythm ?? []), ...(st.closing ? [st.closing] : [])];
+        const floorMiss = colours ? gs.filter((g: any) => !BP.accentVisible(g.accent, g.bg)).map((g: any) => `accent ${g.accent} on ${g.bg}`) : [];
+        const res = await D.designLibraryDeck({ text, slides: plan.length, tone: 'clear', format: 'carousel', styleChoice: name, styles: [] }, { pack: applied.pack, hasPhoto: false, images: [], brief: '', site: '' }, '@saycreator', provider, new AbortController().signal);
+        const lib = res.designed.library;
+        const missing: string[] = [];
+        plan.forEach((p, i) => {
+          const b = res.designed.slides[String(i)].built;
+          const have = (b.layers as any[]).filter((l) => l.kind === 'text' && l.text && !/recurring/.test(l.id + l.name)).flatMap((l) => words(l.text));
+          for (const w of Object.values(p.fields).flatMap((v: any) => (Array.isArray(v) ? v : [v])).flatMap((v: any) => words(String(v)))) if (!have.includes(w)) missing.push(`${i + 1}:${w}`);
+        });
+        const contrast = contrastOf((i) => res.designed.slides[String(i)].built, lib);
+        let again: string[] = [];
+        let againLayouts: string[] = [];
+        if (colours) {
+          const other = await D.redrawLibraryDeck(lib, { pack: applied.pack, hasPhoto: false, images: [], brief: '', site: '' }, '@saycreator');
+          again = contrastOf((i) => other.slides[String(i)].built, other.library);
+          againLayouts = Object.values(other.layouts) as string[];
+        }
+        return { layouts: lib.layouts as string[], missing, contrast, floorMiss, again, againLayouts, repairs: (lib.repairs ?? []).map((x: any) => `${x.slide}:${x.how}`) };
+      };
+      const control = await run(null);
+      for (const c of CC.COLOUR_COMBINATIONS) rows.push({ style: name, combo: c.id, control, got: await run(c.colours) });
+    }
+    return { rows, combos: CC.COLOUR_COMBINATIONS };
+  });
+  expect(r.combos.length, 'eight combinations').toBe(8);
+  expect(new Set(r.combos.map((c: any) => c.id)).size, 'each has its own id').toBe(8);
+  for (const c of r.combos) {
+    expect(c.colours.length, `${c.name}: 1 to 3 colours`).toBeGreaterThanOrEqual(1);
+    expect(c.colours.length).toBeLessThanOrEqual(3);
+    for (const h of c.colours) expect(h, `${c.name}: a #rrggbb colour`).toMatch(/^#[0-9a-f]{6}$/);
+    expect(c.name, 'a plain name').toMatch(/^[A-Z][A-Za-z ]+$/);
+  }
+  expect(r.rows.length).toBe(15 * r.combos.length);
+  for (const x of r.rows) {
+    const who = `${x.style} + ${x.combo}`;
+    expect.soft(x.got.layouts, `${who}: the layouts of the deck without the colours`).toEqual(x.control.layouts);
+    expect.soft(x.got.contrast, `${who}: contrast`).toEqual([]);
+    expect.soft(x.got.again, `${who}: contrast after a switch from the stored plan`).toEqual([]);
+    expect.soft(x.got.againLayouts, `${who}: a switch keeps the layouts`).toEqual(x.control.layouts);
+    expect.soft(x.got.missing, `${who}: no word is cut`).toEqual(x.control.missing);
+    expect.soft(x.got.floorMiss, `${who}: every accent shape shows`).toEqual([]);
+    for (const rp of x.got.repairs) expect.soft(rp, `${who}: repairs`).not.toMatch(/:layout$/);
+  }
+});
