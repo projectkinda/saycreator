@@ -262,6 +262,8 @@ test('H: generate in editorial-collage, switch to dark-quiet: no note, flavour o
   await toStep(page, 3);
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Quiet dark minimal/ }).first().click();
   await expect(page.getByRole('status').filter({ hasText: 'Style changed. Slides redrawn, no model call.' }).first()).toBeVisible({ timeout: 60_000 });
+  // Round F: the page saves the project 250 ms after a change, so the saved doc is read when it says the new style (the test used to read it the moment the status appeared and passed by the luck of the polling interval)
+  await expect.poll(async () => (await doc(page))?.style, { timeout: 10_000 }).toBe('dark-quiet');
   const after = await doc(page);
   const text = mention(after);
   fs.mkdirSync(OUT, { recursive: true });
