@@ -220,7 +220,8 @@ const BASE_LIST: LayoutDef[] = [
             const boxLines = acc ? lineTexts(text, fam, wt, size, w, lh).length : ls.length;
             // a word wider than the column makes the engine shrink the type and wrap it again
             const widest = Math.max(...text.split(/\s+/).filter(Boolean).map((x) => measureWidth(x, fam, wt, size)));
-            if (widest <= w && ls.length <= maxLines && ls.length <= boxLines && ls.length * size * lh <= 0.8 * fieldH && !(ls.length > 1 && ls.some(orphan))) {
+            if (widest <= w && ls.length <= maxLines && ls.length <= boxLines && ls.length * size * lh <= 0.8 * fieldH && !(ls.length > 1 && ls.some(orphan)) && !(font === 'h' && ls.length >= 3 && ls.filter((l) => !/\s/.test(l.trim())).length >= 2)) {
+              // Round E: a headline of three lines or more with two single-word lines ("Four / steps to a / post / that sells") reads as a ladder, not a headline: the size steps down until the wrap is better
               ok = true;
               break;
             }

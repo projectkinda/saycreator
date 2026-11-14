@@ -113,3 +113,35 @@ test('A: a numbered list of three short items fills at least 0.75 of the height 
   expect(r.n).toBe(60);
   expect(r.bad).toEqual([]);
 });
+
+test('G: the big headline of split-text never wraps as a ladder (three lines or more with two single-word lines) in 15 styles, short, long and worst-case text, every cut; no word is cut', async ({ page }) => {
+  const helpSrc = fs.readFileSync('tests/image-engine/picture-layouts.spec.ts', 'utf8');
+  const HELP = helpSrc.slice(helpSrc.indexOf('const HELP = `') + 14, helpSrc.indexOf('`;\n\nasync function setup'));
+  await page.route('**/api/carousel/status', (r) => r.fulfill({ json: { available: false } }));
+  await page.goto('/images/carousel');
+  await page.evaluate(HELP);
+  const STYLES = ['style-1', 'style-2', 'style-3', 'style-4', 'style-5', 'style-6', 'style-7', 'style-8', 'dark-quiet', 'editorial-collage', 'film-paper', 'glass-gradient', 'hot-flat', 'mono-poster', 'object-neon'];
+  const r: any = await page.evaluate(async (styles) => {
+    const H = (window as any).__H; const T: any = await import('/src/image-engine/draw/text.ts');
+    const heads = ['Why', 'Why we built it', 'Why we decided to build it ourselves', 'Four steps to a post that sells', 'Seven reasons your carousels never get saved today', 'Ten minutes for the idea, a night for the slides'];
+    const para = 'One layer replaces two things you carry.';
+    const bad: string[] = []; let n = 0;
+    for (const style of styles) {
+      const st = H.D.styleFromPack(H.PR.presetPackFor(style, false)).style;
+      for (const head of heads) for (const cut of ['plain', 'edge-v', 'angle']) {
+        const d = await H.D.drawOne({ layout: 'split-text', fields: { headline: head, paragraph: para }, accents: [] }, 0, st, { handle: '@h', index: 1, total: 7, cut, invert: false, density: 'normal' });
+        if (!d.built) continue;
+        n++;
+        const t = (d.built.layers as any[]).find((l) => l.kind === 'text' && l.name === 'title');
+        const lines: string[] = T.layoutText(t).lines.map((q: any) => (q.words ? q.words.map((x: any) => x.text).join(' ') : ''));
+        const single = lines.filter((q) => q.trim().indexOf(' ') < 0).length;
+        if (lines.length >= 3 && single >= 2) bad.push(`${style}/${cut} "${head}": ${JSON.stringify(lines)}`);
+        const flat = lines.join(' ').toLowerCase().replace(/[^a-z0-9 ]/g, '');
+        for (const w of head.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ')) if (!flat.includes(w)) bad.push(`${style}: lost "${w}"`);
+      }
+    }
+    return { bad, n };
+  }, STYLES);
+  expect(r.n).toBeGreaterThan(200);
+  expect(r.bad).toEqual([]);
+});
