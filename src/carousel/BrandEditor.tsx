@@ -141,7 +141,13 @@ export function BrandEditor({ doc, styleName, brand, others, onSave, onDelete, o
                 {merged.map((m) => (
                   <li key={m.text} data-kind={m.kind}>
                     <span className="small">{m.text}</span>
-                    {m.from && m.to && HEXISH.test(m.from) && HEXISH.test(m.to) && <span className="cr-be-pair" aria-label={`Your colour ${m.from}, what we use ${m.to}`}>{swatch(m.from)}<span aria-hidden="true">&rarr;</span>{swatch(m.to)}</span>}
+                    {(m.detail || (m.from && m.to)) && (
+                      <details className="cr-be-details" data-testid="brand-details">
+                        <summary className="small">Details</summary>
+                        {m.from && m.to && HEXISH.test(m.from) && HEXISH.test(m.to) && <span className="cr-be-pair" aria-label={`Your colour ${m.from}, what we use ${m.to}`}>{swatch(m.from)}<span aria-hidden="true">&rarr;</span>{swatch(m.to)}</span>}
+                        {m.detail && <p className="small muted cr-be-detail">{m.detail}</p>}
+                      </details>
+                    )}
                   </li>
                 ))}
               </ul>

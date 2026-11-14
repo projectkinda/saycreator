@@ -17,8 +17,10 @@ export interface Brand {
 }
 export interface BrandChange {
   kind: 'ignored' | 'close' | 'ink' | 'accent-text' | 'secondary' | 'gradient' | 'derived';
-  /** The sentence for the person. */
+  /** The sentence for the person: plain words, no colour codes, no ratios (Round I part A). */
   text: string;
+  /** The same thing for a designer: the colour codes and the contrast ratios (shown under "Details"). */
+  detail?: string;
   from?: string;
   to?: string;
   /** The contrast ratio that forced the change. */
@@ -113,20 +115,20 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
   if (!brand || !brand.colours?.length) return { pack, changes: [], grounds: [] };
   const changes: BrandChange[] = [];
   const given = brand.colours.slice(0, 3).map(norm);
-  if (!given[0]) return { pack, changes: [{ kind: 'ignored', text: `"${brand.colours[0]}" is not a colour (use a hex colour such as #39FF14), so the style keeps its own colours.` }], grounds: [] };
+  if (!given[0]) return { pack, changes: [{ kind: 'ignored', text: 'Your main colour is not a colour we can read, so the style keeps its own colours.', detail: `"${brand.colours[0]}" is not a colour (use a hex colour such as #39FF14).` }], grounds: [] };
   const P = given[0]!;
   let S = given[1] ?? null;
   const T = given[2] ?? null;
-  brand.colours.slice(1, 3).forEach((c, i) => { if (!given[i + 1]) changes.push({ kind: 'ignored', text: `"${c}" is not a colour, so it was left out.` }); });
+  brand.colours.slice(1, 3).forEach((c, i) => { if (!given[i + 1]) changes.push({ kind: 'ignored', text: `Your ${i === 0 ? 'second' : 'extra'} colour is not a colour we can read, so it was left out.`, detail: `"${c}" is not a colour.` }); });
   // rule 5: two colours too close to tell apart: the second is treated as missing
   if (S && tooClose(P, S)) {
-    changes.push({ kind: 'close', from: S, ratio: contrast(P, S), text: `These two colours are very close (${ratio(P, S)}:1), so we used the first, ${P}, as your main colour.` });
+    changes.push({ kind: 'close', from: S, ratio: contrast(P, S), text: 'Your two colours are very close, so we used your main colour on its own.', detail: `${S} and ${P} read ${ratio(P, S)}:1 against each other, so ${P} is your main colour.` });
     S = null;
   }
   // rule 1: the secondary, when missing, is a lighter or darker step of the main colour
   const derivedS = (() => { const [h, s, l] = toHsl(P); return fromHsl(h, s, Math.max(0.04, Math.min(0.96, l + (isDark(P) ? 0.22 : -0.22)))); })();
   const second = S ?? derivedS;
-  if (!S) changes.push({ kind: 'derived', to: derivedS, text: `We made a second colour from your main one (${derivedS}) for cards and extra highlights.` });
+  if (!S) changes.push({ kind: 'derived', to: derivedS, text: 'We made a second colour from your main one, for cards and extra highlights.', detail: `The second colour is ${derivedS}.` });
 
   // rule 2: the neutral grounds and their inks come from the neutrals, tinted a few percent toward the main colour
   const LIGHT = mix('#FFFFFF', P, 0.05);
@@ -179,7 +181,7 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     const pk = pickAccent(bg, text);
     picks.set('accent:' + bg, pk);
     const g: PackGround = { bg, text, muted: quietOn(text, [bg], mix(text, bg, 0.35), 4.5), accent: pk.accent, surface: mix(bg, text, 0.12), onAccent: readableInk(pk.accent, [bg, text, '#FFFFFF', '#000000']), keepBg: true };
-    return { g, note: c < 4.5 ? { kind: 'ink', ratio: c, to: text, text: `Text on ${bg} is the best we can do, ${text} (${r1(c)}:1), which is under 4.5:1.` } : null };
+    return { g, note: c < 4.5 ? { kind: 'ink', ratio: c, to: text, text: `Text on slides with your ${bg.toUpperCase() === P ? 'main' : 'second'} colour as the background is as readable as we can make it, but it is still a little faint.`, detail: `Text on ${bg} is the best we can do, ${text} (${r1(c)}:1), which is under 4.5:1.` } : null };
   };
 
   const look = pack.look ?? {};
@@ -213,7 +215,7 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     return { slot, g: ng, kind };
   });
 
-  if (darkIsP && out.some((o) => o.kind === 'dark')) changes.push({ kind: 'derived', to: P, text: `Your ${P} is dark enough to be the background of your dark slides (light text on it reads ${ratio(INK_ON_DARK, P)}:1), so it is.` });
+  if (darkIsP && out.some((o) => o.kind === 'dark')) changes.push({ kind: 'derived', to: P, text: 'Your main colour is dark enough to be the background of your dark slides, so it is.', detail: `Light text on ${P} reads ${ratio(INK_ON_DARK, P)}:1.` });
   // rule 4: what your main colour does as text on each neutral ground (the layouts already do this on the same layout; here it is said in words)
   for (const kind of ['light', 'dark'] as const) {
     const ng = out.find((o) => o.kind === kind)?.g;
@@ -223,16 +225,16 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     if (pk && pk.how !== 'primary') continue; // the visibility messages below say what the highlight uses instead
     const sh = shifts.get(kind);
     if (sh) {
-      changes.push({ kind: 'accent-text', from: sh.col, to: sh.to, ratio: sh.from, text: `Your ${sh.col === P ? 'main colour ' : 'colour '}${sh.col} reads ${r1(sh.from)}:1 on your ${kind} slides and this style has no highlight bar, so words set in it are shown ${kind === 'dark' ? 'lighter' : 'darker'} (${sh.to}, ${ratio(sh.to, ng.bg)}:1), the same hue.` });
+      changes.push({ kind: 'accent-text', from: sh.col, to: sh.to, ratio: sh.from, text: `Your ${sh.col === P ? 'main colour' : 'colour'} is hard to read as words on your ${kind} slides and this style has no highlight bar, so words set in it are shown a little ${kind === 'dark' ? 'lighter' : 'darker'}, the same hue.`, detail: `Your ${sh.col === P ? 'main colour ' : 'colour '}${sh.col} reads ${r1(sh.from)}:1 on your ${kind} slides, so words set in it are shown as ${sh.to} (${ratio(sh.to, ng.bg)}:1), the same hue.` });
       continue;
     }
     if (r >= 4.5) continue;
     const roles = accentRolesOf(P, ng.bg, ng.text, [ng.surface]);
     if (roles.accentText !== ng.text && roles.accentText.toUpperCase() !== P) {
-      changes.push({ kind: 'accent-text', from: P, to: roles.accentText, ratio: r, text: `Your main colour ${P} reads ${r1(r)}:1 on your ${kind} slides, so words set in it are shown a little ${kind === 'dark' ? 'lighter' : 'darker'} (${roles.accentText}, ${ratio(roles.accentText, ng.bg)}:1), the same hue.` });
+      changes.push({ kind: 'accent-text', from: P, to: roles.accentText, ratio: r, text: `Your main colour is hard to read as text on your ${kind} slides, so words set in it are shown a little ${kind === 'dark' ? 'lighter' : 'darker'}, the same hue.`, detail: `Your main colour ${P} reads ${r1(r)}:1 on your ${kind} slides, so words set in it are shown as ${roles.accentText} (${ratio(roles.accentText, ng.bg)}:1), the same hue.` });
     } else {
       const ink = readableInk(P, [ng.bg, ng.text, '#FFFFFF', '#000000']);
-      changes.push({ kind: 'accent-text', from: P, ratio: r, text: `Your main colour ${P} reads ${r1(r)}:1 on your ${kind} slides, so highlighted words sit on a bar of it with ${isDark(ink) ? 'black' : 'white'} text (${ratio(ink, P)}:1).` });
+      changes.push({ kind: 'accent-text', from: P, ratio: r, text: `Your main colour is too ${kind === 'light' ? 'bright' : 'dark'} for text on ${kind} slides, so highlighted words sit on a bar of it with ${isDark(ink) ? 'black' : 'white'} text.`, detail: `Your main colour ${P} reads ${r1(r)}:1 on your ${kind} slides, so highlighted words sit on a bar of it with ${isDark(ink) ? 'black' : 'white'} text (${ratio(ink, P)}:1).` });
     }
   }
   // Round G2: where the main colour cannot be seen as a highlight (under the floor), say what the highlight uses instead: one line per reason, not one per slide
@@ -241,7 +243,7 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     for (const [key, pk] of picks) {
       if (pk.how === 'primary') continue;
       if (pk.how === 'ink' && key.startsWith('accent:')) continue; // the ink on its own colour is what an accent ground always did
-      const name = key.startsWith('accent:') ? (pk.bg === P ? `the slides with your ${P} background` : `the slides with your second colour as the background`) : `your ${key} slides`;
+      const name = key.startsWith('accent:') ? (pk.bg === P ? `the slides with your main colour as the background` : `the slides with your second colour as the background`) : `your ${key} slides`;
       const gk = pk.how + pk.accent;
       const gr = groups.get(gk) ?? { how: pk.how, accent: pk.accent, names: [], bg: pk.bg, was: pk.was };
       gr.names.push(name);
@@ -251,16 +253,16 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
       const where = gr.names.join(' and ');
       const bad = `only ${r1(gr.was)}:1 brighter than the ground and ${colourDifference(P, gr.bg).toFixed(2)} different in colour`;
       const onAccentGround = gr.names.every((n) => n.startsWith('the slides '));
-      if (gr.how === 'secondary') changes.push({ kind: 'secondary', from: P, to: gr.accent, ratio: gr.was, text: onAccentGround ? `On ${where}, your ${P} cannot be the highlight, so highlights use your ${gr.accent} (${ratio(gr.accent, gr.bg)}:1).` : `Your ${P} does not show on ${where} (${bad}), so highlights use your ${gr.accent} there (${ratio(gr.accent, gr.bg)}:1).` });
-      else if (gr.how === 'step') changes.push({ kind: 'accent-text', from: P, to: gr.accent, ratio: gr.was, text: `Your ${P} does not show on ${where} (${bad}), so highlights use ${isDark(gr.bg) ? 'a lighter' : 'a darker'} step of it there (${gr.accent}, ${ratio(gr.accent, gr.bg)}:1), the same hue.` });
-      else changes.push({ kind: 'accent-text', from: P, ratio: gr.was, text: `Your ${P} does not show on ${where} (${bad}), and no step of it does, so highlights there are drawn in your text colour.` });
+      if (gr.how === 'secondary') changes.push({ kind: 'secondary', from: P, to: gr.accent, ratio: gr.was, text: onAccentGround ? `On ${where}, your main colour cannot be the highlight, so highlights use your second colour.` : `Your main colour does not show on ${where}, so highlights use your second colour there.`, detail: onAccentGround ? `On ${where}, your ${P} cannot be the highlight, so highlights use your ${gr.accent} (${ratio(gr.accent, gr.bg)}:1).` : `Your ${P} does not show on ${where} (${bad}), so highlights use your ${gr.accent} there (${ratio(gr.accent, gr.bg)}:1).` });
+      else if (gr.how === 'step') changes.push({ kind: 'accent-text', from: P, to: gr.accent, ratio: gr.was, text: `Your main colour does not show well on ${where}, so highlights use ${isDark(gr.bg) ? 'a lighter' : 'a darker'} shade of it there, the same hue.`, detail: `Your ${P} does not show on ${where} (${bad}), so highlights use ${isDark(gr.bg) ? 'a lighter' : 'a darker'} step of it there (${gr.accent}, ${ratio(gr.accent, gr.bg)}:1), the same hue.` });
+      else changes.push({ kind: 'accent-text', from: P, ratio: gr.was, text: `Your main colour does not show on ${where}, and no shade of it does, so highlights there are drawn in the text colour.`, detail: `Your ${P} does not show on ${where} (${bad}), and no step of it does, so highlights there are drawn in your text colour.` });
     }
   }
   // the secondary as text on the main colour (a second colour that cannot be read on it is not used for text there)
   if (S) {
     const acc = out.find((o) => o.kind === 'accent')?.g;
     if (acc && contrast(S, P) < 3) {
-      changes.push({ kind: 'secondary', from: S, to: acc.text, ratio: contrast(S, P), text: `Your second colour ${S} reads ${ratio(S, P)}:1 on your main colour ${P}, so text on slides with that background is ${isDark(acc.text) ? 'black' : 'white'} (${ratio(acc.text, P)}:1) and ${S} is kept for cards.` });
+      changes.push({ kind: 'secondary', from: S, to: acc.text, ratio: contrast(S, P), text: `Your second colour is hard to read on your main colour, so text on slides with that background is ${isDark(acc.text) ? 'black' : 'white'} and your second colour is kept for cards.`, detail: `Your second colour ${S} reads ${ratio(S, P)}:1 on your main colour ${P}, so text on slides with that background is ${isDark(acc.text) ? 'black' : 'white'} (${ratio(acc.text, P)}:1) and ${S} is kept for cards.` });
     }
   }
 
@@ -279,7 +281,7 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
       const moved = stops.map((c, k) => ({ from: base[k], to: c })).filter((m) => m.from !== m.to);
       if (moved.length) {
         const worst = Math.min(...moved.map((m) => Math.min(...grds.map((g) => contrast(m.from, g)))));
-        changes.push({ kind: 'gradient', ratio: worst, from: moved.map((m) => m.from).join(', '), to: moved.map((m) => m.to).join(', '), text: `The headline gradient (${moved.map((m) => m.from).join(', ')}) reads as little as ${r1(worst)}:1 on your background, so its colours are shown as ${moved.map((m) => m.to).join(', ')}, the same hues.` });
+        changes.push({ kind: 'gradient', ratio: worst, from: moved.map((m) => m.from).join(', '), to: moved.map((m) => m.to).join(', '), text: 'The headline gradient is hard to read on your background, so some of its colours are shown a little lighter or darker, the same hues.', detail: `The headline gradient (${moved.map((m) => m.from).join(', ')}) reads as little as ${r1(worst)}:1 on your background, so its colours are shown as ${moved.map((m) => m.to).join(', ')}, the same hues.` });
       }
       roles.gradient = stops;
     }

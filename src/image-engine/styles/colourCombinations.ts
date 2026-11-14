@@ -1,4 +1,4 @@
-// Round H part D: eight ready-made colour combinations (1 to 3 colours each), none tied to a style. They go through the same brand code as a person's own brand (applyBrand), so every one
+// Round H part D (Round I part C: nine now, see the list): ready-made colour combinations (1 to 3 colours each), none tied to a style. They go through the same brand code as a person's own brand (applyBrand), so every one
 // is checked on all 15 styles by tests/image-engine/brand-palette.spec.ts: add one here and that test checks it.
 export interface ColourCombination {
   id: string;
@@ -15,6 +15,8 @@ export const COLOUR_COMBINATIONS: ColourCombination[] = [
   { id: 'forest-cream', name: 'Forest and cream', colours: ['#1f4d3a', '#f3ebd8', '#c8553d'] },
   { id: 'sunrise', name: 'Sunrise', colours: ['#f4553f', '#ffc857'] },
   { id: 'midnight-violet', name: 'Midnight violet', colours: ['#1b1340', '#8b7cff', '#35e0c4'] },
-  { id: 'sky-sand', name: 'Sky and sand', colours: ['#2a5d9f', '#efe3cc'] },
-  { id: 'quiet-stone', name: 'Quiet stone', colours: ['#6f747a', '#e4e1db'] },
+  // Round I: three with a vivid, mid-tone main colour replace Sky and sand and Quiet stone, which looked like the dark ones on dark slides
+  { id: 'teal-coral', name: 'Teal and coral', colours: ['#0f9b8e', '#ff6b5b'] },
+  { id: 'blue-lime', name: 'Blue and lime', colours: ['#2f6bff', '#c6f432'] },
+  { id: 'pink-mint', name: 'Pink and mint', colours: ['#ff4f9a', '#8fe3c0'] },
 ];

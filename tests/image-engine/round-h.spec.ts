@@ -225,7 +225,7 @@ test('C: two brands, switching between them, rename, delete (the carousel keeps 
   const berry = await corners(page);
   expect(berry.join()).not.toBe(navy.join());
   expect((await docOf(page)).scheme.name).toBe('Plum');
-  expect(await page.getByTestId('colours-row').getByRole('radio').count(), 'own colours, 2 brands, 8 combinations, plus Add brand').toBeGreaterThanOrEqual(11);
+  expect(await page.getByTestId('colours-row').getByRole('radio').count(), 'own colours, 2 brands and 8 combinations').toBeGreaterThanOrEqual(11);
   // switch back to the first brand, then to the style's own colours
   await page.getByRole('radio', { name: /Navy and orange/ }).click();
   await page.waitForTimeout(1200);
@@ -294,13 +294,15 @@ test('B: two nearly identical colours say so, and neon with white says text on t
   await page.getByTestId('brand-add-colour').click();
   await setHex(page, 1, '#3c78ff');
   const adj = page.getByTestId('brand-adjusted');
-  await expect(adj).toContainText('These two colours are very close', { timeout: 20_000 });
+  await expect(adj).toContainText('two colours are very close', { timeout: 20_000 });
   await expect(page.getByTestId('brand-colour-1')).toContainText('This is very close to your main colour.');
   // neon + white
   await page.getByTestId('brand-name').fill('Neon');
   await setHex(page, 0, '#39FF14');
   await setHex(page, 1, '#FFFFFF');
   await expect(adj).toContainText('so text on slides with that background is black', { timeout: 20_000 });
+  await expect(adj.locator('.cr-be-pair').first()).toBeHidden(); // Round I: the numbers sit under a closed "Details"
+  for (const sm of await adj.locator('summary').all()) await sm.click();
   await expect(adj.locator('.cr-be-pair').first()).toBeVisible();
   for (const bad of [/palette/, /\bground\b/, /\brole/, /accent/, /\bhex\b/]) expect((await ed.textContent())!.toLowerCase(), `no jargon: ${bad}`).not.toMatch(bad);
   // a pair that needs nothing says so
@@ -317,7 +319,7 @@ test('C/D: a ready-made combination applies, survives a style switch, and Undo t
   const own = await corners(page);
   const layouts = await layoutsOf(page);
   const words = await wordsOf(page);
-  await expect(page.getByTestId('combo-list').getByRole('radio')).toHaveCount(8);
+  await expect(page.getByTestId('combo-list').getByRole('radio')).toHaveCount(9);
   await page.getByTestId('combo-ocean-amber').click();
   await page.waitForTimeout(1500);
   expect((await docOf(page)).scheme).toEqual({ kind: 'combo', id: 'ocean-amber', name: 'Ocean and amber', colours: ['#0b3c5d', '#f2a900'] });

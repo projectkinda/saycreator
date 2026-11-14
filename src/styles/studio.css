@@ -346,11 +346,19 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
 .cr-be-prev li { min-width: 0; aspect-ratio: 4 / 5; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .cr-be-prev img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .cr-be-adj { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.cr-be-adj li { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.cr-be-adj li { display: grid; gap: 4px; }
+.cr-be-details summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; color: var(--muted, #666); }
+.cr-be-details { margin-top: 2px; }
+.cr-be-detail { margin: 6px 0 0; overflow-wrap: anywhere; }
 .cr-be-pair { display: inline-flex; gap: 4px; align-items: center; flex: none; }
 .cr-be-confirm { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
 .cr-be-confirm p { margin: 0; }
 @media (max-width: 760px) {
+  /* Round I: the ready-made colours are a two-column grid, the preview slides are 160 px wide and scroll sideways inside their own strip */
+  .cr-combos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cr-combos .cr-opt { flex-direction: column; align-items: flex-start; gap: 4px; justify-content: center; }
+  .cr-be-prev { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+  .cr-be-prev li { flex: 0 0 160px; scroll-snap-align: start; }
   .cr-dialog.cr-brand-editor { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; border: 0; box-sizing: border-box; }
   .cr-be-body { grid-template-columns: minmax(0, 1fr); }
 }

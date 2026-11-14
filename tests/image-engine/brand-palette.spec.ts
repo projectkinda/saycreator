@@ -113,7 +113,7 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
   const navy = r.filter((y: any) => y.brand === 'navy');
   expect(navy.filter((y: any) => y.got.changes.join(' ').includes('dark enough to be the background')).length, 'navy is the dark ground in every style that has a dark ground').toBe(navy.filter((y: any) => y.got.darkBgs.length > 0).length);
   expect(navy.filter((y: any) => y.got.darkBgs.length > 0).length, '9 of the 15 styles have a dark ground').toBe(9);
-  expect(navy.filter((y: any) => y.got.changes.join(' ').includes('so highlights use your #FCA311')).length, 'orange takes over where navy does not show').toBeGreaterThan(8);
+  expect(navy.filter((y: any) => y.got.changes.join(' ').includes('so highlights use your second colour')).length, 'orange takes over where navy does not show').toBeGreaterThan(8);
   // the close pair is said in words
   for (const x of r.filter((y: any) => y.brand === 'blues')) expect(x.got.changes.join(' '), x.style).toContain('very close');
   // a style with an accent ground tells the person about white on neon
@@ -142,7 +142,7 @@ test('calibration: the two floors let every shape that must show in and keep eve
   for (const c of r.cases) expect(c.visible, `${c.name} (${c.a} on ${c.g}, ${c.de.toFixed(3)} apart in colour)`).toBe(c.want);
 });
 
-// Round H part D: the eight ready-made colour combinations (src/image-engine/styles/colourCombinations.ts) go through the same checks as the stress brands, on all 15 styles. Add a combination that fails and this fails.
+// Round H part D: the ready-made colour combinations (src/image-engine/styles/colourCombinations.ts) go through the same checks as the stress brands, on all 15 styles. Add a combination that fails and this fails.
 test('colour combinations: every one on all 15 styles keeps the layouts, cuts no word, fails no contrast check (also after a switch from the stored plan) and shows every accent shape', async ({ page }) => {
   await page.route('**/api/carousel/status', (r) => r.fulfill({ json: { available: false } }));
   await page.goto('/images/carousel');
@@ -205,8 +205,8 @@ test('colour combinations: every one on all 15 styles keeps the layouts, cuts no
     }
     return { rows, combos: CC.COLOUR_COMBINATIONS };
   });
-  expect(r.combos.length, 'eight combinations').toBe(8);
-  expect(new Set(r.combos.map((c: any) => c.id)).size, 'each has its own id').toBe(8);
+  expect(r.combos.length, 'nine combinations').toBe(9);
+  expect(new Set(r.combos.map((c: any) => c.id)).size, 'each has its own id').toBe(9);
   for (const c of r.combos) {
     expect(c.colours.length, `${c.name}: 1 to 3 colours`).toBeGreaterThanOrEqual(1);
     expect(c.colours.length).toBeLessThanOrEqual(3);
@@ -224,4 +224,49 @@ test('colour combinations: every one on all 15 styles keeps the layouts, cuts no
     expect.soft(x.got.floorMiss, `${who}: every accent shape shows`).toEqual([]);
     for (const rp of x.got.repairs) expect.soft(rp, `${who}: repairs`).not.toMatch(/:layout$/);
   }
+});
+
+// Round I part C: "looks different" is a test. For each ready-made combination we take what a person sees on the real styles, through applyBrand:
+//   1. the highlight colour on a light slide (style-3, the first light ground),  2. the dark ground (dark-quiet, its first ground),  3. the highlight colour on a dark slide (same ground).
+// The distance is colourDifference (OKLab, the same one the accent-visible rule uses). Every pair must be at least LOOK_DISTANCE apart on at least two of the three.
+// 0.08 is about four times the smallest difference an eye notices in OKLab (about 0.02), so "apart" means plainly different and not just measurably so. The closest pair we ship (Ink and paper
+// with Midnight violet, two dark bars on a light slide) sits at 0.082, so the floor is the weakest look we accept, not a number chosen to pass everything.
+const LOOK_DISTANCE = 0.08;
+async function looksOf(page: any, extra: { id: string; colours: string[] }[] = []) {
+  return page.evaluate(async (more: any[]) => {
+    const PR: any = await import('/src/carousel/presets.ts');
+    const BP: any = await import('/src/carousel/brandPalette.ts');
+    const CC: any = await import('/src/image-engine/styles/colourCombinations.ts');
+    const look = (colours: string[]) => {
+      const g = (st: string) => BP.applyBrand(structuredClone(PR.presetPackFor(st, false, null)), { colours }).pack.look.rhythm;
+      const light = g('style-3').find((x: any) => BP.colourDifference(x.bg, '#FFFFFF') < 0.1) ?? g('style-3')[0];
+      const dark = g('dark-quiet')[0];
+      return [light.accent, dark.bg, dark.accent] as string[];
+    };
+    const all = [...CC.COLOUR_COMBINATIONS, ...more].map((c: any) => ({ id: c.id, looks: look(c.colours) }));
+    const pairs: any[] = [];
+    for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+      const d = all[i].looks.map((c: string, k: number) => BP.colourDifference(c, all[j].looks[k]));
+      pairs.push({ a: all[i].id, b: all[j].id, d, apartOn: d.filter((x: number) => x >= 0.08).length });
+    }
+    return { all, pairs };
+  }, extra);
+}
+test('colour combinations look different: every pair is at least 0.08 apart (OKLab) on at least two of what a person sees', async ({ page }) => {
+  await page.route('**/api/carousel/status', (r) => r.fulfill({ json: { available: false } }));
+  await page.goto('/images/carousel');
+  const r = await looksOf(page);
+  fs.mkdirSync('out/round-i', { recursive: true });
+  fs.writeFileSync('out/round-i/combo-distances.json', JSON.stringify(r, null, 1));
+  expect(LOOK_DISTANCE).toBe(0.08);
+  for (const p of r.pairs) expect.soft(p.apartOn, `${p.a} and ${p.b} look alike (${p.d.map((x: number) => x.toFixed(3)).join(', ')})`).toBeGreaterThanOrEqual(2);
+});
+test('the looks-different test catches a lookalike: a copy of a combination with its colours nudged fails it', async ({ page }) => {
+  await page.route('**/api/carousel/status', (r) => r.fulfill({ json: { available: false } }));
+  await page.goto('/images/carousel');
+  const r = await looksOf(page, [{ id: 'ocean-copy', colours: ['#0d3e5f', '#f2a900'] }, { id: 'sunrise-copy', colours: ['#f5563f', '#ffc857'] }]);
+  const bad = r.pairs.filter((p: any) => p.apartOn < 2).map((p: any) => `${p.a}|${p.b}`);
+  expect(bad).toContain('ocean-amber|ocean-copy');
+  expect(bad).toContain('sunrise|sunrise-copy');
+  expect(bad.filter((x: string) => !/-copy/.test(x)), 'the real combinations pass').toEqual([]);
 });

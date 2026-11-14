@@ -1,4 +1,4 @@
-// Round H part C: the "Colours" row of the Style step: the style's own colours, the person's brands, "Add brand...", and the ready-made colour combinations.
+// Round H part C: the "Colours" row of the Style step: the style's own colours, the person's brands, one "Add brand" button (and "Edit brand" only while a brand is in use), and the ready-made colour combinations.
 // Choosing one redraws the carousel (the caller does that: no model call). Words: Main colour, Second colour, Extra colour, Brand, Colours.
 import { COLOUR_COMBINATIONS } from '../image-engine/styles/colourCombinations';
 import type { SavedBrand } from './brandStore';
@@ -40,13 +40,10 @@ export function ColoursRow({ scheme, brands, disabled, onChoose, onAdd, onEdit }
             <span>{b.name}</span>
           </button>
         ))}
-        <button type="button" className="cr-opt cr-opt-add" disabled={disabled} onClick={(e) => onAdd(e.currentTarget)} data-testid="brand-opt-add">
-          <span>Add brand&hellip;</span>
-        </button>
       </div>
       <div className="row-actions cr-colours-actions">
         <button type="button" className="btn btn-outline" disabled={disabled} onClick={(e) => onAdd(e.currentTarget)} data-testid="brand-add">Add brand</button>
-        <button type="button" className="btn btn-outline" disabled={disabled || !sel} onClick={(e) => sel && onEdit(sel, e.currentTarget)} data-testid="brand-edit">Edit brand</button>
+        {sel && <button type="button" className="btn btn-outline" disabled={disabled} onClick={(e) => onEdit(sel, e.currentTarget)} data-testid="brand-edit">Edit brand</button>}
       </div>
       <h4 id="cr-combos-h" className="small cr-combos-h">Ready-made colours</h4>
       <div role="radiogroup" aria-labelledby="cr-combos-h" className="cr-brand-list cr-combos" data-testid="combo-list">

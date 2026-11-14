@@ -27,13 +27,13 @@ export interface BrandPreview {
 }
 
 /** The change list as the person reads it: the same sentence is said once (a reason that repeats on several slide backgrounds is one line). */
-export interface AdjustedLine { kind: BrandChange['kind']; text: string; more: number; from?: string; to?: string }
+export interface AdjustedLine { kind: BrandChange['kind']; text: string; more: number; from?: string; to?: string; detail?: string; ratio?: number }
 export function mergeChanges(changes: BrandChange[]): AdjustedLine[] {
   const by = new Map<string, AdjustedLine>();
   for (const c of changes) {
     const have = by.get(c.text);
     if (have) { have.more++; continue; }
-    by.set(c.text, { kind: c.kind, text: c.text, more: 0, from: c.from, to: c.to });
+    by.set(c.text, { kind: c.kind, text: c.text, more: 0, from: c.from, to: c.to, detail: c.detail, ratio: c.ratio });
   }
   return [...by.values()];
 }
