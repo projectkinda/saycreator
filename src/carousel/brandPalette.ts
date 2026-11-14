@@ -126,7 +126,7 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
   // rule 1: the secondary, when missing, is a lighter or darker step of the main colour
   const derivedS = (() => { const [h, s, l] = toHsl(P); return fromHsl(h, s, Math.max(0.04, Math.min(0.96, l + (isDark(P) ? 0.22 : -0.22)))); })();
   const second = S ?? derivedS;
-  if (!S) changes.push({ kind: 'derived', to: derivedS, text: `We made a second colour from your main one (${derivedS}) for cards and second accents.` });
+  if (!S) changes.push({ kind: 'derived', to: derivedS, text: `We made a second colour from your main one (${derivedS}) for cards and extra highlights.` });
 
   // rule 2: the neutral grounds and their inks come from the neutrals, tinted a few percent toward the main colour
   const LIGHT = mix('#FFFFFF', P, 0.05);

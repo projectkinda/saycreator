@@ -18,7 +18,11 @@ import { DetectedStyleBox } from './DetectedStyle';
 import { DRAW_VERSION, flavourNotes, legacySvgRoute, redrawLibraryDeck, scriptSlideOf, slideProblems, styleFromPack, templateRoute } from './designLibrary';
 import { coverKeyOf, styleIdOf, flavourPass } from './flavour';
 import { canSplitLayout, splitSpec } from './splitSlide';
-import { presetKey, presetPackFor, presetThumbSvg } from './presets';
+import { presetKey, presetPackFor, presetThumbSvg, setCurrentScheme } from './presets';
+import { ColoursRow } from './ColoursRow';
+import { BrandEditor, type BrandDraft } from './BrandEditor';
+import { deleteBrand as deleteStoredBrand, loadBrands, setActiveBrand, upsertBrand, type BrandStore, type SavedBrand } from './brandStore';
+import { effectiveScheme, sameColours, schemeOfBrand, type ColourScheme } from './colourSchemes';
 import { svgToPng } from '../reference/faithful';
 import { cardSlides, previewDeck, PREVIEW_COUNT } from './stylePreview';
 import { choiceOf, pickPicture } from './picturePick';
@@ -908,6 +912,11 @@ export default function CarouselPage() {
   /** Puts a redrawn slide into the deck as ONE undo step (the script form of the slide too when its layout or text changed). */
   const docRef = useRef(doc);
   docRef.current = doc;
+  // Round H: the colours the slides are drawn with. A brand that still exists gives its current colours, a deleted one the copy kept in the document; none: the style's own colours.
+  const [brandStore, setBrandStore] = useState<BrandStore>(() => loadBrands());
+  const [brandEditor, setBrandEditor] = useState<{ brand: SavedBrand | null; opener: HTMLElement | null } | null>(null);
+  const scheme = effectiveScheme(doc.scheme, brandStore.brands);
+  setCurrentScheme(scheme);
   const putSlide = (i: number, r: Extract<Awaited<ReturnType<typeof redrawLibrarySlide>>, { ok: true }>, label: string, extraCalls = 0, usage?: { input: number; output: number }): string | null => {
     const doc = docRef.current; // the latest deck (a text edit can follow another before the page has redrawn)
     const d0 = doc.designed;
@@ -1071,6 +1080,55 @@ export default function CarouselPage() {
       setNotice('The style could not be changed: ' + (e as Error).message);
     }
   };
+  /**
+   * Round H: another colour scheme (a brand, a ready-made combination, or the style's own colours). The whole deck is drawn again from its stored plan with the new colours: the words, the pictures and
+   * the layout of every slide stay (the style's flavour is not run again). No model call; the scheme and the new drawing are one undo step.
+   */
+  const chooseScheme = async (next: ColourScheme | null, label: string): Promise<void> => {
+    const d = docRef.current;
+    const lib = d.designed?.library;
+    const schemeOp = { path: ['scheme'], value: next ?? undefined };
+    const pack = d.style === ACTIVE_STYLE ? null : presetPackFor(d.style, true, next);
+    if (!d.script || !d.designed || !lib?.plan || !pack) {
+      apply({ label, ops: [schemeOp] });
+      return;
+    }
+    try {
+      const out = await redrawLibraryDeck(lib, { pack, hasPhoto: hasPhotoLook, images: photoInfos, site: profileWebsite() }, pickHandle());
+      const designedOut = { ...d.designed, slides: out.slides, layouts: out.layouts, library: { ...out.library, source: lib.source } };
+      const done = apply({ label, ops: [schemeOp, { path: ['designed'], value: designedOut }] });
+      if (done.ok) setNotice(next ? `Colours changed to ${next.name || 'your colours'}. Slides redrawn, no model call.` : 'Back to the style’s own colours. Slides redrawn, no model call.');
+      else setNotice(plainWords(done.reasons[0]));
+    } catch (e) {
+      setNotice('The colours could not be changed: ' + (e as Error).message);
+    }
+  };
+  /** A pick in the Colours row. A brand pick also becomes the brand new carousels start with. */
+  const pickScheme = (next: ColourScheme | null) => {
+    if (next?.kind === 'brand') setBrandStore(setActiveBrand(next.id));
+    else if (!next) setBrandStore(setActiveBrand(null));
+    void chooseScheme(next, next ? `Use the colours ${next.name}` : 'Use the style’s own colours');
+  };
+  const saveBrand = async (draft: BrandDraft) => {
+    const r = upsertBrand(draft);
+    if (!r.saved) setNotice('Your brand could not be saved on this device. It is used for this carousel only.');
+    await chooseScheme(schemeOfBrand(r.brand), `Use the colours of ${r.brand.name}`);
+    setBrandStore(r.store);
+  };
+  const removeBrand = (id: string) => setBrandStore(deleteStoredBrand(id).store);
+  // a brand edited elsewhere (another tab): the carousel that uses it is drawn again with the brand's current colours
+  const brandSynced = useRef('');
+  useEffect(() => {
+    const s = doc.scheme;
+    if (!s || s.kind !== 'brand' || !doc.designed?.library?.plan) return;
+    const b = brandStore.brands.find((x) => x.id === s.id);
+    if (!b || sameColours(b.colours, s.colours)) return;
+    const k = `${b.id}:${b.colours.join()}`;
+    if (brandSynced.current === k) return;
+    brandSynced.current = k;
+    void chooseScheme(schemeOfBrand(b), `Update the colours of ${b.name}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.scheme, brandStore, tplLoaded]);
   /**
    * "Split into two slides": a slide whose text is too long becomes two, cut at the sentence end nearest the middle (every word kept, in order; the second slide has no headline).
    * The deck is drawn again from its plan by code (no model call) and the whole thing is ONE undo step: the plan, the script and the per-slide choices move together.
@@ -1517,6 +1575,7 @@ export default function CarouselPage() {
         </div>
         <div hidden={step !== 3} data-step="3">
           <MakeIt part="style" {...makeProps} styles={<>
+            <ColoursRow scheme={scheme} brands={brandStore.brands} disabled={doc.style === ACTIVE_STYLE || (!!doc.style && !presetPackFor(doc.style, false, null))} onChoose={pickScheme} onAdd={(el) => setBrandEditor({ brand: null, opener: el })} onEdit={(b, el) => setBrandEditor({ brand: b, opener: el })} />
             <StylePicker showIds={devTools} key={resetKey} format={doc.format} value={doc.style} auto={options.autoStyle} onAuto={() => setOptions({ autoStyle: true })} onPick={(name, title) => void switchStyle(name, title)} onNewStyle={() => setNewStyleOpen((v) => !v)} newStyleOpen={newStyleOpen} />
             {targetWarning(doc.style, 'carousel') && <p className="small cr-warn" role="status">{targetWarning(doc.style, 'carousel')}</p>}
           </>} referenceBox={newStyleBox} styleReady={options.autoStyle || !!styleByName(doc.style)} />
@@ -1597,6 +1656,7 @@ export default function CarouselPage() {
       </div>
 
       <FullSize items={openItems} at={open} onClose={() => setOpen(null)} onMove={setOpen} />
+      {brandEditor && <BrandEditor key={brandEditor.brand?.id ?? 'new'} doc={doc} styleName={doc.style} brand={brandEditor.brand} others={brandStore.brands} onSave={(b) => void saveBrand(b)} onDelete={removeBrand} onClose={() => setBrandEditor(null)} />}
     </div>
   );
 }
