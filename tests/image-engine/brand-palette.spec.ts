@@ -43,7 +43,10 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
         // Round G2: every accent drawn as a shape reaches the floor on every ground of the style as the layouts see it (the palette, the rhythm and the closing ground)
         const st = D.styleFromPack(applied.pack).style;
         const gs = [st.palette, ...(st.rhythm ?? []), ...(st.closing ? [st.closing] : [])];
-        const floorMiss = brand ? gs.filter((g: any) => DR.contrast(g.accent, g.bg) < BP.ACCENT_FLOOR).map((g: any) => `accent ${g.accent} on ${g.bg}: ${DR.contrast(g.accent, g.bg).toFixed(2)}:1`) : [];
+        const floorMiss = brand ? gs.filter((g: any) => !BP.accentVisible(g.accent, g.bg)).map((g: any) => `accent ${g.accent} on ${g.bg}: ${DR.contrast(g.accent, g.bg).toFixed(2)}:1, ${BP.colourDifference(g.accent, g.bg).toFixed(3)} apart in colour`) : [];
+        // Round G3: the accents the style draws on this brand's light grounds
+        const lightBgs = applied.grounds.filter((g: any) => g.kind === 'light').map((g: any) => g.bg.toUpperCase());
+        const lightAccents = gs.filter((g: any) => lightBgs.includes(g.bg.toUpperCase())).map((g: any) => g.accent.toUpperCase());
         const darkBgs = applied.grounds.filter((g: any) => g.kind === 'dark').map((g: any) => g.bg.toUpperCase());
         const look = { pack: applied.pack, hasPhoto: false, images: [], brief: '', site: '' };
         const res = await D.designLibraryDeck({ text, slides: plan.length, tone: 'clear', format: 'carousel', styleChoice: name, styles: [] }, look, '@saycreator', provider, new AbortController().signal);
@@ -67,7 +70,7 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
           redrawCalls = calls - 1;
           switched = Object.values(out.layouts) as string[];
         }
-        return { floorMiss, darkBgs, calls, layouts: lib.layouts as string[], missing, contrast, repairs: (lib.repairs ?? []).map((x: any) => `${x.slide}:${x.how}:${x.from}->${x.to}`), changes: applied.changes.map((c: any) => c.text), redrawCalls, switched };
+        return { floorMiss, lightAccents, darkBgs, calls, layouts: lib.layouts as string[], missing, contrast, repairs: (lib.repairs ?? []).map((x: any) => `${x.slide}:${x.how}:${x.from}->${x.to}`), changes: applied.changes.map((c: any) => c.text), redrawCalls, switched };
       };
       const control = await run(null);
       for (const b of brands) rows.push({ style: name, brand: b.id, control, got: await run({ colours: b.colours }) });
@@ -86,7 +89,9 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
     expect(x.got.calls, `${who}: one fake writer call to make the deck`).toBe(1);
     expect(x.got.redrawCalls, `${who}: a brand switch makes 0 writer calls`).toBe(0);
     expect(x.got.switched, `${who}: a brand switch keeps the layouts`).toEqual(x.control.layouts);
-    // every accent drawn as a shape reaches the floor (3.6:1, the weakest built-in) on every ground
+    // every accent drawn as a shape reaches the floor on at least one measure (3.6:1 brighter, or 0.12 apart in colour) on every ground
+    // pale yellow and neon green keep their own colour on a light ground (style-7 has no highlight bar: its accent is shifted to read as text)
+    if ((x.brand === 'yellow' || x.brand === 'neon') && x.style !== 'style-7') for (const a of x.got.lightAccents) expect(a, `${who}: the brand colour stays on light slides`).toBe(MAIN[x.brand]);
     expect(x.got.floorMiss, `${who}: accent visibility`).toEqual([]);
     // a dark primary (navy, near-black) is the dark ground itself; a light or mid one (pale yellow, neon, the blue) is not
     for (const bg of x.got.darkBgs) {
@@ -113,4 +118,26 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
   for (const x of r.filter((y: any) => y.brand === 'blues')) expect(x.got.changes.join(' '), x.style).toContain('very close');
   // a style with an accent ground tells the person about white on neon
   for (const n of ['style-4', 'style-7', 'style-2']) expect(r.find((y: any) => y.style === n && y.brand === 'neon').got.changes.join(' '), n).toContain('so text on slides with that background is black');
+});
+
+test('calibration: the two floors let every shape that must show in and keep every shape that must not out, on the grounds the brand code really produces', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const r: any = await page.evaluate(async () => {
+    const PR: any = await import('/src/carousel/presets.ts');
+    const BP: any = await import('/src/carousel/brandPalette.ts');
+    const grounds = (c: string) => { const g = BP.applyBrand(structuredClone(PR.presetPackFor('style-1', false)), { colours: [c] }).grounds; return { light: g.find((x: any) => x.kind === 'light').bg, dark: g.find((x: any) => x.kind === 'dark').bg }; };
+    const cases: [boolean, string, string, string][] = [
+      [true, 'pale yellow on its light ground', '#FFE97A', grounds('#FFE97A').light],
+      [true, 'neon on its light ground', '#39FF14', grounds('#39FF14').light],
+      [true, 'orange on the navy ground', '#FCA311', grounds('#14213D').dark],
+      [true, 'navy on its light ground', '#14213D', grounds('#14213D').light],
+      [true, 'white on the near-black ground', '#FFFFFF', grounds('#111111').dark],
+      [false, 'navy on near-black', '#14213D', '#0D0D10'],
+      [false, 'near-black on near-black', '#111111', '#0C0C0D'],
+      [false, 'an accent a few percent from its ground', '#F5F5F0', '#FFFEF8'],
+    ];
+    return { floors: { lum: BP.ACCENT_FLOOR, de: BP.ACCENT_FLOOR_DE }, cases: cases.map(([want, name, a, g]) => ({ want, name, a, g, visible: BP.accentVisible(a, g), de: BP.colourDifference(a, g) })) };
+  });
+  expect(r.floors).toEqual({ lum: 3.6, de: 0.12 });
+  for (const c of r.cases) expect(c.visible, `${c.name} (${c.a} on ${c.g}, ${c.de.toFixed(3)} apart in colour)`).toBe(c.want);
 });

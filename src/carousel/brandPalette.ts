@@ -71,6 +71,29 @@ export function tooClose(a: string, b: string): boolean {
  * what we ship. Pale yellow on an off-white ground reads 1.1:1 and does not pass.
  */
 export const ACCENT_FLOOR = 3.6;
+/**
+ * Round G3: brightness is not the only way a shape shows. A pale yellow bar on an off-white page is as bright as the page (1.2:1) and still reads as a clear yellow highlighter, because its COLOUR differs.
+ * The colour difference is the distance in OKLab (the perceptual colour space of Ottosson, 2020: L, a, b; simple, one formula, equal steps look about equal). 0.12 is the floor. It is set from the
+ * calibration cases, not from the built-ins (the weakest built-in, object-neon at 0.32, would reject the pale yellow, 0.142, which must show): every shape that has to show is at 0.142 or more
+ * (pale yellow on off-white 0.142, neon on off-white 0.292, orange on navy 0.578) and every one that must not is at 0.105 or less (navy on near-black 0.105, near-black on near-black 0.023,
+ * an accent a few percent from its ground 0.027), so 0.12 sits between them (0.022 above the weakest pass, 0.015 below the strongest fail).
+ */
+export const ACCENT_FLOOR_DE = 0.12;
+const lin = (v: number) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+const oklab = (hex: string): [number, number, number] => {
+  const [r, g, b] = [1, 3, 5].map((i) => lin(parseInt(hex.slice(i, i + 2), 16)));
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const sv = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * sv, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * sv, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * sv];
+};
+/** The colour difference of two #RRGGBB colours: the Euclidean distance in OKLab. */
+export const colourDifference = (a: string, b: string): number => {
+  const x = oklab(a), y = oklab(b);
+  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
+};
+/** A shape in `accent` shows on `ground` when it reaches the floor on brightness (luminance contrast) OR on colour difference. */
+export const accentVisible = (accent: string, ground: string): boolean => contrast(accent, ground) >= ACCENT_FLOOR || colourDifference(accent, ground) >= ACCENT_FLOOR_DE;
 /** The most a brand colour's lightness may move (HSL, 0 to 1) to reach the floor and still read as the brand: a quarter of the scale. */
 export const MAX_ACCENT_STEP = 0.25;
 /** A dark primary is the dark ground itself when off-white text on it reaches this contrast. */
@@ -116,14 +139,13 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
   // (at most MAX_ACCENT_STEP, same hue) and the ground's own ink, that reaches ACCENT_FLOOR against the ground
   const picks = new Map<string, Pick>();
   const pickAccent = (bg: string, ink: string): Pick => {
-    const seen = (c: string) => contrast(c, bg);
-    const was = seen(P);
-    if (was >= ACCENT_FLOOR) return { accent: P, how: 'primary', was, bg };
-    if (S && seen(S) >= ACCENT_FLOOR) return { accent: S, how: 'secondary', was, bg };
+    const was = contrast(P, bg);
+    if (accentVisible(P, bg)) return { accent: P, how: 'primary', was, bg };
+    if (S && accentVisible(S, bg)) return { accent: S, how: 'secondary', was, bg };
     const [h, sat, l0] = toHsl(P);
     for (let k = 1; k <= Math.round(MAX_ACCENT_STEP * 100); k++) {
       const c = fromHsl(h, sat, Math.max(0, Math.min(1, l0 + (isDark(bg) ? 1 : -1) * 0.01 * k)));
-      if (seen(c) >= ACCENT_FLOOR) return { accent: c, how: 'step', was, bg };
+      if (accentVisible(c, bg)) return { accent: c, how: 'step', was, bg };
     }
     return { accent: ink, how: 'ink', was, bg };
   };
@@ -227,11 +249,11 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     }
     for (const gr of groups.values()) {
       const where = gr.names.join(' and ');
-      const bad = r1(gr.was);
+      const bad = `only ${r1(gr.was)}:1 brighter than the ground and ${colourDifference(P, gr.bg).toFixed(2)} different in colour`;
       const onAccentGround = gr.names.every((n) => n.startsWith('the slides '));
-      if (gr.how === 'secondary') changes.push({ kind: 'secondary', from: P, to: gr.accent, ratio: gr.was, text: onAccentGround ? `On ${where}, your ${P} cannot be the highlight, so highlights use your ${gr.accent} (${ratio(gr.accent, gr.bg)}:1).` : `Your ${P} does not show on ${where} (${bad}:1), so highlights use your ${gr.accent} there (${ratio(gr.accent, gr.bg)}:1).` });
-      else if (gr.how === 'step') changes.push({ kind: 'accent-text', from: P, to: gr.accent, ratio: gr.was, text: `Your ${P} does not show on ${where} (${bad}:1), so highlights use ${isDark(gr.bg) ? 'a lighter' : 'a darker'} step of it there (${gr.accent}, ${ratio(gr.accent, gr.bg)}:1), the same hue.` });
-      else changes.push({ kind: 'accent-text', from: P, ratio: gr.was, text: `Your ${P} does not show on ${where} (${bad}:1), and no step of it does, so highlights there are drawn in your text colour.` });
+      if (gr.how === 'secondary') changes.push({ kind: 'secondary', from: P, to: gr.accent, ratio: gr.was, text: onAccentGround ? `On ${where}, your ${P} cannot be the highlight, so highlights use your ${gr.accent} (${ratio(gr.accent, gr.bg)}:1).` : `Your ${P} does not show on ${where} (${bad}), so highlights use your ${gr.accent} there (${ratio(gr.accent, gr.bg)}:1).` });
+      else if (gr.how === 'step') changes.push({ kind: 'accent-text', from: P, to: gr.accent, ratio: gr.was, text: `Your ${P} does not show on ${where} (${bad}), so highlights use ${isDark(gr.bg) ? 'a lighter' : 'a darker'} step of it there (${gr.accent}, ${ratio(gr.accent, gr.bg)}:1), the same hue.` });
+      else changes.push({ kind: 'accent-text', from: P, ratio: gr.was, text: `Your ${P} does not show on ${where} (${bad}), and no step of it does, so highlights there are drawn in your text colour.` });
     }
   }
   // the secondary as text on the main colour (a second colour that cannot be read on it is not used for text there)
