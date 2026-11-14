@@ -297,3 +297,12 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
   .cr-thumb-badge { max-width: 100%; min-width: 0; }
   .cr-pic-item { max-width: none; min-width: 140px; }
 }
+
+/* Round E: the Slides step at 390 px. The edit card keeps less padding on a phone (26 px each side left the picker, the layout tiles and the tabs 298 px), so the picker thumbnails keep their 140 px and the layout tiles get a readable label. */
+@media (max-width: 480px) {
+  .cr-edit-view { padding-left: 12px; padding-right: 12px; }
+  .cr-edit-view .cr-pick { margin-inline: 0; width: auto; max-width: 100%; }
+  .cr-edit-view .cr-card { padding-left: 8px; padding-right: 8px; }
+  .cr-edit-view .cr-tabpanel .btn.btn-sm { padding-left: 6px; padding-right: 6px; }
+  .cr-edit-view .cr-tabpanel .btn.btn-sm .small { font-size: 12px !important; }
+}

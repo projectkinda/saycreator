@@ -86,5 +86,8 @@ export function pickPicture(spec: SlideSpec, index: number, choice: PickChoice, 
     const f = to === spec.layout ? base.fields : fieldsFor(base, to, { ...look, images: [q], hasPhoto: true });
     return !!f && keepsText(base.fields, f) && imageSlotsOf(to).length > 0;
   }));
-  return { ok: false, why: `This slide cannot show this picture without losing words, so it is unchanged.${offer ? ' Another picture fits it.' : ' No layout with a picture carries all of its words: edit the text or pick another slide.'}`, ...(offer ? { offer: offer.id } : {}) };
+  // Round E: the refusal names the picture (its "What is this?" name, or "Picture N") and says what the person can do; no layout id
+  const callIt = (p: PicInfo) => (p.label?.trim() ? `"${p.label.trim()}" (picture ${pics.indexOf(p) + 1})` : `Picture ${pics.indexOf(p) + 1}`);
+  const notice = `${callIt(pic)} cannot go on slide ${index + 1}: the slide's words would not fit beside it, so the slide is unchanged.`;
+  return { ok: false, why: offer ? `${notice} ${callIt(offer)} does fit this slide: use the button below, or pick another slide.` : `${notice} You can pick another slide, make this slide's text shorter, or choose another layout for it in the Layout tab.`, ...(offer ? { offer: offer.id } : {}) };
 }

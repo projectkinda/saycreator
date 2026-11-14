@@ -172,8 +172,8 @@ test('the picker still refuses where no layout with a picture carries every word
   await openEdit(page, idx + 1);
   await page.getByTestId(`pick-${idx}-0`).click();
   const msg = page.getByTestId(`pick-${idx}-msg`);
-  await expect(msg).toContainText('cannot show this picture without losing words', { timeout: 30_000 });
-  await expect(msg).toContainText('edit the text or pick another slide');
+  await expect(msg).toContainText('cannot go on slide', { timeout: 30_000 }); // Round E: the refusal names the picture and the slide
+  await expect(msg).toContainText('make this slide's text shorter');
   await expect(page.getByTestId(`pick-${idx}-offer`)).toHaveCount(0);
   expect(JSON.stringify((await doc(page)).designed.library.plan.specs[idx])).toBe(before);
   expect(calls.length).toBe(1);

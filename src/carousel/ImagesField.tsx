@@ -64,7 +64,7 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
       <div className="row-actions" style={{ alignItems: 'center', gap: 8 }}>
         <strong className="field-label">Images (optional)</strong>
         <button type="button" className="btn btn-outline btn-sm" disabled={disabled || busy} onClick={() => input.current?.click()}>Add images</button>
-        <span className="small muted">Choose, drop or paste pictures. They stay in this browser; the writer is told only how many there are and their shapes, never the pictures.</span>
+        <span className="small muted">Choose, drop or paste pictures. They stay in this browser. The writer sees only each picture's number, its shape and the name you give it, never the picture itself.</span>
       </div>
       <input ref={input} type="file" multiple accept="image/*" className="visually-hidden" tabIndex={-1} aria-label="Choose images for the slides" onChange={(e) => { void go([...(e.target.files ?? [])]); e.target.value = ''; }} />
       {photos.length > 0 && (

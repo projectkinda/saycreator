@@ -331,7 +331,7 @@ test('A: the Slides-step picker: big thumbnails in their own shape, numbers, nam
   await openEdit(page, bs + 1);
   await page.getByTestId(`pick-${bs}-0`).click();
   const m2 = page.getByTestId(`pick-${bs}-msg`);
-  await expect(m2).toContainText('cannot show this picture without losing words', { timeout: 30_000 });
+  await expect(m2).toContainText('cannot go on slide', { timeout: 30_000 }); // Round E: names the picture and the slide
   msgs.refusal = (await m2.textContent())!;
   shots.push({ buf: await page.getByTestId(`picker-${bs}`).screenshot(), caption: 'A refusal' });
   await page.getByTestId(`pick-${bs}-none`).click();

@@ -54,7 +54,7 @@ export function SlidePicker({ index, pictures, current, shown, usage, onPick }: 
       </div>
       <p className="small" data-testid={`pick-${index}-shown`}>{at >= 0 ? pictureCaption(photos[at], at + 1) : 'No picture on this slide.'}</p>
       {msg && <p className="small muted" role="status" data-testid={`pick-${index}-msg`}>{msg}</p>}
-      {offer && <button type="button" className="btn btn-outline btn-sm" disabled={busy} data-testid={`pick-${index}-offer`} onClick={() => void pick(offer)}>Use a layout with a picture</button>}
+      {offer && <button type="button" className="btn btn-outline btn-sm" disabled={busy} data-testid={`pick-${index}-offer`} onClick={() => void pick(offer)}>Use the picture that fits</button>}
     </div>
   );
 }
