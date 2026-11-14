@@ -27,6 +27,8 @@ async function fake(page: Page) {
   await page.route('**/api/carousel/write', w);
   return () => calls;
 }
+// Round I: the brands live in the one list the Branding page keeps (creator.brand-workspaces.v1) plus a pointer to the active one; creator.brands.v1 is only read once (see round-i.spec.ts).
+const storedStore = (page: Page) => page.evaluate(() => ({ brands: JSON.parse(localStorage.getItem('creator.brand-workspaces.v1') || '[]') as any[], activeId: localStorage.getItem('creator.brand-workspaces.active.v1') }));
 const docOf = (page: Page) => page.evaluate((k) => { const t = localStorage.getItem(k); return t ? JSON.parse(t).project.doc : null; }, DOC_KEY);
 
 /** Opens the page with the saved old-format deck in storage (no writer call at all). */
@@ -47,6 +49,7 @@ test('A: brands are read defensively: missing, corrupt, half-valid and blocked s
     out.missing = B.loadBrands();
     const cases: Record<string, string> = { garbage: '{not json', number: '42', nullish: 'null', notList: '{"brands":5}', halfValid: JSON.stringify({ brands: [{ id: 'a', name: 'A', colours: ['#ABC', 'zzz', '14213d'], createdAt: 5 }, { id: 'b', colours: [] }, { id: 7 }, null, { id: 'a', colours: ['#000000'] }], activeId: 'gone' }) };
     for (const [name, text] of Object.entries(cases)) {
+      for (const k of ['creator.brand-workspaces.v1', 'creator.brand-workspaces.active.v1', 'creator.brands.migrated.v1']) localStorage.removeItem(k);
       localStorage.setItem(B.BRANDS_KEY, text);
       out[name] = B.loadBrands();
     }
@@ -204,7 +207,7 @@ test('B/E: a brand made through the editor (hex typed in), the invalid message, 
   await page.waitForTimeout(1500);
   const d = await docOf(page);
   expect(d.scheme).toMatchObject({ kind: 'brand', name: 'Navy and orange', colours: ['#14213d', '#fca311'] });
-  const store = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), BRANDS_KEY);
+  const store = await storedStore(page);
   expect(store.brands).toHaveLength(1);
   expect(store.brands[0]).toMatchObject({ name: 'Navy and orange', colours: ['#14213d', '#fca311'] });
   expect(store.activeId).toBe(store.brands[0].id);
@@ -252,7 +255,7 @@ test('C: two brands, switching between them, rename, delete (the carousel keeps 
   await expect(page.getByTestId('brand-editor')).toHaveCount(0);
   await page.waitForTimeout(1200);
   await expect(page.getByRole('radio', { name: /Plum and gold/ })).toHaveAttribute('aria-checked', 'true');
-  expect((await page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), BRANDS_KEY)).brands).toHaveLength(2);
+  expect((await storedStore(page)).brands).toHaveLength(2);
   // reload: the list, the scheme and the drawing are all still there
   await page.reload();
   await expect(page.locator('.cr-film img')).toHaveCount(4, { timeout: 60_000 });
@@ -267,7 +270,7 @@ test('C: two brands, switching between them, rename, delete (the carousel keeps 
   await page.getByTestId('brand-delete-yes').click();
   await expect(page.getByTestId('brand-editor')).toHaveCount(0);
   await page.waitForTimeout(800);
-  expect((await page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), BRANDS_KEY)).brands.map((b: any) => b.name)).toEqual(['Navy and orange']);
+  expect((await storedStore(page)).brands.map((b: any) => b.name)).toEqual(['Navy and orange']);
   expect((await docOf(page)).scheme, 'the document keeps its copy of the colours').toMatchObject({ kind: 'brand', name: 'Plum and gold', colours: ['#8e1b4f', '#e9b44c'] });
   expect((await corners(page)).join()).toBe(berry.join());
   await page.reload();
@@ -380,7 +383,7 @@ test('B: the editor works by keyboard alone: Tab through the fields, type, Enter
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('brand-editor')).toHaveCount(0);
   await expect(page.getByTestId('brand-add')).toBeFocused();
-  expect((await page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), BRANDS_KEY)).brands).toHaveLength(1);
+  expect((await storedStore(page)).brands).toHaveLength(1);
   // Done closes it too
   await page.getByTestId('brand-edit').press('Enter');
   await expect(page.getByTestId('brand-editor')).toBeVisible();

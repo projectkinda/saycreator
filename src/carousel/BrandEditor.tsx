@@ -158,6 +158,7 @@ export function BrandEditor({ doc, styleName, brand, others, onSave, onDelete, o
       {confirmDelete && (
         <div className="cr-be-confirm" role="alertdialog" aria-label="Delete this brand?">
           <p>Delete this brand? Carousels already using it keep their colours.</p>
+          <p className="small muted">It is also removed from the Branding page, with its details there.</p>
           <div className="row-actions">
             <button type="button" className="btn btn-dark" onClick={() => { if (brand && onDelete) onDelete(brand.id); close(); }} data-testid="brand-delete-yes">Delete</button>
             <button type="button" className="btn btn-outline" onClick={() => setConfirmDelete(false)}>Keep it</button>

@@ -35,9 +35,10 @@ export function ColoursRow({ scheme, brands, disabled, onChoose, onAdd, onEdit }
           </button>
         )}
         {brands.map((b) => (
-          <button key={b.id} type="button" role="radio" aria-checked={on('brand', b.id)} className="cr-opt" disabled={disabled} onClick={() => onChoose(schemeOfBrand(b))} data-testid={`brand-opt-${b.id}`}>
+          // a brand made on the Branding page has no colours yet: a click opens the editor so it can be given some
+          <button key={b.id} type="button" role="radio" aria-checked={on('brand', b.id)} className="cr-opt" disabled={disabled} onClick={(e) => (b.colours.length ? onChoose(schemeOfBrand(b)) : onEdit(b, e.currentTarget))} data-testid={`brand-opt-${b.id}`}>
             <Swatches colours={b.colours} />
-            <span>{b.name}</span>
+            <span>{b.name}{b.colours.length ? '' : ' (add colours)'}</span>
           </button>
         ))}
       </div>

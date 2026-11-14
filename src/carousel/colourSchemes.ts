@@ -30,7 +30,7 @@ export function effectiveScheme(scheme: ColourScheme | undefined | null, brands:
   if (!scheme) return null;
   if (scheme.kind === 'brand') {
     const b = brands.find((x) => x.id === scheme.id);
-    if (b) return schemeOfBrand(b);
+    if (b && b.colours.length) return schemeOfBrand(b);
   }
   return scheme;
 }
@@ -41,5 +41,5 @@ export const sameColours = (a: string[] | undefined, b: string[] | undefined): b
 export function startScheme(): ColourScheme | undefined {
   const s = loadBrands();
   const b = s.brands.find((x) => x.id === s.activeId);
-  return b ? schemeOfBrand(b) : undefined;
+  return b && b.colours.length ? schemeOfBrand(b) : undefined;
 }

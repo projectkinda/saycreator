@@ -6,7 +6,8 @@ import { useDocumentTitle } from '../useDocumentTitle';
 import { BrandKitTab } from './branding/BrandKitTab';
 import { CompetitorsTab, ProductsTab, ProfileTab } from './branding/BrandDetailsTabs';
 import { VoiceTab } from './branding/VoiceTab';
-import { initialWorkspace, loadWorkspaces, saveWorkspaces, type BrandWorkspace } from './branding/workspace';
+import { BrandColoursCard } from './branding/BrandColoursCard';
+import { initialWorkspace, loadWorkspaces, readActiveId, saveWorkspaces, writeActiveId, type BrandWorkspace } from './branding/workspace';
 
 const TABS = [
   { id: 'profile', label: 'Profile' },
@@ -25,7 +26,9 @@ export default function Branding() {
   const requestedTab = params.get('tab') ?? 'profile';
   const tab = TABS.some((item) => item.id === requestedTab) ? requestedTab : 'profile';
   const [brands, setBrands] = useState<BrandWorkspace[]>(() => loadWorkspaces(seedId, seedName));
-  const [activeId, setActiveId] = useState(() => brands[0]?.id ?? seedId);
+  // Round I: the active brand is remembered (the carousel maker's Style step shows the same one)
+  const [activeId, setActiveIdState] = useState(() => { const a = readActiveId(); return brands.find((b) => b.id === a)?.id ?? brands[0]?.id ?? seedId; });
+  const setActiveId = (id: string) => { setActiveIdState(id); writeActiveId(id); };
   const active = useMemo(() => brands.find((brand) => brand.id === activeId) ?? brands[0], [activeId, brands]);
 
   useEffect(() => saveWorkspaces(brands), [brands]);
@@ -52,6 +55,7 @@ export default function Branding() {
     <div {...tabPanelProps('brand', tab)} className="panel brand-scope">
       <div className="brand-scope-label">Every section below belongs to <strong>{active.name}</strong></div>
       {tab === 'profile' && <ProfileTab brand={active} update={update}/>}
+      {tab === 'kit' && <BrandColoursCard key={`colours-${active.id}`} brand={active} update={update}/>}
       {tab === 'kit' && <BrandKitTab key={active.id} brandId={active.id} brandName={active.name}/>}
       {tab === 'voice' && <VoiceTab key={active.id} brandId={active.id} brandName={active.name}/>}
       {tab === 'products' && <ProductsTab brand={active} update={update}/>}

@@ -1122,7 +1122,7 @@ export default function CarouselPage() {
     const s = doc.scheme;
     if (!s || s.kind !== 'brand' || !doc.designed?.library?.plan) return;
     const b = brandStore.brands.find((x) => x.id === s.id);
-    if (!b || sameColours(b.colours, s.colours)) return;
+    if (!b || !b.colours.length || sameColours(b.colours, s.colours)) return;
     const k = `${b.id}:${b.colours.join()}`;
     if (brandSynced.current === k) return;
     brandSynced.current = k;
