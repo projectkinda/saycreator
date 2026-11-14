@@ -23,7 +23,7 @@ import { svgToPng } from '../reference/faithful';
 import { cardSlides, previewDeck, PREVIEW_COUNT } from './stylePreview';
 import { choiceOf, pickPicture } from './picturePick';
 import { SlidePicker } from './SlidePicker';
-import { plainWords } from './plainWords';
+import { flavourLine, plainWords } from './plainWords';
 import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
 import { LayoutGallery } from './LayoutGallery';
 import { profileWebsite } from './profileSite';
@@ -862,7 +862,7 @@ export default function CarouselPage() {
     job.end('apply', pick ? `style: ${pick.name}` : undefined);
     {
       const sw = designedOut?.library?.flavour?.swaps ?? [];
-      if (sw.length) setNotice(`Flavour: ${sw.length} layout${sw.length === 1 ? '' : 's'} changed to suit ${styleByName(presetUsed ?? '')?.spec.title ?? 'the style'}: ${sw.map((w) => plainWords(`slide ${w.slide} ${w.from} to ${w.to}`)).join('; ')}. Undo takes back the whole carousel; the layout picker changes any slide.`);
+      if (sw.length) setNotice(flavourLine(sw.map((w) => w.slide), styleByName(presetUsed ?? '')?.spec.title));
     }
     job.begin('draw');
     setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…`, styleWhy: (presetUsed ? pickPre : pick)?.why, extra: designedOut ? ` Designed mode: ${Object.keys(designedOut.slides).length} slides designed, ${Object.keys(designedOut.fallbacks).length} fell back, ${designedOut.calls} model call${designedOut.calls === 1 ? '' : 's'}.` : '' });

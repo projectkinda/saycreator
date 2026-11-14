@@ -33,3 +33,13 @@ export function plainWords(text: string): string {
   }
   return out;
 }
+
+/**
+ * Round F: the line the person reads when the style's flavour moved some slides to other layouts. Slide numbers and the style's name, no layout id and no layout name:
+ * "Slides 1 and 5 were laid out differently to fit Warm editorial collage."
+ */
+export function flavourLine(slides: number[], styleTitle?: string): string {
+  const n = [...new Set(slides)].sort((a, b) => a - b);
+  const list = n.length <= 1 ? String(n[0] ?? '') : n.length === 2 ? `${n[0]} and ${n[1]}` : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`;
+  return `${n.length === 1 ? 'Slide' : 'Slides'} ${list} ${n.length === 1 ? 'was' : 'were'} laid out differently to fit ${styleTitle?.trim() || 'this look'}. Undo takes back the whole carousel.`;
+}
