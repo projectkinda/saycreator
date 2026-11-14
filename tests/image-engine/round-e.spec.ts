@@ -145,3 +145,28 @@ test('G: the big headline of split-text never wraps as a ladder (three lines or 
   expect(r.n).toBeGreaterThan(200);
   expect(r.bad).toEqual([]);
 });
+
+test('F: a photo shown whole is feathered into its blurred backdrop (a mask on the picture), the backdrop is no darker than before (0.42), a screenshot keeps its flat panel and hard clip', async ({ page }) => {
+  const helpSrc = fs.readFileSync('tests/image-engine/picture-layouts.spec.ts', 'utf8');
+  const HELP = helpSrc.slice(helpSrc.indexOf('const HELP = `') + 14, helpSrc.indexOf('`;\n\nasync function setup'));
+  await page.route('**/api/carousel/status', (r) => r.fulfill({ json: { available: false } }));
+  await page.goto('/images/carousel');
+  await page.evaluate(HELP);
+  const r: any = await page.evaluate(async () => {
+    const H = (window as any).__H;
+    const out: any = {};
+    for (const style of ['dark-quiet', 'style-1']) {
+      const st = H.D.styleFromPack(H.PR.presetPackFor(style, false)).style;
+      for (const [k, w, h, photo] of [['portrait photo', 1000, 1500, true], ['wide photo', 2400, 1230, true], ['portrait screenshot', 1000, 1500, false]] as [string, number, number, boolean][]) {
+        const d = await H.D.drawOne({ layout: 'photo-full-caption', fields: { headline: 'The hoodie that becomes a backpack', line: 'Ten seconds, one zip.', image: H.IM.makeRef({ id: w === 1000 ? 'portrait' : 'wide', w, h, ...(photo ? { photo: true } : {}) }) }, accents: [] }, 0, st, { handle: '@h', index: 2, total: 7, cut: 'plain', invert: false, density: 'normal' });
+        const svg: string = d.built.svg;
+        out[`${style}/${k}`] = { mask: /<mask id="pic\d+x\d+m"/.test(svg), maskedImage: /<image [^>]*mask="url\(#pic/.test(svg), blur: /feGaussianBlur stdDeviation="30"/.test(svg), dark: /fill-opacity="0.42"/.test(svg), clipped: /<image [^>]*clip-path="url\(#pic/.test(svg) };
+      }
+    }
+    return out;
+  });
+  for (const style of ['dark-quiet', 'style-1']) {
+    for (const k of ['portrait photo', 'wide photo']) expect(r[`${style}/${k}`], `${style} ${k}`).toMatchObject({ mask: true, maskedImage: true, blur: true, dark: true });
+    expect(r[`${style}/portrait screenshot`], `${style} screenshot`).toMatchObject({ mask: false, clipped: true });
+  }
+});

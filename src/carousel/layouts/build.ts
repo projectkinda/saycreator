@@ -400,7 +400,11 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       // a photo shown whole sits on a blurred, darkened copy of itself (no grey or olive bars); a screenshot on a flat panel in its edge colour
       const panel = w0 ? (w0.photo ? blurredBackdrop(id, p, p.src, cropRect(p, parseRef(p.src))) : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" fill="${w0.bg}"/>`) : '';
       const box = cr ? `x="${Math.round(cr.x * 10) / 10}" y="${Math.round(cr.y * 10) / 10}" width="${Math.round(cr.w * 10) / 10}" height="${Math.round(cr.h * 10) / 10}" preserveAspectRatio="none"` : `x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" preserveAspectRatio="xMidYMid slice"`;
-      return `<clipPath id="${id}">${w0 ? `<rect x="${w0.rect.x}" y="${w0.rect.y}" width="${w0.rect.w}" height="${w0.rect.h}"/>` : clip}</clipPath>${panel}<image href="${p.src.replace(/&/g, '&amp;')}" ${box} clip-path="url(#${id})"/>`;
+      // Round E: a photo shown whole is feathered into its blurred backdrop: a mask (the picture's rectangle, 4 px in, blurred) fades the outer 10 px or so instead of cutting a hard edge. The picture is not moved or resized.
+      const feather = !!(w0 && w0.photo);
+      const r2 = (n: number) => Math.round(n * 10) / 10;
+      const maskDef = feather ? `<filter id="${id}f" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="5"/></filter><mask id="${id}m" maskUnits="userSpaceOnUse" x="${r2(w0!.rect.x - 30)}" y="${r2(w0!.rect.y - 30)}" width="${r2(w0!.rect.w + 60)}" height="${r2(w0!.rect.h + 60)}"><rect x="${r2(w0!.rect.x + 4)}" y="${r2(w0!.rect.y + 4)}" width="${r2(w0!.rect.w - 8)}" height="${r2(w0!.rect.h - 8)}" fill="#ffffff" filter="url(#${id}f)"/></mask>` : '';
+      return `<clipPath id="${id}">${w0 ? `<rect x="${w0.rect.x}" y="${w0.rect.y}" width="${w0.rect.w}" height="${w0.rect.h}"/>` : clip}</clipPath>${maskDef}${panel}<image href="${p.src.replace(/&/g, '&amp;')}" ${box} ${feather ? `mask="url(#${id}m)"` : `clip-path="url(#${id})"`}/>`;
     }).join('');
     const indexed = pics.map((p, i) => ({ p, i }));
     // a picture goes right after the ground (the layout's badges and shapes sit over it); a `front` one goes above the plane shapes and cards, below the text
