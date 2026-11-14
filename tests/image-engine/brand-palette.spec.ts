@@ -107,7 +107,7 @@ test('brands: 5 brands x all 15 styles keep the layouts, cut no word, fail no co
   // navy + orange: orange where navy cannot be seen (a navy dark ground), said in one line; pale yellow: no dark ground of its own colour
   const navy = r.filter((y: any) => y.brand === 'navy');
   expect(navy.filter((y: any) => y.got.changes.join(' ').includes('dark enough to be the background')).length, 'navy is the dark ground in every style that has a dark ground').toBe(navy.filter((y: any) => y.got.darkBgs.length > 0).length);
-  expect(navy.filter((y: any) => y.got.darkBgs.length > 0).length, 'most styles have a dark ground').toBeGreaterThan(9);
+  expect(navy.filter((y: any) => y.got.darkBgs.length > 0).length, '9 of the 15 styles have a dark ground').toBe(9);
   expect(navy.filter((y: any) => y.got.changes.join(' ').includes('so highlights use your #FCA311')).length, 'orange takes over where navy does not show').toBeGreaterThan(8);
   // the close pair is said in words
   for (const x of r.filter((y: any) => y.brand === 'blues')) expect(x.got.changes.join(' '), x.style).toContain('very close');
