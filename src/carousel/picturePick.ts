@@ -61,6 +61,17 @@ export function pickPicture(spec: SlideSpec, index: number, choice: PickChoice, 
   if (!pic) return { ok: false, why: 'That picture is not in the project.' };
   const ref = makeRef({ id: pic.id, w: pic.width, h: pic.height, ...(pic.width / pic.height <= 0.5 ? { fy: 0.1 } : {}), ...(pic.content === 'photo' ? { photo: true } : {}) });
   const slots = imageSlotsOf(spec.layout);
+  // Round E: a tall picture (0.62 wide or narrower) goes in the phone frame when the slide can show one with every word kept, before the slide's own picture layout would put it on a grey panel.
+  // A list keeps its list layouts (beside-picture draws its own phone outline); a slide that cannot take the frame falls through to what it did before.
+  if (pic.width / pic.height <= 0.62 && spec.layout !== 'phone-frame' && !LIST_SLIDES.includes(spec.layout) && !avoid.includes('phone-frame') && imagesNeeded('phone-frame') === 1 && hasEnoughPictures('phone-frame', [pic])) {
+    const look0: Look = { ...look, images: [pic], hasPhoto: true };
+    const base0: SlideSpec = { ...spec, fields: withoutImages(spec.fields) as Fields };
+    const f0 = fieldsFor(base0, 'phone-frame', look0);
+    const slot0 = imageSlotsOf('phone-frame')[0];
+    if (f0 && slot0 && keepsText(base0.fields, f0)) {
+      return { ok: true, spec: pinned({ ...spec, layout: 'phone-frame', fields: { ...f0, [slot0.field]: ref } as Fields, density: undefined }), note: `${plainPlacement('phone-frame')} Every word is kept.` };
+    }
+  }
   // the slide's own layout takes the picture (its shape, and not under text for a screenshot): put it in the first picture slot, the others keep what they have
   if (slots.length && !LIST_SLIDES.includes(spec.layout) && fittingPictures(spec.layout, [pic]) === 1 && !avoid.includes(spec.layout)) {
     const have = Object.keys(spec.fields).filter((k) => parseRef(spec.fields[k])).length;
