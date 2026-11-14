@@ -139,13 +139,22 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
         ))}
       </div>
       <h4 className="h4">Variations</h4>
-      <div className="cr-actions" data-testid={`gallery-controls-${index}`} style={{ gap: 6 }}>
-        <span className="small muted">Plane</span>
-        {model.cuts.map((c) => (
-          <button key={c.id} type="button" className="btn btn-outline btn-sm" disabled={busy || c.current} aria-pressed={c.current} data-testid={`gal-cut-${c.id}`} onClick={() => void choose({ cut: c.id })} style={{ padding: '2px 8px', fontSize: 12, outline: c.current ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{c.label}</button>
-        ))}
-        <span className="small muted" style={{ marginLeft: 6 }}>Colours</span>
-        <button type="button" className="btn btn-outline btn-sm" disabled={busy} aria-pressed={!!model.invert} data-testid="gal-invert" onClick={() => void choose({ invert: model.invert ? false : 'full' })} style={{ padding: '2px 8px', fontSize: 12, outline: model.invert ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{model.invert ? 'Inverted (click for normal)' : 'Invert'}</button>
+      {/* Round F: each control sits with its own label in its own group; the colour group is its own container (it gets more controls next round). The groups wrap, label above buttons. */}
+      <div className="cr-var" data-testid={`gallery-controls-${index}`}>
+        <div className="cr-var-group" role="group" aria-labelledby={`cr-var-plane-${index}`} data-testid={`gallery-plane-${index}`}>
+          <span className="small muted cr-var-label" id={`cr-var-plane-${index}`}>Plane</span>
+          <div className="cr-var-buttons">
+            {model.cuts.map((c) => (
+              <button key={c.id} type="button" className="btn btn-outline btn-sm cr-var-btn" disabled={busy || c.current} aria-pressed={c.current} data-testid={`gal-cut-${c.id}`} onClick={() => void choose({ cut: c.id })} style={{ outline: c.current ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{c.label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="cr-var-group cr-var-colours" role="group" aria-labelledby={`cr-var-colours-${index}`} data-testid={`gallery-colours-${index}`}>
+          <span className="small muted cr-var-label" id={`cr-var-colours-${index}`}>Colours</span>
+          <div className="cr-var-buttons">
+            <button type="button" className="btn btn-outline btn-sm cr-var-btn" disabled={busy} aria-pressed={!!model.invert} data-testid="gal-invert" onClick={() => void choose({ invert: model.invert ? false : 'full' })} style={{ outline: model.invert ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{model.invert ? 'Inverted (click for normal)' : 'Invert'}</button>
+          </div>
+        </div>
       </div>
       {msg && <span className="small" role="status">{msg}</span>}
     </div>

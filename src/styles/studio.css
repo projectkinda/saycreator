@@ -306,3 +306,10 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
   .cr-edit-view .cr-tabpanel .btn.btn-sm { padding-left: 6px; padding-right: 6px; }
   .cr-edit-view .cr-tabpanel .btn.btn-sm .small { font-size: 12px !important; }
 }
+
+/* Round F: the Variations controls of the Layout tab: each control with its own label, in groups that wrap (label above its buttons) */
+.cr-var { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 22px; margin-top: 4px; }
+.cr-var-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cr-var-label { line-height: 1.2; }
+.cr-var-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.cr-var-btn { padding: 2px 8px; font-size: 12px; }
