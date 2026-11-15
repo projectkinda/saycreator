@@ -3,14 +3,8 @@ import { UploadProgress } from '../../components/UploadProgress';
 import * as engine from '../../engine';
 import { grad } from '../../format';
 
-const COLOR_ROWS: { key: keyof engine.BrandColors; label: string }[] = [
-  { key: 'primary', label: 'Primary' },
-  { key: 'text', label: 'Text' },
-  { key: 'background', label: 'Background' },
-  { key: 'highlight', label: 'Highlight' },
-];
-
-type Editing = 'colors' | 'fonts' | 'handle' | null;
+// Round J: the brand's colours are edited in ONE place, the "Brand colours" card above (main, second, extra); the kit's primary and highlight are those colours.
+type Editing = 'fonts' | 'handle' | null;
 const isHex = (s: string) => /^#[0-9a-f]{6}$/i.test(s);
 
 export function BrandKitTab({ brandId, brandName }: { brandId: string; brandName: string }) {
@@ -18,7 +12,6 @@ export function BrandKitTab({ brandId, brandName }: { brandId: string; brandName
   const [fonts, setFonts] = useState<string[]>([]);
   const [failed, setFailed] = useState(false);
   const [editing, setEditing] = useState<Editing>(null);
-  const [colors, setColors] = useState<engine.BrandColors | null>(null);
   const [fontDraft, setFontDraft] = useState<engine.BrandKit['fonts'] | null>(null);
   const [handle, setHandle] = useState('');
   const [saving, setSaving] = useState(false);
@@ -44,7 +37,6 @@ export function BrandKitTab({ brandId, brandName }: { brandId: string; brandName
     if (!kit) return;
     setError('');
     setEditing(what);
-    if (what === 'colors') setColors({ ...kit.colors });
     if (what === 'fonts') setFontDraft({ ...kit.fonts });
     if (what === 'handle') setHandle(kit.handle);
   };
@@ -81,11 +73,10 @@ export function BrandKitTab({ brandId, brandName }: { brandId: string; brandName
   if (!kit) return <p className="muted" role="status">Loading your brand kit…</p>;
 
   const live = {
-    colors: editing === 'colors' && colors ? colors : kit.colors,
+    colors: kit.colors,
     fonts: editing === 'fonts' && fontDraft ? fontDraft : kit.fonts,
     handle: editing === 'handle' ? handle : kit.handle,
   };
-  const colorsValid = colors ? Object.values(colors).every(isHex) : false;
   const slide: CSSProperties = { background: isHex(live.colors.background) ? live.colors.background : kit.colors.background, color: isHex(live.colors.text) ? live.colors.text : kit.colors.text };
   const safe = (c: string, fallback: string) => (isHex(c) ? c : fallback);
   const family = (f: string) => `'${f}', system-ui, sans-serif`;
@@ -111,59 +102,19 @@ export function BrandKitTab({ brandId, brandName }: { brandId: string; brandName
       )}
 
       <div className="two">
-        {/* Colors */}
-        <section className="card ws-card" aria-labelledby="colors-h">
+        {/* Colors: Round J, read-only here; edited in the Brand colours card */}
+        <section className="card ws-card" aria-labelledby="colors-h" data-testid="kit-colours">
           <h2 id="colors-h" className="h3">Colors</h2>
-          {editing !== 'colors' || !colors ? (
-            <>
-              <ul className="swatches">
-                {COLOR_ROWS.map((c) => (
-                  <li key={c.key} className="sw">
-                    <i style={{ background: kit.colors[c.key] }} aria-hidden="true" />
-                    <span>{c.label}</span>
-                    <span className="small muted">{kit.colors[c.key]}</span>
-                  </li>
-                ))}
-              </ul>
-              <div><button type="button" className="btn btn-outline btn-sm" onClick={() => start('colors')}>Edit colors</button></div>
-            </>
-          ) : (
-            <>
-              <ul className="color-edit">
-                {COLOR_ROWS.map((c) => (
-                  <li key={c.key}>
-                    <label className="field">
-                      <span className="field-label">{c.label}</span>
-                      <span className="color-pair">
-                        <input
-                          type="color"
-                          aria-label={`${c.label} colour picker`}
-                          value={safe(colors[c.key], '#000000')}
-                          onChange={(e) => setColors({ ...colors, [c.key]: e.target.value.toUpperCase() })}
-                        />
-                        <input
-                          type="text"
-                          className="text-input"
-                          value={colors[c.key]}
-                          aria-invalid={!isHex(colors[c.key])}
-                          spellCheck={false}
-                          onChange={(e) => setColors({ ...colors, [c.key]: e.target.value })}
-                        />
-                      </span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-              {!colorsValid && <p className="small" role="status">Each colour needs six digits, like #1A2226.</p>}
-              {errorBox}
-              <div className="row-actions">
-                <button type="button" className="btn btn-dark btn-sm" disabled={saving || !colorsValid} onClick={() => save({ colors }, 'Colors saved')}>
-                  {saving ? 'Saving…' : 'Save colors'}
-                </button>
-                <button type="button" className="btn btn-outline btn-sm" disabled={saving} onClick={cancel}>Cancel</button>
-              </div>
-            </>
-          )}
+          <ul className="swatches">
+            {([['primary', 'Main colour'], ['highlight', 'Second colour']] as const).map(([k, label]) => (
+              <li key={k} className="sw">
+                <i style={{ background: kit.colors[k] }} aria-hidden="true" />
+                <span>{label}</span>
+                <span className="small muted">{kit.colors[k]}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="small muted">Change your colours in Brand colours above. Text and background colours come from the style you pick for each carousel.</p>
         </section>
 
         {/* Fonts */}

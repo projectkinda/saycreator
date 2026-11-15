@@ -205,6 +205,30 @@ export function migrateOldBrands(): boolean {
   return changed;
 }
 
+/** Round J: brands whose old kit colours (primary, highlight) were brought into the list. */
+export const KIT_MIGRATED_KEY = 'creator.brand-kit-colours.migrated.v1';
+/**
+ * Round J: the old four-role brand kit colours (Branding page, in memory) brought into the one list once: Main = primary, Second = highlight (when different). Only for a brand that has no colours in
+ * the list yet and whose kit colours really exist (`kitColours` returns null for a made-up default kit), so nothing the person set is overwritten and no colour is invented. Each brand is done once
+ * (its id is kept in KIT_MIGRATED_KEY), so running it again changes nothing. Returns the same list object when nothing changed.
+ */
+export function migrateKitColours(list: BrandWorkspace[], kitColours: (id: string) => { primary: string; highlight: string } | null): BrandWorkspace[] {
+  let done: string[] = [];
+  try { const d = JSON.parse(read(KIT_MIGRATED_KEY) ?? '[]'); if (Array.isArray(d)) done = d.filter((x): x is string => typeof x === 'string'); } catch { /* a damaged marker: start again (a brand with colours is never touched anyway) */ }
+  let changed = false;
+  const out = list.map((w) => {
+    if (done.includes(w.id)) return w;
+    done.push(w.id);
+    changed = true;
+    if (w.colours?.length) return w;
+    const k = kitColours(w.id);
+    const colours = k ? cleanColours([k.primary, ...(k.highlight && k.highlight.toLowerCase() !== k.primary.toLowerCase() ? [k.highlight] : [])]) : undefined;
+    return colours ? { ...w, colours } : w;
+  });
+  if (changed) write(KIT_MIGRATED_KEY, JSON.stringify(done));
+  return out.some((w, i) => w !== list[i]) ? out : list;
+}
+
 /** The list of brands (migrated first). Empty when nothing is stored. */
 export function readWorkspaces(): BrandWorkspace[] {
   migrateOldBrands();

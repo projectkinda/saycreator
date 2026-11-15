@@ -6,6 +6,7 @@ import * as helpFixtures from './fixtures-help';
 import { assets as assetFixtures } from './fixtures-assets';
 import { brandKit as brandKitFixture, fonts as fontList, voice as voiceFixture, voiceOptions as voiceOptionsFixture } from './fixtures-brand';
 import { images as imageFixtures } from './fixtures-images';
+import { cleanColours, readWorkspaces, writeWorkspaces } from '../pages/branding/workspace';
 import {
   EngineError,
   type Check,
@@ -1173,6 +1174,18 @@ export async function disconnectAccount(brandId: string, platform: Platform): Pr
 // ---- branding: brand kit and writing voice ----
 
 const kitStore = new Map<string, BrandKit>([[brandKitFixture.brandId, clone(brandKitFixture)]]);
+/** Round J: the brands whose kit colours are real (the starting kit of the account brand, and any kit saved in this session); every other kit is a made-up default copy. */
+const kitColoursSet = new Set<string>([brandKitFixture.brandId]);
+/** Round J: the old four kit colours of a brand when they really exist (for the one-time move into the brand list), else null. */
+export function storedKitColours(brandId: string): BrandColors | null {
+  return kitColoursSet.has(brandId) ? clone((kitStore.get(brandId) ?? brandKitFixture).colors) : null;
+}
+/** Round J: the brand list is the one colour list. A brand's main colour is the kit's primary, its second colour the highlight (the main one again when it has no second). */
+function withListColours(kit: BrandKit): BrandKit {
+  const ws = readWorkspaces().find((w) => w.id === kit.brandId);
+  if (!ws?.colours?.length) return kit;
+  return { ...kit, colors: { ...kit.colors, primary: ws.colours[0].toUpperCase(), highlight: (ws.colours[1] ?? ws.colours[0]).toUpperCase() } };
+}
 const voiceStore = new Map<string, VoiceProfile>([[voiceFixture.brandId, clone(voiceFixture)]]);
 
 function kitOf(brandId: string): BrandKit {
@@ -1206,7 +1219,7 @@ const contrast = (a: string, b: string) => {
 
 export async function getBrandKit(brandId: string): Promise<BrandKit> {
   await wait(300);
-  return clone(kitOf(brandId));
+  return clone(withListColours(kitOf(brandId)));
 }
 
 export async function listFonts(): Promise<string[]> {
@@ -1223,8 +1236,8 @@ export async function updateBrandKit(
   patch: { colors?: Partial<BrandColors>; fonts?: Partial<BrandKit['fonts']>; handle?: string },
 ): Promise<BrandKitSave> {
   await wait(450);
-  const kit = kitOf(brandId);
-  const next = clone(kit);
+  // Round J: start from the colours the brand list holds, so saving one colour never puts back an old one
+  const next = clone(withListColours(kitOf(brandId)));
   for (const [name, value] of Object.entries(patch.colors ?? {})) {
     if (!/^#[0-9a-f]{6}$/i.test(value))
       throw new EngineError('INVALID_INPUT', `${name[0].toUpperCase()}${name.slice(1)} needs a colour like #1A2226.`, false);
@@ -1241,6 +1254,17 @@ export async function updateBrandKit(
     next.handle = `@${h}`;
   }
   kitStore.set(brandId, next);
+  // Round J: the primary and the highlight are the brand's main and second colour in the one list (the extra colour is kept)
+  if (patch.colors && ('primary' in patch.colors || 'highlight' in patch.colors)) {
+    kitColoursSet.add(brandId);
+    const list = readWorkspaces();
+    const ws = list.find((w) => w.id === brandId);
+    if (ws) {
+      const extra = ws.colours?.[2];
+      const colours = cleanColours([next.colors.primary, ...(next.colors.highlight !== next.colors.primary ? [next.colors.highlight] : []), ...(extra ? [extra] : [])]);
+      if (colours) writeWorkspaces(list.map((w) => (w.id === brandId ? { ...w, colours } : w)));
+    }
+  }
   const warnings: string[] = [];
   const textOn = contrast(next.colors.text, next.colors.background);
   if (textOn < 4.5)
@@ -1248,7 +1272,7 @@ export async function updateBrandKit(
   const primaryOn = contrast(next.colors.primary, next.colors.background);
   if (primaryOn < 3)
     warnings.push(`Your primary colour is faint on your background (contrast ${primaryOn.toFixed(1)}:1), so buttons and highlights may be missed.`);
-  return clone({ kit: next, warnings });
+  return clone({ kit: withListColours(next), warnings });
 }
 
 /** Same upload behaviour as uploadVideo. The new logo replaces the old one on carousels and quote cards. */

@@ -3,11 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { Tabs, tabPanelProps } from '../components/Tabs';
 import { useDocumentTitle } from '../useDocumentTitle';
+import * as engine from '../engine';
 import { BrandKitTab } from './branding/BrandKitTab';
 import { CompetitorsTab, ProductsTab, ProfileTab } from './branding/BrandDetailsTabs';
 import { VoiceTab } from './branding/VoiceTab';
 import { BrandColoursCard } from './branding/BrandColoursCard';
-import { initialWorkspace, loadWorkspaces, readActiveId, saveWorkspaces, writeActiveId, type BrandWorkspace } from './branding/workspace';
+import { initialWorkspace, loadWorkspaces, migrateKitColours, readActiveId, saveWorkspaces, writeActiveId, type BrandWorkspace } from './branding/workspace';
 
 const TABS = [
   { id: 'profile', label: 'Profile' },
@@ -31,6 +32,9 @@ export default function Branding() {
   const setActiveId = (id: string) => { setActiveIdState(id); writeActiveId(id); };
   const active = useMemo(() => brands.find((brand) => brand.id === activeId) ?? brands[0], [activeId, brands]);
 
+  // Round J: the old kit colours come into the one colour list once (main = primary, second = highlight)
+  // (outside the state updater, which may run twice; it runs again when a brand is added, e.g. the account brand once it has loaded, and does nothing for a brand already done)
+  useEffect(() => { const next = migrateKitColours(brands, engine.storedKitColours); if (next !== brands) setBrands(next); }, [brands]);
   useEffect(() => saveWorkspaces(brands), [brands]);
   useEffect(() => {
     if (!accountBrand || brands.length !== 1 || brands[0].id !== 'brand-1' || brands[0].name !== 'My brand') return;
