@@ -37,6 +37,9 @@ export interface GenerateOptions {
   brief?: string;
   /** A pasted text that is already divided into paragraphs: "writer" (one small writing call) or "paragraphs" (each paragraph is a slide, free). Unset: by the text (pasted.ts defaultTextMode). */
   textMode?: 'writer' | 'paragraphs';
+  /** Round O: "Keep every sentence of my text" (unset = on). On: the picked count is the target and the writer may add up to 2 slides so no sentence is lost; off: exactly the picked count, and
+   * sentences may be left out (the notice lists them). Only the NEXT writer call reads it. */
+  keepEverySentence?: boolean;
 }
 export const DEFAULT_OPTIONS: GenerateOptions = { slides: 7, tone: 'clear', autoStyle: true, handle: '', platform: null };
 

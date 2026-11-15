@@ -313,6 +313,12 @@
   color: var(--error);
   font-weight: 600;
 }
+/* Round O: a plain note about the deck (more slides than picked, sentences on no slide): neutral, never the red of a phone-size warning */
+.cr-info {
+  color: var(--text-2);
+  font-weight: 500;
+  margin: 0;
+}
 .cr-tags {
   list-style: none;
   margin: 0;
@@ -592,3 +598,9 @@
 .cr-strip-item .btn {
   margin-top: auto;
 }
+
+/* Round O: the Keep every sentence switch in the Format step */
+.cr-keep-sentences { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.cr-keep-sentences p { margin: 0; max-width: 60ch; }
+.cr-switch { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-weight: 600; }
+.cr-switch input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent, currentColor); }

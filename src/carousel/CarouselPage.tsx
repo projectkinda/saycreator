@@ -761,6 +761,8 @@ export default function CarouselPage() {
   const failingText = failingWords === failing ? `${failing} of ${slides.length} slides ${have} too many words.` : failingWords ? `${failing} of ${slides.length} slides ${have} something to fix at phone size (${failingWords} of them only because of too many words).` : `${failing} of ${slides.length} slides ${have} something to fix at phone size.`;
   // Round I: which slide and what, in plain words (the slide name selects that slide in the strip)
   // Round M: the sentences of the text that are on no slide, from the slides as they are now (recomputed after every edit, style or colour switch: no call)
+  // Round O: the slides the person picked for the writer's call that made this deck (null for a pasted script)
+  const slidesAsked = doc.designed?.library?.slidesRequested ?? null;
   const notOnSlides = useMemo(() => (doc.topic?.trim() && slides.length ? sourceNotOnSlidesOf(doc.topic, slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? []))) : { count: 0, total: 0, percentOfSentences: 0, sentences: [] as string[] }), [doc.topic, slides]);
   const failingDetail = slides.flatMap((_, i) => { const why = [...new Set((views[i]?.rendered?.lint ?? []).filter((l) => !l.pass).map((l) => LINT_PLAIN[l.id] ?? 'something may not read well'))]; return why.length ? [{ i, why }] : []; });
   const warned = slides.filter((_, i) => { const lint = views[i]?.rendered?.lint ?? []; return lint.every((l) => l.pass) && lint.some((l) => l.warn); }).length;
@@ -835,6 +837,8 @@ export default function CarouselPage() {
       text: doc.topic,
       // A chosen platform sets a ceiling; the count asked for is capped to it (the chip says so).
       slides: Math.min(hi, Math.max(lo, options.slides), doc.format === 'carousel' ? platformOf(options.platform)?.max ?? hi : hi),
+      // Round O: the person's "Keep every sentence of my text" switch (on unless they turned it off)
+      keepEverySentence: options.keepEverySentence !== false,
       tone: options.tone,
       format: doc.format,
       styleChoice: options.autoStyle ? 'auto' : doc.style,
@@ -842,7 +846,8 @@ export default function CarouselPage() {
     };
     setGen({ phase: 'writing' });
     setNotice('');
-    const job = startJob('one-shot-carousel', `Carousel from ${doc.topic.trim().split(/\s+/).filter(Boolean).length} words of text, ${options.slides} slides`, [{ id: 'write', label: 'Ask the writer for the script' }, { id: 'apply', label: 'Check the script and pick a style' }, { id: 'draw', label: 'Draw the slides' }]);
+    const jobTitle = `Carousel from ${doc.topic.trim().split(/\s+/).filter(Boolean).length} words of text, ${req.slides} slides asked`;
+    const job = startJob('one-shot-carousel', jobTitle, [{ id: 'write', label: 'Ask the writer for the script' }, { id: 'apply', label: 'Check the script and pick a style' }, { id: 'draw', label: 'Draw the slides' }]);
     genJob.current = job;
     onCancel(job.id, () => ctl.abort());
     job.begin('write');
@@ -1278,6 +1283,9 @@ export default function CarouselPage() {
     if (drawnCount >= slides.length) {
       if (genJob.current) {
         genJob.current.end('draw', `${slides.length} slides`);
+        // Round O: the job line says what was asked and what was made
+        const asked = doc.designed?.library?.slidesRequested;
+        if (asked) genJob.current.retitle(`Carousel from ${doc.topic.trim().split(/\s+/).filter(Boolean).length} words of text, ${asked} slides asked, ${slides.length} made`);
         genJob.current.plan();
         genJob.current.finish('done');
         genJob.current = null;
@@ -1579,10 +1587,16 @@ export default function CarouselPage() {
             </span>
           )}
         </p>
+        {hasWork && slidesAsked !== null && slides.length > slidesAsked && (
+          // Round O: the deck has more slides than the person picked (the writer's answer is kept whole: never a slide removed); a plain line, not a warning
+          <p className="small cr-info" data-testid="slide-count-line">
+            {doc.designed?.library?.keepEverySentence === false ? `The writer made ${slides.length} slides instead of ${slidesAsked}.` : `Your text needed ${slides.length} slides instead of ${slidesAsked} so no sentence is lost.`}
+          </p>
+        )}
         {hasWork && notOnSlides.count > 0 && (
-          // Round M: sentences of the person's text that are on no slide (measured, never changed); no notice when every sentence is on a slide
+          // Round M: sentences of the person's text that are on no slide (measured, never changed); no notice when every sentence is on a slide. Round O: a neutral note, not the red of a phone warning
           <div className="small cr-not-on-slides" data-testid="not-on-slides">
-            <p className="cr-problem">{notOnSlides.count} of {notOnSlides.total} sentence{notOnSlides.total === 1 ? '' : 's'} from your text {notOnSlides.count === 1 ? 'is' : 'are'} not on any slide.</p>
+            <p className="cr-info">{notOnSlides.count} of {notOnSlides.total} sentence{notOnSlides.total === 1 ? '' : 's'} from your text {notOnSlides.count === 1 ? 'is' : 'are'} not on any slide.</p>
             <details>
               <summary>Show them</summary>
               <ul data-testid="not-on-slides-list">{notOnSlides.sentences.map((s, k) => <li key={k}>{s}</li>)}</ul>

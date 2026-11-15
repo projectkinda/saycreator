@@ -97,6 +97,8 @@ export interface JobHandle {
   keep(n: number): void;
   waiting(label: string | null): void;
   note(text: string): void;
+  /** Round O: a new title (the real numbers once known, e.g. "7 slides asked, 9 made"). */
+  retitle(title: string): void;
   cached(): void;
   finish(status: 'done' | 'failed' | 'cancelled', message?: string): void;
   plan(): void;
@@ -142,6 +144,7 @@ export function startJob(kind: JobKind, title: string, stages: { id: string; lab
     keep: (n) => patch((j) => ({ ...j, rounds: j.rounds.map((r) => ({ ...r, kept: !r.draft && r.n === n })) })),
     waiting: (label) => patch((j) => ({ ...j, waiting: label ? { label, since: Date.now() } : undefined })),
     note: (text) => patch((j) => ({ ...j, note: text })),
+    retitle: (title) => patch((j) => ({ ...j, title })),
     cached: () => patch((j) => ({ ...j, cached: true })),
     plan: () => patch((j) => ({ ...j, hasPlan: true })),
     cost: (c) => patch((j) => ({ ...j, cost: c })),

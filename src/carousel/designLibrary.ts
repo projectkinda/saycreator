@@ -506,15 +506,21 @@ export function flavourCoverLine(fl: NonNullable<LayoutStyle['flavour']>): strin
 
 /**
  * Round M part 3: ask the writer to keep EVERY sentence of the person's text (the writer used to drop whole sentences to fit a fixed slide count, and nothing told the person).
- * With it on, the deck may grow to KEEP_EVERY_SENTENCE_MAX slides when the text needs the room (the app takes 3 to 10).
+ * Round O: it is the person's switch ("Keep every sentence of my text", on by default, WriteRequest.keepEverySentence). On: the picked count N is the target and the deck may grow to N + 2
+ * (never past the app's 10) only so no sentence is lost. Off: exactly N slides; whole sentences from the middle may be left out, never the opening hook or the closing line.
  */
 export const KEEP_EVERY_SENTENCE = true;
 /** Round N: the photo shape rule (photoShape.ts) is on. A switch the before/after comparison turns off; the app never does. */
 export const photoShapeRule = { on: true };
-export const KEEP_EVERY_SENTENCE_MAX = 9;
+/** Round O: with "Keep every sentence" on, at most this many slides more than the person picked (never past the app's maximum). */
+export const KEEP_EVERY_SENTENCE_EXTRA = 2;
+/** The most slides the writer may write for a request of `n` slides. */
+export const mostSlidesFor = (n: number, keep: boolean): number => (keep ? Math.min(n + KEEP_EVERY_SENTENCE_EXTRA, SLIDE_RANGE.carousel[1]) : n);
 export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutStyle, brief: string, n: number, handle?: string): string {
-  const keep = KEEP_EVERY_SENTENCE && req.format === 'carousel';
-  const most = Math.max(n, Math.min(KEEP_EVERY_SENTENCE_MAX, SLIDE_RANGE.carousel[1]));
+  const carousel = req.format === 'carousel';
+  const keep = KEEP_EVERY_SENTENCE && carousel && req.keepEverySentence !== false;
+  const exact = carousel && req.keepEverySentence === false;
+  const most = mostSlidesFor(n, keep);
   const tone = TONES.find((t) => t.id === req.tone)!;
   // photo-led needs a photo; a layout with picture slots needs enough pictures that fit its slots (the metadata list below); without a list, any photo will do
   const ids = LAYOUT_IDS.filter((id) => !isCoverLayout(id)).filter((id) => !WRITER_HIDDEN.includes(id)).filter((id) => (id === 'photo-led' ? !!look.hasPhoto : (IMAGE_LAYOUT_IDS as readonly string[]).includes(id) ? (look.images ? hasEnoughPictures(id, look.images) : !!look.hasPhoto) : true));
@@ -534,13 +540,13 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     ...ids.map(fieldLine),
     '',
     'Rules:',
-    `- Write ${n} slides${keep && most > n ? `; when the person's text needs more room to keep every sentence, use up to ${most} slides (never more than ${most})` : ''}. Slide 1 is a strong hook (statement, statement-stacked, statement-card, statement-pill, statement-question, big-question or lead-statement; at most 8 words). In between choose the layout that suits THAT slide's content.`,
+    `- Write ${exact ? `exactly ${n}` : n} slides${keep && most > n ? `; when the person's text needs more room to keep every sentence, use up to ${most} slides (never more than ${most})` : ''}. Slide 1 is a strong hook (statement, statement-stacked, statement-card, statement-pill, statement-question, big-question or lead-statement; at most 8 words). In between choose the layout that suits THAT slide's content.`,
     '- The closing (last slide) depends on the TEXT, not on habit. If the text contains a real next action for the reader (book, buy, sign up, download, visit, reply, join): "cta-button" with that action; "cta-pair" when it gives TWO different actions; "contact-closing" when the text itself contains contact details such as a handle, site, phone or email (never invent any). These always win over a generic call to action.',
     '- A real action also includes: comment (a quoted or capitalised keyword too), DM or message me, reply, send me, link in bio or below, subscribe, follow, save, share, click, tap, try it. The button label uses the action\'s own words from the text ("Comment brain", "DM me GUIDE", "Download the guide"), at most 24 characters. The line under the closing headline ("sub") may only use words that are in the text; when it would need other words, leave the sub line out. Never invent an offer, link, number or promise.',
     `- If the text has NO real action, the closing is STILL a "cta-button", with ONE generic label picked to fit the content: how-to, list, tips or steps: "${GENERIC_CTA_OF.save}"; opinion, story, critique or insight: ${isSetHandle(handle) ? `"Follow ${handle!.trim()}" (the brand handle) or "${GENERIC_CTA_OF.follow}"` : `"${GENERIC_CTA_OF.follow}" (no @, no handle)`}; relatable, funny or common-pain posts: "${GENERIC_CTA_OF.friend}". Use only these labels; do not invent another action. Its headline is a real takeaway sentence from the text, never "Thanks for reading" or other filler. Never invent a link, "link in bio", website, email, offer or number${isSetHandle(handle) ? '' : ', and never a handle'}. A closing that is a plain statement with no button counts as a miss and is asked for again.`,
     '- Every other button label is an ACTION PHRASE: verb first, 2 to 4 words, at most 20 characters, no question mark, comma or full stop ("Book a call", "Get the checklist", "Join the list"). Never a question, a slogan or a topic ("Which fits you?", "Sleep well"). The three generic labels above are the only exceptions to the length.',
     '- Prose: "prose" is the ONLY layout that takes whole paragraphs. Aim for 35 to 50 words in all (the heading and the pull line included); use up to 70 only when the source text truly needs it. 70 is a hard limit (the handle and the page number are not counted; 300 characters per paragraph at most), and the code cuts anything past it. Prefer ONE short paragraph plus a bold one-line takeaway (the "pull" field) to three paragraphs. Use prose for a slide that needs explaining in sentences; its heading is optional and, when present, reads on its own as a full title. Every other layout stays short: never put a paragraph into a statement, list or card layout.',
-    '- Long passages: if the text for ONE slide would run past 70 words, split it across two slides, a prose slide and then a statement, bullet-list or numbered-list slide for the rest, instead of cramming it into one. ' + (keep ? `You may add a slide for it, up to ${most} slides in all; never cut a sentence to save a slide.` : 'The number of slides is fixed (see above): split only when another slide of your plan can be spared for it (a slide that would only repeat or pad); when every slide is needed, tighten the prose to 70 words or fewer instead.'),
+    '- Long passages: if the text for ONE slide would run past 70 words, split it across two slides, a prose slide and then a statement, bullet-list or numbered-list slide for the rest, instead of cramming it into one. ' + (keep ? `You may add a slide for it, up to ${most} slides in all; never cut a sentence to save a slide.` : exact ? `The number of slides is exactly ${n}: when every slide is needed, tighten the prose to 70 words or fewer, or leave out a whole sentence from the middle of the text (see "Exactly ${n} slides").` : 'The number of slides is fixed (see above): split only when another slide of your plan can be spared for it (a slide that would only repeat or pad); when every slide is needed, tighten the prose to 70 words or fewer instead.'),
     ...(look.images?.length ? imageRules(look.images, n) : []),
     ...(look.images?.some((p) => p.label?.trim()) ? ['- If a picture has a name, put it on the slide whose words it matches best: give that slide "picture": the number of that picture (for example "picture": 2). Use each named picture at most once. A picture without a name is placed by shape as before (leave "picture" out). Never add words to a slide because of a picture name.'] : []),
     '- Forms: "statement-stacked" is 2 to 4 words (one per line); "statement-pill" needs a short caption (at most 40 characters) that is set in a pill; "statement-question" is one question or thought; "numbered-stagger" is 2 or 3 sentences; "bullet-list" and "pill-stagger" are short lines (at most 46 and 36 characters); "headline-card" has ONE key paragraph (the card) under a headline; "cta-pair" has two buttons with a short line each.',
@@ -549,6 +555,7 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     '- Stats: the "label" of big-stat and stat-bar is the continuation of the number, so "number label" reads as one phrase: "30%" + "off for early backers" (never a label that starts a new sentence, such as "Early backers save" under a 30%). split-text: the paragraph is ONE idea in at most 14 words.',
     '- A kicker is only allowed if that exact phrase is in the person\'s text; otherwise omit it. Headlines must be words from the person\'s text in their order; you may drop words but not add or reorder them.',
     keep ? '- Keep every sentence: EVERY sentence of the person\'s text must appear on a slide. Never drop a sentence. You may shorten a sentence only by dropping whole trailing clauses (the words after a comma, "and", "but" or "which" at its end), never its opening words (the hook). A sentence too long for one layout goes on a prose slide, or on a slide of its own, not out of the deck.' : '',
+    exact ? `- Exactly ${n} slides: the person asked for exactly ${n} slides, never more. When the text does not fit, leave out whole sentences from the MIDDLE of the text (the ones the point needs least); never leave out the opening hook (the first sentence) or the closing line (the last sentence), and never cut words inside a sentence you keep to make room.` : '',
     '- Wording: the person\'s own sentences are the copy. A sentence that already fits its layout is used word for word (same words, same order); shorten only what is over a limit, by cutting words, never by rewording; never add a word, claim or example that is not in the text.',
     '- Facts: use only facts, claims and numbers that are in the text. Never invent statistics, names, quotes, dates or results. If a slide would want a figure the text does not give, use a layout without one. A big-stat or stat-bar number must be a real figure from the text.',
     `- "accents": up to 3 phrases copied EXACTLY from the slide's HEADLINE (its headline, title, question or quote text) and from nothing else: never from the kicker, a caption, a sub line, the body or a list item. They are the words that carry the meaning (never filler such as the, a, and, of, to). Highlight 1 or 2 words, the ones that carry the point (never more than half of the headline). The code sets them in the accent colour or on a marker bar.`,
@@ -1202,6 +1209,9 @@ export function scriptSlideOf(layout: string, f: Fields): Record<string, unknown
 // ----- the report -----
 export interface LibraryReport {
   route: 'library';
+  /** Round O: the slides the person picked (the writer's target), and whether "Keep every sentence" was on for that call. Missing on a pasted script (no writer). */
+  slidesRequested?: number;
+  keepEverySentence?: boolean;
   provider: string;
   tokenNote: string;
   calls: number;
@@ -1753,6 +1763,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   const pictureUse: LibraryReport['pictureUse'] = look.images?.length ? pictureUseOf(specs, look.images) : undefined;
   const report: LibraryReport = {
     route: 'library',
+    ...(own ? {} : { slidesRequested: n, keepEverySentence: req.keepEverySentence !== false }),
     drawVersion: DRAW_VERSION,
     provider: p.id,
     tokenNote: p.id === 'dev-cli' ? 'Provider is dev-cli (the Claude Code command line): these token numbers include its own overhead (system prompt, tools, cache reads), so they are inflated. Use the api provider (a key set on the server) for real numbers.' : 'Real usage reported by the API provider.',

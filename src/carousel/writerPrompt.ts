@@ -18,6 +18,8 @@ export interface WriteRequest {
   text: string;
   /** How many slides were asked for. */
   slides: number;
+  /** Round O: keep every sentence (unset = on): up to 2 more slides than asked; false: exactly the number asked, whole sentences from the middle may be left out. */
+  keepEverySentence?: boolean;
   tone: Tone;
   format: Format;
   /** "auto": the writer also picks a style from `styles`. */

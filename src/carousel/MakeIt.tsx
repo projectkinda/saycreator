@@ -213,6 +213,16 @@ export function MakeIt({ images, scriptBox, scriptMode, onScriptMode, doc, optio
               </div>
             </div>
           </div>
+          {doc.format === 'carousel' && (
+            // Round O: what the writer may do with the number of slides; it only changes the NEXT writer call (switching it never starts one)
+            <div className="cr-keep-sentences" data-testid="keep-sentences">
+              <label className="cr-switch">
+                <input type="checkbox" role="switch" checked={options.keepEverySentence !== false} aria-checked={options.keepEverySentence !== false} disabled={busy} data-testid="keep-sentences-switch" onChange={(e) => setOptions({ keepEverySentence: e.target.checked })} />
+                <span>Keep every sentence of my text</span>
+              </label>
+              <p className="small muted" data-testid="keep-sentences-help">On: if your text needs more slides than you picked, I may add up to 2 so nothing is lost. Off: exactly your number of slides; some sentences may be left out and I will list them.</p>
+            </div>
+          )}
           {plat && (
             <p className="small muted" role="status" data-testid="platform-cap">
               {cap ? <strong>{cap}. </strong> : null}

@@ -142,6 +142,10 @@ export async function buildReport(o: ReportOptions): Promise<{ json: string; com
     sourceNotOnSlides: (({ total: _t, ...r }) => r)(sourceNotOnSlidesOf(o.doc.topic ?? '', composed.slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? [])))),
     routeReason: o.doc.route?.reason ?? (o.doc.designed ? 'Designed slides are present (the route was not recorded).' : 'No route was recorded for this project: the style templates are assumed to have filled the slides.'),
     designedCalls: o.doc.designed?.calls ?? null,
+    // Round O: what the person asked for and what was made (the writer's answer is never cut to the count)
+    slidesRequested: o.doc.designed?.library?.slidesRequested ?? null,
+    slidesMade: o.doc.script?.slides.length ?? (o.doc.designed?.library?.layouts?.length ?? null),
+    keepEverySentence: o.doc.designed?.library?.keepEverySentence ?? null,
     designed: o.doc.designed ? { calls: o.doc.designed.calls, tokens: o.doc.designed.tokens ?? null, layouts: o.doc.designed.layouts ?? null, fallbacks: o.doc.designed.fallbacks, notes: o.doc.designed.notes, requestBytes: o.doc.designed.requestBytes ?? null, library: o.doc.designed.library ?? null, model: 'DRAW_MODEL, else CAROUSEL_MODEL, else sonnet (server setting)' } : o.doc.route?.error ? { failed: true, error: o.doc.route.error, requestBytes: o.doc.route.requestBytes ?? null } : null,
     slides: composed.slides.map((s, i) => ({
       number: i + 1,
