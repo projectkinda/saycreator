@@ -56,3 +56,27 @@ test('K3: drawn in all 15 styles, no slide shows its headline again as body text
   }, { text: POST, ids: IDS });
   expect(r, 'a slide that draws its headline twice').toEqual([]);
 });
+
+test('K4: an empty second or extra colour shows an empty swatch, not black, on the Branding page and in the brand editor', async ({ page }) => {
+  await page.route('**/api/carousel/status', (r) => r.fulfill({ json: { available: false } }));
+  await page.goto('/branding');
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('creator.brand-workspaces.v1', JSON.stringify([{ id: 'brand-a', name: 'One colour', colours: ['#2557d6'] }])); localStorage.setItem('creator.brand-kit-colours.migrated.v1', '["brand-a"]'); });
+  await page.goto('/branding?tab=kit');
+  await expect(page.getByTestId('bc-swatch-0')).not.toHaveAttribute('data-empty', 'true');
+  for (const i of [1, 2]) await expect(page.getByTestId(`bc-swatch-${i}`)).toHaveAttribute('data-empty', 'true');
+  // the swatch area is see-through, so no black square shows
+  const bg = await page.getByTestId('bc-swatch-1').evaluate((e) => getComputedStyle(e, '::-webkit-color-swatch').backgroundColor);
+  expect(bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent', `swatch background ${bg}`).toBe(true);
+  // a colour typed in fills it
+  await page.getByTestId('bc-hex-1').fill('#c6f432');
+  await expect(page.getByTestId('bc-swatch-1')).not.toHaveAttribute('data-empty', 'true');
+  // the brand editor: the new second colour field starts empty
+  await page.goto('/images/carousel');
+  await page.locator('.cr-wiz-steps button').nth(2).click();
+  await page.getByTestId('brand-add').click();
+  await expect(page.getByTestId('brand-swatch-0')).toHaveAttribute('data-empty', 'true');
+  await page.getByTestId('brand-hex-0').fill('#2557d6');
+  await expect(page.getByTestId('brand-swatch-0')).not.toHaveAttribute('data-empty', 'true');
+  await page.getByTestId('brand-add-colour').click();
+  await expect(page.getByTestId('brand-swatch-1')).toHaveAttribute('data-empty', 'true');
+});
