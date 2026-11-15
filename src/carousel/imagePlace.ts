@@ -15,6 +15,8 @@ export interface PlaceableSpec {
   named?: string;
   /** Round N: the id of the photo the shape rule (photoShape.ts) kept here. */
   shaped?: string;
+  /** Round O: this slide takes no tall screenshot (the final placement measured one too small here). */
+  refuseTall?: true;
 }
 /** A slide whose picture the person chose (a picture, or none). */
 export const pinnedPicture = (sp: { pin?: { picture?: string }; named?: string; shaped?: string }): boolean => sp.pin?.picture !== undefined || !!sp.named || !!sp.shaped;
@@ -99,7 +101,8 @@ export function placeImages<T extends PlaceableSpec>(specs: T[], variants: (0 | 
     const base = withoutImages(sp.fields);
     if (!imageSlotsOf(sp.layout).length) continue;
     // a screenshot is never the cover unless the person pinned it there
-    const got = placeOne(sp.layout, variants[i] ?? 0, pics.filter((p) => !used.has(p.id) && !(i === 0 && isScreenshot(p))));
+    // (Round O: a slide that measured a tall screenshot too small takes none)
+    const got = placeOne(sp.layout, variants[i] ?? 0, pics.filter((p) => !used.has(p.id) && !(i === 0 && isScreenshot(p)) && !(sp.refuseTall && isScreenshot(p) && picAspect(p) <= 0.62)));
     if (!got) { out[i] = { ...sp, fields: base }; continue; }
     usedIds(got).forEach((id) => used.add(id));
     out[i] = { ...sp, fields: { ...base, ...got } };

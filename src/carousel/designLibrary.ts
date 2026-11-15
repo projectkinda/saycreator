@@ -20,12 +20,12 @@ import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
 import { layoutOptionsFor } from './layoutMap';
 import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
-import { pictureUseOf, placeImages } from './imagePlace';
+import { pictureUseOf, pinnedPicture, placeImages, usedIds } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { settleScrim } from './scrim';
 import { namePass } from './pictureNames';
 import { heroPass, picturePass, screenshotPass, separatePictureRuns, type PictureSwap } from './picturePass';
-import { shapePass, type ShapeRow } from './photoShape';
+import { isTallShot, shapePass, tallShotTooSmall, type ShapeRow } from './photoShape';
 import { TONES } from './writerPrompt';
 import { inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
 
@@ -512,6 +512,8 @@ export function flavourCoverLine(fl: NonNullable<LayoutStyle['flavour']>): strin
 export const KEEP_EVERY_SENTENCE = true;
 /** Round N: the photo shape rule (photoShape.ts) is on. A switch the before/after comparison turns off; the app never does. */
 export const photoShapeRule = { on: true };
+/** Round O: the final placement measures each slide as drawn and moves a tall screenshot drawn under 22% of the width (on; the before/after comparison turns it off, the app never does). */
+export const placementCheck = { on: true };
 /** Round O: with "Keep every sentence" on, at most this many slides more than the person picked (never past the app's maximum). */
 export const KEEP_EVERY_SENTENCE_EXTRA = 2;
 /** The most slides the writer may write for a request of `n` slides. */
@@ -593,6 +595,8 @@ export interface SlideSpec {
   named?: string;
   /** Round N: the id of the photo the shape rule kept on this slide when it moved the slide to a layout that shows the photo larger; the placement leaves it there. */
   shaped?: string;
+  /** Round O: the final placement drew a tall screenshot under 22% of the width on this slide: the slide takes no tall screenshot (other pictures still may go here). */
+  refuseTall?: true;
 }
 export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 export function toSpec(raw: unknown): SlideSpec | null {
@@ -1541,16 +1545,35 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     // the project's pictures go into the picture slots by code (best fit, each at most once); a layout that cannot get enough keeps its text-only form
     if (look.images?.length) specs = placeImages(specs, rot.variants, look.images);
     const out = new Map<number, Drawn>(prev ?? []);
-    for (let i = 0; i < specs.length; i++) {
-      if (only && !only.has(i)) continue;
+    const drawAt = async (i: number) => {
       const pr = slideProblems(specs[i], look, ctaCtx);
       if (pr.length) {
         out.set(i, { built: null, cut: 'plain', invert: false, density: 'normal', adjustments: [], problems: pr });
-        continue;
+        return;
       }
       const d = await drawOne(specs[i], rot.variants[i], style, { handle, index: i, total: specs.length, cut: rot.cuts[i].cut, invert: rot.cuts[i].invert, density: specs[i].density ?? 'normal', ground: rot.cuts[i].ground });
       if (rot.repeats.has(i)) d.problems = [...d.problems, 'layout: ' + rot.repeats.get(i)!];
       out.set(i, d);
+    };
+    for (let i = 0; i < specs.length; i++) {
+      if (only && !only.has(i)) continue;
+      await drawAt(i);
+    }
+    // Round O: the final placement measures too. A slide the code placed a tall screenshot on that draws it under 22% of the slide's width refuses tall screenshots; the placement runs
+    // again (the screenshot may go to a slide that shows it large enough, or stay unused) and the slides whose pictures changed are drawn again. The person's own picks are never touched.
+    if (look.images?.length && placementCheck.on) {
+      for (let round = 0; round < 3; round++) {
+        const small = specs.map((_, i) => i).filter((i) => {
+          if (pinnedPicture(specs[i]) || (only && !only.has(i))) return false;
+          const imgs = out.get(i)?.built?.images;
+          return usedIds(specs[i].fields).some((id) => { const p = look.images!.find((q) => q.id === id); return !!p && isTallShot(p) && tallShotTooSmall(imgs, id); });
+        });
+        if (!small.length) break;
+        const before = specs.map((s) => usedIds(s.fields).join(','));
+        specs = specs.map((s, k) => (small.includes(k) ? { ...s, refuseTall: true } : s));
+        specs = placeImages(specs, rot.variants, look.images);
+        for (let i = 0; i < specs.length; i++) if (usedIds(specs[i].fields).join(',') !== before[i] && (!only || only.has(i))) await drawAt(i);
+      }
     }
     const arr: (Drawn | undefined)[] = specs.map((_, i) => out.get(i));
     if (style.devices.planes) await breakPlainRuns(arr, (i) => specs[i].layout, () => false, (i, cut) => drawOne(specs[i], rot.variants[i], style, { handle, index: i, total: specs.length, cut, invert: rot.cuts[i].invert, density: specs[i].density ?? 'normal', ground: rot.cuts[i].ground }));
