@@ -1591,7 +1591,12 @@ export default function CarouselPage() {
         {hasWork && slidesAsked !== null && slides.length > slidesAsked && (
           // Round O: the deck has more slides than the person picked (the writer's answer is kept whole: never a slide removed); a plain line, not a warning
           <p className="small cr-info" data-testid="slide-count-line">
-            {doc.designed?.library?.keepEverySentence === false ? `The writer made ${slides.length} slides instead of ${slidesAsked}.` : `Your text needed ${slides.length} slides instead of ${slidesAsked} so no sentence is lost.`}
+            {/* Round Q: the line never contradicts the notice below it: "no sentence is lost" only when the count of sentences on no slide is 0; with the switch off it says nothing about sentences */}
+            {doc.designed?.library?.keepEverySentence === false
+              ? `The writer made ${slides.length} slides instead of ${slidesAsked}.`
+              : notOnSlides.count === 0
+                ? `Your text needed ${slides.length} slides instead of ${slidesAsked} so no sentence is lost.`
+                : `Your text needed ${slides.length} slides instead of ${slidesAsked}, but ${notOnSlides.count} sentence${notOnSlides.count === 1 ? '' : 's'} still did not fit; ${notOnSlides.count === 1 ? 'it is' : 'they are'} listed below.`}
           </p>
         )}
         {hasWork && notOnSlides.count > 0 && (
