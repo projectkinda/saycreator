@@ -1167,6 +1167,8 @@ export interface LibraryReport {
   /** Round 15: slides that failed one of the phone checks when drawn and were drawn again by the code (never a model call): what failed, and what the slide is now. */
   /** Round 16: one row per writer call: what was sent and what it cost (null where the provider does not say). */
   writes?: { call: number; promptChars: number; promptBytes: number; requestBytes: number | null; numTurns: number | null; durationApiMs: number | null; effort: string | null; inputTokens: number | null; outputTokens: number | null; seconds: number }[];
+  /** Round J: the colour repairs of the last redraw (a style switch, a colour change), the same rule as the new-deck repair stage. */
+  redrawRepairs?: { slide: number; from: string; to: string; failed: string[]; result: 'repaired' | 'not repaired'; how?: 'colour' | 'layout' }[];
   repairs?: { slide: number; from: string; to: string; failed: string[]; result: 'repaired' | 'not repaired'; /** Round G: 'colour' = a contrast failure fixed by a colour on the same layout; 'layout' = another layout (size, edges, words, overlap). */ how?: 'colour' | 'layout' }[];
   /** The project's pictures and what became of them in the final deck (Round 13). */
   pictureUse?: { uploaded: number; used: number; unused: string[]; whyUnused: string };
@@ -1739,6 +1741,25 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
     drawn.push(d);
   }
   if (style.devices.planes) await breakPlainRuns(drawn, (i) => specs[i].layout, (i) => specs[i].pin?.cut !== undefined, (i, cut) => drawOne(specs[i], variants[i], style, { handle, index: i, total: specs.length, cut, invert: rc[i].invert, density: specs[i].density ?? 'normal', ground: rc[i].ground }));
+  // Round J: the redraw runs the phone check a new deck runs. A slide drawn from the stored plan can carry a layout, a ground or a tint the new style would not have picked itself (a card the previous
+  // style chose, under this style's gradient headline); a contrast failure there is fixed the way the new-deck repair fixes it: by a COLOUR on the same layout (the ink that reads, the gradient
+  // moved along its hue for the grounds under the title), never by another layout, a cut word or a model call. The layout, variant, cut, tint and ground of the slide stay.
+  const redrawRepairs: NonNullable<LibraryReport['repairs']> = [];
+  const contrastFails = (d: Drawn, sp: SlideSpec): string[] => (d.built ? faithfulChecks(d.built.layers as never, { canvas: { w: 1080, h: 1350 }, bg: d.built.fieldBg ?? style.palette.bg, k: 1, slideType: String(scriptSlideOf(sp.layout, sp.fields).type ?? 'content'), prose: /data-layout="prose"/.test(d.built.svg), svg: d.built.svg, devices: d.built.devices }).filter((q) => !q.pass && q.id === 'contrast').map((q) => q.id + ': ' + q.reason) : []);
+  for (let i = 0; i < drawn.length; i++) {
+    const d = drawn[i];
+    if (!d?.built) continue;
+    const failed = contrastFails(d, specs[i]);
+    if (!failed.length) continue;
+    const fixedStyle = readableStyle(style, groundsUnderTitle(d.built.layers as never, d.built.fieldBg ?? style.palette.bg));
+    const dc = fixedStyle ? await drawOne(specs[i], variants[i], fixedStyle, { handle, index: i, total: specs.length, cut: d.cut, invert: rc[i].invert, density: specs[i].density ?? 'normal', ground: rc[i].ground }) : null;
+    const after = dc?.built && !dc.problems.length && dc.cut === d.cut ? contrastFails(dc, specs[i]) : null;
+    if (dc && after && after.length < failed.length) {
+      drawn[i] = dc;
+      redrawRepairs.push({ slide: i + 1, from: specs[i].layout, to: specs[i].layout, failed, result: after.length ? 'not repaired' : 'repaired', how: 'colour' });
+    } else redrawRepairs.push({ slide: i + 1, from: specs[i].layout, to: specs[i].layout, failed, result: 'not repaired', how: 'colour' });
+  }
+  for (const r of redrawRepairs) adjustments.push(`slide ${r.slide}: a colour changed so the words read at phone size, same layout (${r.result}: ${r.failed.join('; ')}).`);
   drawn.forEach((d, i) => {
     adjustments.push(...d.adjustments);
     if (d.built) {
@@ -1758,6 +1779,7 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
     styleNotes,
     plan: { ...lib.plan, specs },
     redraws: (lib.redraws ?? 0) + 1,
+    redrawRepairs: redrawRepairs.length ? redrawRepairs : undefined,
     drawVersion: DRAW_VERSION,
     grounds: rc.map((c) => c.ground ?? null),
   };
