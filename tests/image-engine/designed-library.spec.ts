@@ -107,9 +107,10 @@ test('library route: choose-only deck, one retry for the failing slides, plain f
   expect(r.three.calls).toBe(2);
   expect(r.three.fallbacks.length).toBeGreaterThanOrEqual(1);
   // Round B: a slide that fails only because its layout repeats the one before is moved to ANOTHER layout that shows every word (an earlier fix of the code, better than a trimmed plain version);
-  // a slide with an over-budget field keeps the plain version of the same layout. Never the old template look.
-  expect(r.three.fallbacks.every((f: any) => /same layout|another layout that shows every word and fits/.test(f.level))).toBe(true);
-  expect(r.three.fallbacks.some((f: any) => /same layout/.test(f.level)), 'the over-budget slide is drawn plain in its own layout').toBe(true);
+  // Round M: a slide with an over-budget field (a 78-character checklist item, the most is 48) is no longer trimmed in its own layout, which lost words: it becomes a prose slide with every word.
+  // Never the old template look.
+  expect(r.three.fallbacks.every((f: any) => /same layout|another layout that shows every word and fits|the prose layout with every word/.test(f.level)), JSON.stringify(r.three.fallbacks)).toBe(true);
+  expect(r.three.fallbacks.find((f: any) => f.slide === 5), 'the over-budget slide keeps every word on a prose slide').toMatchObject({ layout: 'prose', level: expect.stringMatching(/the prose layout with every word/) });
   expect(r.three.slides).toBe(7);
   expect(r.three.cuts.every((c: string) => c === 'plain')).toBe(true); // a flat style stays plain
   // 4
