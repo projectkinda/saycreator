@@ -149,7 +149,7 @@ const BASE_LIST: LayoutDef[] = [
         if (v === 0) {
           // a short accent rule, then a small kicker line over a huge headline: one block, centred in the free area (the rule sits right above the kicker, not at the top of the slide)
           if (plain) {
-            d.rect(d.x0, d.y, 160, 12, '$accent', { rx: 6 });
+            d.rect(d.x0, d.y, 160, 12, '$accent3', { rx: 6 });
             d.gap(44);
           }
           d.text('kicker', str(f, 'lead'), { size: 48, weight: 600, fill: '$muted', lines: 2, gap: 20 });
@@ -360,8 +360,8 @@ const BASE_LIST: LayoutDef[] = [
             const cy = top + pitch * i + pitch / 2;
             const lab = measure(s, st.fonts.body, nearestWeight(st.fonts.body, 500), 44, d.w - 2 * r - 40, 1.25);
             const bh = Math.max(lab.h + 2, 2 * r);
-            d.circle(cxn, cy, r, '$accent');
-            d.text('body', String(i + 1), { x: d.x0, w: 2 * r, size: 56, weight: 800, font: 'h', fill: '$onAccent', align: 'center', lines: 1, min: 44, at: cy - bh / 2, boxH: bh });
+            d.circle(cxn, cy, r, '$accent2');
+            d.text('body', String(i + 1), { x: d.x0, w: 2 * r, size: 56, weight: 800, font: 'h', fill: '$onAccent2', align: 'center', lines: 1, min: 44, at: cy - bh / 2, boxH: bh });
             d.text('body', s, { x: d.x0 + 2 * r + 40, w: d.w - 2 * r - 40, size: 44, lines: 2, min: 44, at: cy - bh / 2, boxH: bh });
           });
           d.y = top + pitch * n;
@@ -463,8 +463,8 @@ const BASE_LIST: LayoutDef[] = [
           const m = measure(it, st.fonts.body, nearestWeight(st.fonts.body, 500), bs, d.x0 + d.w - tx, 1.25);
           const h = Math.max(m.h + 2, rowMin);
           const cy = d.y + h / 2;
-          if (v === 1) d.circle(d.x0 + nw / 2 - 12, cy, Math.min(nw / 2 - 12, h / 2), '$accent');
-          d.text('body', String(i + 1), { x: d.x0, w: nw, size: v === 1 ? Math.round(ns * 0.62) : ns, max: v === 1 ? 140 : 200, weight: 800, font: 'h', fill: v === 1 ? '$onAccent' : accentInk(st), align: v === 1 ? 'center' : 'left', lines: 1, min: 44, at: d.y, boxH: h });
+          if (v === 1) d.circle(d.x0 + nw / 2 - 12, cy, Math.min(nw / 2 - 12, h / 2), '$accent2');
+          d.text('body', String(i + 1), { x: d.x0, w: nw, size: v === 1 ? Math.round(ns * 0.62) : ns, max: v === 1 ? 140 : 200, weight: 800, font: 'h', fill: v === 1 ? '$onAccent2' : '$accent2Text', align: v === 1 ? 'center' : 'left', lines: 1, min: 44, at: d.y, boxH: h });
           // the last two words stay together, so a wrapped item never leaves one word alone on its second line
           const glued = it.replace(/ (\S+)$/, ' $1');
           d.text('body', glued, { x: tx, w: d.x0 + d.w - tx, size: bs, max: 96, lines: 2, min: 44, boxH: h });
@@ -550,7 +550,7 @@ const BASE_LIST: LayoutDef[] = [
         // the attribution (and the short rule above it) only when there is one: nothing is drawn that nobody wrote
         if (str(f, 'author')) {
           d.part();
-          d.rect(v === 0 ? d.x0 : d.cx - 40, d.y, 80, 8, '$accent', { rx: 4 });
+          d.rect(v === 0 ? d.x0 : d.cx - 40, d.y, 80, 8, '$accent3', { rx: 4 });
           d.y += 28;
           d.text('body', '— ' + str(f, 'author'), { size: 44, fill: '$muted', align: al, lines: 2 });
         }
@@ -818,7 +818,7 @@ const BASE_LIST: LayoutDef[] = [
         d.y -= 14;
         // the rail runs only BETWEEN the dots (6 px clear of each), never through a dot, above the first or below the last
         for (let i = 0; i + 1 < n; i++) { const y1 = rows[i].cy + 14 + 6, y2 = rows[i + 1].cy - 14 - 6; if (y2 > y1) d.rect(lineX - 2, y1, 4, y2 - y1, '$muted'); }
-        rows.forEach((r) => d.circle(lineX, r.cy, 14, r.last ? '$onAccent' : '$accent'));
+        rows.forEach((r) => d.circle(lineX, r.cy, 14, r.last ? '$onAccent' : '$accent2'));
       });
       return mk(d, { type: 'checklist', fitAs: 'timeline', slide: { type: 'checklist', headline: str(f, 'title') } });
     },
@@ -855,8 +855,8 @@ const BASE_LIST: LayoutDef[] = [
         d.rect(d.x0 + plateW / 2 - 70, y0 + plateH - S(54), 140, 10, '$onAccent', { rx: 5 });
         let y = v === 0 ? y0 + plateH + S(56) : y0 + (plateH - listH) / 2;
         cs.forEach((c, i) => {
-          d.circle(rx + 60, y + hs[i] / 2, badge, '$accent');
-          d.text('body', String(i + 1), { x: rx, w: 120, size: 52, max: 72, weight: 800, font: 'h', fill: '$onAccent', align: 'center', lines: 1, min: 44, at: y, boxH: hs[i] });
+          d.circle(rx + 60, y + hs[i] / 2, badge, '$accent2');
+          d.text('body', String(i + 1), { x: rx, w: 120, size: 52, max: 72, weight: 800, font: 'h', fill: '$onAccent2', align: 'center', lines: 1, min: 44, at: y, boxH: hs[i] });
           d.text('body', c, { x: tx, w: tw, size: 56, max: 72, lines: 3, min: 44, at: y, boxH: hs[i] });
           y += hs[i] + rowGap;
         });

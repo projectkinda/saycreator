@@ -6,7 +6,7 @@
 // `readableInk` / `quietOn` / `lightenForText` / `accentRolesOf` / `toHsl` / `fromHsl` (layouts/cuts.ts) choose inks and say how an accent reads as text on a ground (lightened on a dark one, else a bar
 // of the accent colour with the ink on it: the "marker bar" the layouts already draw on the same layout). New here: the brand rules 1 to 7 below.
 import { contrast } from './layouts/draw';
-import { accentRolesOf, fromHsl, quietOn, readableInk, toHsl } from './layouts/cuts';
+import { accentRolesOf, fromHsl, quietOn, readableInk, secondRoles, toHsl } from './layouts/cuts';
 import { fixGround, readableGradient } from './designLibrary';
 import type { PackGround, StylePack } from '../reference/pack';
 
@@ -16,7 +16,7 @@ export interface Brand {
   name?: string;
 }
 export interface BrandChange {
-  kind: 'ignored' | 'close' | 'ink' | 'accent-text' | 'secondary' | 'gradient' | 'derived';
+  kind: 'ignored' | 'close' | 'ink' | 'accent-text' | 'secondary' | 'gradient' | 'derived' | 'second';
   /** The sentence for the person: plain words, no colour codes, no ratios (Round I part A). */
   text: string;
   /** The same thing for a designer: the colour codes and the contrast ratios (shown under "Details"). */
@@ -67,35 +67,9 @@ export function tooClose(a: string, b: string): boolean {
   return c < 1.6 && hd < 25;
 }
 
-/**
- * Round G2: how visible an accent drawn as a SHAPE (a highlight bar, a pill, a card edge) has to be against its ground: 3.6:1 (the luminance contrast ratio of the accent colour against the ground colour).
- * It is the weakest accent the 15 built-in styles ship (object-neon: #45C9A0 on the lightest stop of its dark gradient, 3.67:1; the next are 4.81 and 4.97), rounded down. A brand is never less visible than
- * what we ship. Pale yellow on an off-white ground reads 1.1:1 and does not pass.
- */
-export const ACCENT_FLOOR = 3.6;
-/**
- * Round G3: brightness is not the only way a shape shows. A pale yellow bar on an off-white page is as bright as the page (1.2:1) and still reads as a clear yellow highlighter, because its COLOUR differs.
- * The colour difference is the distance in OKLab (the perceptual colour space of Ottosson, 2020: L, a, b; simple, one formula, equal steps look about equal). 0.12 is the floor. It is set from the
- * calibration cases, not from the built-ins (the weakest built-in, object-neon at 0.32, would reject the pale yellow, 0.142, which must show): every shape that has to show is at 0.142 or more
- * (pale yellow on off-white 0.142, neon on off-white 0.292, orange on navy 0.578) and every one that must not is at 0.105 or less (navy on near-black 0.105, near-black on near-black 0.023,
- * an accent a few percent from its ground 0.027), so 0.12 sits between them (0.022 above the weakest pass, 0.015 below the strongest fail).
- */
-export const ACCENT_FLOOR_DE = 0.12;
-const lin = (v: number) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
-const oklab = (hex: string): [number, number, number] => {
-  const [r, g, b] = [1, 3, 5].map((i) => lin(parseInt(hex.slice(i, i + 2), 16)));
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const sv = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * sv, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * sv, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * sv];
-};
-/** The colour difference of two #RRGGBB colours: the Euclidean distance in OKLab. */
-export const colourDifference = (a: string, b: string): number => {
-  const x = oklab(a), y = oklab(b);
-  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
-};
-/** A shape in `accent` shows on `ground` when it reaches the floor on brightness (luminance contrast) OR on colour difference. */
-export const accentVisible = (accent: string, ground: string): boolean => contrast(accent, ground) >= ACCENT_FLOOR || colourDifference(accent, ground) >= ACCENT_FLOOR_DE;
+// Round J: the visibility rule lives in colourVisibility.ts (the layout colours use it too); re-exported here so every import of it keeps working.
+export { ACCENT_FLOOR, ACCENT_FLOOR_DE, accentVisible, colourDifference } from './colourVisibility';
+import { accentVisible, colourDifference } from './colourVisibility';
 /** The most a brand colour's lightness may move (HSL, 0 to 1) to reach the floor and still read as the brand: a quarter of the scale. */
 export const MAX_ACCENT_STEP = 0.25;
 /** A dark primary is the dark ground itself when off-white text on it reaches this contrast. */
@@ -151,6 +125,8 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     }
     return { accent: ink, how: 'ink', was, bg };
   };
+  // Round J: the second and extra colour ride on every ground for the small marks (list numbers, ticks, bullets, underline strokes) and the thin rules; the layouts use them where they show
+  const marks: { accent2?: string; accent3?: string } = { ...(S ? { accent2: S } : {}), ...(T ? { accent3: T } : {}) };
   const markerAvailable = !pack.look?.deco?.penCircle;
   const shifts = new Map<string, { col: string; to: string; from: number }>();
   const neutral = (kind: 'light' | 'dark', gradient?: PackGround['gradient']): PackGround => {
@@ -159,7 +135,7 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     const surface = kind === 'dark' && darkIsP ? mix(bg, text, 0.1) : mix(bg, second, kind === 'light' ? 0.12 : 0.14);
     const pk = pickAccent(bg, text);
     picks.set(kind, pk);
-    const g: PackGround = { bg, text, muted: quietOn(text, [bg, surface], mix(text, bg, 0.4), 4.5), accent: pk.accent, surface, onAccent: readableInk(pk.accent, [bg, text, '#FFFFFF', '#000000']), ...(kind === 'dark' && darkIsP ? { keepBg: true } : {}) };
+    const g: PackGround = { bg, text, muted: quietOn(text, [bg, surface], mix(text, bg, 0.4), 4.5), accent: pk.accent, surface, onAccent: readableInk(pk.accent, [bg, text, '#FFFFFF', '#000000']), ...(kind === 'dark' && darkIsP ? { keepBg: true } : {}), ...marks };
     // a style without the marker bar (the pen-circle style circles the word and sets it in the accent) cannot fall back to a bar: its accent is shifted, same hue, until it reads 4.5:1 on the ground and the card
     if (!markerAvailable && Math.min(contrast(pk.accent, bg), contrast(pk.accent, surface)) < 4.5) {
       const shifted = readableGradient([pk.accent], [bg, surface], 4.5)[0];
@@ -180,7 +156,7 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     // keepBg: the ground IS the brand colour; the ground fix must not move it toward a 6:1 ink (the ink reaches 4.5:1 or is the better of black and white)
     const pk = pickAccent(bg, text);
     picks.set('accent:' + bg, pk);
-    const g: PackGround = { bg, text, muted: quietOn(text, [bg], mix(text, bg, 0.35), 4.5), accent: pk.accent, surface: mix(bg, text, 0.12), onAccent: readableInk(pk.accent, [bg, text, '#FFFFFF', '#000000']), keepBg: true };
+    const g: PackGround = { bg, text, muted: quietOn(text, [bg], mix(text, bg, 0.35), 4.5), accent: pk.accent, surface: mix(bg, text, 0.12), onAccent: readableInk(pk.accent, [bg, text, '#FFFFFF', '#000000']), keepBg: true, ...marks };
     return { g, note: c < 4.5 ? { kind: 'ink', ratio: c, to: text, text: `Text on slides with your ${bg.toUpperCase() === P ? 'main' : 'second'} colour as the background is as readable as we can make it, but it is still a little faint.`, detail: `Text on ${bg} is the best we can do, ${text} (${r1(c)}:1), which is under 4.5:1.` } : null };
   };
 
@@ -266,6 +242,27 @@ export function applyBrand(pack: StylePack, brand?: Brand | null): BrandResult {
     }
   }
 
+  // Round J: where the second or the extra colour cannot be used for the small marks (it does not show on the ground or its card, or the ink on it would not read), say so in one sentence; used normally: nothing
+  {
+    const missSecond: string[] = [];
+    const missExtra: string[] = [];
+    const why: string[] = [];
+    const seenG = new Set<string>();
+    for (const o of out) {
+      const g = o.g;
+      if (seenG.has(g.bg)) continue;
+      seenG.add(g.bg);
+      // a ground that IS the second (or extra) colour cannot show it, and was never meant to
+      const name = o.kind === 'accent' ? (g.bg.toUpperCase() === P ? 'slides with your main colour as the background' : 'slides with your second colour as the background') : `your ${o.kind} slides`;
+      const roles = { bg: g.bg, text: g.text, muted: g.muted, accent: g.accent, surface: g.surface, onAccent: g.onAccent ?? g.text, accentText: g.accent, accentDisplay: g.accent };
+      const r = secondRoles(roles, S ?? undefined, T ?? undefined);
+      if (S && g.bg.toUpperCase() !== S && g.accent.toUpperCase() !== S && r.accent2 === roles.accent) { if (!missSecond.includes(name)) missSecond.push(name); why.push(`${S} on ${g.bg}: ${ratio(S, g.bg)}:1, ${colourDifference(S, g.bg).toFixed(2)} different in colour`); }
+      if (T && g.bg.toUpperCase() !== T && g.accent.toUpperCase() !== T && r.accent3 === roles.accent) { if (!missExtra.includes(name)) missExtra.push(name); why.push(`${T} on ${g.bg}: ${ratio(T, g.bg)}:1, ${colourDifference(T, g.bg).toFixed(2)} different in colour`); }
+    }
+    const list = (a: string[]) => (a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0]);
+    if (missSecond.length) changes.push({ kind: 'second', from: S!, to: P, text: `Your second colour does not show on ${list(missSecond)}, so the small marks there (list numbers, ticks, bullets) use your main colour.`, detail: why.filter((w) => w.startsWith(S!)).join('; ') + '.' });
+    if (missExtra.length) changes.push({ kind: 'second', from: T!, to: P, text: `Your extra colour does not show on ${list(missExtra)}, so the thin lines there use your main colour.`, detail: why.filter((w) => w.startsWith(T!)).join('; ') + '.' });
+  }
   // the device roles of the three styles that had hard-coded colours (Round G part B)
   const roles = look.roles ? { ...look.roles } : undefined;
   if (roles) {

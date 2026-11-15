@@ -78,7 +78,7 @@ export interface Built {
   devices?: PlacedDevice[];
 }
 
-const TOKENS = /\$(accentText|accentDisplay|onAccent|bg|text|muted|accent|surface)\b/g;
+const TOKENS = /\$(accentText|accentDisplay|accent2Text|accent2|accent3|onAccent2|onAccent|bg|text|muted|accent|surface)\b/g;
 /** Points the role tokens of a markup at the roles of a surface ('f' field, 'p' plane): $text -> $fText ... */
 const toward = (markup: string, surf: 'f' | 'p'): string => markup.replace(TOKENS, (_m, k: string) => '$' + surf + k[0].toUpperCase() + k.slice(1));
 
@@ -109,9 +109,16 @@ export const paletteOf = (st: LayoutStyle): Record<string, string> => {
   const p = st.palette;
   const up = (c: string) => c.toUpperCase();
   const base = { bg: up(p.bg), text: up(p.text), muted: up(p.muted), accent: up(p.accent), surface: up(p.surface) };
-  return { ...base, onAccent: up(p.onAccent ?? markerInk(base, base.accent)) };
+  return { ...base, onAccent: up(p.onAccent ?? markerInk(base, base.accent)), ...(p.accent2 ? { accent2: up(p.accent2) } : {}), ...(p.accent3 ? { accent3: up(p.accent3) } : {}) };
 };
-const rolesOf = (r: Roles, p: 'f' | 'p'): Record<string, string> => ({ [p + 'Bg']: r.bg, [p + 'Text']: r.text, [p + 'Muted']: r.muted, [p + 'Accent']: r.accent, [p + 'Surface']: r.surface, [p + 'OnAccent']: r.onAccent, [p + 'AccentText']: r.accentText, [p + 'AccentDisplay']: r.accentDisplay });
+const rolesOf = (r: Roles, p: 'f' | 'p'): Record<string, string> => ({ [p + 'Bg']: r.bg, [p + 'Text']: r.text, [p + 'Muted']: r.muted, [p + 'Accent']: r.accent, [p + 'Surface']: r.surface, [p + 'OnAccent']: r.onAccent, [p + 'AccentText']: r.accentText, [p + 'AccentDisplay']: r.accentDisplay, ...secondOf(r, p) });
+/** Round J: the second-colour roles and the role each falls back to. A role equal to its fallback on a surface is written back to the old token name, so a deck without a second colour is byte for byte today's. */
+const SECOND: [keyof Roles, keyof Roles][] = [['accent2Text', 'accentText'], ['onAccent2', 'onAccent'], ['accent2', 'accent'], ['accent3', 'accent']];
+const tokenName = (k: string, p: 'f' | 'p' | ''): string => (p ? p + k[0].toUpperCase() + k.slice(1) : k);
+const differs = (r: Roles, k: keyof Roles, b: keyof Roles): boolean => !!r[k] && r[k] !== r[b];
+const secondOf = (r: Roles, p: 'f' | 'p' | ''): Record<string, string> => Object.fromEntries(SECOND.filter(([k, b]) => differs(r, k, b)).map(([k]) => [tokenName(k, p), r[k] as string]));
+const stripSecond = (r: Roles): Record<string, string | undefined> => { const o: Record<string, string | undefined> = { ...r }; for (const [k] of SECOND) delete o[k]; return o; };
+const foldSecond = (svg: string, r: Roles, p: 'f' | 'p' | ''): string => SECOND.reduce((s, [k, b]) => (differs(r, k, b) ? s : s.replace(new RegExp('\\$' + tokenName(k, p) + '\\b', 'g'), '$' + tokenName(b, p))), svg);
 
 /** Builds one slide: layout id + variant + fields + style (+ cut, invert, density) -> finished SVG and layers. No model call. */
 /** The style of slide i: with a palette rhythm, ground i mod n replaces the palette (and a gradient over it). */
@@ -266,11 +273,12 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   if (bodySlots.length >= 2) slide.items = bodySlots.map((s) => s.text);
   // The surface the headline sits on decides the engine's palette (accent phrases are guarded against it); the other surface's tokens point at its own roles.
   const S: 'f' | 'p' = slots.find((s) => s.role === 'title')?.plane ? 'p' : 'f';
-  const palette: Record<string, string> = { ...(S === 'p' ? P : F), ...rolesOf(F, 'f'), ...rolesOf(P, 'p'), plane: P.bg, planeInk: P.text };
+  const palette: Record<string, string> = { ...stripSecond(S === 'p' ? P : F), ...secondOf(S === 'p' ? P : F, ''), ...rolesOf(F, 'f'), ...rolesOf(P, 'p'), plane: P.bg, planeInk: P.text } as Record<string, string>;
   const on = (markup: string, surf: 'f' | 'p') => (surf === S ? markup : toward(markup, surf));
   const stepper = plan.stepper ? on(stepperSvg(plan.stepper.steps, plan.stepper.current, plan.stepper.bounds).replace(/Instrument Sans/g, st.fonts.body), plan.stepperPlane ? 'p' : 'f') : '';
   const photo = plan.photo ? on(`<rect data-image-slot="inset" data-mask="rect" data-fit="cover" x="${plan.photo.x}" y="${plan.photo.y}" width="${plan.photo.w}" height="${plan.photo.h}" fill="$surface"/>`, 'f') : '';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-type="${key}" data-layout="${layoutId}" data-palette='${JSON.stringify(palette)}'>${on(background(st), 'f')}${g.plane(colours.edge)}${on(plan.shapes, 'f')}${on(plan.planeShapes, 'p')}${photo}${slots.map((s) => slotSvg(s, on(s.fill, s.plane ? 'p' : 'f'))).join('')}${stepper}</svg>`;
+  const svg0 = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" data-type="${key}" data-layout="${layoutId}" data-palette='${JSON.stringify(palette)}'>${on(background(st), 'f')}${g.plane(colours.edge)}${on(plan.shapes, 'f')}${on(plan.planeShapes, 'p')}${photo}${slots.map((s) => slotSvg(s, on(s.fill, s.plane ? 'p' : 'f'))).join('')}${stepper}</svg>`;
+  const svg = foldSecond(foldSecond(foldSecond(svg0, S === 'p' ? P : F, ''), F, 'f'), P, 'p');
   const parsed = await parsePack(svg, layoutId + ' ' + variant, palette);
   if (!parsed.ok) return fail(parsed.reasons);
   // The layout's own measured boxes replace the boxes the parser guessed from the sample words.

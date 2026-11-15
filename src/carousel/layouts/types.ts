@@ -33,6 +33,9 @@ export interface Ground {
   accent: string;
   surface: string;
   onAccent?: string;
+  /** Round J: the brand's second and extra colour on this ground (absent: the accent). */
+  accent2?: string;
+  accent3?: string;
   /** Drawn over the ground colour (bg is then the stop that reads worst, so the contrast holds on every stop). */
   gradient?: Gradient;
 }
@@ -47,7 +50,7 @@ export interface Flavour {
   variants?: Partial<Record<LayoutId, 0 | 1>>;
 }
 export interface LayoutStyle {
-  palette: { bg: string; text: string; muted: string; accent: string; surface: string; onAccent?: string };
+  palette: { bg: string; text: string; muted: string; accent: string; surface: string; onAccent?: string; /** Round J: the brand's second and extra colour (small marks, thin rules); absent = the accent. */ accent2?: string; accent3?: string };
   fonts: { headline: FontFamily; body: FontFamily };
   /** Palette rhythm: 2 or 3 grounds, slide i takes ground i mod n (the palette above is the first). */
   rhythm?: Ground[];

@@ -2,6 +2,7 @@
 // sausi-7/carousels (MIT) - edge-h (plane along the bottom), edge-v (full-height side plane), angle (raked top edge), curve (dome). Static drawing only.
 // Adapted from sausi-7/carousels, MIT: the family split and the idea that type keys off the plane edge; the maths below is our own, in px on a 1080 x 1350 slide.
 import { contrast } from './draw';
+import { accentVisible } from '../colourVisibility';
 import type { Cut, Cx, PlaneTone } from './types';
 
 const W = 1080;
@@ -162,6 +163,14 @@ export interface Roles {
   accentInk?: string;
   /** The accent for big display text (96 px and up): the brand colour kept as close as possible, 3:1 on the hardest ground of the deck. */
   accentDisplay: string;
+  /** Round J: the brand's second colour on this surface, for small marks only (list numerals, ticks, bullets, underline strokes, small badges). The accent when there is none or it does not show. */
+  accent2?: string;
+  /** The ink on an accent2 disc (a numeral or a tick inside it). */
+  onAccent2?: string;
+  /** accent2 used as text (a numeral set in colour). */
+  accent2Text?: string;
+  /** Round J: the brand's extra colour on this surface, for thin rules and one small decoration. The accent when there is none or it does not show. */
+  accent3?: string;
 }
 type Pal = Record<string, string>;
 const mix = (a: string, b: string, t: number): string => {
@@ -214,6 +223,21 @@ export interface Colours {
  * The colours of a slide. The plane takes `tone` (accent, surface or the ink colour) and has its own roles (text, muted, accent, surface re-derived for it, so part B on the
  * plane keeps its contrast). `invert: 'full'` swaps field and plane colours; `invert: 'tint'` only moves the field to the surface colour (for flat styles with no planes).
  */
+/**
+ * Round J: the second and extra colour on a surface. The second colour is used when it shows on the surface AND on its card colour by the main colour's own rule (3.6:1 or OKLab 0.12), the ink
+ * on it reads 4.5:1 (a numeral or a tick inside a disc) and, as text, it reads 4.5:1 on the surface; the extra colour when it shows on the surface and the card. Otherwise what is drawn today.
+ * With no second or extra colour every role is exactly today's (accent, onAccent, accentText), so a deck without them draws byte for byte as before.
+ */
+export function secondRoles(r: Roles, second?: string, extra?: string): Required<Pick<Roles, 'accent2' | 'onAccent2' | 'accent2Text' | 'accent3'>> {
+  const shows = (c: string) => accentVisible(c, r.bg) && accentVisible(c, r.surface);
+  const s = second ? second.toUpperCase() : '';
+  const ink = s ? readableInk(s, [r.text, r.bg, '#FFFFFF', '#000000']) : '';
+  const okShape = !!s && s !== r.accent.toUpperCase() && shows(s) && contrast(ink, s) >= 4.5;
+  const okText = okShape && contrast(s, r.bg) >= 4.5 && contrast(s, r.surface) >= 4.5;
+  const x = extra ? extra.toUpperCase() : '';
+  const okExtra = !!x && x !== r.accent.toUpperCase() && shows(x);
+  return { accent2: okShape ? s : r.accent, onAccent2: okShape ? ink : r.onAccent, accent2Text: okText ? s : r.accentText, accent3: okExtra ? x : r.accent };
+}
 export function coloursFor(base: Pal, opts: { tone?: PlaneTone; invert?: false | 'full' | 'tint'; /** The deck uses tinted slides (the card colour as a ground). A palette rhythm does not: then the card colour does not decide how light the accent text must be. Default true. */ tints?: boolean }): Colours {
   const tone = opts.tone ?? 'accent';
   const plane0 = tone === 'ink' ? base.text : tone === 'surface' ? base.surface : base.accent;
@@ -229,6 +253,7 @@ export function coloursFor(base: Pal, opts: { tone?: PlaneTone; invert?: false |
     inverted = true;
     F = { ...baseRoles, bg: base.surface, surface: base.bg, muted: quietOn(base.text, [base.surface, base.bg], base.muted, 4.5), ...accentOnCard(accentRolesOf(base.accent, base.surface, base.text, [base.bg]), base.surface, base.bg) };
   }
-  const P = opts.invert === 'full' ? baseRoles : rolesFor(planeFill, base);
-  return { F, P: { ...P, bg: planeFill, ...accentRolesOf(P.accent, planeFill, P.text) }, edge: contrast(planeFill, F.bg) < 1.5, inverted };
+  const P0 = opts.invert === 'full' ? baseRoles : rolesFor(planeFill, base);
+  const P = { ...P0, bg: planeFill, ...accentRolesOf(P0.accent, planeFill, P0.text) };
+  return { F: { ...F, ...secondRoles(F, base.accent2, base.accent3) }, P: { ...P, ...secondRoles(P, base.accent2, base.accent3) }, edge: contrast(planeFill, F.bg) < 1.5, inverted };
 }

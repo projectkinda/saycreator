@@ -221,7 +221,7 @@ export class Draw {
     if (!this.st.devices.underline) return;
     this.y += 24;
     const w = 180;
-    this.rect(align === 'center' ? this.cx - w / 2 : x ?? this.x0, this.y, w, 10, '$accent', { rx: 5 });
+    this.rect(align === 'center' ? this.cx - w / 2 : x ?? this.x0, this.y, w, 10, '$accent2', { rx: 5 });
     this.y += 10;
   }
 }
@@ -229,8 +229,8 @@ export class Draw {
 // ----- small graphics -----
 /** A round check icon: accent disc with a tick in the ink that reads on the accent. */
 export function checkIcon(d: Draw, cx: number, cy: number, rad = 28) {
-  d.circle(cx, cy, rad, '$accent');
-  d.path(`M ${r(cx - 0.42 * rad)} ${r(cy)} L ${r(cx - 0.1 * rad)} ${r(cy + 0.34 * rad)} L ${r(cx + 0.46 * rad)} ${r(cy - 0.3 * rad)}`, { stroke: '$onAccent', sw: Math.round(rad * 0.22), cap: true, y0: cy - rad, y1: cy + rad });
+  d.circle(cx, cy, rad, '$accent2');
+  d.path(`M ${r(cx - 0.42 * rad)} ${r(cy)} L ${r(cx - 0.1 * rad)} ${r(cy + 0.34 * rad)} L ${r(cx + 0.46 * rad)} ${r(cy - 0.3 * rad)}`, { stroke: '$onAccent2', sw: Math.round(rad * 0.22), cap: true, y0: cy - rad, y1: cy + rad });
 }
 /** Segment bar: `n` segments, `value` percent filled with the accent. */
 export function segmentBar(d: Draw, y: number, value: number, n = 20, h = 64) {

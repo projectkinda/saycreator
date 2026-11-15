@@ -76,7 +76,7 @@ export const COVER_LAYOUTS: LayoutDef[] = [
       const cap = cx.density === 'statement' ? '' : str(f, 'caption');
       const dense = cx.density === 'statement';
       const d = place(st, cx, 'center', (d) => {
-        const rule = () => { d.rect(d.cx - 48, d.y, 96, 10, '$accent', { rx: 5 }); d.y += 10; d.gap(28); };
+        const rule = () => { d.rect(d.cx - 48, d.y, 96, 10, '$accent3', { rx: 5 }); d.y += 10; d.gap(28); };
         if (kick) {
           if (v === 1) rule();
           kickerOf(d, kick, 'center', v === 0 ? 20 : 36);

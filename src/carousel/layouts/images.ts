@@ -2,7 +2,7 @@
 // The picture is a field ("image", "image2" ...): a data: URL of a picture the person supplied (there is no upload yet, so nothing sets it by itself). With a picture the layout draws it
 // cropped to its slot (cover fit, corners rounded like the preset's cards); WITHOUT one the layout draws its own text-only form (a prose page, a statement, number discs, a comparison with
 // tick and cross badges ...): never an empty box. The writer is only offered these layouts when the deck has a picture. No text is ever drawn over a picture, so no scrim is needed.
-import { CARD_PAD, Draw, accentInk, lineTexts, measure, nearestWeight, S } from './draw';
+import { CARD_PAD, Draw, lineTexts, measure, nearestWeight, S } from './draw';
 import { measureWidth } from '../../image-engine/draw/text';
 import { chromeFor } from './chrome';
 import { chromeBoxes } from './chromeAvoid';
@@ -208,8 +208,8 @@ function listRows(d: Draw, st: LayoutStyle, items: string[], x0: number, w: numb
   const tw = w - MARK_W[mode];
   items.forEach((it, i) => {
     const h = listRowH(st, it, tw);
-    if (mode === 'numerals') d.text('body', String(i + 1), { x: x0, w: MARK_W.numerals, size: LIST_BS, max: LIST_BS, weight: 800, font: 'h', fill: accentInk(st), align: 'left', lines: 1, min: 44, at: d.y, boxH: h });
-    else d.circle(x0 + 14, d.y + h / 2, 14, '$accent');
+    if (mode === 'numerals') d.text('body', String(i + 1), { x: x0, w: MARK_W.numerals, size: LIST_BS, max: LIST_BS, weight: 800, font: 'h', fill: '$accent2Text', align: 'left', lines: 1, min: 44, at: d.y, boxH: h });
+    else d.circle(x0 + 14, d.y + h / 2, 14, '$accent2');
     d.text('body', it, { x: x0 + MARK_W[mode], w: tw, size: LIST_BS, max: LIST_BS, lines: 4, min: 44, lh: 1.2, boxH: h, gap: i < items.length - 1 ? ROW_GAP : 0 });
   });
 }
@@ -322,8 +322,8 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
           else {
             // no picture for this row: a number disc
             const r0 = Math.min(64, h / 2);
-            d.circle(px + TW / 2, d.y + h / 2, r0, '$accent');
-            d.text('body', String(i + 1), { x: px + TW / 2 - 60, w: 120, size: 56, max: 72, weight: 800, font: 'h', fill: '$onAccent', align: 'center', lines: 1, min: 44, at: d.y, boxH: h });
+            d.circle(px + TW / 2, d.y + h / 2, r0, '$accent2');
+            d.text('body', String(i + 1), { x: px + TW / 2 - 60, w: 120, size: 56, max: 72, weight: 800, font: 'h', fill: '$onAccent2', align: 'center', lines: 1, min: 44, at: d.y, boxH: h });
           }
           d.text('body', it, { x: tx, w: tw, size: 48, max: 56, lines: 3, min: 44, boxH: h, gap: i < items.length - 1 ? 28 : 0 });
         });
@@ -519,8 +519,8 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         head(d);
         // a badge: a disc with a cross (wrong) or a tick (right), drawn over the top-left corner of its panel's row
         const badge = (cx0: number, cy0: number, ok: boolean) => {
-          d.circle(cx0, cy0, R, ok ? '$accent' : '$text');
-          const ink = ok ? '$onAccent' : '$bg';
+          d.circle(cx0, cy0, R, ok ? '$accent2' : '$text');
+          const ink = ok ? '$onAccent2' : '$bg';
           if (ok) d.path(`M ${cx0 - 16} ${cy0 + 1} L ${cx0 - 4} ${cy0 + 13} L ${cx0 + 18} ${cy0 - 13}`, { stroke: ink, sw: 9, cap: true, y0: cy0 - R, y1: cy0 + R });
           else d.path(`M ${cx0 - 14} ${cy0 - 14} L ${cx0 + 14} ${cy0 + 14} M ${cx0 + 14} ${cy0 - 14} L ${cx0 - 14} ${cy0 + 14}`, { stroke: ink, sw: 9, cap: true, y0: cy0 - R, y1: cy0 + R });
         };

@@ -15,8 +15,9 @@ export const COLOUR_COMBINATIONS: ColourCombination[] = [
   { id: 'forest-cream', name: 'Forest and cream', colours: ['#1f4d3a', '#f3ebd8', '#c8553d'] },
   { id: 'sunrise', name: 'Sunrise', colours: ['#f4553f', '#ffc857'] },
   { id: 'midnight-violet', name: 'Midnight violet', colours: ['#1b1340', '#8b7cff', '#35e0c4'] },
-  // Round I: three with a vivid, mid-tone main colour replace Sky and sand and Quiet stone, which looked like the dark ones on dark slides
-  { id: 'teal-coral', name: 'Teal and coral', colours: ['#0f9b8e', '#ff6b5b'] },
+  // Round I: three with a vivid, mid-tone main colour replace Sky and sand and Quiet stone, which looked like the dark ones on dark slides.
+  // Round J: Teal and coral's teal is a step deeper (#0f9b8e was as bright as the coral, 1.23:1, so the "too close" rule dropped the coral and it never showed)
+  { id: 'teal-coral', name: 'Teal and coral', colours: ['#0b7c72', '#ff6b5b'] },
   { id: 'blue-lime', name: 'Blue and lime', colours: ['#2557d6', '#c6f432'] },
   { id: 'pink-mint', name: 'Pink and mint', colours: ['#ff4f9a', '#8fe3c0'] },
 ];

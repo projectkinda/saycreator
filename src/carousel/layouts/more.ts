@@ -62,7 +62,7 @@ export const MORE_LAYOUTS: LayoutDef[] = [
         bullets.forEach((b, i) => {
           const m = measure(b, st.fonts.body, bw(st), eff(bs, 72), d.w - S(56), 1.25);
           const h = Math.max(m.h + 2, S(60));
-          d.circle(d.x0 + S(12), d.y + h / 2, S(9), '$accent');
+          d.circle(d.x0 + S(12), d.y + h / 2, S(9), '$accent2');
           d.text('body', b, { x: d.x0 + S(56), w: d.w - S(56), size: bs, max: 100, lines: 3, min: lo, boxH: h, gap: i < bullets.length - 1 || pull ? 20 : 0 });
         });
         if (pull) d.text('body', pull, { size: bs + 4, max: 120, weight: 800, font: 'h', lines: 3, min: lo, lh: 1.2 });
@@ -215,7 +215,7 @@ export const MORE_LAYOUTS: LayoutDef[] = [
       const contacts = arr(f, 'contacts').slice(0, 4);
       const d = place(st, cx, 'center', (d) => {
         if (brand) {
-          d.shape(star(d.x0 + S(20), d.y + S(24), S(20), '$accent'), { y0: d.y, y1: d.y + S(48) });
+          d.shape(star(d.x0 + S(20), d.y + S(24), S(20), '$accent3'), { y0: d.y, y1: d.y + S(48) });
           d.text('body', brand, { x: d.x0 + S(56), w: d.w - S(56), size: 48, max: 52, weight: 700, font: 'h', lines: 1, min: 44, at: d.y, boxH: S(48), gap: 0 });
           d.y += S(48);
           d.gap(36);
@@ -314,7 +314,7 @@ export const MORE_LAYOUTS: LayoutDef[] = [
         const nw = NW(eff(bs, 96), eff(ns, 200)); // the type scale may have grown the numerals: the column is as wide as the scaled numeral needs
         items.forEach((it, i) => {
           const h = Math.max(measure(it, st.fonts.body, bw(st), eff(bs, 96), d.w - nw - 20, 1.3).h + 2, v === 1 ? Math.round(eff(ns, 200) * 0.95) : Math.round(eff(bs, 96) * 1.3));
-          d.text('body', String(i + 1), { x: d.x0, w: nw, size: v === 1 ? ns : bs, max: v === 1 ? 200 : 96, weight: 800, font: 'h', fill: '$accentText', lines: 1, min: 44, at: d.y, boxH: h });
+          d.text('body', String(i + 1), { x: d.x0, w: nw, size: v === 1 ? ns : bs, max: v === 1 ? 200 : 96, weight: 800, font: 'h', fill: '$accent2Text', lines: 1, min: 44, at: d.y, boxH: h });
           d.text('body', it, { x: d.x0 + nw + 20, w: d.w - nw - 20, size: bs, max: 96, lines: 4, min: 44, lh: 1.3, boxH: h, gap: i < items.length - 1 ? 52 : 0 });
         });
       });
@@ -339,7 +339,7 @@ export const MORE_LAYOUTS: LayoutDef[] = [
           const m = measure(it, st.fonts.body, bw(st, 700), eff(52, 110), d.w - S(60), 1.2);
           const h = Math.max(m.h + 2, S(72));
           if (v === 0) d.circle(d.x0 + S(14), d.y + h / 2, S(10), '$text');
-          else d.rect(d.x0 + S(4), d.y + h / 2 - S(10), S(20), S(20), '$accent', { rx: 4 });
+          else d.rect(d.x0 + S(4), d.y + h / 2 - S(10), S(20), S(20), '$accent2', { rx: 4 });
           d.text('body', it, { x: tx, w: d.w - S(60), size: 52, max: 110, weight: 700, font: 'h', lines: 2, min: 44, lh: 1.2, boxH: h, gap: i < items.length - 1 ? 28 : 0 });
         });
       });

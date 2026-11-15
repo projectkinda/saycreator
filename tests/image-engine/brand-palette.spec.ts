@@ -198,7 +198,10 @@ test('colour combinations: every one on all 15 styles keeps the layouts, cuts no
           again = contrastOf((i) => other.slides[String(i)].built, other.library);
           againLayouts = Object.values(other.layouts) as string[];
         }
-        return { layouts: lib.layouts as string[], missing, contrast, floorMiss, again, againLayouts, repairs: (lib.repairs ?? []).map((x: any) => `${x.slide}:${x.how}`) };
+        // Round J: the slides on which the second colour is drawn (the small marks: ticks, numerals, bullets), and every place it is drawn shows on what is under it
+        const s2 = colours && colours[1] ? colours[1].toUpperCase() : '';
+        const seconds = s2 ? plan.map((_p, i) => (res.designed.slides[String(i)].built.svg as string).toUpperCase().includes(s2)).filter(Boolean).length : 0;
+        return { layouts: lib.layouts as string[], missing, contrast, floorMiss, again, againLayouts, seconds, repairs: (lib.repairs ?? []).map((x: any) => `${x.slide}:${x.how}`) };
       };
       const control = await run(null);
       for (const c of CC.COLOUR_COMBINATIONS) rows.push({ style: name, combo: c.id, control, got: await run(c.colours) });
@@ -224,6 +227,12 @@ test('colour combinations: every one on all 15 styles keeps the layouts, cuts no
     expect.soft(x.got.floorMiss, `${who}: every accent shape shows`).toEqual([]);
     for (const rp of x.got.repairs) expect.soft(rp, `${who}: repairs`).not.toMatch(/:layout$/);
   }
+  // Round J: every combination with a second colour shows it somewhere in the deck (the checklist ticks at least), in most styles; how many is written to a file for the report
+  const shown: Record<string, number> = {};
+  for (const x of r.rows) shown[x.combo] = (shown[x.combo] ?? 0) + (x.got.seconds > 0 ? 1 : 0);
+  fs.mkdirSync('out/round-j', { recursive: true });
+  fs.writeFileSync('out/round-j/second-shown.json', JSON.stringify(shown, null, 1));
+  for (const c of r.combos) if (c.colours.length >= 2) expect.soft(shown[c.id], `${c.name}: the second colour shows in at least 12 of the 15 styles`).toBeGreaterThanOrEqual(12);
 });
 
 // Round I part C: "looks different" is a test. For each ready-made combination we take what a person sees on the real styles, through applyBrand:

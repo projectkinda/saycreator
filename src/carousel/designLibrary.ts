@@ -226,7 +226,7 @@ export function fixGround(g: PackGround, notes: string[]): NonNullable<LayoutSty
   const muted = quietOn(text, [...allFinal, surface], hx(g.muted, mixHex(text, bgFinal, 0.4)), mutedMin);
   const onAccent = readableInk(accent, [hx(g.onAccent, text), text, bgFinal, '#FFFFFF', '#000000']);
   void inkOn;
-  return { bg: bgFinal, text, muted, accent, surface, onAccent, ...(stops ? { gradient: { angle: g.gradient!.angle, stops } } : {}) };
+  return { bg: bgFinal, text, muted, accent, surface, onAccent, ...(g.accent2 && HEX6.test(g.accent2) ? { accent2: g.accent2.toUpperCase() } : {}), ...(g.accent3 && HEX6.test(g.accent3) ? { accent3: g.accent3.toUpperCase() } : {}), ...(stops ? { gradient: { angle: g.gradient!.angle, stops } } : {}) };
 }
 /**
  * Round G: the style with every ground's ink made readable on its own ground (text 4.5:1 by the better of the ink, white and black, the muted ink and the ink on the accent re-derived),
@@ -322,7 +322,7 @@ export function styleFromPack(pack: StylePack | null | undefined): { style: Layo
     const L = pack.look;
     const grounds = (L.rhythm ?? []).map((g) => fixGround(g, notes));
     if (grounds.length) {
-      base.palette = { bg: grounds[0].bg, text: grounds[0].text, muted: grounds[0].muted, accent: grounds[0].accent, surface: grounds[0].surface, onAccent: grounds[0].onAccent };
+      base.palette = { bg: grounds[0].bg, text: grounds[0].text, muted: grounds[0].muted, accent: grounds[0].accent, surface: grounds[0].surface, onAccent: grounds[0].onAccent, ...(grounds[0].accent2 ? { accent2: grounds[0].accent2 } : {}), ...(grounds[0].accent3 ? { accent3: grounds[0].accent3 } : {}) };
       if (grounds.length >= 2) base.rhythm = grounds;
       else if (L.closing) base.rhythm = undefined;
       if (grounds[0].gradient) {

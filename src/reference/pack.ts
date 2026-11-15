@@ -66,6 +66,9 @@ export interface PackGround {
   accent: string;
   surface: string;
   onAccent?: string;
+  /** Round J: the brand's second and extra colour on this ground (small marks, thin rules); absent = the accent. */
+  accent2?: string;
+  accent3?: string;
   gradient?: { angle: number; stops: { at: number; color: string }[] };
   /** Round G: the ground colour is the brand's own and stays as it is (the ground fix does not move it for a 6:1 ink; the ink still reaches 4.5:1). */
   keepBg?: boolean;
