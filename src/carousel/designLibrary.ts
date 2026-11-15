@@ -1055,6 +1055,52 @@ export function dropBadButtons(specs: SlideSpec[], ctx?: CtaCtx): { specs: Slide
   return { specs: out, trims };
 }
 /** Trims every field to its budget; null when a required list cannot reach its minimum. */
+/** Round M: the words of a slide's text fields (the picture fields left out), lower case, with repeats. */
+const fieldWords = (f: Fields): string[] => Object.entries(f).filter(([k]) => !/^image\d*$/.test(k)).flatMap(([, v]) => (Array.isArray(v) ? v : [v])).flatMap((x) => String(x).toLowerCase().replace(/[’']/g, "'").match(/[\p{L}\p{N}']+/gu) ?? []);
+/** Round M: true when every word of `before` (as often as it is there) is also in `after`: a change of fields that loses no word. */
+export function keepsAllWords(before: Fields, after: Fields): boolean {
+  const have = new Map<string, number>();
+  for (const w of fieldWords(after)) have.set(w, (have.get(w) ?? 0) + 1);
+  for (const w of fieldWords(before)) {
+    const n = have.get(w) ?? 0;
+    if (n <= 0) return false;
+    have.set(w, n - 1);
+  }
+  return true;
+}
+/**
+ * Round M: every word of a slide as the prose layout's fields: the first text as the heading when it is short (60 characters) and there is more, then the rest in the paragraphs (300, 300, 260
+ * characters), split at sentence ends and, for a sentence longer than a paragraph, between words. No word is cut or left out; null when the text is longer than the three paragraphs hold.
+ */
+export function proseFieldsOf(f: Fields): Fields | null {
+  const texts = Object.entries(f).filter(([k]) => !/^image\d*$/.test(k)).flatMap(([, v]) => (Array.isArray(v) ? v : [v])).map((x) => String(x).replace(/\s+/g, ' ').trim()).filter(Boolean);
+  if (!texts.length) return null;
+  const heading = texts.length > 1 && texts[0].length <= 60 ? texts[0] : '';
+  const rest = heading ? texts.slice(1) : texts;
+  const pieces = rest.flatMap((t) => t.split(/(?<=[.!?])\s+/)).flatMap((sentence) => {
+    if (sentence.length <= 260) return [sentence];
+    const out: string[] = [];
+    let cur = '';
+    for (const w of sentence.split(' ')) { if (cur && (cur + ' ' + w).length > 260) { out.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w; }
+    if (cur) out.push(cur);
+    return out;
+  });
+  const caps = [300, 300, 260];
+  const paras: string[] = [''];
+  for (const p of pieces) {
+    const k = paras.length - 1;
+    if (!paras[k]) paras[k] = p;
+    else if ((paras[k] + ' ' + p).length <= caps[k]) paras[k] += ' ' + p;
+    else { if (paras.length === 3) return null; paras.push(p); }
+    if (paras[paras.length - 1].length > caps[paras.length - 1]) return null;
+  }
+  if (!paras[0]) return null;
+  const out: Fields = { p1: paras[0] };
+  if (heading) out.heading = heading;
+  if (paras[1]) out.p2 = paras[1];
+  if (paras[2]) out.p3 = paras[2];
+  return validateSlideContent('prose', out).ok ? out : null;
+}
 export function repairFields(id: string, f: Fields): Fields | null {
   const def = layoutDef(id);
   if (!def) return null;
@@ -1545,14 +1591,32 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
         }
       }
     }
-    const fixed = done ? null : layoutDef(sp.layout) && !(sp.layout === 'photo-led' && !look.hasPhoto) ? repairFields(sp.layout, fieldsOf(sp)) : null;
+    // Round M: a repair is used only when it keeps EVERY word of the slide (repairFields drops a field the layout does not have, and clips to a field's length)
+    const fixed0 = done ? null : layoutDef(sp.layout) && !(sp.layout === 'photo-led' && !look.hasPhoto) ? repairFields(sp.layout, fieldsOf(sp)) : null;
+    const fixed = fixed0 && keepsAllWords(sp.fields, fixed0) ? fixed0 : null;
     if (fixed) for (const v of [rot.variants[i], (1 - rot.variants[i]) as 0 | 1]) {
       const d = await drawOne({ ...sp, fields: Object.fromEntries(Object.entries(fixed).filter(([k]) => k !== 'accent')) as Fields, density: undefined }, v, style, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
       if (d.built) { done = d; break; }
     }
+    // Round M: no repair keeps every word: the prose layout with EVERY word (a heading, then the rest in paragraphs, by sentence), before any fallback that would lose words
     if (!done) {
-      // the fields cannot be repaired for that layout: the plain statement layout with the text that is there
-      level = 'plain statement layout (the fields could not be repaired for the chosen layout)';
+      const pf = proseFieldsOf(sp.fields);
+      if (pf) for (const v of [0, 1] as const) {
+        const d = await drawOne({ layout: 'prose', fields: pf, accents: sp.accents ?? [] }, v, style, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
+        if (d.built && keepsAllWords(sp.fields, pf)) {
+          done = d;
+          level = 'the prose layout with every word (the fields could not be repaired for the chosen layout without losing words)';
+          specs = specs.map((s, k) => (k === i ? { layout: 'prose', fields: pf, accents: s.accents ?? [] } : s));
+          break;
+        }
+      }
+      if (done) { fallbacks.push({ slide: i + 1, layout: 'prose', level, reason }); drawn.set(i, done); continue; }
+    }
+    if (!done) {
+      // the fields cannot be repaired for that layout and are too long for the prose layout: the plain statement layout with the text that is there (the words it loses are named in the level)
+      const kept = Object.values(sp.fields).flat().map((x) => String(x).trim()).filter(Boolean)[0] ?? '';
+      const lost = Object.entries(sp.fields).filter(([k]) => !/^image\d*$/.test(k)).flatMap(([, v]) => (Array.isArray(v) ? v : [v])).map((x) => String(x).trim()).filter((t) => t && t !== kept);
+      level = 'plain statement layout (the fields could not be repaired for the chosen layout)' + (lost.length ? `; NOT on the slide: ${lost.map((t) => '"' + t + '"').join(', ')}` : '');
       const text0 = Object.values(sp.fields).flat().map((x) => String(x).trim()).filter(Boolean)[0] ?? 'Slide ' + (i + 1);
       done = await drawOne({ layout: 'statement', fields: { headline: clip(text0, 60) }, accents: [] }, 0, style, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
       specs = specs.map((s, k) => (k === i ? { layout: 'statement', fields: { headline: clip(text0, 60) }, accents: [] } : s));
