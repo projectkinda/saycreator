@@ -26,6 +26,7 @@ import { settleScrim } from './scrim';
 import { namePass } from './pictureNames';
 import { heroPass, picturePass, screenshotPass, separatePictureRuns, type PictureSwap } from './picturePass';
 import { isTallShot, shapePass, tallShotTooSmall, type ShapeRow } from './photoShape';
+import { rescuePass, type RescueRow } from './pictureRescue';
 import { TONES } from './writerPrompt';
 import { inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
 
@@ -514,6 +515,8 @@ export const KEEP_EVERY_SENTENCE = true;
 export const photoShapeRule = { on: true };
 /** Round O: the final placement measures each slide as drawn and moves a tall screenshot drawn under 22% of the width (on; the before/after comparison turns it off, the app never does). */
 export const placementCheck = { on: true };
+/** Round Q: the rescue pass for unused pictures (pictureRescue.ts) is on. A switch the before/after comparison turns off; the app never does. */
+export const pictureRescueRule = { on: true };
 /** Round O: with "Keep every sentence" on, at most this many slides more than the person picked (never past the app's maximum). */
 export const KEEP_EVERY_SENTENCE_EXTRA = 2;
 /** The most slides the writer may write for a request of `n` slides. */
@@ -1250,6 +1253,8 @@ export interface LibraryReport {
   pictureSwaps?: PictureSwap[];
   /** Round N: every photo slide the shape rule looked at: the layout, the share of its slot the photo covers and the crop, before and after. */
   photoShape?: ShapeRow[];
+  /** Round Q: every picture the passes left unused, and where the rescue pass put it (or why it stays unused). */
+  pictureRescue?: RescueRow[];
   /** Round 15: slides that failed one of the phone checks when drawn and were drawn again by the code (never a model call): what failed, and what the slide is now. */
   /** Round 16: one row per writer call: what was sent and what it cost (null where the provider does not say). */
   writes?: { call: number; promptChars: number; promptBytes: number; requestBytes: number | null; numTurns: number | null; durationApiMs: number | null; effort: string | null; inputTokens: number | null; outputTokens: number | null; seconds: number }[];
@@ -1435,6 +1440,21 @@ export async function applyPhotoShape(specs0: SlideSpec[], look: Look, style: La
   }, (deck) => deckRotation(deck, look, style));
   return { specs: specs0.map((s, k) => (sh.moved.includes(k) ? sh.specs[k] : s)), swaps: sh.swaps, rows: sh.rows };
 }
+/**
+ * Round Q: every picture still unused after the passes gets a second chance (pictureRescue.ts): measured on the slides as drawn, the empty picture slots first, then the slides whose words match
+ * its name, then any slide whose words fit a picture layout. No model call, every word kept.
+ */
+export async function applyPictureRescue(specs0: SlideSpec[], look: Look, style: LayoutStyle, handle: string, ctx?: CtaCtx): Promise<{ specs: SlideSpec[]; swaps: PictureSwap[]; rows: RescueRow[] }> {
+  if (!look.images?.length) return { specs: specs0, swaps: [], rows: [] };
+  const placed = placeImages(specs0, deckRotation(specs0, look, style).variants, look.images);
+  const rs = await rescuePass(placed, look, async (sp, i, v, deck) => {
+    if (slideProblems(sp, look, ctx).length) return null;
+    const rc = deckRotation(deck, look, style).cuts[i];
+    const d = await drawOne(sp, v, style, { handle, index: i, total: deck.length, cut: rc.cut, invert: rc.invert, density: sp.density ?? 'normal', ground: rc.ground });
+    return d.built && !d.problems.length ? d.built.images ?? [] : null;
+  }, (deck) => deckRotation(deck, look, style));
+  return { specs: specs0.map((s, k) => (rs.moved.includes(k) ? rs.specs[k] : s)), swaps: rs.swaps, rows: rs.rows };
+}
 export interface OwnScript { title: string; specs: SlideSpec[]; script: CarouselScript; /** Per slide: 'simple' = the simple (prose) layout because the text is long; 'kept' = no layout fits, the words are kept and the slide is drawn with the style's template. */ marks?: ('simple' | 'kept' | null)[] }
 export async function designLibraryDeck(req: WriteRequest, look: Look, handle: string, p: WriteProvider, signal: AbortSignal, onPhase: (ph: 'writing' | 'retrying') => void = () => undefined, own?: OwnScript): Promise<GenerateResult & { designed: Designed }> {
   const t0 = performance.now();
@@ -1587,6 +1607,14 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     specs = sh.specs;
     pictureSwaps.push(...sh.swaps);
     shapeRows = sh.rows;
+  }
+  // Round Q: a picture still unused gets a second chance (pictureRescue.ts)
+  let rescueRows: RescueRow[] = [];
+  if (look.images?.length && pictureRescueRule.on) {
+    const rs = await applyPictureRescue(specs, look, style, handle, ctaCtx);
+    specs = rs.specs;
+    pictureSwaps.push(...rs.swaps);
+    rescueRows = rs.rows;
   }
   let { out: drawn, rot } = await drawAll();
   const failing = () => new Map<number, string[]>([...drawn].filter(([, d]) => d.problems.length || !d.built).map(([i, d]) => [i, d.problems.length ? d.problems : ['it could not be drawn']]));
@@ -1809,6 +1837,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     ...(fp ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : {}),
     ...(pictureSwaps.length ? { pictureSwaps } : {}),
     ...(shapeRows.length ? { photoShape: shapeRows } : {}),
+    ...(rescueRows.length ? { pictureRescue: rescueRows } : {}),
     ...(repairs.length ? { repairs } : {}),
     ...(writes.length ? { writes } : {}),
     ...(pictureUse ? { pictureUse } : {}),
