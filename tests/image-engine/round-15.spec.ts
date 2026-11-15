@@ -12,7 +12,10 @@ const REAL = process.env.REAL_PICTURES_DIR ?? 'out/test-pictures';
 const helpSrc = fs.readFileSync('tests/image-engine/screenshots.spec.ts', 'utf8');
 const MAKE = helpSrc.slice(helpSrc.indexOf('const MAKE = `') + 14, helpSrc.indexOf('`;\n\ntest(\'classification'));
 
-test('A1: every real picture in out/test-pictures classifies as a screenshot (numbers in out/round-15/real-classification.md)', async ({ page }) => {
+// Round K: the folder now holds real photos too (the user's WhatsApp JPEGs and crops of them) next to screenshots. The rule is safe by default: every SCREENSHOT must be classed a screenshot
+// (text must never go over one). A photo may be classed either way (a photo called a screenshot only never goes under text, and its card has a Photo chip), so photos are recorded, not asserted.
+// A screenshot is a PNG or a file named "screenshot"; a JPEG is a camera photo.
+test('A1: every real screenshot in out/test-pictures classifies as a screenshot; the photos are recorded (numbers in out/round-15/real-classification.md)', async ({ page }) => {
   const files = fs.existsSync(REAL) ? fs.readdirSync(REAL).filter((f) => /\.(png|jpe?g|webp)$/i.test(f)) : [];
   test.skip(!files.length, `no pictures in ${REAL} (put the real screenshots there to classify them; set REAL_PICTURES_DIR to use another folder)`);
   await page.goto('/images/carousel');
@@ -27,8 +30,11 @@ test('A1: every real picture in out/test-pictures classifies as a screenshot (nu
     }, [b64, mime])) });
   }
   fs.mkdirSync(OUT, { recursive: true });
-  fs.writeFileSync(`${OUT}/real-classification.md`, ['# Real pictures: screenshot or photo (current rule)', '', '| file | size | result | top16 | flat | edges | grain | colours |', '|---|---|---|---|---|---|---|---|', ...rows.map((x) => `| ${x.f} | ${x.w}x${x.h} | ${x.content} | ${x.top16} | ${x.flat} | ${x.edges} | ${x.grain} | ${x.buckets} |`), ''].join('\n'));
-  for (const x of rows) expect(x.content, `${x.f}: top16 ${x.top16}, flat ${x.flat}, edges ${x.edges}, grain ${x.grain}`).toBe('screenshot');
+  const isShot = (f: string) => /\.png$/i.test(f) || /screenshot/i.test(f);
+  fs.writeFileSync(`${OUT}/real-classification.md`, ['# Real pictures: screenshot or photo (current rule)', '', '| file | kind | size | result | top16 | flat | edges | grain | colours |', '|---|---|---|---|---|---|---|---|---|', ...rows.map((x) => `| ${x.f} | ${isShot(x.f) ? 'screenshot' : 'photo'} | ${x.w}x${x.h} | ${x.content} | ${x.top16} | ${x.flat} | ${x.edges} | ${x.grain} | ${x.buckets} |`), ''].join('\n'));
+  for (const x of rows.filter((r) => isShot(r.f))) expect(x.content, `${x.f} is a screenshot: top16 ${x.top16}, flat ${x.flat}, edges ${x.edges}, grain ${x.grain}`).toBe('screenshot');
+  // a picture that IS called a photo must look like one (camera grain), never a flat picture that slipped through
+  for (const x of rows.filter((r) => r.content === 'photo')) expect(x.grain, `${x.f}: called a photo`).toBeGreaterThanOrEqual(0.3);
 });
 
 test('A2: safe by default: a photo only when clearly one; unknown or unreadable content is a screenshot; synthetic photos stay photos, synthetic screenshots stay screenshots', async ({ page }) => {
