@@ -116,7 +116,7 @@ export function BrandEditor({ doc, styleName, brand, others, onSave, onDelete, o
               <div key={i} className="cr-be-colour" data-testid={`brand-colour-${i}`}>
                 <label className="cr-be-label" htmlFor={`be-hex-${i}`}>{LABELS[i]}{i === 0 ? '' : ' (optional)'}</label>
                 <div className="cr-be-row">
-                  <input type="color" className="cr-be-swatch" value={hexes[i] ?? '#000000'} onChange={(e) => { setText(i, e.target.value.toLowerCase()); touch(i); }} aria-label={`${LABELS[i]}: pick a colour`} data-testid={`brand-swatch-${i}`} />
+                  <input type="color" className={'cr-be-swatch' + (hexes[i] ? '' : ' swatch-empty')} data-empty={hexes[i] ? undefined : 'true'} value={hexes[i] ?? '#000000'} onChange={(e) => { setText(i, e.target.value.toLowerCase()); touch(i); }} aria-label={`${LABELS[i]}: pick a colour`} data-testid={`brand-swatch-${i}`} />
                   <input id={`be-hex-${i}`} className="input cr-be-hex" type="text" inputMode="text" autoComplete="off" spellCheck={false} placeholder="#14213D" value={t} onChange={(e) => setText(i, e.target.value)} onBlur={() => normalise(i)} aria-invalid={!!problem} aria-describedby={`be-note-${i}`} data-testid={`brand-hex-${i}`} />
                   {i > 0 && <button type="button" className="btn btn-outline btn-sm cr-be-btn" onClick={() => remove(i)} aria-label={`Remove the ${LABELS[i].toLowerCase()}`}>Remove</button>}
                 </div>

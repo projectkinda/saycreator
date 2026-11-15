@@ -36,7 +36,7 @@ export function BrandColoursCard({ brand, update }: { brand: BrandWorkspace; upd
             <label className="field">
               <span>{label}{i === 0 ? '' : ' (optional)'}</span>
               <span className="color-pair">
-                <input type="color" aria-label={`${label}: pick a colour`} value={normaliseHex(texts[i]) ?? '#000000'} onChange={(e) => set(i, e.target.value.toLowerCase(), true)} data-testid={`bc-swatch-${i}`} />
+                <input type="color" className={normaliseHex(texts[i]) ? undefined : 'swatch-empty'} data-empty={normaliseHex(texts[i]) ? undefined : 'true'} aria-label={`${label}: pick a colour`} value={normaliseHex(texts[i]) ?? '#000000'} onChange={(e) => set(i, e.target.value.toLowerCase(), true)} data-testid={`bc-swatch-${i}`} />
                 <input className="input" type="text" spellCheck={false} autoComplete="off" placeholder="#14213D" value={texts[i]} aria-invalid={bad[i]} onChange={(e) => set(i, e.target.value)} onBlur={() => commit(texts)} data-testid={`bc-hex-${i}`} />
               </span>
             </label>

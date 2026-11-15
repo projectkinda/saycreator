@@ -172,3 +172,15 @@ button {
 .muted {
   color: var(--text-2);
 }
+
+/* Round K: an empty colour field (no second or extra colour yet) shows an EMPTY swatch, a dashed outline with a small plus, never the black a colour input falls back to */
+input[type="color"].swatch-empty {
+  background-color: transparent !important;
+  background-image: linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor) !important;
+  background-size: 12px 2px, 2px 12px !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  color: var(--muted, #6b6b6b);
+}
+input[type="color"].swatch-empty::-webkit-color-swatch { background: transparent !important; border: 2px dashed currentColor; border-radius: 4px; }
+input[type="color"].swatch-empty::-moz-color-swatch { background: transparent !important; border: 2px dashed currentColor; border-radius: 4px; }
