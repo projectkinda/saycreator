@@ -10,9 +10,9 @@ import { markerInk, type RLayer } from '../../reference/recreate';
 import { resolveSvgTokens } from '../../reference/faithful';
 import { balanceVertical, clampSlots, finalGuards, fitSlots, readingOrder, recurringLayers, recurringMarkup, resolveCollisions, stepperSvg } from '../designed';
 import { avatarMarkup, chromeFor } from './chrome';
-import { avoidChrome, blurredBackdrop } from './chromeAvoid';
+import { avoidChrome, blurredBackdrop, BACKDROP_GROW } from './chromeAvoid';
 import { cropRect, parseRef } from './images';
-import { containRect, edgeColour, needsContain } from './pictureFit';
+import { BACKDROP_VEIL, containRect, edgeColour, matchedVeil, needsContain } from './pictureFit';
 import { artDevices } from './artDevices';
 import { centreButtons } from './buttons';
 import { accentDevices, behindDevices, insetGround, overDevices, shapeBoxesOf, siteText, type Box, type DeviceCtx, type PlacedDevice } from './devices';
@@ -26,10 +26,10 @@ import type { Cut, Cx, Fields, Gradient, LayoutStyle, Plan, PlaneTone, PlanImage
 /**
  * Round F: the feather of a photo shown whole over its blurred backdrop. The mask is the picture's rectangle moved `FEATHER_INSET` px in and blurred by `FEATHER_BLUR` (a Gaussian of that standard deviation):
  * the picture goes from 10% to 90% visible over about 2.56 x 11 = 28 px at 1080 wide (it was 11 px with a blur of 5 and an inset of 4, which still read as a hard edge). The picture is not moved or
- * resized and the backdrop (blur 30, a 42% black veil) is unchanged.
+ * resized. Round N: 2.56 x 25 = 64 px (blur 25, inset 32), measured softer on the Round K photos; the backdrop's veil is matched to the photo's own edge (pictureFit.matchedVeil).
  */
-export const FEATHER_BLUR = 11;
-export const FEATHER_INSET = 14;
+export const FEATHER_BLUR = 25;
+export const FEATHER_INSET = 32;
 export interface BuildOpts {
   /** Second pass of a card layout: the real headline height measured on the first drawing (see Plan.hug). */
   hugged?: number;
@@ -399,11 +399,22 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   const pics = avoidChrome(plan.images ?? [], rec);
   if (pics.length) {
     // the crop budget: a picture a cover-crop would cut by more than 10% is drawn whole, on a panel in its own average edge colour
-    const whole = new Map<number, { rect: { x: number; y: number; w: number; h: number }; bg: string; photo: boolean }>();
+    const whole = new Map<number, { rect: { x: number; y: number; w: number; h: number }; bg: string; photo: boolean; veil: number }>();
+    const textBoxes = r.layers.filter((l) => l.kind === 'text').map((l) => ({ x: l.x, y: l.y, w: l.width, h: l.height }));
     for (const [i, p] of pics.entries()) {
       const ref = parseRef(p.src);
       if (p.circle || !ref || !needsContain(p, ref)) continue;
-      whole.set(i, { rect: containRect(p, ref, p.rx), bg: ref.photo ? '#000000' : (await edgeColour(p.src)) ?? '#808080', photo: !!ref.photo });
+      const rect = containRect(p, ref, p.rx);
+      // Round N: the blurred copy is darkened only as far as the photo's own edge (never lighter than it, never darker than today); where text sits over the fill, today's veil stays
+      let veil = BACKDROP_VEIL;
+      if (ref.photo) {
+        const cr = cropRect(p, ref) ?? { x: p.x, y: p.y, w: p.w, h: p.h };
+        const grown = { x: cr.x - cr.w * BACKDROP_GROW, y: cr.y - cr.h * BACKDROP_GROW, w: cr.w * (1 + 2 * BACKDROP_GROW), h: cr.h * (1 + 2 * BACKDROP_GROW) };
+        const inBars = (b: { x: number; y: number; w: number; h: number }) => b.x < p.x + p.w && b.x + b.w > p.x && b.y < p.y + p.h && b.y + b.h > p.y && !(b.x >= rect.x && b.x + b.w <= rect.x + rect.w && b.y >= rect.y && b.y + b.h <= rect.y + rect.h);
+        const m = textBoxes.some(inBars) ? null : await matchedVeil(p.src, p, rect, grown);
+        if (m) veil = m.veil;
+      }
+      whole.set(i, { rect, bg: ref.photo ? '#000000' : (await edgeColour(p.src)) ?? '#808080', photo: !!ref.photo, veil });
       notes.push(ref.photo ? `picture ${i + 1}: a cover-crop would cut more than 25% of this photo, so it is drawn whole on a blurred, darkened copy of itself.` : `picture ${i + 1}: a cover-crop would cut more than 10% of it, so it is drawn whole on a panel of its edge colour.`);
     }
     const markupOf = (list: { p: PlanImage; i: number }[]) => list.map(({ p, i }) => {
@@ -413,7 +424,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       const w0 = whole.get(i);
       const cr = w0 ? { x: w0.rect.x, y: w0.rect.y, w: w0.rect.w, h: w0.rect.h } : cropRect(p, parseRef(p.src));
       // a photo shown whole sits on a blurred, darkened copy of itself (no grey or olive bars); a screenshot on a flat panel in its edge colour
-      const panel = w0 ? (w0.photo ? blurredBackdrop(id, p, p.src, cropRect(p, parseRef(p.src))) : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" fill="${w0.bg}"/>`) : '';
+      const panel = w0 ? (w0.photo ? blurredBackdrop(id, p, p.src, cropRect(p, parseRef(p.src)), w0.veil) : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" fill="${w0.bg}"/>`) : '';
       const box = cr ? `x="${Math.round(cr.x * 10) / 10}" y="${Math.round(cr.y * 10) / 10}" width="${Math.round(cr.w * 10) / 10}" height="${Math.round(cr.h * 10) / 10}" preserveAspectRatio="none"` : `x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" preserveAspectRatio="xMidYMid slice"`;
       // Round E: a photo shown whole is feathered into its blurred backdrop: a mask (the picture's rectangle, 4 px in, blurred) fades the outer 10 px or so instead of cutting a hard edge. The picture is not moved or resized.
       const feather = !!(w0 && w0.photo);
