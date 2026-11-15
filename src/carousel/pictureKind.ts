@@ -5,8 +5,14 @@
 //   3. `flat` = share of 4x4 blocks whose three channels each vary by 6 or less (a window, a card, a page background);
 //   4. `edges` = share of pixels on a sharp horizontal or vertical edge (luminance jumps by more than 40 to the next pixel);
 //   5. `grain` = share of neighbouring pixel pairs whose luminance differs by a small, non-zero amount (1 to 12): the texture of a camera sensor. A screenshot is exactly flat (0) or a hard jump.
-// PHOTO only when ALL hold: top16 < 0.50, flat < 0.12, buckets >= 150 and grain >= 0.30. A PNG must be clearer still (top16 < 0.40, flat < 0.06, grain >= 0.45), because a PNG is far more often a screenshot.
-// A picture whose content is unknown (added before this rule, or unreadable) counts as a screenshot: see `contentOr`. The numbers are returned so they can be shown and tested.
+// Round L: GRAIN FIRST. The old rule (top16 < 0.50 and flat < 0.12 and 150+ colours and grain >= 0.30) called 5 of 7 real photos screenshots: flat sky and shadows put 54 to 73% of a real photo
+// in 16 colours. On a labelled set (7 real photos, 22 real screenshots of the app in PNG and JPEG, 10 code-drawn graphics; out/round-l/rule.md) grain separates them under both decodes:
+// every real photo 0.537 or more, every screenshot or graphic 0.431 or less. So:
+//   - a PNG, or a file whose name contains "screenshot": a screenshot (not read further);
+//   - grain >= 0.50 and top16 < 0.85: a PHOTO (top16 is only a guard: a very flat picture whose compression lifts its grain keeps a top16 near 1; real photos are 0.73 at most, non-photos 0.89 or more);
+//   - 0.47 <= grain < 0.50: UNSURE, which is a screenshot (safe by default);
+//   - grain < 0.47: a screenshot.
+// A picture whose content is unknown (added before this rule, or unreadable) counts as a screenshot: see `contentOr`.
 export type PictureContent = 'screenshot' | 'photo';
 export interface ContentReading {
   content: PictureContent;
@@ -15,16 +21,21 @@ export interface ContentReading {
   edges: number;
   buckets: number;
   grain: number;
+  /** Round L: true when the grain is in the unsure band (the picture is then a screenshot). */
+  unsure?: boolean;
+  /** Round L: why, in a few words (for the report and the tests). */
+  why?: string;
 }
-/** The limits a picture must be inside on every number to count as a photo (a PNG uses the second set). */
-export const PHOTO_LIMITS = { top16: 0.5, flat: 0.12, buckets: 150, grain: 0.3 };
-export const PHOTO_LIMITS_PNG = { top16: 0.4, flat: 0.06, buckets: 150, grain: 0.45 };
+/** Round L: a photo from this much grain up (with top16 under `top16Max`); between `grainUnsure` and `grainPhoto` the reading is unsure, which is a screenshot. */
+export const PHOTO_RULE = { grainPhoto: 0.5, grainUnsure: 0.47, top16Max: 0.85 };
+/** A file that is a screenshot by its type or its name, whatever its pixels say. */
+export const screenshotByFile = (png: boolean, name = ''): boolean => png || /screenshot/i.test(name);
 /** Unknown content is a screenshot (safe by default). */
 export const contentOr = (c?: PictureContent | null): PictureContent => (c === 'photo' ? 'photo' : 'screenshot');
 const lum = (d: Uint8ClampedArray, i: number) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
 
 /** The reading of RGBA pixel data (w x h). Pure, so tests and the app agree. `png`: the file is a PNG (a stricter test for "photo"). */
-export function readContent(d: Uint8ClampedArray, w: number, h: number, png = false): ContentReading {
+export function readContent(d: Uint8ClampedArray, w: number, h: number, png = false, name = ''): ContentReading {
   const counts = new Map<number, number>();
   let n = 0;
   for (let i = 0; i < w * h; i++) {
@@ -52,14 +63,17 @@ export function readContent(d: Uint8ClampedArray, w: number, h: number, png = fa
   }
   const pairs = Math.max(1, (w - 1) * (h - 1));
   const edges = edgePx / pairs, grain = grainPx / pairs;
-  const lim = png ? PHOTO_LIMITS_PNG : PHOTO_LIMITS;
-  const clearlyPhoto = top16 < lim.top16 && flat < lim.flat && counts.size >= lim.buckets && grain >= lim.grain;
+  const R = PHOTO_RULE;
+  const byFile = screenshotByFile(png, name);
+  const clearlyPhoto = !byFile && n > 0 && grain >= R.grainPhoto && top16 < R.top16Max;
+  const unsure = !byFile && !clearlyPhoto && grain >= R.grainUnsure && grain < R.grainPhoto;
+  const why = byFile ? (png ? 'a PNG' : 'named a screenshot') : clearlyPhoto ? 'camera grain' : unsure ? 'unsure (grain between ' + R.grainUnsure + ' and ' + R.grainPhoto + ')' : grain >= R.grainPhoto ? 'too few colours for a photo' : 'no camera grain';
   const r3 = (v: number) => Math.round(v * 1000) / 1000;
-  return { content: clearlyPhoto ? 'photo' : 'screenshot', top16: r3(top16), flat: r3(flat), edges: r3(edges), buckets: counts.size, grain: r3(grain) };
+  return { content: clearlyPhoto ? 'photo' : 'screenshot', top16: r3(top16), flat: r3(flat), edges: r3(edges), buckets: counts.size, grain: r3(grain), ...(unsure ? { unsure: true } : {}), why };
 }
 
 /** Reads a picture (any image source the canvas can draw) at 160 px and classifies it. Unreadable: a screenshot. */
-export function readContentOf(src: CanvasImageSource & { width?: number; height?: number }, width: number, height: number, png = false): ContentReading {
+export function readContentOf(src: CanvasImageSource & { width?: number; height?: number }, width: number, height: number, png = false, name = ''): ContentReading {
   const k = Math.min(1, 160 / Math.max(width, height));
   const w = Math.max(8, Math.round(width * k)), h = Math.max(8, Math.round(height * k));
   const c = document.createElement('canvas');
@@ -68,5 +82,5 @@ export function readContentOf(src: CanvasImageSource & { width?: number; height?
   const g = c.getContext('2d', { willReadFrequently: true })!;
   g.imageSmoothingEnabled = true;
   g.drawImage(src, 0, 0, w, h);
-  return readContent(g.getImageData(0, 0, w, h).data, w, h, png);
+  return readContent(g.getImageData(0, 0, w, h).data, w, h, png, name);
 }

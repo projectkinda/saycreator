@@ -12,10 +12,10 @@ const REAL = process.env.REAL_PICTURES_DIR ?? 'out/test-pictures';
 const helpSrc = fs.readFileSync('tests/image-engine/screenshots.spec.ts', 'utf8');
 const MAKE = helpSrc.slice(helpSrc.indexOf('const MAKE = `') + 14, helpSrc.indexOf('`;\n\ntest(\'classification'));
 
-// Round K: the folder now holds real photos too (the user's WhatsApp JPEGs and crops of them) next to screenshots. The rule is safe by default: every SCREENSHOT must be classed a screenshot
-// (text must never go over one). A photo may be classed either way (a photo called a screenshot only never goes under text, and its card has a Photo chip), so photos are recorded, not asserted.
-// A screenshot is a PNG or a file named "screenshot"; a JPEG is a camera photo.
-test('A1: every real screenshot in out/test-pictures classifies as a screenshot; the photos are recorded (numbers in out/round-15/real-classification.md)', async ({ page }) => {
+// Round K: the folder holds real photos (the user's WhatsApp JPEGs and crops of them) next to screenshots. Round L: the pictures are read the way the APP reads them (photoLibrary.prepare), and
+// with the grain-first rule every real photo is a photo and every screenshot a screenshot. The kind of a file comes from out/test-pictures/labels.json when it is there (Round L's labelled set);
+// a file it does not list is a screenshot when it is a PNG or named "screenshot", else a camera photo.
+test('A1: every real screenshot in out/test-pictures classifies as a screenshot and every real photo as a photo, read the way the app reads (numbers in out/round-15/real-classification.md)', async ({ page }) => {
   const files = fs.existsSync(REAL) ? fs.readdirSync(REAL).filter((f) => /\.(png|jpe?g|webp)$/i.test(f)) : [];
   test.skip(!files.length, `no pictures in ${REAL} (put the real screenshots there to classify them; set REAL_PICTURES_DIR to use another folder)`);
   await page.goto('/images/carousel');
@@ -23,18 +23,22 @@ test('A1: every real screenshot in out/test-pictures classifies as a screenshot;
   for (const f of files) {
     const b64 = fs.readFileSync(path.join(REAL, f)).toString('base64');
     const mime = /\.png$/i.test(f) ? 'image/png' : /\.webp$/i.test(f) ? 'image/webp' : 'image/jpeg';
-    rows.push({ f, ...(await page.evaluate(async ([b64, mime]) => {
-      const K: any = await import('/src/carousel/pictureKind.ts');
-      const img = new Image(); img.src = `data:${mime};base64,${b64}`; await img.decode();
-      return { w: img.naturalWidth, h: img.naturalHeight, ...K.readContentOf(img, img.naturalWidth, img.naturalHeight, mime === 'image/png') };
-    }, [b64, mime])) });
+    rows.push({ f, ...(await page.evaluate(async ([b64, mime, f]) => {
+      const PL: any = await import('/src/carousel/photoLibrary.ts');
+      const blob = await (await fetch(`data:${mime};base64,${b64}`)).blob();
+      const p = await PL.prepare(new File([blob], f, { type: mime }), 'photo');
+      return { w: p.stored.width, h: p.stored.height, ...p.reading };
+    }, [b64, mime, f])) });
   }
   fs.mkdirSync(OUT, { recursive: true });
-  const isShot = (f: string) => /\.png$/i.test(f) || /screenshot/i.test(f);
+  const labelsFile = path.join(REAL, 'labels.json');
+  const labels: Record<string, string> = fs.existsSync(labelsFile) ? JSON.parse(fs.readFileSync(labelsFile, 'utf8')) : {};
+  const isShot = (f: string) => (labels[f] ? labels[f] !== 'photo' : /\.png$/i.test(f) || /screenshot/i.test(f));
   fs.writeFileSync(`${OUT}/real-classification.md`, ['# Real pictures: screenshot or photo (current rule)', '', '| file | kind | size | result | top16 | flat | edges | grain | colours |', '|---|---|---|---|---|---|---|---|---|', ...rows.map((x) => `| ${x.f} | ${isShot(x.f) ? 'screenshot' : 'photo'} | ${x.w}x${x.h} | ${x.content} | ${x.top16} | ${x.flat} | ${x.edges} | ${x.grain} | ${x.buckets} |`), ''].join('\n'));
   for (const x of rows.filter((r) => isShot(r.f))) expect(x.content, `${x.f} is a screenshot: top16 ${x.top16}, flat ${x.flat}, edges ${x.edges}, grain ${x.grain}`).toBe('screenshot');
-  // a picture that IS called a photo must look like one (camera grain), never a flat picture that slipped through
-  for (const x of rows.filter((r) => r.content === 'photo')) expect(x.grain, `${x.f}: called a photo`).toBeGreaterThanOrEqual(0.3);
+  // Round L: a real photo is a photo, and a picture called a photo has camera grain
+  for (const x of rows.filter((r) => !isShot(r.f))) expect(x.content, `${x.f} is a photo: top16 ${x.top16}, grain ${x.grain} (${x.why})`).toBe('photo');
+  for (const x of rows.filter((r) => r.content === 'photo')) expect(x.grain, `${x.f}: called a photo`).toBeGreaterThanOrEqual(0.5);
 });
 
 test('A2: safe by default: a photo only when clearly one; unknown or unreadable content is a screenshot; synthetic photos stay photos, synthetic screenshots stay screenshots', async ({ page }) => {
@@ -55,7 +59,7 @@ test('A2: safe by default: a photo only when clearly one; unknown or unreadable 
       dense: dense.content, denseNumbers: dense,
       unknown: K.contentOr(undefined), photo: K.contentOr('photo'), nul: K.contentOr(null),
       empty: K.readContent(new Uint8ClampedArray(0), 0, 0).content,
-      limits: [K.PHOTO_LIMITS, K.PHOTO_LIMITS_PNG],
+      rule: K.PHOTO_RULE,
     };
   });
   expect(r.photos).toEqual(['photo', 'photo', 'photo']);
@@ -63,7 +67,7 @@ test('A2: safe by default: a photo only when clearly one; unknown or unreadable 
   expect(r.dense, JSON.stringify(r.denseNumbers)).toBe('screenshot');
   expect([r.unknown, r.photo, r.nul]).toEqual(['screenshot', 'photo', 'screenshot']);
   expect(r.empty).toBe('screenshot');
-  expect(r.limits[1].top16).toBeLessThan(r.limits[0].top16); // a PNG must be clearer still
+  expect(r.rule.grainUnsure).toBeLessThan(r.rule.grainPhoto); // Round L: between the two the reading is unsure, which is a screenshot
 });
 
 const REAL_PLAN = (() => {

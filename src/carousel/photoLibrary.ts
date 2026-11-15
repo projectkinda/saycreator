@@ -47,9 +47,9 @@ const newId = () => 'p-' + Math.random().toString(36).slice(2, 8) + Date.now().t
 const canvasBlob = (c: HTMLCanvasElement, type: string, q?: number) => new Promise<Blob>((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new PictureError('This browser could not make a copy of the picture.'))), type, q));
 
 /** The screenshot-or-photo reading of the working copy (nothing when the canvas cannot be read: the picture counts as a screenshot). */
-function readingOf(c: HTMLCanvasElement, w: number, h: number, png = false): { reading?: ContentReading } {
+function readingOf(c: HTMLCanvasElement, w: number, h: number, png = false, name = ''): { reading?: ContentReading } {
   try {
-    return { reading: readContentOf(c, w, h, png) };
+    return { reading: readContentOf(c, w, h, png, name) };
   } catch {
     return {};
   }
@@ -99,7 +99,7 @@ export async function prepare(file: File, kind: 'photo' | 'object'): Promise<Pre
     }
     const work = kind === 'photo' ? await canvasBlob(c, 'image/jpeg', 0.92) : await canvasBlob(c, 'image/png');
     if (kind === 'photo' && Math.min(width, height) < 700) notes.push(`"${file.name}" is small (${width} by ${height} pixels), so it will look soft on a full slide.`);
-    return { stored: { id: newId(), kind, name: file.name.replace(/\.[^.]+$/, '').slice(0, 60) || 'picture', original: file, work, width, height, workWidth: ww, workHeight: wh, addedAt: Date.now() }, notes, ...(kind === 'photo' ? readingOf(c, ww, wh, /png/i.test(file.type)) : {}) };
+    return { stored: { id: newId(), kind, name: file.name.replace(/\.[^.]+$/, '').slice(0, 60) || 'picture', original: file, work, width, height, workWidth: ww, workHeight: wh, addedAt: Date.now() }, notes, ...(kind === 'photo' ? readingOf(c, ww, wh, /png/i.test(file.type), file.name) : {}) };
   } finally {
     bm.close();
   }
