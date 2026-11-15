@@ -665,11 +665,21 @@ export function trimOptionalFields(specs: SlideSpec[]): { specs: SlideSpec[]; tr
 }
 const wordsOf = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}\s'-]/gu, ' ').split(/\s+/).filter(Boolean);
 /** True when a line repeats the headline: at least 60% of the words of the shorter text are in the other (case and punctuation ignored). */
+/**
+ * Round M: a line repeats the headline only when it ADDS nothing: at least 80% of its meaning words (small words like "they", "have", "a" left out, plurals and -ing / -ed folded) are already
+ * in the headline. The old rule (60% of the shorter one's words, small words counted) took out real sentences: "They have a time problem." under "Most creators don't have a design problem."
+ * shares only "have a ... problem", and "Back it today, early backers save" under "Back it today" adds "early backers save". A line that adds a word of its own stays.
+ */
+const REPEAT_STOP = new Set(['a', 'an', 'the', 'it', 'its', "it's", 'is', 'are', 'was', 'be', 'to', 'of', 'and', 'or', 'but', 'for', 'in', 'on', 'at', 'this', 'that', 'these', 'those', 'they', 'them', 'their', 'you', 'your', "you're", 'we', 'our', 'i', 'my', 'me', 'he', 'she', 'have', 'has', 'had', 'do', 'does', "don't", "doesn't", 'not', 'no', 'so', 'with', 'as', 'by', 'from', 'just', 'will', 'can', 'all', 'more', 'than', 'there', 'here', 'what', 'who', 'how']);
+const stemWord = (w: string): string => (w.length > 5 && w.endsWith('ing') ? w.slice(0, -3) : w.length > 4 && w.endsWith('ed') ? w.slice(0, -2) : w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
 export function repeatsHeadline(line: string, headline: string): boolean {
   const a = wordsOf(line), b = wordsOf(headline);
-  if (a.length < 2 || b.length < 2) return a.length > 0 && a.join(' ') === b.join(' ');
-  const [short, long] = a.length <= b.length ? [a, new Set(b)] : [b, new Set(a)];
-  return short.filter((w) => long.has(w)).length / short.length >= 0.6;
+  if (!a.length) return false;
+  if (a.join(' ') === b.join(' ')) return true;
+  const mean = (ws: string[]) => ws.filter((w) => !REPEAT_STOP.has(w)).map(stemWord);
+  const la = mean(a), hb = new Set(mean(b));
+  if (!la.length) return a.every((w) => b.includes(w));
+  return la.filter((w) => hb.has(w)).length / la.length >= 0.8;
 }
 const HEAD_FIELDS = ['headline', 'title', 'question', 'heading'];
 const LINE_FIELDS = ['caption', 'sub', 'subline', 'line', 'subtitle', 'kicker'];

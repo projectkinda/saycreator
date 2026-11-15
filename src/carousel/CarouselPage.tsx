@@ -52,6 +52,7 @@ import { ACTIVE_STYLE, activeReference, clearActiveReference, useActiveReference
 import { cancelJob } from '../live/jobs';
 import { sizeOf as sizeOfPic, urlOf as urlOfPic } from './photoLibrary';
 import { contentOr } from './pictureKind';
+import { sourceNotOnSlidesOf, visibleTextOf } from './sourceCheck';
 import { ensureTemplatesLoaded, isUserStyle, targetWarning, useTemplatesVersion } from '../reference/templates';
 import { platformOf, platformWarning } from './platform';
 import { PhotosStrip } from './PhotosStrip';
@@ -733,6 +734,8 @@ export default function CarouselPage() {
   const have = failing === 1 ? 'has' : 'have';
   const failingText = failingWords === failing ? `${failing} of ${slides.length} slides ${have} too many words.` : failingWords ? `${failing} of ${slides.length} slides ${have} something to fix at phone size (${failingWords} of them only because of too many words).` : `${failing} of ${slides.length} slides ${have} something to fix at phone size.`;
   // Round I: which slide and what, in plain words (the slide name selects that slide in the strip)
+  // Round M: the sentences of the text that are on no slide, from the slides as they are now (recomputed after every edit, style or colour switch: no call)
+  const notOnSlides = useMemo(() => (doc.topic?.trim() && slides.length ? sourceNotOnSlidesOf(doc.topic, slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? []))) : { count: 0, total: 0, percentOfSentences: 0, sentences: [] as string[] }), [doc.topic, slides]);
   const failingDetail = slides.flatMap((_, i) => { const why = [...new Set((views[i]?.rendered?.lint ?? []).filter((l) => !l.pass).map((l) => LINT_PLAIN[l.id] ?? 'something may not read well'))]; return why.length ? [{ i, why }] : []; });
   const warned = slides.filter((_, i) => { const lint = views[i]?.rendered?.lint ?? []; return lint.every((l) => l.pass) && lint.some((l) => l.warn); }).length;
 
@@ -1547,6 +1550,16 @@ export default function CarouselPage() {
             </span>
           )}
         </p>
+        {hasWork && notOnSlides.count > 0 && (
+          // Round M: sentences of the person's text that are on no slide (measured, never changed); no notice when every sentence is on a slide
+          <div className="small cr-not-on-slides" data-testid="not-on-slides">
+            <p className="cr-problem">{notOnSlides.count} of {notOnSlides.total} sentence{notOnSlides.total === 1 ? '' : 's'} from your text {notOnSlides.count === 1 ? 'is' : 'are'} not on any slide.</p>
+            <details>
+              <summary>Show them</summary>
+              <ul data-testid="not-on-slides-list">{notOnSlides.sentences.map((s, k) => <li key={k}>{s}</li>)}</ul>
+            </details>
+          </div>
+        )}
         {hasWork && ready && !!doc.designed?.library?.plan && unusedList.length > 0 && (
           <p className="small muted" data-testid="pictures-unused">{unusedList.length} of {pictures.filter((p) => p.kind === 'photo').length} pictures {unusedList.length === 1 ? 'is' : 'are'} not on a slide.</p>
         )}

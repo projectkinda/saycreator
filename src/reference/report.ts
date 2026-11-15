@@ -49,8 +49,9 @@ export function textSizesOf(layers: unknown[]): { role: string; size: number; wo
     });
 }
 
-/** The words of a text, lower case, apostrophes made plain ("I’ll" and "I'll" are one word). */
-export const wordsOfText = (t: string): string[] => (t.toLowerCase().replace(/[\u2018\u2019]/g, "'").match(/[\p{L}\p{N}]+(?:'[\p{L}]+)?/gu) ?? []);
+// Round M: the words and the visible text live in ../carousel/sourceCheck (the page uses them too); re-exported here so every import keeps working.
+export { wordsOfText, visibleTextOf } from '../carousel/sourceCheck';
+import { sourceNotOnSlidesOf, visibleTextOf, wordsOfText } from '../carousel/sourceCheck';
 /**
  * The wording check (measure only: the slides are never changed): every visible word of every slide is compared with the words of the source text. `wordsNotInSource` are the words the slides show
  * that the text does not have, `slidesWithChangedWording` the slide numbers (1-based) that show at least one, `matchPercent` the share of visible words that are in the source.
@@ -103,13 +104,6 @@ export function fieldsNotInSourceOf(source: string, specs: { fields: Record<stri
   });
   return out;
 }
-/** The visible words of a composed slide's layers: every text except the page counter, the swipe cue, the handle and decoration. */
-export const visibleTextOf = (layers: unknown[]): string =>
-  (layers as { kind?: string; visible?: boolean; id?: string; name?: string; role?: string; text?: string }[])
-    .filter((l) => l.kind === 'text' && l.visible !== false && l.role !== 'decor' && !/recurring|^page|^swipe|^handle|^strip|^dots/.test(`${l.id ?? ''} ${l.name ?? ''}`) && (l.text ?? '').trim())
-    .map((l) => l.text)
-    .join(' ');
-
 /** The library layout slide i was drawn with, when the layout library drew that slide (else null: the old route's own layout and rule are reported). */
 export function libraryLayoutOf(doc: Doc, i: number): string | null {
   const d = doc.designed;
@@ -144,6 +138,8 @@ export async function buildReport(o: ReportOptions): Promise<{ json: string; com
     pictures: o.doc.designed?.library?.plan?.specs ? pictureUseOf(o.doc.designed.library.plan.specs, (o.doc.photos ?? []).filter((p) => p.kind === 'photo').map((p) => ({ id: p.id, width: p.width, height: p.height, content: contentOr(p.content) }))) : null,
     /** Round 12: every visible word of every slide compared with the source text (measure only, nothing is changed). */
     wordingCheck: { ...wordingCheckOf(o.doc.topic ?? '', composed.slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? []))), fieldsNotInSource: o.doc.designed?.library?.plan?.specs ? fieldsNotInSourceOf(o.doc.topic ?? '', o.doc.designed.library.plan.specs as { fields: Record<string, unknown> }[]) : [] },
+    /** Round M: the sentences of the text that are on no slide (a sentence is on a slide when 80% of its words are on one slide, in order). */
+    sourceNotOnSlides: (({ total: _t, ...r }) => r)(sourceNotOnSlidesOf(o.doc.topic ?? '', composed.slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? [])))),
     routeReason: o.doc.route?.reason ?? (o.doc.designed ? 'Designed slides are present (the route was not recorded).' : 'No route was recorded for this project: the style templates are assumed to have filled the slides.'),
     designedCalls: o.doc.designed?.calls ?? null,
     designed: o.doc.designed ? { calls: o.doc.designed.calls, tokens: o.doc.designed.tokens ?? null, layouts: o.doc.designed.layouts ?? null, fallbacks: o.doc.designed.fallbacks, notes: o.doc.designed.notes, requestBytes: o.doc.designed.requestBytes ?? null, library: o.doc.designed.library ?? null, model: 'DRAW_MODEL, else CAROUSEL_MODEL, else sonnet (server setting)' } : o.doc.route?.error ? { failed: true, error: o.doc.route.error, requestBytes: o.doc.route.requestBytes ?? null } : null,

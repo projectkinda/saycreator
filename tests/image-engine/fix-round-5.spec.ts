@@ -226,8 +226,9 @@ test('a pill, caption or sub that repeats the headline is taken out (a trim, nev
   expect(r.dr.layouts, 'a pill that repeats the headline becomes a plain statement (a statement card when the next slide is already a statement)').toEqual(['statement-card', 'statement', 'cta-button']);
   expect(r.dr.fields[0]).toEqual(['headline']);
   expect(r.dr.fields[1], 'a caption that adds something stays').toEqual(['headline', 'caption']);
-  expect(r.dr.fields[2], 'the repeating sub goes, the button stays').toEqual(['headline', 'button']);
-  expect(r.dr.trims).toBe(2);
+  // Round M: "Back it today, early backers save" adds "early backers save" to the headline "Back it today": it is not a repeat, so it stays (a line goes only when it adds nothing)
+  expect(r.dr.fields[2], 'a sub that adds words of its own stays').toEqual(['headline', 'button', 'sub']);
+  expect(r.dr.trims).toBe(1);
   expect(r.calls, 'no retry call').toBe(1);
   // Round C: the first slide is the plain statement the pill became, or the style's own cover form of it (Round 6: a cover is chosen per deck and style; style-7 gives cover-sticker)
   expect(r.first).toMatch(/^(statement|cover-[a-z-]+)$/);

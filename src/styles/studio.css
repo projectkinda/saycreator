@@ -366,3 +366,9 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
 /* Round I: the slide name in the phone-size warning selects that slide */
 .cr-slidelink { background: none; border: 0; padding: 0 2px; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; display: inline-flex; align-items: center; min-height: 40px; }
 .cr-slidelink:focus-visible { outline: 2px solid var(--ink, #111); outline-offset: 2px; }
+
+/* Round M: the sentences of the person's text that are on no slide */
+.cr-not-on-slides { margin: 0 0 var(--sp-2, 8px); }
+.cr-not-on-slides p { margin: 0; }
+.cr-not-on-slides summary { cursor: pointer; min-height: 40px; display: inline-flex; align-items: center; }
+.cr-not-on-slides ul { margin: 4px 0 0; padding-left: 18px; }
