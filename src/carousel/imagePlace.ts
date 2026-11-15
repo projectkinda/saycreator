@@ -21,6 +21,8 @@ export const pinnedPicture = (sp: { pin?: { picture?: string }; named?: string; 
 const cost = (p: PicInfo, aspect: number, accepts: string[], orientation: string, maxAspect?: number) => Math.abs(Math.log(picAspect(p) / aspect)) + (accepts.includes(picOrientation(p)) && !(maxAspect && picAspect(p) > maxAspect) ? 0 : 5) + (picOrientation(p) === orientation ? 0 : 0.15);
 /** How far a picture's shape may be from its slot's before the cover crop is called bad: ln(ratio) 0.6 keeps at least 55% of the picture. */
 export const CROP_OK = 0.6;
+/** Round N: the layouts that always draw a tall screenshot under about 22% of the slide's width (out/round-n/tall-screenshot.md): the placement and the picker never give them one. */
+export const TALL_SHOT_SMALL: readonly string[] = ['list-under-band'];
 /** A picture this tall (aspect 0.5 or less, like a phone screenshot) shows its top and goes to a one-picture layout. */
 export const TALL = 0.5;
 /** The multi-picture layouts that take a tall picture in a tile (it shows its top). */
@@ -44,7 +46,9 @@ export function placeOne(layout: string, variant: 0 | 1, free0: PicInfo[]): Fiel
   // a very tall picture (a phone screenshot) is never cut into one of several small slots: it goes to a one-picture layout (a split panel)
   // a screenshot is never placed under text (a title over a photo); a very tall picture is never cut into one of several small slots
   const free1 = TEXT_OVER_PICTURE.includes(layout) ? free0.filter((p) => !isScreenshot(p)) : free0;
-  const free = slots.length >= 2 && !TALL_OK.has(layout) ? free1.filter((p) => picAspect(p) > TALL) : free1;
+  const free2 = slots.length >= 2 && !TALL_OK.has(layout) ? free1.filter((p) => picAspect(p) > TALL) : free1;
+  // Round N: a tall screenshot (0.62 wide or narrower) is drawn at 21 to 23% of the slide's width in list-under-band, too small to read: never placed there
+  const free = TALL_SHOT_SMALL.includes(layout) ? free2.filter((p) => !(isScreenshot(p) && picAspect(p) <= 0.62)) : free2;
   const need = imagesNeeded(layout);
   const fill = (pool: PicInfo[]): { picked: string[]; fields: Fields } => {
     const left = [...pool];

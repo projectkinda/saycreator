@@ -62,6 +62,7 @@ import { listCutouts, putCutout, type CutoutRecord } from '../image-engine/cutou
 import type { AddFiles } from './PhotoControls';
 import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, syncPictureCrops, useLibraryVersion, type PictureMeta } from './photoLibrary';
 import { drawnSize } from './letterbox';
+import { TALL_SHOT_REFUSAL, isTallShot, tallShotTooSmall } from './photoShape';
 import { SlideCard, type EditTab, type SlideView } from './SlideCard';
 import { SlotOverlay } from './PictureSlots';
 import { IMAGE_LAYOUT_IDS } from './layouts/images';
@@ -1053,6 +1054,9 @@ export default function CarouselPage() {
     if (choice === 'auto' && spec.pin?.picture === undefined) return r.note;
     const redraw = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, { layout: r.spec.layout as LayoutId, fields: r.spec.fields, accents: r.spec.accents, pin: { picture: r.spec.pin?.picture, auto: r.spec.pin?.auto } });
     if (!redraw.ok) return plainWords(`Could not redraw slide ${i + 1}: ${redraw.reasons[0]} The slide is unchanged.`);
+    // Round N: a tall screenshot the layout draws under 22% of the slide's width is refused (measured on the slide as drawn); the slide is unchanged
+    const picked = photoInfos.find((p) => p.id === choice);
+    if (picked && isTallShot(picked) && tallShotTooSmall(redraw.slide.built?.images, picked.id)) return TALL_SHOT_REFUSAL;
     const bad = putSlide(i, redraw, choice === 'auto' ? `Slide ${i + 1}: picture on Auto` : choice === 'none' ? `Slide ${i + 1}: no picture` : `Slide ${i + 1}: pick a picture`);
     return bad ? plainWords(bad) : r.note;
   };

@@ -5,7 +5,7 @@
 //  - the same picture may be picked on two slides.
 import type { Look } from './designed';
 import type { SlideSpec } from './designLibrary';
-import { withoutImages } from './imagePlace';
+import { TALL_SHOT_SMALL, withoutImages } from './imagePlace';
 import { ALTERNATIVES, fieldsFor, keepsText, targetsFor } from './picturePass';
 import type { Fields } from './layouts';
 import { fittingPictures, hasEnoughPictures, imageSlotsOf, imagesNeeded, makeRef, parseRef, type PicInfo } from './layouts/images';
@@ -73,7 +73,7 @@ export function pickPicture(spec: SlideSpec, index: number, choice: PickChoice, 
     }
   }
   // the slide's own layout takes the picture (its shape, and not under text for a screenshot): put it in the first picture slot, the others keep what they have
-  if (slots.length && !LIST_SLIDES.includes(spec.layout) && fittingPictures(spec.layout, [pic]) === 1 && !avoid.includes(spec.layout)) {
+  if (slots.length && !LIST_SLIDES.includes(spec.layout) && fittingPictures(spec.layout, [pic]) === 1 && !avoid.includes(spec.layout) && !(pic.content === 'screenshot' && pic.width / pic.height <= 0.62 && TALL_SHOT_SMALL.includes(spec.layout))) {
     const have = Object.keys(spec.fields).filter((k) => parseRef(spec.fields[k])).length;
     if (imagesNeeded(spec.layout) <= 1 || have >= imagesNeeded(spec.layout)) {
       return { ok: true, spec: pinned({ ...spec, fields: { ...spec.fields, [slots[0].field]: ref } as Fields }), note: 'This picture is on the slide.' };
@@ -82,8 +82,10 @@ export function pickPicture(spec: SlideSpec, index: number, choice: PickChoice, 
   // another layout that shows every word and takes this picture
   const look1: Look = { ...look, images: [pic], hasPhoto: true };
   const base: SlideSpec = { ...spec, fields: withoutImages(spec.fields) as Fields };
+  const tallShot = pic.content === 'screenshot' && pic.width / pic.height <= 0.62;
   for (const to of candidatesFor(spec.layout, index, pic)) {
     if (avoid.includes(to) && to !== spec.layout) continue;
+    if (tallShot && TALL_SHOT_SMALL.includes(to)) continue; // Round N: drawn too small to read there
     if (imagesNeeded(to) !== 1 || !hasEnoughPictures(to, [pic])) continue;
     const f = to === spec.layout ? base.fields : fieldsFor(base, to, look1);
     if (!f || !keepsText(base.fields, f)) continue;

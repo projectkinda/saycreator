@@ -5,10 +5,10 @@
 // rule; a slide whose picture or layout the person chose is never changed.
 import type { Look } from './designed';
 import type { SlideSpec } from './designLibrary';
-import { withoutImages } from './imagePlace';
+import { TALL_SHOT_SMALL, withoutImages } from './imagePlace';
 import { fieldsFor, keepsText, type PictureSwap } from './picturePass';
 import { containRect, coverLoss, needsContain, PHOTO_CROP_BUDGET } from './layouts/pictureFit';
-import { hasEnoughPictures, imageSlotsOf, imagesNeeded, isScreenshot, makeRef, parseRef, type PicInfo } from './layouts/images';
+import { TEXT_OVER_PICTURE, hasEnoughPictures, imageSlotsOf, imagesNeeded, isScreenshot, makeRef, parseRef, type PicInfo } from './layouts/images';
 import type { Fields } from './layouts';
 import type { PlanImage } from './layouts/types';
 
@@ -22,6 +22,23 @@ export const SHAPE_TIE = 0.03;
 export const SHAPE_TARGETS = ['split-half', 'title-over-photo', 'headline-body-image', 'photo-full-caption', 'list-under-band', 'list-beside-picture', 'photo-cover', 'cover-art', 'art-side-text'];
 /** A photo drawn whole that still covers 55% of its slot moves only to a layout that fills its slot with it at least this much larger. */
 export const SHAPE_BIGGER = 1.15;
+/** Round N part 4: a screenshot this narrow (width / height) is a tall screenshot (a phone screen). */
+export const TALL_SHOT_ASPECT = 0.62;
+/** Round N part 4: a tall screenshot drawn narrower than this share of the slide's width is too small to read: the code never places it so, the picker refuses it. */
+export const TALL_SHOT_MIN = 0.22;
+/** Round N part 4: the layouts a slide with a tall screenshot may move to (the measurement decides; never a layout with text over the picture). */
+export const TALL_SHOT_TARGETS = ['phone-frame', 'split-half', 'list-beside-picture', 'art-side-text', 'headline-body-image', 'photo-full-caption', 'cover-art', 'photo-cover', 'portrait-closing'];
+/** Round N part 4: is this picture a tall screenshot? */
+export const isTallShot = (p: { width: number; height: number; content?: string }): boolean => isScreenshot(p) && p.width / p.height <= TALL_SHOT_ASPECT;
+/** Round N part 4: is the picture `id` drawn under 22% of the slide's width among a built slide's pictures? */
+export const tallShotTooSmall = (images: DrawnPicture[] | undefined, id: string): boolean => {
+  const fit = photoFitOf(images, id, '', 0);
+  return !!fit && fit.widthShare < TALL_SHOT_MIN;
+};
+/** The message the picker shows when it refuses a tall screenshot for a layout that draws it too small. */
+export const TALL_SHOT_REFUSAL = 'A tall screenshot is too small in this layout; try Split or Phone frame.';
+/** The marker of a slide the rule left with no picture (a tall screenshot it could not draw large enough anywhere): the placement leaves the slide as it is. */
+export const SHAPED_NONE = 'none';
 /** At most this many slides moved by this rule may end up in the same layout. */
 export const SHAPE_SAME_MAX = 2;
 
@@ -36,21 +53,25 @@ export interface PhotoFit {
   crop: number;
   /** Drawn whole, on a blurred copy of itself. */
   whole: boolean;
+  /** Round N part 4: the share of the slide's width the picture is drawn at (a tall screenshot needs at least 22%). */
+  widthShare: number;
 }
 const SLIDE = 1080 * 1350;
+/** A picture as a built slide holds it (its slot after the chrome moved it). */
+export type DrawnPicture = Pick<PlanImage, 'src' | 'x' | 'y' | 'w' | 'h'> & { rx?: number; circle?: boolean };
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 /** How the photo `id` is drawn among the built slide's pictures (their slots after the chrome moved them), measured from the geometry the engine draws. Null when it is not there. */
-export function photoFitOf(images: PlanImage[] | undefined, id: string, layout: string, variant: 0 | 1): PhotoFit | null {
+export function photoFitOf(images: DrawnPicture[] | undefined, id: string, layout: string, variant: 0 | 1): PhotoFit | null {
   const p = (images ?? []).find((q) => parseRef(q.src)?.id === id);
   const ref = p ? parseRef(p.src) : null;
   if (!p || !ref || !ref.w || !ref.h || p.circle) return null;
   const slot = p.w * p.h;
   if (needsContain(p, ref)) {
     const c = containRect(p, ref, p.rx);
-    return { layout, variant, slotShare: r3((c.w * c.h) / slot), slideShare: r3((c.w * c.h) / SLIDE), crop: 0, whole: true };
+    return { layout, variant, slotShare: r3((c.w * c.h) / slot), slideShare: r3((c.w * c.h) / SLIDE), crop: 0, whole: true, widthShare: r3(c.w / 1080) };
   }
   const l = coverLoss(p, ref);
-  return { layout, variant, slotShare: 1, slideShare: r3(slot / SLIDE), crop: r3(l ? Math.max(l.w, l.h) : 0), whole: false };
+  return { layout, variant, slotShare: 1, slideShare: r3(slot / SLIDE), crop: r3(l ? Math.max(l.w, l.h) : 0), whole: false, widthShare: r3(p.w / 1080) };
 }
 /** The rule that keeps the writer's layout: the photo fills its slot within the budget, or drawn whole it still covers 55% of the slot. */
 export const looksRight = (f: PhotoFit): boolean => (f.whole ? f.slotShare >= SHAPE_KEEP_SHARE : f.crop <= PHOTO_CROP_BUDGET + 1e-6);
@@ -82,6 +103,51 @@ export async function shapePass(specs0: SlideSpec[], look: Look, draw: ShapeDraw
   if (!pics.length) return { specs, swaps, rows, moved: [] };
   const movedTo: Record<string, number> = {};
   const moved: number[] = [];
+  // Round N part 4: a tall screenshot drawn under 22% of the slide's width moves to the layout that draws it widest (every word kept, never under text); when none draws it at 22% or more,
+  // the slide keeps its text-only form (the code does not put a screenshot where it cannot be read)
+  const tallShot = async (i: number, sp: SlideSpec, pic: PicInfo, refStr: string): Promise<ShapeRow | null> => {
+    const rot0 = rotate(specs);
+    const v0 = rot0.variants[i] ?? 0;
+    const im0 = await draw(sp, i, v0, specs);
+    const before = im0 ? photoFitOf(im0, pic.id, sp.layout, v0) : null;
+    if (!before) return null;
+    if (before.widthShare >= TALL_SHOT_MIN && !TALL_SHOT_SMALL.includes(sp.layout)) return { slide: i + 1, picture: pic.id, before, after: before, why: `kept: the tall screenshot is drawn at ${Math.round(before.widthShare * 100)}% of the slide's width` };
+    const base: SlideSpec = { ...sp, fields: withoutImages(sp.fields) as Fields };
+    const look1: Look = { ...look, images: [pic], hasPhoto: true };
+    let pick: { fit: PhotoFit; spec: SlideSpec } | null = null;
+    for (const to of TALL_SHOT_TARGETS) {
+      if (to === sp.layout || TEXT_OVER_PICTURE.includes(to) || imagesNeeded(to) !== 1 || imageSlotsOf(to).length !== 1 || (movedTo[to] ?? 0) >= SHAPE_SAME_MAX) continue;
+      const f = fieldsFor(base, to, look1);
+      if (!f || !keepsText(base.fields, f)) continue;
+      const trial = specs.map((s, k) => (k === i ? ({ ...s, layout: to } as SlideSpec) : s));
+      const rot = rotate(trial);
+      if ([...rot.repeats.keys()].some((k) => !rot0.repeats.has(k))) continue;
+      const vr = (rot.variants[i] ?? 0) as 0 | 1;
+      for (const v of [vr, (1 - vr) as 0 | 1]) {
+        if (!hasEnoughPictures(to, [pic], v)) continue;
+        const slot = imageSlotsOf(to, v)[0];
+        const pin = v === vr ? sp.pin : { ...sp.pin, variant: v };
+        const spec: SlideSpec = { ...sp, layout: to, fields: { ...withoutImages(f), [slot.field]: refStr } as Fields, density: undefined, variant: undefined, shaped: pic.id, pictureUpgrade: undefined, ...(pin ? { pin } : {}) };
+        const im = await draw(spec, i, v, trial.map((s, k) => (k === i ? spec : s)));
+        const fit = im ? photoFitOf(im, pic.id, to, v) : null;
+        if (fit && fit.widthShare >= TALL_SHOT_MIN && (!pick || fit.widthShare > pick.fit.widthShare)) pick = { fit, spec };
+      }
+    }
+    const was = `the tall screenshot was drawn at ${Math.round(before.widthShare * 100)}% of the slide's width in "${sp.layout}"`;
+    moved.push(i);
+    if (pick) {
+      const p = pick;
+      movedTo[p.spec.layout] = (movedTo[p.spec.layout] ?? 0) + 1;
+      const why = `${was}; "${p.spec.layout}" draws it at ${Math.round(p.fit.widthShare * 100)}%, every word kept`;
+      swaps.push({ slide: i + 1, from: sp.layout, to: p.spec.layout, why: 'tall screenshot: ' + why });
+      specs = specs.map((s, k) => (k === i ? p.spec : s));
+      return { slide: i + 1, picture: pic.id, before, after: p.fit, why: 'moved: ' + why };
+    }
+    const why = `${was}, and no layout that keeps every word draws it at 22% or more: the slide keeps its text-only form`;
+    swaps.push({ slide: i + 1, from: sp.layout, to: sp.layout, why: 'tall screenshot: ' + why });
+    specs = specs.map((s, k) => (k === i ? { ...base, shaped: SHAPED_NONE } : s));
+    return { slide: i + 1, picture: pic.id, before, after: { ...before, slotShare: 0, slideShare: 0, widthShare: 0 }, why: 'removed: ' + why };
+  };
   for (let i = 0; i < specs.length; i++) {
     const sp = specs[i];
     // the person's choices: a picture they picked (or none), a layout they chose in the Layout tab
@@ -90,6 +156,11 @@ export async function shapePass(specs0: SlideSpec[], look: Look, draw: ShapeDraw
     if (slots.length !== 1 || imagesNeeded(sp.layout) !== 1) continue;
     const ref = parseRef(sp.fields[slots[0].field]) ?? parseRef(sp.fields[imageSlotsOf(sp.layout, 1)[0]?.field ?? '']);
     const pic = ref ? pics.find((p) => p.id === ref.id) : undefined;
+    if (ref && pic && isTallShot(pic) && ref.z <= 1) {
+      const t = await tallShot(i, sp, pic, String(sp.fields[slots[0].field]));
+      if (t) rows.push(t);
+      continue;
+    }
     if (!ref || !pic || isScreenshot(pic) || !ref.photo || ref.z > 1) continue;
     const rot0 = rotate(specs);
     const v0 = rot0.variants[i] ?? 0;
