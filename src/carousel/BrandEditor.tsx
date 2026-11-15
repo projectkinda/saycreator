@@ -137,20 +137,29 @@ export function BrandEditor({ doc, styleName, brand, others, onSave, onDelete, o
           <h3 className="small cr-be-label">What we adjusted</h3>
           <div data-testid="brand-adjusted" aria-live="polite">
             {!mainOk ? <p className="small muted">Add a main colour to see this.</p> : prev && merged.length === 0 ? <p className="small">Your colours work as they are.</p> : (
-              <ul className="cr-be-adj">
-                {merged.map((m) => (
-                  <li key={m.text} data-kind={m.kind}>
-                    <span className="small">{m.text}</span>
-                    {(m.detail || (m.from && m.to)) && (
-                      <details className="cr-be-details" data-testid="brand-details">
-                        <summary className="small">Details</summary>
-                        {m.from && m.to && HEXISH.test(m.from) && HEXISH.test(m.to) && <span className="cr-be-pair" aria-label={`Your colour ${m.from}, what we use ${m.to}`}>{swatch(m.from)}<span aria-hidden="true">&rarr;</span>{swatch(m.to)}</span>}
-                        {m.detail && <p className="small muted cr-be-detail">{m.detail}</p>}
-                      </details>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="cr-be-adj">
+                  {merged.map((m) => (
+                    <li key={m.text} data-kind={m.kind}>
+                      <span className="small">{m.text}</span>
+                    </li>
+                  ))}
+                </ul>
+                {/* Round J: ONE Details fold for the whole list (closed by default): the colour codes and the ratios, line by line, for a designer */}
+                {merged.some((m) => m.detail || (m.from && m.to)) && (
+                  <details className="cr-be-details" data-testid="brand-details">
+                    <summary className="small">Details</summary>
+                    <ul className="cr-be-adj cr-be-detail-list">
+                      {merged.filter((m) => m.detail || (m.from && m.to)).map((m) => (
+                        <li key={m.text} data-kind={m.kind}>
+                          {m.detail && <p className="small muted cr-be-detail">{m.detail}</p>}
+                          {m.from && m.to && HEXISH.test(m.from) && HEXISH.test(m.to) && <span className="cr-be-pair" aria-label={`Your colour ${m.from}, what we use ${m.to}`}>{swatch(m.from)}<span aria-hidden="true">&rarr;</span>{swatch(m.to)}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </>
             )}
           </div>
         </div>

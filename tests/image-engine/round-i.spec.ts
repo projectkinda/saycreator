@@ -82,11 +82,13 @@ test.describe('at 390 px', () => {
     await page.evaluate(() => { const d = document.querySelector('[data-testid=brand-editor]') as HTMLElement; d.scrollTop = Math.max(0, d.scrollTop - 40); });
     await page.waitForTimeout(200);
     const closed = await page.screenshot();
+    // Round J: ONE Details fold for the whole list
+    await expect(adj.locator('details')).toHaveCount(1);
     const first = adj.locator('details').first();
     await first.locator('summary').click();
-    await expect(first.locator('.cr-be-detail')).toBeVisible();
-    await expect(first.locator('.cr-be-detail')).toContainText(/#[0-9A-F]{6}/i);
-    await expect(first.locator('.cr-be-detail')).toContainText(/\d:1/);
+    await expect(first.locator('.cr-be-detail').first()).toBeVisible();
+    await expect(first.locator('.cr-be-detail').first()).toContainText(/#[0-9A-F]{6}/i);
+    await expect(first.locator('.cr-be-detail').first()).toContainText(/\d:1/);
     const open = await page.screenshot();
     for (const sm of await adj.locator('summary').all()) if (!(await sm.evaluate((e) => (e.parentElement as HTMLDetailsElement).open))) await sm.click();
     await expect(adj.locator('.cr-be-pair').first(), 'a line that changed a colour shows from and to swatches').toBeVisible();

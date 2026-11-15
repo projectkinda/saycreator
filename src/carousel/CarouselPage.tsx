@@ -1536,7 +1536,7 @@ export default function CarouselPage() {
           </div>
         </div>
         <p className="small muted" role="status" aria-live="polite">
-          {exporting || (proj.saveFailed ? 'This browser would not save the project. Download your slides before you leave.' : proj.saved)}
+          {exporting || (proj.saveFailed ? 'This browser would not save the project. Download your slides before you leave.' : proj.saved && !/[.!?]$/.test(proj.saved) ? proj.saved + '.' : proj.saved)}
           {hasWork && ready && !exporting && failing === 0 && ` ${warned === 0 ? 'All slides pass the phone-size check.' : `${slides.length - warned} slide${slides.length - warned === 1 ? '' : 's'} pass, ${warned} ${warned === 1 ? 'has' : 'have'} a warning.`}`}
           {hasWork && ready && !exporting && failing > 0 && (
             <span className="cr-problem" data-testid="phone-warning"> {failingText}{' '}
