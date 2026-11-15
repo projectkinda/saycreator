@@ -190,7 +190,8 @@ export async function redrawLibrarySlide(lib: LibraryReport, look: Look, handle:
   const d = await drawOne(spec, variant, style, { handle, index: i, total: lib.plan.specs.length, cut, invert, density, ...(lib.grounds?.[i] != null ? { ground: lib.grounds[i]! } : {}) });
   if (!d.built) return { ok: false, reasons: d.problems };
   // (a picture the person pinned stays pinned through any later redraw of the slide: the pin is merged, never replaced)
-  const pinObj = { ...cur.pin, ...ch.pin, variant, cut: d.cut, invert: d.invert ? invert || 'full' : false } as NonNullable<SlideSpec['pin']>;
+  // Round N: a layout the person chose in the Layout tab is theirs: the photo shape rule never moves it
+  const pinObj = { ...cur.pin, ...ch.pin, variant, cut: d.cut, invert: d.invert ? invert || 'full' : false, ...(ch.layout && ch.layout !== cur.layout ? { layout: true as const } : {}) } as NonNullable<SlideSpec['pin']>;
   for (const k of Object.keys(pinObj) as (keyof typeof pinObj)[]) if (pinObj[k] === undefined) delete pinObj[k];
   const pinned: SlideSpec = { ...spec, pin: pinObj };
   const specs = lib.plan.specs.map((s, k) => (k === i ? pinned : s));

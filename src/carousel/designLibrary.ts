@@ -25,6 +25,7 @@ import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap 
 import { settleScrim } from './scrim';
 import { namePass } from './pictureNames';
 import { heroPass, picturePass, screenshotPass, separatePictureRuns, type PictureSwap } from './picturePass';
+import { shapePass, type ShapeRow } from './photoShape';
 import { TONES } from './writerPrompt';
 import { inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
 
@@ -508,6 +509,8 @@ export function flavourCoverLine(fl: NonNullable<LayoutStyle['flavour']>): strin
  * With it on, the deck may grow to KEEP_EVERY_SENTENCE_MAX slides when the text needs the room (the app takes 3 to 10).
  */
 export const KEEP_EVERY_SENTENCE = true;
+/** Round N: the photo shape rule (photoShape.ts) is on. A switch the before/after comparison turns off; the app never does. */
+export const photoShapeRule = { on: true };
 export const KEEP_EVERY_SENTENCE_MAX = 9;
 export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutStyle, brief: string, n: number, handle?: string): string {
   const keep = KEEP_EVERY_SENTENCE && req.format === 'carousel';
@@ -574,13 +577,15 @@ export interface SlideSpec {
   /** A slide of the person's own script whose text is longer than the layout can show: its words are kept exactly as written and the code never trims them (it is drawn with the style's template until the text is shortened). */
   keepAsWritten?: boolean;
   /** What the person chose for this slide in the layout picker: the deck rotation and the style toggles keep it. */
-  pin?: { variant?: 0 | 1; cut?: Cut; invert?: false | 'full' | 'tint'; /** The picture picker: "none", or the id of the picture the person chose (their choice is never moved or removed). */ picture?: string; /** The slide as the deck's own placement made it, kept while a picture is pinned so "Auto" can bring it back. */ auto?: { layout: string; fields: Fields; accents: string[] } };
+  pin?: { variant?: 0 | 1; cut?: Cut; invert?: false | 'full' | 'tint'; /** The picture picker: "none", or the id of the picture the person chose (their choice is never moved or removed). */ picture?: string; /** The slide as the deck's own placement made it, kept while a picture is pinned so "Auto" can bring it back. */ auto?: { layout: string; fields: Fields; accents: string[] }; /** Round N: the person chose this slide's layout in the Layout tab: no automatic rule moves it. */ layout?: true };
   /** A text slide the code turned into a picture layout because a picture was left unused: the pictures the writer's own picture layouts need are placed first. */
   pictureUpgrade?: boolean;
   /** Round 18: the writer's suggestion for a NAMED picture (its number, 1-based). The code keeps it only when the layout rules allow it. */
   hint?: number;
   /** Round 18: the id of the NAMED picture the code put on this slide by its name; the placement leaves the slide alone (the person's own pick is `pin.picture`, which wins). */
   named?: string;
+  /** Round N: the id of the photo the shape rule kept on this slide when it moved the slide to a layout that shows the photo larger; the placement leaves it there. */
+  shaped?: string;
 }
 export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 export function toSpec(raw: unknown): SlideSpec | null {
@@ -1229,6 +1234,8 @@ export interface LibraryReport {
   flavour?: { swaps: FlavourSwap[]; kept: FlavourKept[] };
   /** Slides changed to a picture layout because pictures were left unused (slide, from, to, why). */
   pictureSwaps?: PictureSwap[];
+  /** Round N: every photo slide the shape rule looked at: the layout, the share of its slot the photo covers and the crop, before and after. */
+  photoShape?: ShapeRow[];
   /** Round 15: slides that failed one of the phone checks when drawn and were drawn again by the code (never a model call): what failed, and what the slide is now. */
   /** Round 16: one row per writer call: what was sent and what it cost (null where the provider does not say). */
   writes?: { call: number; promptChars: number; promptBytes: number; requestBytes: number | null; numTurns: number | null; durationApiMs: number | null; effort: string | null; inputTokens: number | null; outputTokens: number | null; seconds: number }[];
@@ -1382,6 +1389,38 @@ function buildRetry(first: string, specs: SlideSpec[], why: Map<number, string[]
 }
 
 /** The person's own script, already turned into a plan by code (see libraryFromScript.ts): the deck is drawn from it with NO model call and none of the writer-only rules (generic closing, text trims). */
+/** The deck's rotation: variants and cuts over the whole deck. A layout the rotation would change (repeated or over-used) is a problem for the retry. */
+export function deckRotation(list: SlideSpec[], look: Look, style: LayoutStyle) {
+  const ids = list.map((s) => s.layout as LayoutId);
+  const rv = rotateVariants(ids.map((layout) => ({ layout: layoutDef(layout) ? layout : ('statement' as LayoutId) })), { photo: !!look.hasPhoto, flavour: style.flavour });
+  const count: Record<string, number> = {};
+  const variants = list.map((s, i) => {
+    const same = rv[i].layout === s.layout;
+    const c = count[s.layout] ?? 0;
+    count[s.layout] = c + 1;
+    return same ? rv[i].variant : ((c % 2) as 0 | 1);
+  });
+  list.forEach((s, i) => { if (s.pin?.variant !== undefined) variants[i] = s.pin.variant; }); // a variant the preset (closing) or the person pinned
+  const repeats = new Map<number, string>();
+  rv.forEach((r, i) => layoutDef(list[i].layout) && r.layout !== list[i].layout && repeats.set(i, r.note || `the layout "${list[i].layout}" repeats or is over-used`));
+  const rc = rotateCuts(ids.map((layout) => ({ layout: layoutDef(layout) ? layout : ('statement' as LayoutId) })), style, { suggest: list.map((s) => ({ cut: s.cut })) });
+  return { variants, repeats, cuts: rc };
+}
+/**
+ * Round N: the photo shape rule on a whole deck (photoShape.ts): the pictures are placed as the deck places them, each photo slide is measured as drawn, and a slide moves only to a layout that
+ * shows its photo larger with every word kept. The slides that do not move are returned as they came (the placement puts their pictures in again). No model call.
+ */
+export async function applyPhotoShape(specs0: SlideSpec[], look: Look, style: LayoutStyle, handle: string, ctx?: CtaCtx): Promise<{ specs: SlideSpec[]; swaps: PictureSwap[]; rows: ShapeRow[] }> {
+  if (!look.images?.length) return { specs: specs0, swaps: [], rows: [] };
+  const placed = placeImages(specs0, deckRotation(specs0, look, style).variants, look.images);
+  const sh = await shapePass(placed, look, async (sp, i, v, deck) => {
+    if (slideProblems(sp, look, ctx).length) return null;
+    const rc = deckRotation(deck, look, style).cuts[i];
+    const d = await drawOne(sp, v, style, { handle, index: i, total: deck.length, cut: rc.cut, invert: rc.invert, density: sp.density ?? 'normal', ground: rc.ground });
+    return d.built && !d.problems.length ? d.built.images ?? [] : null;
+  }, (deck) => deckRotation(deck, look, style));
+  return { specs: specs0.map((s, k) => (sh.moved.includes(k) ? sh.specs[k] : s)), swaps: sh.swaps, rows: sh.rows };
+}
 export interface OwnScript { title: string; specs: SlideSpec[]; script: CarouselScript; /** Per slide: 'simple' = the simple (prose) layout because the text is long; 'kept' = no layout fits, the words are kept and the slide is drawn with the style's template. */ marks?: ('simple' | 'kept' | null)[] }
 export async function designLibraryDeck(req: WriteRequest, look: Look, handle: string, p: WriteProvider, signal: AbortSignal, onPhase: (ph: 'writing' | 'retrying') => void = () => undefined, own?: OwnScript): Promise<GenerateResult & { designed: Designed }> {
   const t0 = performance.now();
@@ -1484,23 +1523,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     pictureSwaps.push(...hp.swaps);
   }
 
-  /** The deck's rotation: variants and cuts over the whole deck. A layout the rotation would change (repeated or over-used) is a problem for the retry. */
-  const rotate = () => {
-    const ids = specs.map((s) => s.layout as LayoutId);
-    const rv = rotateVariants(ids.map((layout) => ({ layout: layoutDef(layout) ? layout : ('statement' as LayoutId) })), { photo: !!look.hasPhoto, flavour: style.flavour });
-    const count: Record<string, number> = {};
-    const variants = specs.map((s, i) => {
-      const same = rv[i].layout === s.layout;
-      const c = count[s.layout] ?? 0;
-      count[s.layout] = c + 1;
-      return same ? rv[i].variant : ((c % 2) as 0 | 1);
-    });
-    specs.forEach((s, i) => { if (s.pin?.variant !== undefined) variants[i] = s.pin.variant; }); // a variant the preset (closing) or the person pinned
-    const repeats = new Map<number, string>();
-    rv.forEach((r, i) => layoutDef(specs[i].layout) && r.layout !== specs[i].layout && repeats.set(i, r.note || `the layout "${specs[i].layout}" repeats or is over-used`));
-    const rc = rotateCuts(ids.map((layout) => ({ layout: layoutDef(layout) ? layout : ('statement' as LayoutId) })), style, { suggest: specs.map((s) => ({ cut: s.cut })) });
-    return { variants, repeats, cuts: rc };
-  };
+  const rotate = (list: SlideSpec[] = specs) => deckRotation(list, look, style);
   const ctaCtx: CtaCtx = { handle, text: req.text };
   // The closing is never a reason for a second writer call: a closing that breaks the rule (no real action in the text, so a generic label) is settled by the code below (ensureGenericClosing, settleClosing).
   const drawAll = async (only?: Set<number>, prev?: Map<number, Drawn>) => {
@@ -1524,6 +1547,14 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     arr.forEach((d, i) => d && out.set(i, d));
     return { out, rot };
   };
+  // Round N: a photo goes where it looks good: how much of its slot it fills and how much a crop cuts, measured on the slide as drawn (photoShape.ts), no model call
+  let shapeRows: ShapeRow[] = [];
+  if (look.images?.length && photoShapeRule.on) {
+    const sh = await applyPhotoShape(specs, look, style, handle, ctaCtx);
+    specs = sh.specs;
+    pictureSwaps.push(...sh.swaps);
+    shapeRows = sh.rows;
+  }
   let { out: drawn, rot } = await drawAll();
   const failing = () => new Map<number, string[]>([...drawn].filter(([, d]) => d.problems.length || !d.built).map(([i, d]) => [i, d.problems.length ? d.problems : ['it could not be drawn']]));
   const retries: LibraryReport['retries'] = [];
@@ -1743,6 +1774,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     grounds: rot.cuts.map((c) => c.ground ?? null),
     ...(fp ? { flavour: { swaps: fp.swaps, kept: fp.kept } } : {}),
     ...(pictureSwaps.length ? { pictureSwaps } : {}),
+    ...(shapeRows.length ? { photoShape: shapeRows } : {}),
     ...(repairs.length ? { repairs } : {}),
     ...(writes.length ? { writes } : {}),
     ...(pictureUse ? { pictureUse } : {}),
