@@ -22,8 +22,10 @@ test('writer prompt: prose aims for 35 to 50 words, 70 is the hard limit, a long
   expect(prose, 'one paragraph and a takeaway').toMatch(/ONE short paragraph plus a bold one-line takeaway/);
   expect(prose, 'the split rule').toMatch(/past 70 words, split it across two slides/);
   expect(prose, 'the split target layouts').toMatch(/statement, bullet-list or numbered-list slide/);
-  expect(prose, 'a fixed slide count: split only with room').toMatch(/split only when another slide of your plan can be spared/);
-  expect(prose, 'otherwise tighten to 70').toMatch(/tighten the prose to 70 words or fewer/);
+  // Round M: the writer keeps every sentence (KEEP_EVERY_SENTENCE): a long passage may take another slide, up to 9, and no sentence is cut to save a slide
+  expect(prose, 'a long passage may take another slide').toMatch(/You may add a slide for it, up to 9 slides in all; never cut a sentence to save a slide/);
+  expect(r.prompt, 'every sentence is kept').toMatch(/EVERY sentence of the person's text must appear on a slide\. Never drop a sentence\./);
+  expect(r.prompt, 'the slide count may grow to 9').toMatch(/Write 7 slides; when the person's text needs more room to keep every sentence, use up to 9 slides/);
   // the hard cap stays at 70 in the trim: a prose slide of 82 words is cut to 70 or fewer, one of 60 words is left alone
   expect(r.cap).toBe(70);
   expect(r.bigWords).toBeLessThanOrEqual(70);
