@@ -123,6 +123,19 @@ export function pictureUseOf(specs: PlaceableSpec[], pics: PicInfo[]): { uploade
       : '',
   };
 }
+/**
+ * Round Q: the pictures the person added that no slide uses, by the names they typed ("picture 3" when a picture has no name), for the plain line under the phone check and report.json.
+ * `metas`: the project's pictures in the order they were added (objects left out).
+ */
+export function picturesUnusedOf(specs: PlaceableSpec[], metas: { id: string; kind?: string; label?: string }[]): { count: number; total: number; names: string[] } {
+  const photos = metas.filter((m) => m.kind !== 'object');
+  const used = new Set(specs.flatMap((s) => usedIds(s.fields)));
+  const left = photos.filter((p) => !used.has(p.id));
+  return { count: left.length, total: photos.length, names: left.map((p) => p.label?.trim() || `picture ${photos.indexOf(p) + 1}`) };
+}
+/** The plain line: "2 of your 4 pictures were not used: motorbike on the street, sun rays through palms." (null when every picture is used or none was added). */
+export const picturesUnusedLine = (u: { count: number; total: number; names: string[] }): string | null =>
+  u.count && u.total ? `${u.count} of your ${u.total} picture${u.total === 1 ? '' : 's'} ${u.count === 1 ? 'was' : 'were'} not used: ${u.names.join(', ')}.` : null;
 /** The pictures no slide of the deck uses (candidates for a replacement), in the order they were added. */
 export const unusedPictures = (specs: PlaceableSpec[], pics: PicInfo[], exceptSlide = -1): PicInfo[] => {
   const used = new Set(specs.flatMap((s, i) => (i === exceptSlide ? [] : usedIds(s.fields))));

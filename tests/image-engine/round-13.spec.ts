@@ -121,7 +121,8 @@ test('B: report.json pictures: uploaded, used, unused, whyUnused, counted from t
   const line = page.getByTestId('pictures-unused');
   await expect(line).toBeVisible({ timeout: 30_000 });
   const text = (await line.textContent()) ?? '';
-  const m = /^(\d+) of 8 pictures are not on a slide\.$/.exec(text.trim());
+  // Round Q: the names of the unused pictures follow ("picture 3" when a picture has no name)
+  const m = /^(\d+) of your 8 pictures (?:was|were) not used: .+\.$/.exec(text.trim());
   expect(m, text).toBeTruthy();
   const rep: any = await page.evaluate(async () => {
     const RP: any = await import('/src/reference/report.ts');

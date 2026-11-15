@@ -122,7 +122,8 @@ test('the picker: a pick is pinned, no writer call, restyle and text edit keep i
   const unusedAll = photos.filter((p) => !usedAll.has(p)).length;
   await page.locator('.cr-wiz-steps button').nth(3).click();
   const line = page.getByTestId('pictures-unused');
-  if (unusedAll > 0) await expect(line).toHaveText(new RegExp(`^${unusedAll} of 3 pictures? (is|are) not on a slide\\.$`));
+  // Round Q: "N of your 3 pictures were not used: picture 2, picture 3." (the names the person typed; these pictures have none)
+  if (unusedAll > 0) await expect(line).toHaveText(new RegExp(`^${unusedAll} of your 3 pictures (was|were) not used: picture \\d(, picture \\d)*\\.$`));
   else await expect(line).toHaveCount(0);
   console.log('PICKER unused after the picks', unusedNow, 'at the end', unusedAll);
   const rep: any = await page.evaluate(async () => {

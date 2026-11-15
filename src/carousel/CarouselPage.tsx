@@ -35,7 +35,7 @@ import { ImagesField } from './ImagesField';
 import { UnusedPictures, type SlotChoice } from './UnusedPictures';
 import { prepareForSlots } from './imagePrep';
 import { imageSlotsOf, imagesNeeded, makeRef, parseRef, withCrop } from './layouts/images';
-import { dropMissing, unusedPictures, usedIds, withoutImages } from './imagePlace';
+import { dropMissing, picturesUnusedLine, picturesUnusedOf, unusedPictures, usedIds, withoutImages } from './imagePlace';
 import type { Fields, LayoutId } from './layouts';
 import type { SlotChange, SlotView } from './PictureSlots';
 import { setActiveReference as setActiveRef } from '../reference/active';
@@ -1035,6 +1035,7 @@ export default function CarouselPage() {
     const free = new Set(unusedPictures(specs, photoInfos).map((p) => p.id));
     return pictures.filter((p) => p.kind === 'photo' && free.has(p.id));
   })();
+  const unusedLine = doc.designed?.library?.plan ? picturesUnusedLine(picturesUnusedOf(doc.designed.library.plan.specs, pictures)) : null;
   /** For each picture, the slides (1-based) that show it now. */
   const pictureUsage: Record<string, number[]> = (() => {
     const out: Record<string, number[]> = {};
@@ -1603,8 +1604,9 @@ export default function CarouselPage() {
             </details>
           </div>
         )}
-        {hasWork && ready && !!doc.designed?.library?.plan && unusedList.length > 0 && (
-          <p className="small muted" data-testid="pictures-unused">{unusedList.length} of {pictures.filter((p) => p.kind === 'photo').length} pictures {unusedList.length === 1 ? 'is' : 'are'} not on a slide.</p>
+        {hasWork && ready && !!doc.designed?.library?.plan && unusedLine && (
+          // Round Q: the pictures the person added that no slide uses, by their names (recomputed from the deck: a pick, a restyle or a text edit changes it with no call); the picker places them
+          <p className="small cr-info" data-testid="pictures-unused">{unusedLine}</p>
         )}
 
             <PreviewStage overlay={previewSlots && previewSlots.length ? <SlotOverlay index={si} slots={previewSlots} open={slotOpen} onOpen={(field) => { setSlotOpen(field); if (field) { setEditTab('pictures'); setStep(4); setEditView(true); } }} onChange={(field, change) => slotChange(si, field, change)} /> : undefined} count={hasWork ? slides.length : 0} items={slides.map((_, i) => views[i] ?? { status: 'drawing' })} selected={sel} onSelect={setSel} onOpen={setOpen} />
