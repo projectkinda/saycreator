@@ -11,7 +11,7 @@ import { contentOr } from './pictureKind';
 
 const LABEL = { portrait: 'Portrait', landscape: 'Landscape', square: 'Square' } as const;
 
-export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, onLabel, disabled }: {
+export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, onLabel, onFullPicture, disabled }: {
   /** The project's pictures (photos only are listed here). */
   pictures: PictureMeta[];
   addFiles: AddFiles;
@@ -22,6 +22,8 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
   onContent?: (id: string, content: 'screenshot' | 'photo') => void;
   /** Round 18: sets what the person calls a picture ("What is this?", at most 40 characters). */
   onLabel?: (id: string, label: string) => void;
+  /** Round N: a photo with letterbox bars: keep the full picture (true) or draw it without its bars (false). */
+  onFullPicture?: (id: string, full: boolean) => void;
   disabled?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -80,6 +82,15 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
                 </label>
                 <span className="small" data-testid={`image-${i}-orientation`}>{LABEL[o]} · {p.width}×{p.height}</span>
                 <button type="button" className="chip-btn" data-testid={`image-${i}-content`} data-content={contentOr(p.content) === 'screenshot' ? 'screenshot' : 'photo'} aria-label={contentOr(p.content) === 'screenshot' ? `Image ${i + 1} is a screenshot. Switch it to a photo.` : `Image ${i + 1} is a photo. Switch it to a screenshot.`} title={contentOr(p.content) === 'screenshot' ? 'A screenshot never goes behind text. Click to make it a photo.' : 'Click if this is a screenshot: a screenshot never goes behind text.'} disabled={disabled || !onContent} onClick={() => onContent?.(p.id, contentOr(p.content) === 'screenshot' ? 'photo' : 'screenshot')}>{contentOr(p.content) === 'screenshot' ? 'Screenshot' : 'Photo'}</button>
+                {p.crop && contentOr(p.content) !== 'screenshot' && (
+                  <span className="cr-pic-bars small" data-testid={`image-${i}-bars`}>
+                    {p.fullPicture ? 'This picture has black bars; the full picture is used.' : 'Black bars were cropped off.'}
+                    <label className="cr-pic-bars-switch">
+                      <input type="checkbox" role="switch" aria-checked={!!p.fullPicture} checked={!!p.fullPicture} disabled={disabled || !onFullPicture} data-testid={`image-${i}-full`} onChange={(e) => onFullPicture?.(p.id, e.target.checked)} />
+                      <span>Keep the full picture</span>
+                    </label>
+                  </span>
+                )}
                 <span className="row-actions">
                   <button type="button" className="btn btn-outline btn-sm" disabled={i === 0} onClick={() => onMove(p.id, -1)} aria-label={`Move image ${i + 1} earlier`}>←</button>
                   <button type="button" className="btn btn-outline btn-sm" disabled={i === photos.length - 1} onClick={() => onMove(p.id, 1)} aria-label={`Move image ${i + 1} later`}>→</button>

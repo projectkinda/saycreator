@@ -60,7 +60,8 @@ import { CutoutEditor, type CutoutSaved } from './CutoutEditor';
 import { cutoutPicture, useCutoutIds } from './cutoutAction';
 import { listCutouts, putCutout, type CutoutRecord } from '../image-engine/cutout/cutoutStore';
 import type { AddFiles } from './PhotoControls';
-import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, useLibraryVersion, type PictureMeta } from './photoLibrary';
+import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, syncPictureCrops, useLibraryVersion, type PictureMeta } from './photoLibrary';
+import { drawnSize } from './letterbox';
 import { SlideCard, type EditTab, type SlideView } from './SlideCard';
 import { SlotOverlay } from './PictureSlots';
 import { IMAGE_LAYOUT_IDS } from './layouts/images';
@@ -449,7 +450,10 @@ export default function CarouselPage() {
   const pictures = doc.photos ?? [];
   // the writer and the picker are told only the pictures' metadata (id and pixel size), never the pixels
   // what the code knows about each picture: its size and whether it is a screenshot or a photo (metadata only, never pixels)
-  const photoInfos = pictures.filter((p) => p.kind === 'photo').map((p) => ({ id: p.id, width: p.width, height: p.height, content: contentOr(p.content), ...(p.label?.trim() ? { label: p.label.trim() } : {}) }));
+  // (Round N: a photo with letterbox bars is placed and drawn at the size of its picture without them, unless the person keeps the full picture)
+  const photoInfos = pictures.filter((p) => p.kind === 'photo').map((p) => ({ id: p.id, ...drawnSize({ ...p, content: contentOr(p.content) }), content: contentOr(p.content), ...(p.label?.trim() ? { label: p.label.trim() } : {}) }));
+  // the drawing knows which pictures are drawn without their bars (a change draws those pictures again)
+  useEffect(() => syncPictureCrops(pictures.map((p) => ({ ...p, content: contentOr(p.content) }))), [pictures]);
   // (a deck whose pictures are all screenshots still has pictures: picture layouts are allowed; only the person's-own-photo layout is refused, see slideProblems)
   const hasPhotoLook = pictures.length > 0;
   const libVersion = useLibraryVersion();
@@ -691,6 +695,27 @@ export default function CarouselPage() {
   /** The chip on a picture: switch it between "Screenshot" and "Photo" (what the code does with it follows). */
   const setLabel = (id: string, label: string) => setPhotos((before) => before.map((p) => (p.id === id ? { ...p, label: label.slice(0, 40) } : p)));
   const setContent = (id: string, content: 'screenshot' | 'photo') => setPhotos((before) => before.map((p) => (p.id === id ? { ...p, content } : p)));
+  /** Round N: "Keep the full picture" (letterbox bars kept) or not: the slides that show the picture are drawn again at its new shape (one undo step, no model call). */
+  const setFullPicture = async (id: string, full: boolean) => {
+    const nextMetas = pictures.map((p) => (p.id === id ? { ...p, fullPicture: full || undefined } : p));
+    setPhotos(() => nextMetas);
+    syncPictureCrops(nextMetas.map((p) => ({ ...p, content: contentOr(p.content) })));
+    const lib = doc.designed?.library;
+    const d0 = doc.designed;
+    const meta = nextMetas.find((p) => p.id === id);
+    if (!lib?.plan || !d0 || !meta) return;
+    const size = drawnSize({ ...meta, content: contentOr(meta.content) });
+    let touched = false;
+    const specs = lib.plan.specs.map((sp) => {
+      const fields = Object.fromEntries(Object.entries(sp.fields).map(([k, v]) => { const r = parseRef(v); if (!r || r.id !== id) return [k, v]; touched = true; return [k, makeRef({ id, w: size.width, h: size.height, fx: r.fx, fy: r.fy, z: r.z, ...(r.photo ? { photo: true } : {}) })]; }));
+      return { ...sp, fields } as typeof sp;
+    });
+    if (!touched) return;
+    const pack = presetPackFor(doc.style) ?? activeReference()?.pack ?? null;
+    const images = photoInfos.map((p) => (p.id === id ? { ...p, ...size } : p));
+    const out = await redrawLibraryDeck({ ...lib, plan: { ...lib.plan, specs } }, { pack, hasPhoto: hasPhotoLook, images, site: profileWebsite() }, options.handle.trim() || doc.script?.brand.handle || '');
+    apply(patches.setDesigned({ ...d0, slides: out.slides, layouts: out.layouts, library: out.library }, full ? 'Keep the full picture' : 'Crop off the black bars'));
+  };
   const moveImage = (id: string, dir: -1 | 1) =>
     setPhotos((before) => {
       const photos = before.filter((p) => p.kind === 'photo');
@@ -1598,7 +1623,7 @@ export default function CarouselPage() {
 
       <div hidden={editOn} className="cr-wiz-body">
         <div hidden={step !== 1} data-step="1">
-          <MakeIt part="content" {...makeProps} images={<ImagesField pictures={pictures} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onMove={moveImage} onContent={setContent} onLabel={setLabel} disabled={busy} />} scriptBox={scriptBox} scriptMode={scriptMode} onScriptMode={setScriptMode} />
+          <MakeIt part="content" {...makeProps} images={<ImagesField pictures={pictures} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onMove={moveImage} onContent={setContent} onLabel={setLabel} onFullPicture={(id, full) => void setFullPicture(id, full)} disabled={busy} />} scriptBox={scriptBox} scriptMode={scriptMode} onScriptMode={setScriptMode} />
           <div className="row-actions cr-wiz-nav"><button type="button" className="btn btn-dark btn-lg" onClick={() => goStep(2)}>Next: Format</button></div>
         </div>
         <div hidden={step !== 2} data-step="2">

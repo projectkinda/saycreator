@@ -286,6 +286,10 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
 .cr-pic-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 14px; }
 .cr-pic-item { display: flex; flex-direction: column; gap: 6px; max-width: 190px; }
 .cr-pic-item .cr-pic-name input { width: 100%; min-height: 40px; box-sizing: border-box; }
+/* Round N: the letterbox note and its switch on a picture row */
+.cr-pic-bars { display: flex; flex-direction: column; gap: 4px; }
+.cr-pic-bars-switch { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; cursor: pointer; }
+.cr-pic-bars-switch input { width: 20px; height: 20px; margin: 0; }
 @media (max-width: 520px) {
   .cr-pick-thumbs, .cr-pic-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .cr-pick { margin-inline: -12px; width: calc(100% + 24px); max-width: none; } /* the picker takes the room of the card's side padding: two 140 px thumbnails need about 290 px */

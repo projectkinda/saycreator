@@ -9,6 +9,7 @@ import type { ObjectInput } from '../image-engine/photo/objects';
 import type { PhotoInput } from '../image-engine/photo/zones';
 import { setPictureResolver } from '../reference/faithful';
 import { readContentOf, type ContentReading, type PictureContent } from './pictureKind';
+import { cropOfBars, findBars, type CropRect } from './letterbox';
 import { deletePicture, getPicture, isQuotaError, putPicture, storageRoom, type StoredPicture } from './photoStore';
 
 /** What the project remembers about a picture (the picture itself is in the browser's storage). */
@@ -23,6 +24,10 @@ export interface PictureMeta {
   content?: PictureContent;
   /** Round 18: what the person says this picture is ("What is this?", at most 40 characters). Saved with the project; the code (and the writer) place the picture on the slide whose words match it. */
   label?: string;
+  /** Round N: black letterbox bars found when the picture was added (a photo only): the part of the picture without them, in its own pixels. The file is never changed. */
+  crop?: CropRect;
+  /** Round N: the person switched on "Keep the full picture": the crop is not used. */
+  fullPicture?: boolean;
 }
 
 export const MAX_FILE_BYTES = 60 * 1024 * 1024;
@@ -40,6 +45,8 @@ export interface Prepared {
   notes: string[];
   /** What the pixels say: a screenshot or a photo, with the numbers (a photo kind only). */
   reading?: ContentReading;
+  /** Round N: the letterbox crop of a photo (null: no bars). */
+  crop?: CropRect | null;
 }
 
 const newId = () => 'p-' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3);
@@ -52,6 +59,22 @@ function readingOf(c: HTMLCanvasElement, w: number, h: number, png = false, name
     return { reading: readContentOf(c, w, h, png, name) };
   } catch {
     return {};
+  }
+}
+
+/** The letterbox crop of a picture (in its own pixels W x H), read on a small copy of the working canvas; null when it has no bars or cannot be read. */
+function barsCrop(c: HTMLCanvasElement, W: number, H: number): CropRect | null {
+  try {
+    const k = Math.min(1, 600 / Math.max(c.width, c.height));
+    const w = Math.max(8, Math.round(c.width * k)), h = Math.max(8, Math.round(c.height * k));
+    const s = document.createElement('canvas');
+    s.width = w;
+    s.height = h;
+    const g = s.getContext('2d', { willReadFrequently: true })!;
+    g.drawImage(c, 0, 0, w, h);
+    return cropOfBars(findBars(g.getImageData(0, 0, w, h).data, w, h), w, h, W, H);
+  } catch {
+    return null;
   }
 }
 
@@ -99,7 +122,10 @@ export async function prepare(file: File, kind: 'photo' | 'object'): Promise<Pre
     }
     const work = kind === 'photo' ? await canvasBlob(c, 'image/jpeg', 0.92) : await canvasBlob(c, 'image/png');
     if (kind === 'photo' && Math.min(width, height) < 700) notes.push(`"${file.name}" is small (${width} by ${height} pixels), so it will look soft on a full slide.`);
-    return { stored: { id: newId(), kind, name: file.name.replace(/\.[^.]+$/, '').slice(0, 60) || 'picture', original: file, work, width, height, workWidth: ww, workHeight: wh, addedAt: Date.now() }, notes, ...(kind === 'photo' ? readingOf(c, ww, wh, /png/i.test(file.type), file.name) : {}) };
+    const rd = kind === 'photo' ? readingOf(c, ww, wh, /png/i.test(file.type), file.name) : {};
+    // Round N: black letterbox bars, looked for on a copy at most 600 px on its long side; the crop is used only while the picture counts as a photo (never for a screenshot)
+    const crop = kind === 'photo' ? barsCrop(c, width, height) : null;
+    return { stored: { id: newId(), kind, name: file.name.replace(/\.[^.]+$/, '').slice(0, 60) || 'picture', original: file, work, width, height, workWidth: ww, workHeight: wh, addedAt: Date.now() }, notes, ...rd, ...(crop ? { crop } : {}) };
   } finally {
     bm.close();
   }
@@ -144,7 +170,7 @@ function toLive(p: StoredPicture, memoryOnly: boolean): Live {
 
 /** Adds a picture. Resolves with its meta, whether the browser kept it, and notes; rejects with a PictureError for an unusable file. */
 export async function addPicture(file: File, kind: 'photo' | 'object'): Promise<{ meta: PictureMeta; kept: boolean; notes: string[] }> {
-  const { stored, notes, reading } = await prepare(file, kind);
+  const { stored, notes, reading, crop } = await prepare(file, kind);
   let kept = true;
   try {
     await putPicture(stored);
@@ -154,6 +180,7 @@ export async function addPicture(file: File, kind: 'photo' | 'object'): Promise<
   }
   const l = toLive(stored, !kept);
   if (reading) l.meta.content = reading.content;
+  if (crop) l.meta.crop = crop;
   if (kind === 'photo') l.stats = await statsOf(stored.work).catch(() => undefined);
   live.set(stored.id, l);
   bump();
@@ -195,6 +222,22 @@ export async function hydrate(metas: PictureMeta[]) {
 // A slide drawn by the layout library holds a picture as a reference ("picture:<id>#..."); when the slide is turned into a picture (the preview, the gallery, the export) the reference is
 // replaced by the stored picture, scaled to at most 1600 px on its long side (a slot is never wider than 1080), as a data: URL. Cached per picture.
 const dataUrls = new Map<string, Promise<string | null>>();
+/** Round N: the letterbox crop in use for each picture (set from the project's pictures by syncPictureCrops). */
+const crops = new Map<string, { crop: CropRect; width: number; height: number }>();
+/** Round N: tells the drawing which pictures are drawn without their bars (a photo with a crop, unless the person keeps the full picture). Pictures whose crop changed are drawn again. */
+export function syncPictureCrops(metas: PictureMeta[]) {
+  let changed = false;
+  const want = new Map(metas.filter((m) => m.crop && !m.fullPicture && m.content !== 'screenshot').map((m) => [m.id, { crop: m.crop!, width: m.width, height: m.height }]));
+  for (const id of new Set([...crops.keys(), ...want.keys()])) {
+    const a = crops.get(id), b = want.get(id);
+    if (JSON.stringify(a ?? null) === JSON.stringify(b ?? null)) continue;
+    if (b) crops.set(id, b);
+    else crops.delete(id);
+    dataUrls.delete(id);
+    changed = true;
+  }
+  if (changed) bump();
+}
 export const PICTURE_DRAW_MAX = 1600;
 export function pictureDataUrl(id: string): Promise<string | null> {
   let p = dataUrls.get(id);
@@ -204,11 +247,15 @@ export function pictureDataUrl(id: string): Promise<string | null> {
       if (!blob) return null;
       const bm = await createImageBitmap(blob);
       try {
-        const k = Math.min(1, PICTURE_DRAW_MAX / Math.max(bm.width, bm.height));
+        // the part of the picture without its letterbox bars (the crop is in the original's pixels; the working copy may be smaller)
+        const cr = crops.get(id);
+        const kx = cr ? bm.width / cr.width : 1, ky = cr ? bm.height / cr.height : 1;
+        const src = cr ? { x: cr.crop.x * kx, y: cr.crop.y * ky, w: cr.crop.w * kx, h: cr.crop.h * ky } : { x: 0, y: 0, w: bm.width, h: bm.height };
+        const k = Math.min(1, PICTURE_DRAW_MAX / Math.max(src.w, src.h));
         const c = document.createElement('canvas');
-        c.width = Math.max(1, Math.round(bm.width * k));
-        c.height = Math.max(1, Math.round(bm.height * k));
-        c.getContext('2d')!.drawImage(bm, 0, 0, c.width, c.height);
+        c.width = Math.max(1, Math.round(src.w * k));
+        c.height = Math.max(1, Math.round(src.h * k));
+        c.getContext('2d')!.drawImage(bm, src.x, src.y, src.w, src.h, 0, 0, c.width, c.height);
         return c.toDataURL('image/jpeg', 0.88);
       } finally {
         bm.close();
