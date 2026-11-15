@@ -520,12 +520,13 @@ export const pictureRescueRule = { on: true };
 /** Round O: with "Keep every sentence" on, at most this many slides more than the person picked (never past the app's maximum). */
 export const KEEP_EVERY_SENTENCE_EXTRA = 2;
 /** The most slides the writer may write for a request of `n` slides. */
-export const mostSlidesFor = (n: number, keep: boolean): number => (keep ? Math.min(n + KEEP_EVERY_SENTENCE_EXTRA, SLIDE_RANGE.carousel[1]) : n);
+export const mostSlidesFor = (n: number, keep: boolean, max: number = SLIDE_RANGE.carousel[1]): number => (keep ? Math.max(n, Math.min(n + KEEP_EVERY_SENTENCE_EXTRA, SLIDE_RANGE.carousel[1], max)) : n);
 export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutStyle, brief: string, n: number, handle?: string): string {
   const carousel = req.format === 'carousel';
   const keep = KEEP_EVERY_SENTENCE && carousel && req.keepEverySentence !== false;
   const exact = carousel && req.keepEverySentence === false;
-  const most = mostSlidesFor(n, keep);
+  // (Round Q: never past the chosen platform's limit)
+  const most = mostSlidesFor(n, keep, req.slidesMax);
   const tone = TONES.find((t) => t.id === req.tone)!;
   // photo-led needs a photo; a layout with picture slots needs enough pictures that fit its slots (the metadata list below); without a list, any photo will do
   const ids = LAYOUT_IDS.filter((id) => !isCoverLayout(id)).filter((id) => !WRITER_HIDDEN.includes(id)).filter((id) => (id === 'photo-led' ? !!look.hasPhoto : (IMAGE_LAYOUT_IDS as readonly string[]).includes(id) ? (look.images ? hasEnoughPictures(id, look.images) : !!look.hasPhoto) : true));

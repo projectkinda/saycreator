@@ -20,6 +20,8 @@ export interface WriteRequest {
   slides: number;
   /** Round O: keep every sentence (unset = on): up to 2 more slides than asked; false: exactly the number asked, whole sentences from the middle may be left out. */
   keepEverySentence?: boolean;
+  /** Round Q: the most slides the chosen platform allows (unset: no platform, the app's 10): the extra slides "Keep every sentence" allows never go past it. */
+  slidesMax?: number;
   tone: Tone;
   format: Format;
   /** "auto": the writer also picks a style from `styles`. */

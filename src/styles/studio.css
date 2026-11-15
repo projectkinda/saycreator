@@ -374,5 +374,11 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
 /* Round M: the sentences of the person's text that are on no slide */
 .cr-not-on-slides { margin: 0 0 var(--sp-2, 8px); }
 .cr-not-on-slides p { margin: 0; }
-.cr-not-on-slides summary { cursor: pointer; min-height: 40px; display: inline-flex; align-items: center; }
+/* Round Q: the "Show them" fold looks tappable: a chevron that turns when open, a hover state, a 44 px tap area */
+.cr-not-on-slides summary { cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; padding: 0 10px 0 6px; margin-left: -6px; border-radius: 8px; list-style: none; font-weight: 600; color: var(--text, inherit); }
+.cr-not-on-slides summary::-webkit-details-marker { display: none; }
+.cr-not-on-slides summary::before { content: ""; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease; flex: none; }
+.cr-not-on-slides details[open] > summary::before { transform: rotate(45deg); }
+.cr-not-on-slides summary:hover { background: var(--surface-2, rgba(0, 0, 0, .06)); }
+.cr-not-on-slides summary:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .cr-not-on-slides ul { margin: 4px 0 0; padding-left: 18px; }

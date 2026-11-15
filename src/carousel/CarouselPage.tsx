@@ -839,6 +839,8 @@ export default function CarouselPage() {
       slides: Math.min(hi, Math.max(lo, options.slides), doc.format === 'carousel' ? platformOf(options.platform)?.max ?? hi : hi),
       // Round O: the person's "Keep every sentence of my text" switch (on unless they turned it off)
       keepEverySentence: options.keepEverySentence !== false,
+      // Round Q: the platform's limit (if one is chosen) bounds the extra slides too
+      ...(doc.format === 'carousel' && platformOf(options.platform) ? { slidesMax: platformOf(options.platform)!.max } : {}),
       tone: options.tone,
       format: doc.format,
       styleChoice: options.autoStyle ? 'auto' : doc.style,

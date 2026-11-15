@@ -205,6 +205,10 @@ export function MakeIt({ images, scriptBox, scriptMode, onScriptMode, doc, optio
             <div className="cr-inline">
               <span className="field-label" id="cr-platform-l">Platform</span>
               <div role="group" aria-labelledby="cr-platform-l" className="chip-group">
+                {/* Round Q: the default (no platform, so no limit on the number of slides) is a chip of its own, selected until a platform is picked */}
+                <button type="button" className="chip-btn" aria-pressed={platform === null} disabled={busy} title="No platform: no limit on the number of slides." data-testid="platform-none" onClick={() => { setOptions({ platform: null }); setCap(''); }}>
+                  None
+                </button>
                 {PLATFORMS.map((p) => (
                   <button key={p.id} type="button" className="chip-btn" aria-pressed={platform === p.id} disabled={busy} title={`At most ${p.max} slides. Press again to clear.`} onClick={() => choosePlatform(p.id)}>
                     {p.label}
