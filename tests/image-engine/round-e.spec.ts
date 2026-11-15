@@ -160,7 +160,7 @@ test('F: a photo shown whole is feathered into its blurred backdrop (a mask on t
       for (const [k, w, h, photo] of [['portrait photo', 1000, 1500, true], ['wide photo', 2400, 1230, true], ['portrait screenshot', 1000, 1500, false]] as [string, number, number, boolean][]) {
         const d = await H.D.drawOne({ layout: 'photo-full-caption', fields: { headline: 'The hoodie that becomes a backpack', line: 'Ten seconds, one zip.', image: H.IM.makeRef({ id: w === 1000 ? 'portrait' : 'wide', w, h, ...(photo ? { photo: true } : {}) }) }, accents: [] }, 0, st, { handle: '@h', index: 2, total: 7, cut: 'plain', invert: false, density: 'normal' });
         const svg: string = d.built.svg;
-        out[`${style}/${k}`] = { mask: /<mask id="pic\d+x\d+m"/.test(svg), maskedImage: /<image [^>]*mask="url\(#pic/.test(svg), blur: /feGaussianBlur stdDeviation="30"/.test(svg), dark: /fill-opacity="0.42"/.test(svg), clipped: /<image [^>]*clip-path="url\(#pic/.test(svg) };
+        out[`${style}/${k}`] = { mask: /<mask id="pic\d+x\d+m"/.test(svg), maskedImage: /<image [^>]*mask="url\(#pic/.test(svg), blur: /feGaussianBlur stdDeviation="30"/.test(svg), dark: ((m) => !!m && Number(m[1]) <= 0.42)(/fill="#000000" fill-opacity="([\d.]+)"\/><\/g>/.exec(svg)) /* Round N: the veil is matched to the photo edge, never darker than 0.42 */, clipped: /<image [^>]*clip-path="url\(#pic/.test(svg) };
       }
     }
     return out;
