@@ -19,7 +19,7 @@ import { DRAW_VERSION, drawOne, flavourNotes, legacySvgRoute, redrawLibraryDeck,
 import { addPhotoSlides, SLIDES_MAX, slideCountLine } from './photoSlides';
 import { coverKeyOf, styleIdOf, flavourPass } from './flavour';
 import { canSplitLayout, splitSpec } from './splitSlide';
-import { arrangeLabel, arrangeOrder, minSlides, newIndexOf, recordEdit, remapKeys, removeBlockedLine, reorder, type ArrangeOp } from './slideEdit';
+import { arrangeLabel, arrangeOrder, minSlides, newIndexOf, recordEdit, remapKeys, removeBlockedLine, reorder, sentencesLine, type ArrangeOp } from './slideEdit';
 import { presetKey, presetPackFor, presetThumbSvg, setCurrentScheme } from './presets';
 import { ColoursRow } from './ColoursRow';
 import { BrandEditor, type BrandDraft } from './BrandEditor';
@@ -1043,7 +1043,7 @@ export default function CarouselPage() {
   const unusedLine = doc.designed?.library?.plan ? picturesUnusedLine(picturesUnusedOf(doc.designed.library.plan.specs, pictures)) : null;
   // Round R: the slide-count line, and the room for photo slides (the platform's cap, or the app's maximum)
   const photoSlideCount = doc.designed?.library?.plan?.specs.filter((s) => s.photoSlide).length ?? 0;
-  const countLine = slideCountLine({ asked: slidesAsked, total: slides.length, photo: photoSlideCount, keep: doc.designed?.library?.keepEverySentence !== false, missing: notOnSlides.count });
+  const countLine = doc.designed?.library?.manualEdits?.removed.length ? null : slideCountLine({ asked: slidesAsked, total: slides.length, photo: photoSlideCount, keep: doc.designed?.library?.keepEverySentence !== false, missing: notOnSlides.count });
   const slideMax = Math.min(SLIDE_RANGE[doc.format][1], SLIDES_MAX, doc.format === 'carousel' && platformOf(options.platform) ? platformOf(options.platform)!.max : Infinity);
   const photoRoom = doc.designed?.library?.plan ? slideMax - doc.designed.library.plan.specs.length : 0;
   const unusedPhotos = doc.designed?.library?.plan ? unusedPictures(doc.designed.library.plan.specs, photoInfos).filter((p) => p.content !== 'screenshot').length : 0;
@@ -1691,7 +1691,7 @@ export default function CarouselPage() {
           // Round M: sentences of the person's text that are on no slide (measured, never changed); no notice when every sentence is on a slide. Round O: a neutral note, not the red of a phone warning.
           // Round R: an emoji of the text that no slide shows is listed too (the word check reads letters only), with the words it followed
           <div className="small cr-not-on-slides" data-testid="not-on-slides">
-            {notOnSlides.count > 0 && <p className="cr-info">{notOnSlides.count} of {notOnSlides.total} sentence{notOnSlides.total === 1 ? '' : 's'} from your text {notOnSlides.count === 1 ? 'is' : 'are'} not on any slide.</p>}
+            {notOnSlides.count > 0 && <p className="cr-info" data-testid="sentences-line">{sentencesLine(notOnSlides.count, notOnSlides.total, notOnSlides.sentences, doc.designed?.library?.manualEdits)}</p>}
             {notOnSlides.emojis.length > 0 && <p className="cr-info" data-testid="emoji-not-on-slides">{notOnSlides.emojis.length === 1 ? '1 emoji' : `${notOnSlides.emojis.length} emoji`} from your text {notOnSlides.emojis.length === 1 ? 'is' : 'are'} not on any slide.</p>}
             <details>
               <summary>Show them</summary>
