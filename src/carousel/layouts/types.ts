@@ -9,7 +9,8 @@ export type LayoutId =
   | 'cover-centred' | 'cover-index' | 'cover-block' | 'cover-sticker' | 'cover-word' | 'cover-ruled'
   | 'photo-full-caption' | 'split-half' | 'title-over-photo' | 'twin-photos' | 'photo-grid' | 'phone-frame'
   | 'headline-body-image' | 'image-row' | 'thumb-rows' | 'cover-art' | 'photo-cover' | 'portrait-closing' | 'art-side-text' | 'do-dont'
-  | 'list-under-band' | 'list-beside-picture';
+  | 'list-under-band' | 'list-beside-picture'
+  | 'photo-full' | 'photo-pair' | 'photo-quad';
 
 export type ContentShape =
   | 'claim' | 'hook' | 'story' | 'question' | 'explainer' | 'number' | 'metric' | 'process' | 'step' | 'benefits' | 'list' | 'ranking'

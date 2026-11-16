@@ -121,7 +121,7 @@ const ZONE_BOTTOM = 1250;
  * Round 18: the top of the picture zone for THIS style. A style with a profile header (the avatar, the name and the handle, to about y 160) starts the zone below the header, so a picture is planned to
  * the room it really has and nothing is trimmed afterwards. Other styles start at 116 as before.
  */
-const zoneTopOf = (st: LayoutStyle): number => {
+export const zoneTopOf = (st: LayoutStyle): number => {
   const rec = chromeFor({ handle: '@x', index: 1, total: 3, profile: !!st.devices.profileHeader, font: st.fonts.body, deco: st.deco, site: st.site ?? '' });
   const header = chromeBoxes(rec as never).filter((b) => b.y + b.h / 2 < 675);
   return Math.max(ZONE_TOP, Math.ceil(Math.max(0, ...header.map((b) => b.y + b.h))));

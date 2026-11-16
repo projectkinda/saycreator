@@ -27,6 +27,9 @@ import { namePass } from './pictureNames';
 import { heroPass, picturePass, screenshotPass, separatePictureRuns, type PictureSwap } from './picturePass';
 import { isTallShot, shapePass, tallShotTooSmall, type ShapeRow } from './photoShape';
 import { rescuePass, type RescueRow } from './pictureRescue';
+import { isPhotoOnly } from './layouts/photoOnly';
+import { addPhotoSlides, SLIDES_MAX, type PhotoSlideAdded } from './photoSlides';
+import type { Picked } from './layouts';
 import { TONES } from './writerPrompt';
 import { inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
 
@@ -398,6 +401,10 @@ const GOOD_FOR: Record<LayoutId, string> = {
   'portrait-closing': 'a closing with a supplied portrait of a person: a band title, a heading, paragraphs and a link',
   'art-side-text': 'a heading and a short paragraph beside a supplied picture, with a hand-drawn arrow',
   'do-dont': 'a numbered do and do-not pair: what is wrong and what is right (text on each side; a supplied picture for each side is optional)',
+  // Round R: picture-only slides the code adds (never offered to the writer)
+  'photo-full': 'one photo, no text (added by the code)',
+  'photo-pair': 'two photos, no text (added by the code)',
+  'photo-quad': 'three or four photos, no text (added by the code)',
 };
 const FIELD_NOTE: Record<string, string> = {
   bar: 'percent filled, a whole number 0-100',
@@ -517,6 +524,8 @@ export const photoShapeRule = { on: true };
 export const placementCheck = { on: true };
 /** Round Q: the rescue pass for unused pictures (pictureRescue.ts) is on. A switch the before/after comparison turns off; the app never does. */
 export const pictureRescueRule = { on: true };
+/** Round R: photo slides for the photos still unused when the writer made fewer slides than were asked for (photoSlides.ts). A switch the before/after comparison turns off; the app never does. */
+export const photoSlidesRule = { on: true };
 /** Round O: with "Keep every sentence" on, at most this many slides more than the person picked (never past the app's maximum). */
 export const KEEP_EVERY_SENTENCE_EXTRA = 2;
 /** The most slides the writer may write for a request of `n` slides. */
@@ -601,6 +610,8 @@ export interface SlideSpec {
   shaped?: string;
   /** Round O: the final placement drew a tall screenshot under 22% of the width on this slide: the slide takes no tall screenshot (other pictures still may go here). */
   refuseTall?: true;
+  /** Round R: a picture-only slide the code added for photos no slide used (photoSlides.ts): no text field. */
+  photoSlide?: true;
 }
 export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 export function toSpec(raw: unknown): SlideSpec | null {
@@ -1210,6 +1221,8 @@ export function scriptSlideOf(layout: string, f: Fields): Record<string, unknown
     case 'numbered-stagger': case 'bullet-list': return { type: 'checklist', headline: s('title'), items: a('items'), ...tags };
     case 'pill-stagger': return { type: 'checklist', headline: s('headline'), items: a('items'), ...tags };
     case 'headline-card': return { type: 'content', headline: s('headline'), body: [s('card'), s('paragraph'), s('closing')].filter(Boolean).join(' '), ...tags };
+    // Round R: a photo slide has no words: a cover with no headline (the script check lets a photoOnly slide go without one)
+    case 'photo-full': case 'photo-pair': case 'photo-quad': return { type: 'cover', headline: '', photoOnly: true, ...tags };
     default: return { type: 'content', headline: s('headline') || s('title') || 'Slide', body: Object.values(f).flat().join('. ').slice(0, 250) || 'Slide', ...tags };
   }
 }
@@ -1256,6 +1269,8 @@ export interface LibraryReport {
   photoShape?: ShapeRow[];
   /** Round Q: every picture the passes left unused, and where the rescue pass put it (or why it stays unused). */
   pictureRescue?: RescueRow[];
+  /** Round R: the photo slides the code added (the writer made `slidesBefore` slides): where each is, its layout and its pictures. */
+  photoSlidesAdded?: { count: number; slidesBefore: number; slides: PhotoSlideAdded[] };
   /** Round 15: slides that failed one of the phone checks when drawn and were drawn again by the code (never a model call): what failed, and what the slide is now. */
   /** Round 16: one row per writer call: what was sent and what it cost (null where the provider does not say). */
   writes?: { call: number; promptChars: number; promptBytes: number; requestBytes: number | null; numTurns: number | null; durationApiMs: number | null; effort: string | null; inputTokens: number | null; outputTokens: number | null; seconds: number }[];
@@ -1410,16 +1425,28 @@ function buildRetry(first: string, specs: SlideSpec[], why: Map<number, string[]
 
 /** The person's own script, already turned into a plan by code (see libraryFromScript.ts): the deck is drawn from it with NO model call and none of the writer-only rules (generic closing, text trims). */
 /** The deck's rotation: variants and cuts over the whole deck. A layout the rotation would change (repeated or over-used) is a problem for the retry. */
-export function deckRotation(list: SlideSpec[], look: Look, style: LayoutStyle) {
-  const ids = list.map((s) => s.layout as LayoutId);
-  const rv = rotateVariants(ids.map((layout) => ({ layout: layoutDef(layout) ? layout : ('statement' as LayoutId) })), { photo: !!look.hasPhoto, flavour: style.flavour });
+/**
+ * The layout rotation of the TEXT slides (the variants, and the layouts that repeat or are over-used): Round R picture-only slides are left out of it, so adding a photo slide never changes the
+ * variant of a text slide or makes one count as a repeat. A picture-only slide takes variant 1 (its only form).
+ */
+export function rotationOf(list: SlideSpec[], photo: boolean, flavour: LayoutStyle['flavour']): { rv: Picked[]; variants: (0 | 1)[] } {
+  const text = list.map((_, i) => i).filter((i) => !isPhotoOnly(list[i].layout));
+  const rv0 = rotateVariants(text.map((i) => ({ layout: layoutDef(list[i].layout) ? (list[i].layout as LayoutId) : ('statement' as LayoutId) })), { photo, flavour });
+  const rv: Picked[] = list.map((s) => ({ layout: s.layout as LayoutId, variant: 0, note: '' }));
+  text.forEach((i, k) => (rv[i] = rv0[k]));
   const count: Record<string, number> = {};
   const variants = list.map((s, i) => {
+    if (isPhotoOnly(s.layout)) return 0 as const;
     const same = rv[i].layout === s.layout;
     const c = count[s.layout] ?? 0;
     count[s.layout] = c + 1;
     return same ? rv[i].variant : ((c % 2) as 0 | 1);
   });
+  return { rv, variants };
+}
+export function deckRotation(list: SlideSpec[], look: Look, style: LayoutStyle) {
+  const ids = list.map((s) => s.layout as LayoutId);
+  const { rv, variants } = rotationOf(list, !!look.hasPhoto, style.flavour);
   list.forEach((s, i) => { if (s.pin?.variant !== undefined) variants[i] = s.pin.variant; }); // a variant the preset (closing) or the person pinned
   const repeats = new Map<number, string>();
   rv.forEach((r, i) => layoutDef(list[i].layout) && r.layout !== list[i].layout && repeats.set(i, r.note || `the layout "${list[i].layout}" repeats or is over-used`));
@@ -1646,6 +1673,25 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     // the layouts changed, so the rotation changes: redraw the whole deck (no model call)
     ({ out: drawn, rot } = await drawAll());
   }
+  // Round R: the writer made fewer slides than the person asked for and photos are still unused after every placement pass: the code adds photo slides for them (no text on them), at most
+  // the slides that were not made, never past the platform's cap or 10. After the retry, so the writer's slide numbers are the ones a retry speaks of. No model call.
+  const slidesMade0 = specs.length;
+  let photoSlidesAdded: PhotoSlideAdded[] = [];
+  if (!own && look.images?.length && photoSlidesRule.on) {
+    const cap = Math.min(n, req.slidesMax ?? hi, SLIDES_MAX, hi);
+    if (cap > specs.length) {
+      const ps = await addPhotoSlides(specs, look.images, cap - specs.length, style, async (sp, i, deck) => {
+        const rc = deckRotation(deck, look, style).cuts[i];
+        const d = await drawOne(sp, 0, style, { handle, index: i, total: deck.length, cut: rc.cut, invert: rc.invert, density: 'normal', ground: rc.ground });
+        return d.built && !d.problems.length ? d.built.images ?? [] : null;
+      });
+      if (ps.added.length) {
+        specs = ps.specs;
+        photoSlidesAdded = ps.added;
+        ({ out: drawn, rot } = await drawAll());
+      }
+    }
+  }
   // A closing whose button is still not an action phrase after the retry: the button goes (the closing becomes a statement card with no button): a trim, never a failure.
   {
     const db = dropBadButtons(specs, ctaCtx);
@@ -1816,6 +1862,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   const report: LibraryReport = {
     route: 'library',
     ...(own ? {} : { slidesRequested: n, keepEverySentence: req.keepEverySentence !== false }),
+    ...(photoSlidesAdded.length ? { photoSlidesAdded: { count: photoSlidesAdded.length, slidesBefore: slidesMade0, slides: photoSlidesAdded } } : {}),
     drawVersion: DRAW_VERSION,
     provider: p.id,
     tokenNote: p.id === 'dev-cli' ? 'Provider is dev-cli (the Claude Code command line): these token numbers include its own overhead (system prompt, tools, cache reads), so they are inflated. Use the api provider (a key set on the server) for real numbers.' : 'Real usage reported by the API provider.',
@@ -1885,14 +1932,7 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
   const style: LayoutStyle = site ? { ...style0, site } : style0;
   let specs = lib.plan.specs;
   const ids = specs.map((s) => (layoutDef(s.layout) ? (s.layout as LayoutId) : ('statement' as LayoutId)));
-  const rv = rotateVariants(ids.map((layout) => ({ layout })), { photo: !!look.hasPhoto, flavour: style.flavour });
-  const count: Record<string, number> = {};
-  const variants = specs.map((s, i) => {
-    const same = rv[i].layout === s.layout;
-    const c = count[s.layout] ?? 0;
-    count[s.layout] = c + 1;
-    return same ? rv[i].variant : ((c % 2) as 0 | 1);
-  });
+  const { variants } = rotationOf(specs, !!look.hasPhoto, style.flavour);
   const rc = rotateCuts(ids.map((layout) => ({ layout })), style, { suggest: specs.map((s) => ({ cut: s.cut })) });
   // a slide the person set in the layout picker keeps its variant, cut and invert
   specs.forEach((s, i) => {

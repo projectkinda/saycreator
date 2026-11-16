@@ -22,6 +22,7 @@ import { cutsOf, layoutDef, withAccent } from './library';
 import { validateSlideContent } from './pick';
 import { textFitProblems, tightenBox } from './textFits';
 import type { Cut, Cx, Fields, Gradient, LayoutStyle, Plan, PlaneTone, PlanImage, Slot } from './types';
+import { isPhotoOnly } from './photoOnly';
 
 /**
  * Round F: the feather of a photo shown whole over its blurred backdrop. The mask is the picture's rectangle moved `FEATHER_INSET` px in and blurred by `FEATHER_BLUR` (a Gaussian of that standard deviation):
@@ -331,7 +332,8 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   const col = resolveCollisions(balanced, key, slide, o.handle, plan.fitAs);
   problems.push(...col.problems);
   notes.push(...col.notes);
-  problems.push(...finalGuards(col.pack, key, slide, o.handle));
+  // Round R: a picture-only slide (photoOnly.ts) has no words by design: the 3-words guard and the empty-card guard do not apply to it (its cells are under its photos)
+  if (!isPhotoOnly(layoutId)) problems.push(...finalGuards(col.pack, key, slide, o.handle));
   pack = col.pack;
   // The accent phrase of a big headline (96 px and up) is set in the display accent, a smaller one in the small-text accent.
   {

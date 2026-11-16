@@ -8,6 +8,7 @@ import { bitmapFromUrl } from './images';
 import { contentOr } from '../carousel/pictureKind';
 import { layoutText } from '../image-engine/draw/text';
 import { pictureUseOf, picturesUnusedOf } from '../carousel/imagePlace';
+import { photoSlidesOf } from '../carousel/photoSlides';
 import type { TextLayer } from '../image-engine/types';
 
 export type SlideVerdict = 'good' | 'meh' | 'bad';
@@ -148,6 +149,8 @@ export async function buildReport(o: ReportOptions): Promise<{ json: string; com
     keepEverySentence: o.doc.designed?.library?.keepEverySentence ?? null,
     // Round Q: the pictures no slide uses, by the names the person typed
     picturesUnused: o.doc.designed?.library?.plan ? picturesUnusedOf(o.doc.designed.library.plan.specs, o.doc.photos ?? []) : null,
+    // Round R: the photo slides the code added for unused photos (no text on them), as the deck is now
+    photoSlidesAdded: o.doc.designed?.library?.plan ? photoSlidesOf(o.doc.designed.library.plan.specs, o.doc.photos ?? []) : null,
     designed: o.doc.designed ? { calls: o.doc.designed.calls, tokens: o.doc.designed.tokens ?? null, layouts: o.doc.designed.layouts ?? null, fallbacks: o.doc.designed.fallbacks, notes: o.doc.designed.notes, requestBytes: o.doc.designed.requestBytes ?? null, library: o.doc.designed.library ?? null, model: 'DRAW_MODEL, else CAROUSEL_MODEL, else sonnet (server setting)' } : o.doc.route?.error ? { failed: true, error: o.doc.route.error, requestBytes: o.doc.route.requestBytes ?? null } : null,
     slides: composed.slides.map((s, i) => ({
       number: i + 1,

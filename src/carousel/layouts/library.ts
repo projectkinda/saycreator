@@ -7,6 +7,7 @@ import { readingOrder } from '../designed';
 import { IMAGE_LAYOUTS } from './images';
 import { MORE_LAYOUTS } from './more';
 import { COVER_LAYOUTS } from './covers';
+import { PHOTO_ONLY_LAYOUTS } from './photoOnly';
 import type { Cut, Cx, Fields, LayoutDef, LayoutId, LayoutStyle, Plan, Slot } from './types';
 
 export const str = (f: Fields, k: string) => (typeof f[k] === 'string' ? (f[k] as string).trim() : '');
@@ -868,7 +869,8 @@ const BASE_LIST: LayoutDef[] = [
 ];
 
 const LAYOUT_LIST: LayoutDef[] = [...BASE_LIST, ...MORE_LAYOUTS, ...IMAGE_LAYOUTS, ...COVER_LAYOUTS];
-export const LAYOUTS_BY_ID = Object.fromEntries(LAYOUT_LIST.map((l) => [l.id, l])) as Record<LayoutId, LayoutDef>;
+// Round R: the picture-only layouts are drawn like any other (layoutDef finds them) but are not in LAYOUT_IDS: the writer, the gallery and the layout checks never offer them (they carry no text).
+export const LAYOUTS_BY_ID = Object.fromEntries([...LAYOUT_LIST, ...PHOTO_ONLY_LAYOUTS].map((l) => [l.id, l])) as Record<LayoutId, LayoutDef>;
 export const LAYOUT_IDS = LAYOUT_LIST.map((l) => l.id) as LayoutId[];
 export const layoutDef = (id: string): LayoutDef | undefined => LAYOUTS_BY_ID[id as LayoutId];
 export type { Slot };
