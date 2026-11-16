@@ -764,7 +764,7 @@ export default function CarouselPage() {
   // Round M: the sentences of the text that are on no slide, from the slides as they are now (recomputed after every edit, style or colour switch: no call)
   // Round O: the slides the person picked for the writer's call that made this deck (null for a pasted script)
   const slidesAsked = doc.designed?.library?.slidesRequested ?? null;
-  const notOnSlides = useMemo(() => (doc.topic?.trim() && slides.length ? sourceNotOnSlidesOf(doc.topic, slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? []))) : { count: 0, total: 0, percentOfSentences: 0, sentences: [] as string[] }), [doc.topic, slides]);
+  const notOnSlides = useMemo(() => (doc.topic?.trim() && slides.length ? sourceNotOnSlidesOf(doc.topic, slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? []))) : { count: 0, total: 0, percentOfSentences: 0, sentences: [] as string[], emojis: [] as { emoji: string; after: string }[] }), [doc.topic, slides]);
   const failingDetail = slides.flatMap((_, i) => { const why = [...new Set((views[i]?.rendered?.lint ?? []).filter((l) => !l.pass).map((l) => LINT_PLAIN[l.id] ?? 'something may not read well'))]; return why.length ? [{ i, why }] : []; });
   const warned = slides.filter((_, i) => { const lint = views[i]?.rendered?.lint ?? []; return lint.every((l) => l.pass) && lint.some((l) => l.warn); }).length;
 
@@ -1638,13 +1638,18 @@ export default function CarouselPage() {
           // sentences notice. Round R: photo slides that filled the slides the text did not need are said so (photoSlides.slideCountLine)
           <p className="small cr-info" data-testid="slide-count-line">{countLine}</p>
         )}
-        {hasWork && notOnSlides.count > 0 && (
-          // Round M: sentences of the person's text that are on no slide (measured, never changed); no notice when every sentence is on a slide. Round O: a neutral note, not the red of a phone warning
+        {hasWork && (notOnSlides.count > 0 || notOnSlides.emojis.length > 0) && (
+          // Round M: sentences of the person's text that are on no slide (measured, never changed); no notice when every sentence is on a slide. Round O: a neutral note, not the red of a phone warning.
+          // Round R: an emoji of the text that no slide shows is listed too (the word check reads letters only), with the words it followed
           <div className="small cr-not-on-slides" data-testid="not-on-slides">
-            <p className="cr-info">{notOnSlides.count} of {notOnSlides.total} sentence{notOnSlides.total === 1 ? '' : 's'} from your text {notOnSlides.count === 1 ? 'is' : 'are'} not on any slide.</p>
+            {notOnSlides.count > 0 && <p className="cr-info">{notOnSlides.count} of {notOnSlides.total} sentence{notOnSlides.total === 1 ? '' : 's'} from your text {notOnSlides.count === 1 ? 'is' : 'are'} not on any slide.</p>}
+            {notOnSlides.emojis.length > 0 && <p className="cr-info" data-testid="emoji-not-on-slides">{notOnSlides.emojis.length === 1 ? '1 emoji' : `${notOnSlides.emojis.length} emoji`} from your text {notOnSlides.emojis.length === 1 ? 'is' : 'are'} not on any slide.</p>}
             <details>
               <summary>Show them</summary>
-              <ul data-testid="not-on-slides-list">{notOnSlides.sentences.map((s, k) => <li key={k}>{s}</li>)}</ul>
+              <ul data-testid="not-on-slides-list">
+                {notOnSlides.sentences.map((s, k) => <li key={k}>{s}</li>)}
+                {notOnSlides.emojis.map((e, k) => <li key={'e' + k}>{e.emoji}{e.after ? ` (after “${e.after}”)` : ''}</li>)}
+              </ul>
             </details>
           </div>
         )}

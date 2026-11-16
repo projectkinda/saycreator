@@ -55,11 +55,11 @@ for (const [preset, tag] of [['film-paper', 'film-paper'], ['hot-flat', 'hot-fla
     expect(r.slides).toBe(7);
   });
 
-  test(`A2 (${tag}): no action in the source: the closing is a generic label and the invented offer in the sub line is dropped`, async ({ page }) => {
+  test(`A2 (${tag}): no action in the source: the closing has no button (Round R: the writer's label is not the person's words) and the invented offer in the sub line is not drawn`, async ({ page }) => {
     const r = await run(page, { preset, text: NO_ACTION_SOURCE, closing: { layout: 'cta-button', fields: { headline: 'Build a second brain', button: 'Comment brain', sub: "I'll send you a document to get started." }, accents: [] } });
     save(`a2-generic-${tag}`, r.png);
-    expect(GENERIC, 'a generic label').toContain(r.last.fields.button);
-    expect(r.last.fields.sub, 'the offer is not in the source, so the sub line is dropped').toBeUndefined();
+    expect(r.last.fields.button, 'no action in the text: no button').toBeUndefined();
+    expect(JSON.stringify(r.last.fields)).not.toMatch(/Save this for later|Follow for more|Send this to a friend/);
     expect(JSON.stringify(r.last.fields)).not.toMatch(/document|get started/i);
     expect(JSON.stringify(r.last.fields)).not.toContain('(cta-button)');
     expect(r.slides).toBe(7);
@@ -178,7 +178,7 @@ test('C: a sub line only keeps words that are in the source (small function word
       button: D.settleClosing(mk('cta-button', { headline: 'Build a second brain', button: 'Comment brain', sub: 'A free 30-page guide is on its way.' }), BRAIN_SOURCE),
       contact: D.settleClosing(mk('contact-closing', { headline: 'Say hello', contacts: ['@maya', 'maya.com'], line: 'We reply within one hour.' }), BRAIN_SOURCE),
       pair: D.settleClosing(mk('cta-pair', { headline: 'Two ways', button1: 'Comment brain', button2: 'Follow me', line1: 'I\'ll send you the document.', line2: 'A bonus video is included.' }), BRAIN_SOURCE),
-      generic: D.ensureGenericClosing(mk('statement', { headline: 'A second brain fixes that.', caption: 'Twenty people, one week.' }), NO_ACTION_SOURCE, '', false),
+      generic: D.dropInventedButtons(mk('cta-button', { headline: 'A second brain fixes that.', button: 'Follow for more', sub: 'Twenty people, one week.' }), NO_ACTION_SOURCE),
     };
   }, { BRAIN_SOURCE, NO_ACTION_SOURCE });
   expect([r.yes, r.yesSmall, r.empty]).toEqual([true, true, true]);
@@ -188,8 +188,12 @@ test('C: a sub line only keeps words that are in the source (small function word
   expect(r.contact.specs[1].fields.line, 'contact-closing: the invented promise goes').toBeUndefined();
   expect(r.pair.specs[1].fields.line1, 'cta-pair: a line from the text stays').toBe("I'll send you the document.");
   expect(r.pair.specs[1].fields.line2, 'cta-pair: an invented line goes').toBeUndefined();
-  // the generic fallback keeps the caption as the sub line, and the closing rule then drops it (the words are not in the source)
-  expect(r.generic.specs[1].fields.sub).toBe('Twenty people, one week.');
+  // Round R: a text with no action loses an invented button; the closing keeps its headline, and the sub line is not carried over because its words are not in the source (the sub-line rule)
+  expect(r.generic.specs[1].layout).toBe('statement-card');
+  expect(r.generic.specs[1].fields.button).toBeUndefined();
+  expect(r.generic.specs[1].fields.headline).toBe('A second brain fixes that.');
+  expect(r.generic.specs[1].fields.caption).toBeUndefined();
+  expect(r.generic.trims.map((t: any) => t.field).sort()).toEqual(['closing sub line', 'invented button']);
 });
 
 // ----- D: the trim report -----
@@ -199,8 +203,9 @@ test('D: the closing report says what happened in words: no "over its limit of 2
   expect(all).not.toMatch(/over its limit of 20/);
   expect(all).not.toContain('(cta-button)');
   expect(JSON.stringify(r.last.fields)).not.toContain('(cta-button)');
-  expect(GENERIC).toContain(r.last.fields.button);
-  expect(r.adjustments.join('\n'), 'the report names the generic label').toMatch(/the closing had no call to action, so the code made it "(Save this for later|Follow for more|Send this to a friend)"/);
+  // Round R: no action in the text: no button, and no generic label is added
+  expect(r.last.fields.button).toBeUndefined();
+  expect(JSON.stringify(r.last.fields)).not.toMatch(/Save this for later|Follow for more|Send this to a friend/);
   // a label of 13 characters that fits (the evidence deck) is reported with no limit and never trimmed
   const kept = await run(page, { preset: 'film-paper', text: BRAIN_SOURCE, closing: { layout: 'cta-button', fields: { headline: 'Build a second brain', button: 'Comment brain', sub: "I'll send you the document." }, accents: [] } });
   expect(kept.last.fields.button).toBe('Comment brain');
@@ -219,11 +224,11 @@ test('E: a source with a real action and a writer that follows the closing rule:
     expect(r.calls, `${preset}: one call`).toBe(1);
     expect(r.retries, `${preset}: no retry`).toEqual([]);
   }
-  // no action in the source, the writer closes on a plain statement: asked once more (by design), the answer is used
+  // no action in the source, the writer closes on a plain statement: that is right (Round R), one call, no button
   const retried = await run(page, { preset: 'film-paper', text: NO_ACTION_SOURCE, closing: { layout: 'statement', fields: { headline: 'Build a second brain' }, accents: [] }, second: { layout: 'cta-button', fields: { headline: 'Build a second brain', button: 'Save this for later' }, accents: [] } });
   expect(retried.calls).toBe(1);
   expect(retried.retries).toEqual([]);
-  expect(GENERIC).toContain(retried.last.fields.button);
+  expect(retried.last.fields.button).toBeUndefined();
 });
 
 // ----- F1: a highlight box never covers the punctuation after the marked word -----

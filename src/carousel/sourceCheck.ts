@@ -36,12 +36,27 @@ function inOrder(a: string[], b: string[]): number {
 /** A sentence is on a slide when at least this share of its words appears on ONE slide, in order. */
 export const ON_SLIDE_SHARE = 0.8;
 
+/** Round R: the emoji of a text (an emoji with its variation selector, skin tone or joined parts is one), in order. */
+export const EMOJI = /\p{Extended_Pictographic}(?:️|\p{Emoji_Modifier}|‍\p{Extended_Pictographic}️?)*/gu;
+export const emojisOf = (t: string): string[] => t.match(EMOJI) ?? [];
+/** Round R: each emoji of the text with the words just before it (up to 4), so a note can say where it stood. */
+export function emojiPlaces(text: string): { emoji: string; after: string }[] {
+  const out: { emoji: string; after: string }[] = [];
+  for (const m of text.matchAll(EMOJI)) {
+    const before = text.slice(0, m.index).split(/(?<=[.!?:\n])\s+/).pop() ?? '';
+    out.push({ emoji: m[0], after: (before.match(/[\p{L}\p{N}'’-]+/gu) ?? []).slice(-4).join(' ') });
+  }
+  return out;
+}
+
 export interface SourceNotOnSlides {
   count: number;
   /** Of all the sentences of the text. */
   total: number;
   percentOfSentences: number;
   sentences: string[];
+  /** Round R: the emoji of the text that no slide shows (the word check reads letters only, so an emoji is checked on its own), with the words before it. */
+  emojis: { emoji: string; after: string }[];
 }
 /** The sentences of `source` that are on no slide. `slideTexts`: the visible words of each slide. */
 export function sourceNotOnSlidesOf(source: string, slideTexts: string[]): SourceNotOnSlides {
@@ -51,5 +66,8 @@ export function sourceNotOnSlidesOf(source: string, slideTexts: string[]): Sourc
     const ws = wordsOfText(s);
     return !slides.some((sw) => inOrder(ws, sw) >= Math.ceil(ws.length * ON_SLIDE_SHARE));
   });
-  return { count: missing.length, total: sentences.length, percentOfSentences: sentences.length ? Math.round((missing.length / sentences.length) * 1000) / 10 : 0, sentences: missing };
+  // each emoji of the text must be on a slide as often as the text has it
+  const shown = slideTexts.flatMap(emojisOf);
+  const emojis = emojiPlaces(source).filter((e) => { const k = shown.indexOf(e.emoji); if (k < 0) return true; shown.splice(k, 1); return false; });
+  return { count: missing.length, total: sentences.length, percentOfSentences: sentences.length ? Math.round((missing.length / sentences.length) * 1000) / 10 : 0, sentences: missing, emojis };
 }

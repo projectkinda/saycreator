@@ -138,23 +138,24 @@ test('B: false positives: "Follow the process", "Save time by writing it down", 
   for (const x of r) { expect(x.action).toBeNull(); expect(x.has).toBe(false); }
 });
 
-test('B: a text with no action: a generic label, and a sub line that is not in the text is always dropped (one writer call)', async ({ page }) => {
+test('B: a text with no action: no button (Round R: never a generic label), and a sub line that is not in the text is always dropped (one writer call)', async ({ page }) => {
   const noAction = SOURCE.replace(/So if you want to build your own, comment brain,\s+and I'll send you a document to get started\./, 'That is the whole idea.');
   expect(noAction).not.toMatch(/comment brain/);
   const r = await run(page, { preset: 'style-4', text: noAction, closing: { layout: 'cta-button', fields: { headline: 'Build your own second brain', button: 'Comment brain', sub: 'Grab my free ebook today.' }, accents: [] } });
-  expect(['Save this for later', 'Follow for more', 'Send this to a friend']).toContain(r.last.fields.button);
+  expect(r.last.fields.button, 'no action in the text: no button').toBeUndefined();
+  expect(JSON.stringify(r.last.fields)).not.toMatch(/Save this for later|Follow for more|Send this to a friend|ebook/);
   expect(r.last.fields.sub, 'not in the text: dropped').toBeUndefined();
   expect(r.calls, 'one writer call, whatever the closing was: ' + JSON.stringify(r.notes)).toBe(1);
   expect(r.retries).toEqual([]);
   expect(r.writerClosing, 'the report keeps what the writer gave').toMatchObject({ button: 'Comment brain', sub: 'Grab my free ebook today.' });
 });
 
-test('D: a closing that breaks the rule never costs a second writer call: the code settles it', async ({ page }) => {
+test('D: the closing never costs a second writer call: a plain statement closing of a text with no action is right as it is (Round R: no generic button is added)', async ({ page }) => {
   const noAction = SOURCE.replace(/So if you want to build your own, comment brain,\s+and I'll send you a document to get started\./, 'That is the whole idea.');
   const r = await run(page, { preset: 'film-paper', text: noAction, closing: { layout: 'statement', fields: { headline: 'Build your own second brain' }, accents: [] } });
   expect(r.calls).toBe(1);
-  expect(r.last.layout).toBe('cta-button');
-  expect(['Save this for later', 'Follow for more', 'Send this to a friend']).toContain(r.last.fields.button);
+  expect(r.last.layout).toBe('statement');
+  expect(r.last.fields.button).toBeUndefined();
   expect(r.slides).toBe(7);
 });
 

@@ -31,6 +31,7 @@ import { isPhotoOnly } from './layouts/photoOnly';
 import { addPhotoSlides, SLIDES_MAX, type PhotoSlideAdded } from './photoSlides';
 import type { Picked } from './layouts';
 import { TONES } from './writerPrompt';
+import { emojiPlaces, emojisOf } from './sourceCheck';
 import { inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
 
 /** The old route, where the model draws every slide as SVG, stays available behind this flag (off by default): localStorage "creator.legacySvgRoute" = "1" or VITE_LEGACY_SVG_ROUTE=1. */
@@ -556,10 +557,12 @@ export function buildLibraryPrompt(req: WriteRequest, look: Look, style: LayoutS
     '',
     'Rules:',
     `- Write ${exact ? `exactly ${n}` : n} slides${keep && most > n ? `; when the person's text needs more room to keep every sentence, use up to ${most} slides (never more than ${most})` : ''}. Slide 1 is a strong hook (statement, statement-stacked, statement-card, statement-pill, statement-question, big-question or lead-statement; at most 8 words). In between choose the layout that suits THAT slide's content.`,
-    '- The closing (last slide) depends on the TEXT, not on habit. If the text contains a real next action for the reader (book, buy, sign up, download, visit, reply, join): "cta-button" with that action; "cta-pair" when it gives TWO different actions; "contact-closing" when the text itself contains contact details such as a handle, site, phone or email (never invent any). These always win over a generic call to action.',
+    '- The closing (last slide) depends on the TEXT, not on habit. If the text contains a real next action for the reader (book, buy, sign up, download, visit, reply, join): "cta-button" with that action; "cta-pair" when it gives TWO different actions; "contact-closing" when the text itself contains contact details such as a handle, site, phone or email (never invent any).',
     '- A real action also includes: comment (a quoted or capitalised keyword too), DM or message me, reply, send me, link in bio or below, subscribe, follow, save, share, click, tap, try it. The button label uses the action\'s own words from the text ("Comment brain", "DM me GUIDE", "Download the guide"), at most 24 characters. The line under the closing headline ("sub") may only use words that are in the text; when it would need other words, leave the sub line out. Never invent an offer, link, number or promise.',
-    `- If the text has NO real action, the closing is STILL a "cta-button", with ONE generic label picked to fit the content: how-to, list, tips or steps: "${GENERIC_CTA_OF.save}"; opinion, story, critique or insight: ${isSetHandle(handle) ? `"Follow ${handle!.trim()}" (the brand handle) or "${GENERIC_CTA_OF.follow}"` : `"${GENERIC_CTA_OF.follow}" (no @, no handle)`}; relatable, funny or common-pain posts: "${GENERIC_CTA_OF.friend}". Use only these labels; do not invent another action. Its headline is a real takeaway sentence from the text, never "Thanks for reading" or other filler. Never invent a link, "link in bio", website, email, offer or number${isSetHandle(handle) ? '' : ', and never a handle'}. A closing that is a plain statement with no button counts as a miss and is asked for again.`,
-    '- Every other button label is an ACTION PHRASE: verb first, 2 to 4 words, at most 20 characters, no question mark, comma or full stop ("Book a call", "Get the checklist", "Join the list"). Never a question, a slogan or a topic ("Which fits you?", "Sleep well"). The three generic labels above are the only exceptions to the length.',
+    // Round R: an emoji is the person's words; a button label only uses the person's words, and a text that asks for nothing gets no button (no generic "Follow for more")
+    "- Keep every emoji of the text where it stands (right after the same words): an emoji is part of the person's words.",
+    `- If the text has NO real action, the closing has NO button: use "statement" or "statement-card" with a real takeaway sentence from the text as its headline, never "Thanks for reading" or other filler. Never invent a call to action ("Follow for more", "Save this for later", "Send this to a friend" ...), a link, "link in bio", website, email, offer, number${isSetHandle(handle) ? '' : ' or handle'}.`,
+    '- Every button label is an ACTION PHRASE made ONLY of words from the text: verb first, 2 to 4 words, at most 20 characters, no question mark, comma or full stop ("Book a call", "Get the checklist", "Join the list"). Never a question, a slogan or a topic ("Which fits you?", "Sleep well").',
     '- Prose: "prose" is the ONLY layout that takes whole paragraphs. Aim for 35 to 50 words in all (the heading and the pull line included); use up to 70 only when the source text truly needs it. 70 is a hard limit (the handle and the page number are not counted; 300 characters per paragraph at most), and the code cuts anything past it. Prefer ONE short paragraph plus a bold one-line takeaway (the "pull" field) to three paragraphs. Use prose for a slide that needs explaining in sentences; its heading is optional and, when present, reads on its own as a full title. Every other layout stays short: never put a paragraph into a statement, list or card layout.',
     '- Long passages: if the text for ONE slide would run past 70 words, split it across two slides, a prose slide and then a statement, bullet-list or numbered-list slide for the rest, instead of cramming it into one. ' + (keep ? `You may add a slide for it, up to ${most} slides in all; never cut a sentence to save a slide.` : exact ? `The number of slides is exactly ${n}: when every slide is needed, tighten the prose to 70 words or fewer, or leave out a whole sentence from the middle of the text (see "Exactly ${n} slides").` : 'The number of slides is fixed (see above): split only when another slide of your plan can be spared for it (a slide that would only repeat or pad); when every slide is needed, tighten the prose to 70 words or fewer instead.'),
     ...(look.images?.length ? imageRules(look.images, n) : []),
@@ -821,52 +824,102 @@ export function genericKindOf(text: string): CtaKind {
   if (/\b(?:we'?ve all|everyone has|relatable|ever (?:feel|notice)|funny|lol|that moment when|every monday)\b/i.test(text)) return 'friend';
   return 'follow';
 }
-/** The slide forms that close on a plain statement (no button). */
-const PLAIN_CLOSINGS = new Set(['statement', 'statement-stacked', 'statement-pill', 'statement-question', 'big-question', 'lead-statement', 'statement-card']);
 const CLOSING_FILLER = /^(?:thanks?(?: you)?(?: for (?:reading|watching|stopping by))?|thank you|the end|that'?s all|see you|bye)\W*$/i;
 /**
- * The closing rule for a text with NO real action: the last slide is a cta-button with one of the generic labels (a statement card, on a preset that closes on one, carries the label in its
- * caption). A last slide that is a plain statement, a button with another label, or filler as a headline is a miss. A text with a real action (or contact details) is not checked here: the
- * writer chooses cta-button, cta-pair or contact-closing as before. Returns the reasons (empty when fine).
+ * Round R: the closing rule for a text with NO real action: the last slide has no button (a plain statement or a statement card with a real takeaway sentence from the text). A button there is a
+ * miss, and so is filler as a headline. A text with a real action (or contact details) is not checked here. Returns the reasons (empty when fine).
  */
-export function closingProblems(s: SlideSpec, text: string, handle?: string): string[] {
+export function closingProblems(s: SlideSpec, text: string, _handle?: string): string[] {
   if (textHasAction(text)) return [];
-  // a closing button taken straight from the text ("Comment brain" for "... comment brain, and ...") is faithful to the source: never a problem
-  if (s.layout === 'cta-button' && labelIsSourcePhrase(String(s.fields.button ?? ''), text)) return [];
-  const labels = genericLabels(handle);
-  const say = `the text has no real action, so the closing is a "cta-button" with ONE generic label: ${labels.join(' / ')} ("${GENERIC_CTA_OF.save}" for how-to, list, tips or steps; "${isSetHandle(handle) ? `Follow ${handle!.trim()}` : GENERIC_CTA_OF.follow}" for an opinion, story, critique or insight; "${GENERIC_CTA_OF.friend}" for relatable, funny or common-pain posts). Keep the headline a real takeaway sentence from the text. Never invent a link, website, email, offer or number`;
-  const f = s.fields;
-  const head = String(f.headline ?? '').trim();
   const out: string[] = [];
-  if (s.layout === 'cta-button') {
-    if (!isGenericCta(String(f.button ?? ''), handle)) out.push(`closing: ${say} (it is "${String(f.button ?? '')}")`);
-  } else if (s.layout === 'statement-card') {
-    if (!isGenericCta(String(f.caption ?? ''), handle)) out.push(`closing: ${say} (a statement card closing carries the label in its caption)`);
-  } else if (PLAIN_CLOSINGS.has(s.layout)) out.push(`closing: the last slide is a plain statement but ${say}`);
-  if (out.length && CLOSING_FILLER.test(head)) out.push('closing: the headline must be a real takeaway sentence from the text, not "Thanks for reading"');
+  const labels = BUTTON_FIELDS.map((k) => String(s.fields[k] ?? '').trim()).filter(Boolean);
+  if (labels.length) out.push(`closing: the text asks the reader for no action, so the closing has no button (it is "${labels.join('" / "')}"): use a statement or a statement card with a takeaway sentence from the text`);
+  if (CLOSING_FILLER.test(String(s.fields.headline ?? '').trim())) out.push('closing: the headline must be a real takeaway sentence from the text, not "Thanks for reading"');
   return out;
 }
+const closingWords = (t: string) => t.toLowerCase().replace(/[’']/g, '').match(/[a-z0-9]+/g) ?? [];
+/** Round R: a button label made of the person's own words: every word is in the text (small function words allowed) and at least one is not a function word. */
+export const labelOwnWords = (label: string, text: string): boolean => labelFromSource(label, text) && closingWords(label).some((w) => !isFunctionWord(w));
 /**
- * The same rule applied by the code when the retry did not fix it (a trim, never a failure): the last plain statement becomes a cta-button with the generic label that fits the text (its
- * headline kept, a caption line kept as the sub line); a statement card keeps its layout and takes the label as its caption; a button with another label gets the generic label.
+ * Round R: an emoji of the person's text that the writer left out is put back on the slide that has the words it followed ("Punit Chawla 😂"), right after them, when the field still fits its
+ * budget. Pure code: no word changes; an emoji that finds no place stays out and the sentences notice lists it (sourceCheck.emojis).
  */
-export function ensureGenericClosing(specs: SlideSpec[], text: string, handle: string | undefined, keepCard: boolean): { specs: SlideSpec[]; trims: Trim[] } {
-  const i = specs.length - 1;
-  if (i < 1 || !closingProblems(specs[i], text, handle).length) return { specs, trims: [] };
-  const s = specs[i];
-  const kind = genericKindOf(text);
-  const label: string = kind === 'follow' && isSetHandle(handle) ? `Follow ${handle!.trim()}` : GENERIC_CTA_OF[kind];
-  const head = String(s.fields.headline ?? '').trim();
-  const clip60 = (t: string) => (t.length <= 60 ? t : t.slice(0, 60).replace(/\s+\S*$/, '').replace(/[,;:\s]+$/, ''));
-  let next: SlideSpec;
-  if (s.layout === 'statement-card' && keepCard) next = { ...s, fields: { ...s.fields, caption: label } as Fields };
-  else if (s.layout === 'cta-button') next = { ...s, fields: { ...s.fields, button: label } as Fields };
-  else {
-    const sub = [s.fields.caption, s.fields.sub, s.fields.line].find((x) => typeof x === 'string' && x.trim()) as string | undefined;
-    next = { layout: 'cta-button', fields: { headline: clip60(head || String(s.fields.lead ?? s.fields.question ?? '')), button: label, ...(sub ? { sub: clip60(sub) } : {}) } as Fields, accents: s.accents };
+export function restoreEmojis(specs: SlideSpec[], text: string): { specs: SlideSpec[]; trims: Trim[] } {
+  const trims: Trim[] = [];
+  let out = specs;
+  const fieldTexts = () => out.flatMap((s) => Object.entries(s.fields).filter(([k]) => !/^image\d?$/.test(k)).flatMap(([, v]) => (Array.isArray(v) ? v : [v])).map(String));
+  const shown = fieldTexts().flatMap(emojisOf);
+  for (const e of emojiPlaces(text)) {
+    const k0 = shown.indexOf(e.emoji);
+    if (k0 >= 0) { shown.splice(k0, 1); continue; }
+    const words = e.after.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) continue;
+    // the field whose text holds those words in order: the emoji goes right after the last of them
+    const pat = new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^\\p{L}\\p{N}]+') + '(?![\\p{L}\\p{N}])', 'iu');
+    let done = false;
+    out = out.map((s, i) => {
+      if (done) return s;
+      for (const [key, v] of Object.entries(s.fields)) {
+        if (typeof v !== 'string' || /^image\d?$/.test(key)) continue;
+        const m = pat.exec(v);
+        if (!m) continue;
+        const at = m.index + m[0].length;
+        const next = v.slice(0, at) + ' ' + e.emoji + v.slice(at);
+        const fields = { ...s.fields, [key]: next } as Fields;
+        if (layoutDef(s.layout) && !validateSlideContent(s.layout, fields).ok) continue;
+        done = true;
+        trims.push({ slide: i + 1, field: 'emoji', from: e.emoji, to: next, max: 0 });
+        return { ...s, fields };
+      }
+      return s;
+    });
   }
-  // the report line says what happened to the closing; it is not a length trim, so there is no limit to quote (max 0) and the label stands alone
-  return { specs: specs.map((x, k) => (k === i ? next : x)), trims: [{ slide: i + 1, field: 'closing cta', from: s.layout === 'cta-button' ? String(s.fields.button ?? '') : '', to: label, max: 0 }] };
+  return { specs: out, trims };
+}
+/**
+ * Round R: the code's check after the writer: a button label may only use words from the person's text, and a text that asks for no action has no button at all. A slide whose button breaks
+ * this loses it: a contact closing keeps its contacts; a cta-button or cta-pair becomes its no-button sibling, a statement card (the headline, the line under it as the caption), else a
+ * statement, else the prose layout, whichever keeps EVERY word of the slide (a label that is not the person's is not their word). No model call; each change is logged.
+ */
+export function dropInventedButtons(specs: SlideSpec[], text: string): { specs: SlideSpec[]; trims: Trim[] } {
+  const action = textHasAction(text);
+  const trims: Trim[] = [];
+  const out = specs.map((s, i) => {
+    const keys = BUTTON_FIELDS.filter((k) => typeof s.fields[k] === 'string' && (s.fields[k] as string).trim());
+    const bad = keys.filter((k) => !action || !labelOwnWords(String(s.fields[k]), text));
+    if (!bad.length) return s;
+    const labels = bad.map((k) => String(s.fields[k]).trim()).join(' / ');
+    const why = action ? 'the label uses words that are not in the text' : 'the text asks for no action';
+    // the text asks for an action: a closing button takes that action's own words instead (the settled closing of the source)
+    const act = action && s.layout === 'cta-button' ? sourceAction(text) : null;
+    if (act && labelOwnWords(act.label, text)) {
+      trims.push({ slide: i + 1, field: 'closing cta', from: labels, to: act.label, max: 0 });
+      return { ...s, fields: { ...s.fields, button: act.label } as Fields };
+    }
+    if (s.layout === 'contact-closing') {
+      trims.push({ slide: i + 1, field: 'invented button', from: labels, to: `${why}; the contacts stay`, max: 0 });
+      return { ...s, fields: Object.fromEntries(Object.entries(s.fields).filter(([k]) => !bad.includes(k))) as Fields };
+    }
+    // a line under the headline the writer made up (its words are not in the text) is not carried over: the sub-line rule of the closing
+    const LINES = ['sub', 'line', 'line1', 'line2', 'caption'];
+    const made = LINES.filter((k) => typeof s.fields[k] === 'string' && (s.fields[k] as string).trim() && !inSource(s.fields[k] as string, text));
+    for (const k of made) trims.push({ slide: i + 1, field: 'closing sub line', from: String(s.fields[k]), to: '(not in the text)', max: 0 });
+    const kept = Object.fromEntries(Object.entries(s.fields).filter(([k]) => !BUTTON_FIELDS.includes(k) && k !== 'link' && !made.includes(k))) as Fields;
+    const head = String(kept.headline ?? '').trim();
+    const cap = LINES.map((k) => String(kept[k] ?? '').trim()).filter(Boolean).join(' ');
+    const tries: [string, Fields | null][] = [
+      ['statement-card', head ? ({ headline: head, ...(cap ? { caption: cap } : {}) } as Fields) : null],
+      ['statement', head ? ({ headline: head, ...(cap ? { caption: cap } : {}) } as Fields) : null],
+      ['prose', proseFieldsOf(kept)],
+    ];
+    for (const [layout, fields] of tries) {
+      if (!fields || !validateSlideContent(layout, fields).ok || !keepsAllWords(kept, fields)) continue;
+      trims.push({ slide: i + 1, field: 'invented button', from: labels, to: `${why}; the closing is "${layout}" with every other word`, max: 0 });
+      return { layout, fields, accents: s.accents } as SlideSpec;
+    }
+    return s;
+  });
+  return { specs: out, trims };
 }
 /** The closing fields that carry a line under the headline. */
 const SUB_FIELDS: Record<string, string[]> = { 'cta-button': ['sub'], 'contact-closing': ['line'], 'cta-pair': ['line1', 'line2'] };
@@ -1037,6 +1090,8 @@ export function trimNote(t: Trim): string {
   if (t.field === 'highlight') return `slide ${t.slide}: the highlight "${t.from}" was longer than ${t.max} word${t.max === 1 ? '' : 's'}, so the code kept the last words: "${t.to}".`;
   if (t.field === 'step swap') return `slide ${t.slide}: only one slide in the deck is a step, so the code drew it as split-text with the same words (step-numeral is for two or more steps of one sequence).`;
   if (t.field === 'closing cta') return t.from ? `slide ${t.slide}: the closing button "${t.from}" was not the call to action the text asks for, so the code used "${t.to}".` : `slide ${t.slide}: the closing had no call to action, so the code made it "${t.to}".`;
+  if (t.field === 'emoji') return `slide ${t.slide}: the writer left out the ${t.from} of your text, so the code put it back after the same words: "${t.to}".`;
+  if (t.field === 'invented button') return `slide ${t.slide}: the button "${t.from}" is not your words (${t.to.split(';')[0]}), so the code left it out:${t.to.split(';').slice(1).join(';')}.`;
   if (t.field === 'closing sub line') return `slide ${t.slide}: the line under the closing headline, "${t.from}", uses words that are not in the text, so the code left it out (an offer or promise is never invented).`;
   if (t.to.startsWith('(removed')) return `slide ${t.slide}: ${t.field} "${t.from}" repeats the headline, so the code left it out.`;
   if (t.field === 'button') return `slide ${t.slide}: the button "${t.from}" is not an action phrase (verb first, 2 to 4 words), so the code left it out: ${t.to}.`;
@@ -1551,6 +1606,14 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     const di = dropInvented(specs, req.text, parsed.title);
     specs = di.specs;
     tr.trims.push(...di.trims);
+    // Round R: a button label only of the person's words; no button when the text asks for no action
+    const db = dropInventedButtons(specs, req.text);
+    specs = db.specs;
+    tr.trims.push(...db.trims);
+    // Round R: an emoji of the text the writer left out goes back after the same words (when the field has room); one that still is on no slide is listed by the sentences notice
+    const re = restoreEmojis(specs, req.text);
+    specs = re.specs;
+    tr.trims.push(...re.trims);
   }
   // one step-numeral slide alone in a deck is not a sequence: it is drawn as split-text with the same words (for the person's own script too)
   {
@@ -1587,7 +1650,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
 
   const rotate = (list: SlideSpec[] = specs) => deckRotation(list, look, style);
   const ctaCtx: CtaCtx = { handle, text: req.text };
-  // The closing is never a reason for a second writer call: a closing that breaks the rule (no real action in the text, so a generic label) is settled by the code below (ensureGenericClosing, settleClosing).
+  // The closing is never a reason for a second writer call: a closing that breaks the rule is settled by the code below (dropInventedButtons, settleClosing).
   const drawAll = async (only?: Set<number>, prev?: Map<number, Drawn>) => {
     const rot = rotate();
     // the project's pictures go into the picture slots by code (best fit, each at most once); a layout that cannot get enough keeps its text-only form
@@ -1668,6 +1731,12 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
         changed.add(i);
       }
     }
+    // Round R: the retry's answer gets the button check too, before a preset's card closing could carry its label as a caption
+    {
+      const rb = dropInventedButtons(specs, req.text);
+      specs = rb.specs;
+      tr.trims.push(...rb.trims);
+    }
     // a preset that closes on a card moves the new closing onto it again (the preset's flavour)
     if (style.closingLayout && look.pack?.look?.flavour) specs = flavourPass(specs, style, look, look.pack.name.replace(/ pack$/, ''), coverKeyOf(parsed.title, specs, styleIdOf(look.pack))).specs;
     // the layouts changed, so the rotation changes: redraw the whole deck (no model call)
@@ -1701,12 +1770,12 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
       ({ out: drawn, rot } = await drawAll());
     }
   }
-  // A text with no real action whose closing is still a plain statement (or a button with another label) after the retry: the closing becomes the generic call to action that fits the text.
+  // Round R: after the retry the same check: a button label only of the person's words, no button when the text asks for no action (never a generic "Follow for more")
   if (!own) {
-    const gc = ensureGenericClosing(specs, req.text, handle, !!style.closingLayout && style.closingLayout.layout === 'statement-card');
-    if (gc.trims.length) {
-      specs = gc.specs;
-      tr.trims.push(...gc.trims);
+    const ib = dropInventedButtons(specs, req.text);
+    if (ib.trims.length) {
+      specs = ib.specs;
+      tr.trims.push(...ib.trims);
       ({ out: drawn, rot } = await drawAll());
     }
   }

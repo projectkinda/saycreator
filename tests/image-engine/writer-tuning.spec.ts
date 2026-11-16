@@ -33,8 +33,8 @@ test('the prompt: the closing depends on the content, a button is an action phra
     expect(p).toContain('"cta-pair" when it gives TWO different actions');
     expect(p).toContain('"contact-closing" when the text itself contains contact details');
     expect(p).toContain('never invent any');
-    expect(p, `${id}: no real action: a generic cta`).toContain('If the text has NO real action, the closing is STILL a "cta-button"');
-    expect(p, `${id}: button rule`).toContain('button label is an ACTION PHRASE: verb first, 2 to 4 words');
+    expect(p, `${id}: no real action: no button (Round R)`).toContain('If the text has NO real action, the closing has NO button');
+    expect(p, `${id}: button rule`).toContain('button label is an ACTION PHRASE made ONLY of words from the text: verb first, 2 to 4 words');
     expect(p).toContain('"Book a call"');
     expect(p).toContain('"Which fits you?"');
     expect(p).toContain('Save this for later');
@@ -85,18 +85,27 @@ test('a button that is not an action phrase: one retry asks for a new one; if it
       const lib = out.designed.library;
       return { calls: n, layouts: lib.layouts, closing: lib.plan.specs[lib.plan.specs.length - 1], adjustments: lib.codeAdjustments, retries: lib.retries, trims: lib.trims ?? [], retryPrompt: prompts[1] ?? '', first };
     };
-    const bad = { layout: 'cta-button', fields: { headline: 'Sleep on it, then back it', button: 'Sleep well' }, accents: [] };
+    // a label of the text's own words that is not an action phrase (Round R: an invented label never gets this far, the code replaces it with the text's own action, see e)
+    const bad = { layout: 'cta-button', fields: { headline: 'Sleep on it, then back it', button: 'Kickstarter today' }, accents: [] };
     const fixed = JSON.stringify({ slides: { '7': { layout: 'cta-button', fields: { headline: 'Back Quick Flip today', button: 'Back it now' }, accents: [] } } });
     const first = (c: any) => JSON.stringify({ title: 'Quick Flip', slides: [...BODY, c] });
     const a = await run(bad, [first(bad), fixed]);
-    const stillBad = JSON.stringify({ slides: { '7': { layout: 'cta-button', fields: { headline: 'Sleep on it', button: 'Which fits you?' }, accents: [] } } });
+    const stillBad = JSON.stringify({ slides: { '7': { layout: 'cta-button', fields: { headline: 'Sleep on it', button: 'Kickstarter today' }, accents: [] } } });
     const b = await run(bad, [first(bad), stillBad]);
-    const good = { layout: 'cta-button', fields: { headline: 'Back Quick Flip today', button: 'Book a call' }, accents: [] };
+    const invented = { layout: 'cta-button', fields: { headline: 'Sleep on it, then back it', button: 'Sleep well' }, accents: [] };
+    const e = await run(invented, [first(invented)]);
+    // (Round R: a good label is an action phrase made of the text's own words)
+    const good = { layout: 'cta-button', fields: { headline: 'Back Quick Flip today', button: 'Back it today' }, accents: [] };
     const c = await run(good, [first(good)]);
     const none = { layout: 'statement-card', fields: { headline: 'One hoodie. Two jobs.', caption: 'That is the whole idea.' }, accents: [] };
     const d = await run(none, [first(none)]);
-    return { a, b, c, d };
+    return { a, b, c, d, e };
   }, BODY);
+  // Round R: an invented label (its words are not in the text) costs no retry: the code uses the action the text asks for in its own words, or (no label can be built from the text, as
+  // here) the closing loses the button; never the invented label
+  expect(r.e.calls).toBe(1);
+  expect(r.e.closing.fields.button).toBeUndefined();
+  expect(JSON.stringify(r.e.closing.fields)).not.toContain('Sleep well');
   expect(r.a.calls, 'a bad button costs one retry').toBe(2);
   expect(r.a.retryPrompt, 'the retry says what is wrong with the button').toContain('does not start with an action verb');
   expect(r.a.closing.fields.button).toBe('Back it now');
@@ -107,7 +116,7 @@ test('a button that is not an action phrase: one retry asks for a new one; if it
   expect(r.b.adjustments.join(' ')).toContain('is not an action phrase');
   expect(r.b.layouts.length, 'a trim, not a failure: all 7 slides are there').toBe(7);
   expect(r.c.calls).toBe(1);
-  expect(r.c.closing.fields.button).toBe('Book a call');
+  expect(r.c.closing.fields.button).toBe('Back it today');
   expect(r.d.calls).toBe(1);
   expect(r.d.layouts[6], 'a closing statement with no button is kept as it is').toBe('statement-card');
 });
