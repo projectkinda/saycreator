@@ -64,10 +64,11 @@ export async function readScrim(b: Built): Promise<ScrimReading> {
  * Draws a title-over-photo slide with the weakest scrim that reads: `build(level)` draws it at a scrim level (0 gradient .. 3 solid panel). Returns the slide, the level used and what the last
  * reading was; `reads` false means even the solid panel was not measured as reading (the caller falls back to photo-full-caption).
  */
-export async function settleScrim(build: (level: number) => Promise<Built>): Promise<{ built: Built; level: number; reads: boolean; tried: { level: number; worst: number }[] }> {
+/** `from`: the weakest level tried (Round T: a headline the Round T check measured as not reading is drawn again from the next level up). */
+export async function settleScrim(build: (level: number) => Promise<Built>, from = 0): Promise<{ built: Built; level: number; reads: boolean; tried: { level: number; worst: number }[] }> {
   const tried: { level: number; worst: number }[] = [];
   let last: Built | null = null;
-  for (let level = 0; level <= 3; level++) {
+  for (let level = Math.max(0, Math.min(3, from)); level <= 3; level++) {
     const b = await build(level);
     last = b;
     if (!b.ok) return { built: b, level, reads: false, tried };

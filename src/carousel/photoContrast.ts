@@ -181,3 +181,41 @@ export function photoContrastSentence(m: PhotoContrastReading): string {
   const part = (r: PhotoContrastRole) => `${r.role === 'recurring' ? 'page chrome' : r.role === 'side-label' ? 'side label (page chrome)' : r.role} ${r.ratio.toFixed(2)}:1 (needs ${r.threshold}:1${r.pass ? '' : ', too low'})`;
   return `Text over the picture, measured on the slide as drawn (${LIGHT_PERCENTILE}th percentile of the pixels behind light text, ${100 - LIGHT_PERCENTILE}th behind dark text): ${m.roles.map(part).join('; ')}.`;
 }
+
+/** The strongest plate behind a side label (Round T repair): a soft panel in the colour opposite the label's ink, never more opaque than this. */
+export const PLATE_MAX = 0.6;
+const PLATES = [0.3, 0.45, PLATE_MAX];
+export interface SideLabelRepair { svg: string; repair: string; ratio: number; pass: boolean }
+/**
+ * Round T: a side label (page chrome) that does not read at 4.5:1 over a photo is repaired on the drawing, in this order, stopping at the first that passes: a plate behind the label only (its own
+ * ink, 0.3, 0.45 then 0.6 opacity, dark under light ink, light under dark ink), then the other ink of the slide's palette (`inks`: the text and ground colours of the slide), then that ink on a plate.
+ * Nothing moves and no word changes. When nothing passes, the best reading is kept (pass false). null: the slide has no side label over a picture.
+ */
+export async function repairSideLabel(b: Pick<Built, 'layers' | 'svg'> & { images?: Built['images'] }, inks: string[]): Promise<SideLabelRepair | null> {
+  const pics: Box[] = b.images?.length ? b.images.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })) : pictureBoxesOfSvg(b.svg);
+  const label = sideLabelsOfSvg(b.svg).find((sl) => pics.some((p) => overlaps(p, sl.box)));
+  if (!label) return null;
+  const m = /<text transform="translate\([\d.]+ [\d.]+\) rotate\(-90\)"[^>]*>[^<]*<\/text>/.exec(b.svg);
+  if (!m) return null;
+  const el = m[0];
+  const read = async (svg: string) => (await measurePhotoContrast({ ...b, svg })).roles.find((r) => r.role === 'side-label');
+  const withInk = (ink: string) => el.replace(/fill="#[0-9A-Fa-f]{6}"/, `fill="${ink}"`);
+  const plate = (ink: string, a: number) => {
+    const light = (lumOfHex(ink) ?? 0) > 0.18;
+    const p = { x: label.box.x - 10, y: label.box.y - 12, w: label.box.w + 20, h: label.box.h + 24 };
+    return `<rect data-role="side-label-plate" x="${Math.round(p.x)}" y="${Math.round(p.y)}" width="${Math.round(p.w)}" height="${Math.round(p.h)}" rx="${Math.round(p.w / 2)}" fill="${light ? '#000000' : '#FFFFFF'}" fill-opacity="${a}"/>`;
+  };
+  const tries: { svg: string; repair: string }[] = [];
+  for (const a of PLATES) tries.push({ svg: b.svg.replace(el, () => plate(label.ink, a) + el), repair: `a ${a} plate behind the side label` });
+  const others = [...new Set(inks.map((c) => c.toUpperCase()))].filter((c) => /^#[0-9A-F]{6}$/.test(c) && c !== label.ink.toUpperCase());
+  for (const c of others) tries.push({ svg: b.svg.replace(el, () => withInk(c)), repair: `the side label in the other ink (${c})` });
+  for (const c of others) for (const a of PLATES) tries.push({ svg: b.svg.replace(el, () => plate(c, a) + withInk(c)), repair: `the side label in the other ink (${c}) on a ${a} plate` });
+  let best: SideLabelRepair | null = null;
+  for (const t of tries) {
+    const r = await read(t.svg);
+    if (!r) continue;
+    if (r.pass) return { svg: t.svg, repair: t.repair, ratio: r.ratio, pass: true };
+    if (!best || r.ratio > best.ratio) best = { svg: t.svg, repair: t.repair, ratio: r.ratio, pass: false };
+  }
+  return best;
+}

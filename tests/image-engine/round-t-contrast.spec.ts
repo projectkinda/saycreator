@@ -72,7 +72,11 @@ test('T1 the check reads the photo: light text with no scrim fails on every pict
     // style-1 sets the handle upright along the right edge (a 36 px side label, page chrome): over the photo it is measured too, at 4.5:1
     expect(x.side, `${n}: the side label crosses the photo`).not.toBeNull();
     expect(x.side.threshold, n).toBe(4.5);
-    expect(x.rows[0].pass, n).toBe(x.app.pass && x.side.pass);
+    // the repair pass: a side label that does not read is repaired (a plate, the other ink), the headline is left as it is
+    expect(x.rows[0].pass, `${n}: after the repair pass`).toBe(true);
+    const sideRow = x.rows[0].roles.find((q: any) => q.role === 'side-label');
+    if (!x.side.pass) expect(sideRow.repair, n).toMatch(/plate behind the side label|side label in the other ink/);
+    else expect(sideRow.repair, n).toBeUndefined();
     expect(x.app.ratio, n).toBeGreaterThanOrEqual(3);
     expect(x.rows, n).toHaveLength(1);
     expect(x.rows[0].roles.find((q: any) => q.role === 'title').ratio, n).toBe(x.app.ratio);
@@ -230,7 +234,88 @@ test('T4 the app: the deck stores one row per slide with text over a picture, re
   await page.waitForTimeout(1500);
   const d2 = await stored(page);
   expect(d2.designed.library.photoContrast.map((r: any) => r.slide)).toEqual(over);
-  // Mono editorial glow (style-1): the headline still reads
-  expect(d2.designed.library.photoContrast.every((r: any) => r.roles.find((q: any) => q.role === 'title').pass)).toBe(true);
+  // Mono editorial glow (style-1): the headline still reads, and its side label over the photo is repaired, so every row passes; the layouts and words are those of the plan
+  const rows2 = d2.designed.library.photoContrast;
+  expect(rows2.every((r: any) => r.pass), JSON.stringify(rows2)).toBe(true);
+  const sideFixed = rows2.filter((r: any) => r.roles.some((q: any) => q.role === 'side-label' && q.repair));
+  expect(d2.designed.library.plan.specs.map((s: any) => s.layout)).toEqual(specs.map((s: any) => s.layout));
+  expect(d2.designed.library.plan.specs.map((s: any) => JSON.stringify(s.fields))).toEqual(specs.map((s: any) => JSON.stringify(s.fields)));
+  const svgOf = (dd: any, k: number) => dd.designed.slides[String(k - 1)].built.svg as string;
+  const fixedSvgs = sideFixed.map((r: any) => svgOf(d2, r.slide));
+  // the same switch again draws and repairs the same way (deterministic): a colour combination and back would redraw too; a reload keeps the drawing
+  await page.reload();
+  await expect(page.locator('.cr-film li').nth(4)).toBeVisible({ timeout: 60_000 });
+  const d3 = await stored(page);
+  expect(sideFixed.map((r: any) => svgOf(d3, r.slide))).toEqual(fixedSvgs);
+  // a move: the slide is drawn again at its new place and still reads (repaired again where needed)
+  const k = over[0];
+  if (!(await page.getByTestId('arrange-box').isVisible().catch(() => false))) await page.getByTestId('edit-slides').click();
+  await page.getByRole('button', { name: `Show slide ${k}`, exact: true }).click();
+  await page.getByRole('button', { name: `Move slide ${k} up`, exact: true }).click();
+  await expect(page.getByTestId('arrange-status')).toBeVisible({ timeout: 60_000 });
+  await page.waitForTimeout(1500);
+  const d4 = await stored(page);
+  expect(d4.designed.library.photoContrast.map((r: any) => r.slide)).toContain(k - 1);
+  expect(d4.designed.library.photoContrast.every((r: any) => r.pass)).toBe(true);
   expect(f.calls, 'no writer call after the build').toBe(made);
+});
+
+test('T5 each repair is reached on its own fixture: a gradient headline gets a stronger scrim; a side label gets a plate, or the other ink on a plate; words, layout and picture never change', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const pics = await makeHard(page);
+  const r = await page.evaluate(async (pics) => {
+    const DL: any = await import('/src/carousel/designLibrary.ts');
+    const PR: any = await import('/src/carousel/presets.ts');
+    const FA: any = await import('/src/reference/faithful.ts');
+    const IM: any = await import('/src/carousel/layouts/images.ts');
+    const PC: any = await import('/src/carousel/photoContrast.ts');
+    const fonts: any = await import('/src/image-engine/fonts.ts'); await fonts.loadFonts();
+    FA.setPictureResolver(async (ref: string) => (pics as any)[ref.slice('picture:'.length).split('#')[0]] ?? null);
+    const words = (b: any) => b.layers.filter((l: any) => l.kind === 'text').map((l: any) => l.text).join(' | ');
+    const href = (svg: string) => [...svg.matchAll(/<image href="([^"]+)"/g)].map((m) => m[1]).join(' ');
+    const one = async (styleId: string, pic: string, ground: number, v: 0 | 1) => {
+      const { style } = DL.styleFromPack(PR.presetPackFor(styleId, false, null));
+      const f = { headline: 'The hoodie that becomes a backpack', line: 'Ten seconds, one zip.', image: IM.makeRef({ id: pic, w: 1280, h: 960, photo: true }) };
+      const d = await DL.drawOne({ layout: 'title-over-photo', fields: f, accents: [] }, v, style, { handle: '@saycreator', index: 2, total: 7, cut: 'plain', invert: false, density: 'normal', ground });
+      const before = await PC.measurePhotoContrast(d.built);
+      const st = await DL.settlePhotoContrast([d], ['title-over-photo']);
+      const after = st.drawn[0];
+      const again = await DL.settlePhotoContrast([await DL.drawOne({ layout: 'title-over-photo', fields: f, accents: [] }, v, style, { handle: '@saycreator', index: 2, total: 7, cut: 'plain', invert: false, density: 'normal', ground })], ['title-over-photo']);
+      return {
+        before: before.roles.map((q: any) => ({ role: q.role, pass: q.pass, ratio: q.ratio })), row: st.rows[0], notes: st.notes,
+        sameWords: words(after.built) === words(d.built), samePicture: href(after.built.svg) === href(d.built.svg),
+        plates: [...after.built.svg.matchAll(/data-role="side-label-plate"[^>]*fill-opacity="([\d.]+)"/g)].map((m) => Number(m[1])),
+        deterministic: again.drawn[0].built.svg === after.built.svg,
+        untouched: before.pass ? after.built.svg === d.built.svg : null,
+      };
+    };
+    return {
+      gradient: await one('style-8', 'busy-check', 0, 0),
+      plate: await one('style-1', 'near-white', 0, 0),
+      otherInk: await one('style-1', 'busy-check', 1, 0),
+      reads: await one('style-3', 'busy-check', 0, 0),
+    };
+  }, pics);
+  // the gradient headline (style-8): fails as the layout draws it, reads after its own scrim is raised
+  expect(r.gradient.before.find((q: any) => q.role === 'title').pass).toBe(false);
+  expect(r.gradient.row.pass).toBe(true);
+  expect(r.gradient.row.roles.find((q: any) => q.role === 'title').repair).toMatch(/^the title-over-photo scrim raised from level \d to \d of 3$/);
+  // the side label on a plate (its own ink), the side label in the other ink on a plate
+  for (const k of ['plate', 'otherInk'] as const) {
+    expect(r[k].before.find((q: any) => q.role === 'side-label').pass, k).toBe(false);
+    expect(r[k].row.pass, k).toBe(true);
+    expect(r[k].plates.length, k).toBe(1);
+    expect(r[k].plates[0], `${k}: never more than 0.6`).toBeLessThanOrEqual(0.6);
+  }
+  expect(r.plate.row.roles.find((q: any) => q.role === 'side-label').repair).toMatch(/^a 0\.\d+ plate behind the side label$/);
+  expect(r.otherInk.row.roles.find((q: any) => q.role === 'side-label').repair).toMatch(/^the side label in the other ink \(#[0-9A-F]{6}\) on a 0\.\d+ plate$/);
+  for (const k of ['gradient', 'plate', 'otherInk', 'reads'] as const) {
+    expect(r[k].sameWords, `${k}: every word kept`).toBe(true);
+    expect(r[k].samePicture, `${k}: the same picture`).toBe(true);
+    expect(r[k].deterministic, `${k}: the same drawing every time`).toBe(true);
+  }
+  // a slide that reads is left exactly as it is
+  expect(r.reads.before.every((q: any) => q.pass)).toBe(true);
+  expect(r.reads.untouched).toBe(true);
+  expect(r.reads.notes).toEqual([]);
 });

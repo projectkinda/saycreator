@@ -23,7 +23,7 @@ import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImag
 import { pictureUseOf, pinnedPicture, placeImages, usedIds } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { settleScrim } from './scrim';
-import { measurePhotoContrast, type PhotoContrastRole } from './photoContrast';
+import { measurePhotoContrast, repairSideLabel, type PhotoContrastRole } from './photoContrast';
 import { namePass } from './pictureNames';
 import { heroPass, picturePass, screenshotPass, separatePictureRuns, type PictureSwap } from './picturePass';
 import { isTallShot, shapePass, tallShotTooSmall, type ShapeRow } from './photoShape';
@@ -1369,26 +1369,77 @@ export interface Drawn {
   problems: string[];
   /** title-over-photo: the scrim level the drawing settled on (0 is the layout's own; 1..3 were raised so the headline reads), or 'caption' when no scrim read and the slide became a photo-full-caption. */
   scrim?: number | 'caption';
+  /** Round T: draws the same slide again with the title-over-photo scrim starting at a higher level (set by drawOne; never stored). */
+  redo?: (scrimFrom: number) => Promise<Drawn>;
 }
 /** Round T: one slide's text over its picture, measured on the slide as drawn (photoContrast.ts). */
 export interface PhotoContrastSlide { slide: number; layout: string; pass: boolean; roles: PhotoContrastRole[]; ms: number }
 /**
- * Round T: every drawn slide with text over a picture, measured (light text against the 90th percentile of the pixels behind it, dark text against the 10th; 3:1 from 48 px, else 4.5:1). The repair
- * that made a role read is the scrim title-over-photo raised (drawOne), when it raised one. A slide with no text over a picture is not drawn again and has no row. No model call.
+ * Round T: every drawn slide with text over a picture is measured (light text against the 90th percentile of the pixels behind it, dark text against the 10th; 3:1 from 48 px, else 4.5:1) and a slide
+ * that does not read is repaired, stopping at the first step that passes; a slide that reads is left exactly as it is.
+ *  - the headline or its line on title-over-photo (a gradient headline, which the layout's own scrim is not chosen for): the same slide drawn again with its scrim one level stronger, up to the solid
+ *    panel (level 3); the layout, the words and the picture stay.
+ *  - the side label (page chrome) over a photo: a plate behind the label only (at most 0.6 opacity), then the other ink of the slide's palette, then that ink on a plate (repairSideLabel).
+ * A role that still does not read keeps the best result and stays failing in the report. The repairs run on every drawing (a new deck and every redraw), from the slide as drawn, so a style switch, a
+ * colour change or a move draws and repairs the same way each time. A slide with no text over a picture is not drawn again and has no row. No model call.
  */
-export async function photoContrastOf(drawn: (Drawn | null | undefined)[], layouts: string[]): Promise<PhotoContrastSlide[]> {
+export async function settlePhotoContrast(drawn0: (Drawn | null | undefined)[], layouts: string[]): Promise<{ rows: PhotoContrastSlide[]; drawn: (Drawn | null | undefined)[]; notes: string[] }> {
   const rows: PhotoContrastSlide[] = [];
+  const notes: string[] = [];
+  const drawn = [...drawn0];
+  const read = async (d: Drawn) => { try { return await measurePhotoContrast(d.built!); } catch { return null; } };
+  const ratioOfRole = (x: { roles: PhotoContrastRole[] } | null, role: string) => x?.roles.find((r) => r.role === role)?.ratio ?? 0;
+  const textFails = (x: { roles: PhotoContrastRole[] } | null) => !!x?.roles.some((r) => (r.role === 'title' || r.role === 'body') && !r.pass);
   for (let i = 0; i < drawn.length; i++) {
-    const d = drawn[i];
+    let d = drawn[i];
     if (!d?.built?.images?.length) continue;
-    let m;
-    try { m = await measurePhotoContrast(d.built); } catch { continue; }
-    if (!m.roles.length) continue;
-    const repair = typeof d.scrim === 'number' && d.scrim > 0 ? `the title-over-photo scrim was raised to level ${d.scrim} of 3` : undefined;
-    rows.push({ slide: i + 1, layout: layouts[i] ?? '', pass: m.pass, roles: m.roles.map((r) => (repair ? { ...r, repair } : r)), ms: m.ms });
+    let m = await read(d);
+    if (!m?.roles.length) continue;
+    let ms = m.ms;
+    const repairs = new Map<string, string>();
+    if (textFails(m) && d.redo && typeof d.scrim === 'number' && d.scrim < 3) {
+      for (let lv = d.scrim + 1; lv <= 3; lv++) {
+        const d2 = await d.redo(lv);
+        if (!d2.built || typeof d2.scrim !== 'number') break;
+        const m2 = await read(d2);
+        if (!m2) break;
+        ms += m2.ms;
+        const done = !textFails(m2) || d2.scrim >= 3;
+        if (!done) { lv = Math.max(lv, d2.scrim); continue; }
+        // the strongest scrim and still no better: the slide stays as it was drawn
+        if (textFails(m2) && ratioOfRole(m2, 'title') <= ratioOfRole(m, 'title')) break;
+        const how = `the title-over-photo scrim raised from level ${d.scrim} to ${d2.scrim} of 3`;
+        for (const r of m2.roles) if (r.role === 'title' || r.role === 'body') repairs.set(r.role, how);
+        notes.push(`slide ${i + 1}: ${how}, so the headline reads on the picture (${ratioOfRole(m2, 'title')}:1).`);
+        d = { ...d2, redo: d.redo };
+        m = m2;
+        break;
+      }
+    }
+    const side = m.roles.find((r) => r.role === 'side-label');
+    if (side && !side.pass) {
+      const pal = d.built!.palette ?? {};
+      const fix = await repairSideLabel(d.built!, [pal.text, pal.bg].filter(Boolean));
+      if (fix && fix.ratio > side.ratio) {
+        d = { ...d, built: { ...d.built!, svg: fix.svg } };
+        const m3 = await read(d);
+        if (m3) { ms += m3.ms; m = m3; }
+        repairs.set('side-label', fix.repair);
+        notes.push(`slide ${i + 1}: ${fix.repair}, so the side label reads on the picture (${fix.ratio}:1${fix.pass ? '' : ', still under 4.5:1'}).`);
+      }
+    }
+    // the scrim drawOne itself raised (the Round N rule), when it raised one
+    const own = typeof d.scrim === 'number' && d.scrim > 0 ? `the title-over-photo scrim was raised to level ${d.scrim} of 3` : undefined;
+    drawn[i] = d;
+    rows.push({
+      slide: i + 1, layout: layouts[i] ?? '', pass: m.roles.every((r) => r.pass), ms,
+      roles: m.roles.map((r) => { const how = repairs.get(r.role) ?? (r.role === 'title' || r.role === 'body' ? own : undefined); return how ? { ...r, repair: how } : r; }),
+    });
   }
-  return rows;
+  return { rows, drawn, notes };
 }
+/** The rows of settlePhotoContrast alone (measured and repaired; the repaired drawings are not returned). */
+export const photoContrastOf = async (drawn: (Drawn | null | undefined)[], layouts: string[]): Promise<PhotoContrastSlide[]> => (await settlePhotoContrast(drawn, layouts)).rows;
 /** Draws one slide. A density or cut that does not fit is dropped by the code (no model call); only a plain failure is a problem. */
 /**
  * After a deck is drawn: a run of 3 or more plain slides is broken by giving a slide in it (the middle one first) another cut its layout carries. A layout that cannot carry any
@@ -1452,7 +1503,7 @@ export async function breakPlainRuns(drawn: (Drawn | undefined)[], layoutOf: (i:
     if (!fixed) return;
   }
 }
-export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyle, o: { handle: string; index: number; total: number; cut: Cut; invert: false | 'full' | 'tint'; density: 'normal' | 'statement'; ground?: number }): Promise<Drawn> {
+export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyle, o: { handle: string; index: number; total: number; cut: Cut; invert: false | 'full' | 'tint'; density: 'normal' | 'statement'; ground?: number; /** Round T: the weakest title-over-photo scrim level to try. */ scrimFrom?: number }): Promise<Drawn> {
   const f = fieldsOf(spec);
   const adjustments: string[] = [];
   const headline = typeof f.headline === 'string' ? f.headline : typeof f.question === 'string' ? f.question : '';
@@ -1472,7 +1523,7 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
     let b: Built;
     if (spec.layout === 'title-over-photo' && typeof f.image === 'string' && f.image) {
       // a headline on a picture: the scrim is the weakest one at which every word reads at 4.5:1 over 95% of the pixels behind it, measured on the real picture; if even the solid panel does not read, the slide is the full-photo caption layout
-      const sc = await settleScrim((level) => buildSlide(spec.layout, variant, f, style, { ...opts, scrim: level }));
+      const sc = await settleScrim((level) => buildSlide(spec.layout, variant, f, style, { ...opts, scrim: level }), o.scrimFrom ?? 0);
       if (sc.reads) {
         b = sc.built;
         scrim = sc.level;
@@ -1487,7 +1538,7 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
     if (b.ok) {
       if (k > 0) adjustments.push(`slide ${o.index + 1}: drawn with ${t.cut}${t.invert ? ' + invert' : ''}${t.density === 'statement' ? ' + statement density' : ''} instead of ${o.cut}${o.invert ? ' + invert' : ''}${density === 'statement' ? ' + statement density' : ''} (that did not fit: ${tries[k - 1] && last ? 'content too big for it' : ''}).`);
       if (b.cut !== t.cut) adjustments.push(`slide ${o.index + 1}: the ${t.cut} plane would hold no content for ${spec.layout}, so it is drawn with no plane.`);
-      return { built: b, cut: b.cut, invert: !!t.invert, density: t.density, adjustments, problems: [], ...(scrim !== undefined ? { scrim } : {}) };
+      return { built: b, cut: b.cut, invert: !!t.invert, density: t.density, adjustments, problems: [], ...(scrim !== undefined ? { scrim, redo: (scrimFrom: number) => drawOne(spec, variant, style, { ...o, scrimFrom }) } : {}) };
     }
   }
   return { built: null, cut: 'plain', invert: false, density: 'normal', adjustments, problems: (last?.errors ?? ['it could not be drawn']).slice(0, 4) };
@@ -1947,6 +1998,11 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   if (!v.script && !own) throw new WriterError('invalid', 'The slides could not be turned into a script.', v.errors);
   const script: CarouselScript = own ? { ...own.script, brand: { ...own.script.brand, handle: handle.trim() || own.script.brand.handle } } : { ...v.script!, brand: { ...v.script!.brand, handle: handle.trim() || v.script!.brand.handle } };
   const designed: Designed = { slides: {}, fallbacks: {}, notes: [], calls, ms, layouts: {}, ...(tokens.input || tokens.output ? { tokens } : {}), ...(writes.length ? { requestBytes: { images: [], prompt: writes[0].promptChars, body: writes[0].requestBytes ?? writes[0].promptBytes } } : {}) };
+  // Round T: text over a picture is measured and, where it does not read, repaired (the repaired drawing is the one kept)
+  const settled = await settlePhotoContrast(specs.map((_, i) => drawn.get(i)), specs.map((sp) => sp.layout));
+  settled.drawn.forEach((d, i) => { if (d) drawn.set(i, d); });
+  const photoContrast = settled.rows;
+  adjustments.push(...settled.notes);
   specs.forEach((s, i) => {
     const d = drawn.get(i);
     if (!d?.built) return;
@@ -1954,7 +2010,6 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     designed.slides[String(i)] = ds;
     designed.layouts![String(i)] = s.layout;
   });
-  const photoContrast = await photoContrastOf(specs.map((_, i) => drawn.get(i)), specs.map((sp) => sp.layout));
   const seconds = Math.round((performance.now() - t0) / 100) / 10;
   // the pictures of the project and what became of them in the FINAL deck
   const pictureUse: LibraryReport['pictureUse'] = look.images?.length ? pictureUseOf(specs, look.images) : undefined;
@@ -2080,6 +2135,10 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
       redrawRepairs.push({ slide: i + 1, from: specs[i].layout, to: specs[i].layout, failed, result: after.length ? 'not repaired' : 'repaired', how: 'colour' });
     } else redrawRepairs.push({ slide: i + 1, from: specs[i].layout, to: specs[i].layout, failed, result: 'not repaired', how: 'colour' });
   }
+  // Round T: text over a picture, measured and repaired the way a new deck is
+  const settled = await settlePhotoContrast(drawn, specs.map((s) => s.layout));
+  settled.drawn.forEach((d, i) => { if (d) drawn[i] = d; });
+  adjustments.push(...settled.notes);
   for (const r of redrawRepairs) adjustments.push(`slide ${r.slide}: a colour changed so the words read at phone size, same layout (${r.result}: ${r.failed.join('; ')}).`);
   drawn.forEach((d, i) => {
     adjustments.push(...d.adjustments);
@@ -2088,7 +2147,7 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
       layouts[String(i)] = specs[i].layout;
     }
   });
-  const photoContrast = await photoContrastOf(drawn, specs.map((s) => s.layout));
+  const photoContrast = settled.rows;
   const library: LibraryReport = {
     ...lib,
     photoContrast: photoContrast.length ? photoContrast : undefined,
