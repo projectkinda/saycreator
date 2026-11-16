@@ -153,9 +153,13 @@ export async function buildReport(o: ReportOptions): Promise<{ json: string; com
     photoSlidesAdded: o.doc.designed?.library?.plan ? photoSlidesOf(o.doc.designed.library.plan.specs, o.doc.photos ?? []) : null,
     // Round S: the slides the person removed and moved in Edit slides (slide numbers as they were at the time); the slides below are numbered as the deck is now
     manualEdits: o.doc.designed?.library?.manualEdits ? { removed: o.doc.designed.library.manualEdits.removed.map((r) => ({ slide: r.slide, layout: r.layout })), moved: o.doc.designed.library.manualEdits.moved.map((m) => ({ from: m.from, to: m.to })) } : { removed: [], moved: [] },
+    // Round T: the slides with text over a picture, measured on the slide as drawn (light text against the 90th percentile of the pixels behind it, dark text against the 10th; 3:1 from 48 px, else 4.5:1)
+    photoContrast: (o.doc.designed?.library?.photoContrast ?? []).map((r) => ({ slide: r.slide, layout: r.layout, pass: r.pass, roles: r.roles.map((q) => ({ role: q.role, ratio: q.ratio, threshold: q.threshold, pass: q.pass, tone: q.tone, size: q.size, repair: q.repair ?? null })) })),
     designed: o.doc.designed ? { calls: o.doc.designed.calls, tokens: o.doc.designed.tokens ?? null, layouts: o.doc.designed.layouts ?? null, fallbacks: o.doc.designed.fallbacks, notes: o.doc.designed.notes, requestBytes: o.doc.designed.requestBytes ?? null, library: o.doc.designed.library ?? null, model: 'DRAW_MODEL, else CAROUSEL_MODEL, else sonnet (server setting)' } : o.doc.route?.error ? { failed: true, error: o.doc.route.error, requestBytes: o.doc.route.requestBytes ?? null } : null,
     slides: composed.slides.map((s, i) => ({
       number: i + 1,
+      // Round T: this slide's text over its picture, as measured (null: no text crosses a picture)
+      photoContrast: ((r) => (r ? r.roles.map((q) => ({ role: q.role, ratio: q.ratio, threshold: q.threshold, pass: q.pass, repair: q.repair ?? null })) : null))(o.doc.designed?.library?.photoContrast?.find((r) => r.slide === i + 1)),
       type: s.type,
       // a deck the layout library drew: the library layout each slide really uses, and none of the old route's rule / because / palette lines (they describe a drawing that did not happen)
       ...(libraryLayoutOf(o.doc, i)

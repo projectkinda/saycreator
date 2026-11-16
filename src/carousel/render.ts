@@ -23,6 +23,7 @@ import { pictureStamp } from './photoLibrary';
 import { cleanScript } from './clean';
 import { deckFallbackPack, recurringFor, recurringLayers, recurringMarkup } from './designed';
 import { faithfulChecks, UNCHECKED } from '../reference/faithfulChecks';
+import { hasTextOverPicture, measurePhotoContrast, photoContrastSentence } from './photoContrast';
 import type { Layer } from '../image-engine/types';
 import { activeStyle } from '../reference/active';
 
@@ -223,7 +224,11 @@ class Renderer {
     const png = await svgToPng(fa.svg, W, same ? undefined : { w: W, h: H, bg: fa.bg });
     const k = same ? W / fa.canvas.w : Math.min(W / fa.canvas.w, H / fa.canvas.h);
     const lint = faithfulChecks(fa.layers, { canvas: fa.canvas, bg: fa.bg, k, slideType: slide.type, prose: /data-layout="prose"/.test(fa.svg), svg: fa.svg });
-    return { png, lint, warnings: [`Faithful drawing: these checks cannot run on it. ${UNCHECKED.join(' ')}`], repairs: [], ms: performance.now() - t0 };
+    // Round T: text over a picture is measured on the slide as drawn, so on such a slide the real result takes the place of the "not checked" sentence
+    const over = hasTextOverPicture({ layers: fa.layers as never, svg: fa.svg });
+    const measured = over ? await measurePhotoContrast({ layers: fa.layers as never, svg: fa.svg }).catch(() => null) : null;
+    const warnings = measured?.roles.length ? [`Faithful drawing: these checks cannot run on it. ${UNCHECKED.slice(1).join(' ')}`, photoContrastSentence(measured)] : [`Faithful drawing: these checks cannot run on it. ${UNCHECKED.join(' ')}`];
+    return { png, lint, warnings, repairs: [], ms: performance.now() - t0 };
   }
 
   /** A small picture of a plan, for the style picker. No checks. */

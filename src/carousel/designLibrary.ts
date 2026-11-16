@@ -23,6 +23,7 @@ import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImag
 import { pictureUseOf, pinnedPicture, placeImages, usedIds } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { settleScrim } from './scrim';
+import { measurePhotoContrast, type PhotoContrastRole } from './photoContrast';
 import { namePass } from './pictureNames';
 import { heroPass, picturePass, screenshotPass, separatePictureRuns, type PictureSwap } from './picturePass';
 import { isTallShot, shapePass, tallShotTooSmall, type ShapeRow } from './photoShape';
@@ -1328,6 +1329,8 @@ export interface LibraryReport {
   photoSlidesAdded?: { count: number; slidesBefore: number; slides: PhotoSlideAdded[] };
   /** Round S: the slides the person removed and moved in Edit slides (slideEdit.ts). A redraw keeps it; a new deck has none. */
   manualEdits?: import('./slideEdit').ManualEdits;
+  /** Round T: the slides with text over a picture, measured as drawn (photoContrastOf); recomputed on every redraw. */
+  photoContrast?: PhotoContrastSlide[];
   /** Round 15: slides that failed one of the phone checks when drawn and were drawn again by the code (never a model call): what failed, and what the slide is now. */
   /** Round 16: one row per writer call: what was sent and what it cost (null where the provider does not say). */
   writes?: { call: number; promptChars: number; promptBytes: number; requestBytes: number | null; numTurns: number | null; durationApiMs: number | null; effort: string | null; inputTokens: number | null; outputTokens: number | null; seconds: number }[];
@@ -1364,6 +1367,27 @@ export interface Drawn {
   density: 'normal' | 'statement';
   adjustments: string[];
   problems: string[];
+  /** title-over-photo: the scrim level the drawing settled on (0 is the layout's own; 1..3 were raised so the headline reads), or 'caption' when no scrim read and the slide became a photo-full-caption. */
+  scrim?: number | 'caption';
+}
+/** Round T: one slide's text over its picture, measured on the slide as drawn (photoContrast.ts). */
+export interface PhotoContrastSlide { slide: number; layout: string; pass: boolean; roles: PhotoContrastRole[]; ms: number }
+/**
+ * Round T: every drawn slide with text over a picture, measured (light text against the 90th percentile of the pixels behind it, dark text against the 10th; 3:1 from 48 px, else 4.5:1). The repair
+ * that made a role read is the scrim title-over-photo raised (drawOne), when it raised one. A slide with no text over a picture is not drawn again and has no row. No model call.
+ */
+export async function photoContrastOf(drawn: (Drawn | null | undefined)[], layouts: string[]): Promise<PhotoContrastSlide[]> {
+  const rows: PhotoContrastSlide[] = [];
+  for (let i = 0; i < drawn.length; i++) {
+    const d = drawn[i];
+    if (!d?.built?.images?.length) continue;
+    let m;
+    try { m = await measurePhotoContrast(d.built); } catch { continue; }
+    if (!m.roles.length) continue;
+    const repair = typeof d.scrim === 'number' && d.scrim > 0 ? `the title-over-photo scrim was raised to level ${d.scrim} of 3` : undefined;
+    rows.push({ slide: i + 1, layout: layouts[i] ?? '', pass: m.pass, roles: m.roles.map((r) => (repair ? { ...r, repair } : r)), ms: m.ms });
+  }
+  return rows;
 }
 /** Draws one slide. A density or cut that does not fit is dropped by the code (no model call); only a plain failure is a problem. */
 /**
@@ -1442,6 +1466,7 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
   if (o.cut !== 'plain') tries.push({ cut: 'plain', invert: o.invert, density: 'normal' });
   if (o.invert) tries.push({ cut: 'plain', invert: false, density: 'normal' });
   let last: Built | null = null;
+  let scrim: Drawn['scrim'];
   for (const [k, t] of tries.entries()) {
     const opts = { handle: o.handle, index: o.index, total: o.total, cut: cutsOf(spec.layout).includes(t.cut) ? t.cut : ('plain' as Cut), invert: t.invert, density: t.density, ...(o.ground !== undefined ? { ground: o.ground } : {}) };
     let b: Built;
@@ -1450,8 +1475,10 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
       const sc = await settleScrim((level) => buildSlide(spec.layout, variant, f, style, { ...opts, scrim: level }));
       if (sc.reads) {
         b = sc.built;
+        scrim = sc.level;
         if (sc.level > 0) adjustments.push(`slide ${o.index + 1}: the scrim behind the headline was strengthened to level ${sc.level} of 3 so every word reads at 4.5:1 on the picture.`);
       } else {
+        scrim = 'caption';
         b = await buildSlide('photo-full-caption', variant, { headline: f.headline, ...(f.line ? { line: f.line } : {}), image: f.image, ...(f.accent ? { accent: f.accent } : {}) } as Fields, style, opts);
         adjustments.push(`slide ${o.index + 1}: no scrim made the headline read on this picture, so it is drawn as a full photo with a caption panel.`);
       }
@@ -1460,7 +1487,7 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
     if (b.ok) {
       if (k > 0) adjustments.push(`slide ${o.index + 1}: drawn with ${t.cut}${t.invert ? ' + invert' : ''}${t.density === 'statement' ? ' + statement density' : ''} instead of ${o.cut}${o.invert ? ' + invert' : ''}${density === 'statement' ? ' + statement density' : ''} (that did not fit: ${tries[k - 1] && last ? 'content too big for it' : ''}).`);
       if (b.cut !== t.cut) adjustments.push(`slide ${o.index + 1}: the ${t.cut} plane would hold no content for ${spec.layout}, so it is drawn with no plane.`);
-      return { built: b, cut: b.cut, invert: !!t.invert, density: t.density, adjustments, problems: [] };
+      return { built: b, cut: b.cut, invert: !!t.invert, density: t.density, adjustments, problems: [], ...(scrim !== undefined ? { scrim } : {}) };
     }
   }
   return { built: null, cut: 'plain', invert: false, density: 'normal', adjustments, problems: (last?.errors ?? ['it could not be drawn']).slice(0, 4) };
@@ -1927,12 +1954,14 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     designed.slides[String(i)] = ds;
     designed.layouts![String(i)] = s.layout;
   });
+  const photoContrast = await photoContrastOf(specs.map((_, i) => drawn.get(i)), specs.map((sp) => sp.layout));
   const seconds = Math.round((performance.now() - t0) / 100) / 10;
   // the pictures of the project and what became of them in the FINAL deck
   const pictureUse: LibraryReport['pictureUse'] = look.images?.length ? pictureUseOf(specs, look.images) : undefined;
   const report: LibraryReport = {
     route: 'library',
     ...(own ? {} : { slidesRequested: n, keepEverySentence: req.keepEverySentence !== false }),
+    ...(photoContrast.length ? { photoContrast } : {}),
     ...(photoSlidesAdded.length ? { photoSlidesAdded: { count: photoSlidesAdded.length, slidesBefore: slidesMade0, slides: photoSlidesAdded } } : {}),
     drawVersion: DRAW_VERSION,
     provider: p.id,
@@ -2059,8 +2088,10 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
       layouts[String(i)] = specs[i].layout;
     }
   });
+  const photoContrast = await photoContrastOf(drawn, specs.map((s) => s.layout));
   const library: LibraryReport = {
     ...lib,
+    photoContrast: photoContrast.length ? photoContrast : undefined,
     layouts: specs.map((s) => s.layout),
     variants: variants.map((x) => x + 1),
     cuts: drawn.map((d) => d.cut),
