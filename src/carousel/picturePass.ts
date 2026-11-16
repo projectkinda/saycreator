@@ -75,6 +75,8 @@ export function picturePass(specs0: SlideSpec[], look: Look): { specs: SlideSpec
     let best: { i: number; to: string; fields: Fields; take: number; rank: number } | null = null;
     specs.forEach((sp, i) => {
       if (pinnedPicture(sp)) return; // the person's choice (a picture or none) is never changed by this pass
+      // Round R: the closing stays a closing (a text with no action now closes on a statement or statement card, which this pass would otherwise turn into a picture slide)
+      if (i === specs.length - 1 && specs.length > 1) return;
       // the cover never takes a screenshot (unless the person pinned it): its pool is the photos
       const pool = i === 0 ? unused.filter((p) => !isScreenshot(p)) : unused;
       // a picture layout the deck does not have yet comes first (variety), then the ones it has once

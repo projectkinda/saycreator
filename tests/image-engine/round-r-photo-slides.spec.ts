@@ -83,6 +83,8 @@ test('R1: the user\'s deck (7 asked, 5 made, 6 photos): photo slides fill the 2 
     }
     // the closing stays last, the writer's first slide keeps its photo
     expect(specs[specs.length - 1].fields.headline).toBe('Looking forward for some more of these going forward.');
+    // the closing takes no picture, and (the text asks for no action) no button
+    expect(JSON.stringify(specs[specs.length - 1].fields)).not.toMatch(/picture:|Follow for more/);
     // every photo is on a slide
     const used = new Set(JSON.stringify(specs.map((s: any) => s.fields)).match(/picture:[^#"]+/g)!.map((x: string) => x.slice(8)));
     for (const p of d.photos) expect(used.has(p.id), `photo ${p.label ?? p.id} is on a slide`).toBe(true);
