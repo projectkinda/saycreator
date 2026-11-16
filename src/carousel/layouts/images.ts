@@ -988,6 +988,13 @@ export interface PicInfo {
   label?: string;
 }
 export const isScreenshot = (p: { content?: string }): boolean => p.content === 'screenshot';
+/** Round R: the picture-layout cap is on (a switch the before/after comparison turns off; the app never does). */
+export const pictureCapRule = { on: true };
+/**
+ * Round R: how many slides one picture layout may take. The rule for every layout is twice at most and never two slides in a row; when the person added 4 or more photos (not screenshots), a
+ * picture layout may take 3 slides (never two in a row still holds), so more of their photos find a slide with words.
+ */
+export const pictureLayoutCap = (pics: { content?: string }[] | undefined): number => (pictureCapRule.on && (pics ?? []).filter((p) => !isScreenshot(p)).length >= 4 ? 3 : 2);
 /** The layouts that set text OVER the picture (with a scrim): a screenshot is never placed in them, its own text would show through behind the headline. */
 export const TEXT_OVER_PICTURE: readonly string[] = ['title-over-photo'];
 export const picOrientation = (p: PicInfo): Orientation => orientationOf(p.width, p.height);

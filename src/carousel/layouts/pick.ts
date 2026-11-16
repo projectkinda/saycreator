@@ -31,7 +31,7 @@ export interface Picked {
  */
 /** The key of the "no neighbours" rule: a layout is its own family, except that step-numeral and listicle-numeral are ONE family (two giant numerals side by side look the same). */
 export const neighbourFamily = (l: string): string => (l === 'step-numeral' || l === 'listicle-numeral' ? 'numeral' : l);
-export function rotateVariants(deck: DeckItem[], opts: { photo?: boolean; flavour?: Flavour } = {}): Picked[] {
+export function rotateVariants(deck: DeckItem[], opts: { photo?: boolean; flavour?: Flavour; /** Round R: how many slides one picture layout may take (2, or 3 with 4 or more photos). */ pictureCap?: number } = {}): Picked[] {
   const fl = opts.flavour;
   // a preset's flavour orders the layouts a replacement is taken from: liked first, avoided last (the neighbour and twice-at-most rules still decide)
   const rank = (id: LayoutId) => (fl?.prefer?.includes(id) ? 0 : fl?.avoid?.includes(id) ? 2 : 1);
@@ -39,7 +39,7 @@ export function rotateVariants(deck: DeckItem[], opts: { photo?: boolean; flavou
   const out: Picked[] = [];
   deck.forEach((item, i) => {
     const prev = out[i - 1]?.layout;
-    const ok = (id: LayoutId) => (!prev || neighbourFamily(id) !== neighbourFamily(prev)) && (used[id] ?? 0) < 2 && (opts.photo || !isPhotoLayout(id));
+    const ok = (id: LayoutId) => (!prev || neighbourFamily(id) !== neighbourFamily(prev)) && (used[id] ?? 0) < (isPhotoLayout(id) ? opts.pictureCap ?? 2 : 2) && (opts.photo || !isPhotoLayout(id));
     const wanted = item.layout ? [item.layout, ...(item.shape ? layoutFor(item.shape) : [])] : item.shape ? layoutFor(item.shape) : [];
     const pool = [...wanted, ...LAYOUT_IDS.filter((id) => !isCoverLayout(id) && (!isPhotoLayout(id) || !!opts.photo)).sort((a, b) => rank(a) - rank(b))];
     const layout = pool.find(ok) ?? pool[0];

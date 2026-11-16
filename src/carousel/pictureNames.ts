@@ -9,7 +9,7 @@ import type { PictureSwap } from './picturePass';
 import type { Look } from './designed';
 import { usedIds, withoutImages } from './imagePlace';
 import { pickPicture } from './picturePick';
-import { isScreenshot, type PicInfo } from './layouts/images';
+import { IMAGE_LAYOUT_IDS, isScreenshot, pictureLayoutCap, type PicInfo } from './layouts/images';
 
 const STOP = new Set(['a', 'an', 'the', 'of', 'to', 'in', 'on', 'and', 'or', 'my', 'your', 'our', 'is', 'it', 'for', 'at', 'with', 'by']);
 /** The lowercase words of a text, without punctuation. */
@@ -50,7 +50,8 @@ export function namePass(specs: SlideSpec[], look: Look): NameResult {
     // the deck's rotation sends back a picture layout that repeats the slide before or after it, or that a third slide would use: those layouts are not offered (the writer is never asked again for it)
     const near = [out[i - 1]?.layout, out[i + 1]?.layout].filter((x): x is string => !!x);
     const counts = out.reduce<Record<string, number>>((a, s, k) => (k === i ? a : { ...a, [s.layout]: (a[s.layout] ?? 0) + 1 }), {});
-    const avoid = [...near, ...Object.keys(counts).filter((l) => counts[l] >= 2)];
+    // (Round R: a picture layout may take a third slide when the person added 4 or more photos)
+    const avoid = [...near, ...Object.keys(counts).filter((l) => counts[l] >= ((IMAGE_LAYOUT_IDS as readonly string[]).includes(l) ? pictureLayoutCap(pics) : 2))];
     const r = pickPicture(out[i], i, p.id, pics, look, avoid);
     if (!r.ok) return false;
     const { pin: _pin, ...rest } = r.spec;

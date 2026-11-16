@@ -119,7 +119,7 @@ export function pictureUseOf(specs: PlaceableSpec[], pics: PicInfo[]): { uploade
     used: pics.length - left.length,
     unused: left.map((p) => p.id),
     whyUnused: left.length
-      ? 'No slide could take ' + (left.length === 1 ? 'it' : 'them') + ' without losing words or breaking a layout rule (a picture layout is not used on two slides in a row or on more than two slides, a layout takes only the picture shapes its slot accepts: a phone only a screenshot 0.62 wide or narrower, and a screenshot is never put under text or on the cover). ' + left.map((p) => p.id + ': ' + p.width + 'x' + p.height + ' (' + shapeOfAspect(p.width / p.height) + (isScreenshot(p) ? ', screenshot' : '') + ')').join('; ') + '.'
+      ? 'No slide could take ' + (left.length === 1 ? 'it' : 'them') + ' without losing words or breaking a layout rule (a picture layout is not used on two slides in a row or on more than two slides, three when 4 or more photos were added, a layout takes only the picture shapes its slot accepts: a phone only a screenshot 0.62 wide or narrower, and a screenshot is never put under text or on the cover). ' + left.map((p) => p.id + ': ' + p.width + 'x' + p.height + ' (' + shapeOfAspect(p.width / p.height) + (isScreenshot(p) ? ', screenshot' : '') + ')').join('; ') + '.'
       : '',
   };
 }

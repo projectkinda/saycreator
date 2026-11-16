@@ -6,7 +6,7 @@ import type { Look } from './designed';
 import type { SlideSpec } from './designLibrary';
 import { layoutOptionsFor, flat } from './layoutMap';
 import { pinnedPicture, placeImages, usedIds, withoutImages } from './imagePlace';
-import { HERO_BAND_H, IMAGE_LAYOUT_IDS, TEXT_OVER_PICTURE, PANEL_H, PANEL_W, fittingPictures, hasEnoughPictures, imagesNeeded, isScreenshot, shapeOf, type PicInfo } from './layouts/images';
+import { HERO_BAND_H, IMAGE_LAYOUT_IDS, TEXT_OVER_PICTURE, PANEL_H, PANEL_W, fittingPictures, hasEnoughPictures, imagesNeeded, isScreenshot, pictureLayoutCap, shapeOf, type PicInfo } from './layouts/images';
 import type { Fields } from './layouts';
 
 export interface PictureSwap {
@@ -81,8 +81,8 @@ export function picturePass(specs0: SlideSpec[], look: Look): { specs: SlideSpec
       const ordered = targetsFor(sp.layout, i).map((t, k) => ({ t, k, u: specs.filter((q) => q.layout === t).length })).sort((x, y) => x.u - y.u || x.k - y.k).map((x) => x.t);
       for (const to of ordered) {
         if (!hasEnoughPictures(to, pool)) continue;
-        // no neighbour in the same layout, no layout more than twice
-        if (specs[i - 1]?.layout === to || specs[i + 1]?.layout === to || specs.filter((q) => q.layout === to).length >= 2) continue;
+        // no neighbour in the same layout, no layout more than twice (Round R: a picture layout 3 times with 4 or more photos)
+        if (specs[i - 1]?.layout === to || specs[i + 1]?.layout === to || specs.filter((q) => q.layout === to).length >= pictureLayoutCap(imgs)) continue;
         const fields = fieldsFor(sp, to, look2);
         if (!fields || !keepsText(sp.fields, fields)) continue;
         const take = Math.min(fittingPictures(to, pool), imagesNeeded(to) === 1 ? 1 : fittingPictures(to, pool));
@@ -220,7 +220,7 @@ export function screenshotPass(specs0: SlideSpec[], look: Look): { specs: SlideS
       specs = specs.map((s, k) => (k === i ? { ...s, layout: to, fields, accents: s.accents, density: undefined, variant: undefined, ...(variant !== undefined ? { pin: { ...s.pin, variant } } : {}) } as SlideSpec : s));
       return true;
     };
-    const neighbourOk = (to: string) => specs[i - 1]?.layout !== to && specs[i + 1]?.layout !== to && specs.filter((q) => q.layout === to).length < 2;
+    const neighbourOk = (to: string) => specs[i - 1]?.layout !== to && specs[i + 1]?.layout !== to && specs.filter((q) => q.layout === to).length < pictureLayoutCap(imgs);
     let done = false;
     if (i > 0 && unusedShots.length) {
       const hasPhone = specs.some((s, k) => k !== i && s.layout === 'phone-frame');

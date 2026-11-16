@@ -19,7 +19,7 @@ import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
 import { layoutOptionsFor } from './layoutMap';
-import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation } from './layouts/images';
+import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation, pictureLayoutCap } from './layouts/images';
 import { pictureUseOf, pinnedPicture, placeImages, usedIds } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { settleScrim } from './scrim';
@@ -1429,9 +1429,9 @@ function buildRetry(first: string, specs: SlideSpec[], why: Map<number, string[]
  * The layout rotation of the TEXT slides (the variants, and the layouts that repeat or are over-used): Round R picture-only slides are left out of it, so adding a photo slide never changes the
  * variant of a text slide or makes one count as a repeat. A picture-only slide takes variant 1 (its only form).
  */
-export function rotationOf(list: SlideSpec[], photo: boolean, flavour: LayoutStyle['flavour']): { rv: Picked[]; variants: (0 | 1)[] } {
+export function rotationOf(list: SlideSpec[], photo: boolean, flavour: LayoutStyle['flavour'], pictureCap = 2): { rv: Picked[]; variants: (0 | 1)[] } {
   const text = list.map((_, i) => i).filter((i) => !isPhotoOnly(list[i].layout));
-  const rv0 = rotateVariants(text.map((i) => ({ layout: layoutDef(list[i].layout) ? (list[i].layout as LayoutId) : ('statement' as LayoutId) })), { photo, flavour });
+  const rv0 = rotateVariants(text.map((i) => ({ layout: layoutDef(list[i].layout) ? (list[i].layout as LayoutId) : ('statement' as LayoutId) })), { photo, flavour, pictureCap });
   const rv: Picked[] = list.map((s) => ({ layout: s.layout as LayoutId, variant: 0, note: '' }));
   text.forEach((i, k) => (rv[i] = rv0[k]));
   const count: Record<string, number> = {};
@@ -1446,7 +1446,7 @@ export function rotationOf(list: SlideSpec[], photo: boolean, flavour: LayoutSty
 }
 export function deckRotation(list: SlideSpec[], look: Look, style: LayoutStyle) {
   const ids = list.map((s) => s.layout as LayoutId);
-  const { rv, variants } = rotationOf(list, !!look.hasPhoto, style.flavour);
+  const { rv, variants } = rotationOf(list, !!look.hasPhoto, style.flavour, pictureLayoutCap(look.images));
   list.forEach((s, i) => { if (s.pin?.variant !== undefined) variants[i] = s.pin.variant; }); // a variant the preset (closing) or the person pinned
   const repeats = new Map<number, string>();
   rv.forEach((r, i) => layoutDef(list[i].layout) && r.layout !== list[i].layout && repeats.set(i, r.note || `the layout "${list[i].layout}" repeats or is over-used`));
@@ -1932,7 +1932,9 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
   const style: LayoutStyle = site ? { ...style0, site } : style0;
   let specs = lib.plan.specs;
   const ids = specs.map((s) => (layoutDef(s.layout) ? (s.layout as LayoutId) : ('statement' as LayoutId)));
-  const { variants } = rotationOf(specs, !!look.hasPhoto, style.flavour);
+  // the picture-layout cap of the deck: from the project's pictures, or (a caller that gives none) from the photos the plan shows
+  const planPhotos = [...new Set(specs.flatMap((s) => Object.values(s.fields).filter((v): v is string => typeof v === 'string' && v.startsWith('picture:') && v.includes('k=p')).map((v) => v.split('#')[0])))].map(() => ({ content: 'photo' }));
+  const { variants } = rotationOf(specs, !!look.hasPhoto, style.flavour, pictureLayoutCap(look.images?.length ? look.images : planPhotos));
   const rc = rotateCuts(ids.map((layout) => ({ layout })), style, { suggest: specs.map((s) => ({ cut: s.cut })) });
   // a slide the person set in the layout picker keeps its variant, cut and invert
   specs.forEach((s, i) => {
