@@ -156,3 +156,23 @@ export function photoSlidesOf(specs: SlideSpec[], metas: { id: string; kind?: st
   const slides = specs.map((s, i) => ({ s, i })).filter(({ s }) => s.photoSlide).map(({ s, i }) => ({ slide: i + 1, layout: s.layout, pictures: usedIds(s.fields).map(name) }));
   return { count: slides.length, slides };
 }
+/**
+ * Round R part 3: the slide-count line under the deck (null: no line). `asked` the slides the person picked, `total` the slides of the deck, `photo` its photo slides, `keep` the "Keep every
+ * sentence" switch, `missing` the sentences of the text on no slide. It never contradicts the sentences notice: "no sentence is lost" only when none is missing; with the switch off it says
+ * nothing about sentences.
+ *  - photo slides filled spare slides: "You asked for 7 slides. Your text needed 5, so 2 photo slides were added for your pictures." (+ " 1 sentence still did not fit; it is listed below.")
+ *  - the text needed more slides (Round O / Q): "Your text needed 9 slides instead of 7 so no sentence is lost." or "..., but 2 sentences still did not fit; they are listed below."
+ */
+export function slideCountLine(o: { asked: number | null; total: number; photo: number; keep: boolean; missing: number }): string | null {
+  if (o.asked === null) return null;
+  const text = o.total - o.photo;
+  const s = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const still = o.keep && o.missing > 0 ? ` ${s(o.missing, 'sentence')} still did not fit; ${o.missing === 1 ? 'it is' : 'they are'} listed below.` : '';
+  const added = (n: number) => `${s(n, 'photo slide')} ${n === 1 ? 'was' : 'were'} added for your pictures.`;
+  if (o.photo > 0 && text < o.asked) return `You asked for ${s(o.asked, 'slide')}. ${o.keep ? 'Your text needed' : 'The writer made'} ${text}, so ${added(o.photo)}${still}`;
+  if (text > o.asked) {
+    const head = !o.keep ? `The writer made ${text} slides instead of ${o.asked}.` : o.missing === 0 ? `Your text needed ${text} slides instead of ${o.asked} so no sentence is lost.` : `Your text needed ${text} slides instead of ${o.asked}, but ${s(o.missing, 'sentence')} still did not fit; ${o.missing === 1 ? 'it is' : 'they are'} listed below.`;
+    return o.photo > 0 ? `${head} ${added(o.photo)}` : head;
+  }
+  return o.photo > 0 ? added(o.photo) : null;
+}

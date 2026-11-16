@@ -607,3 +607,7 @@
 
 /* Round Q: the Format step: the same space above "Platform" as above "Slides" */
 .cr-step-card .cr-options { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+
+/* Round R: "Add as photo slide" under the unused-pictures line: a small button, at least 44 px tall to tap */
+.cr-unused-pictures { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.cr-unused-pictures .cr-add-photo { min-height: 44px; padding: 0 16px; font-size: 14px; }

@@ -15,7 +15,8 @@ import { libraryDeckFromScript, scriptText } from './libraryFromScript';
 import type { CarouselScript } from '../image-engine/carousel/types';
 import { clearPageState } from './resetState';
 import { DetectedStyleBox } from './DetectedStyle';
-import { DRAW_VERSION, flavourNotes, legacySvgRoute, redrawLibraryDeck, scriptSlideOf, slideProblems, styleFromPack, templateRoute } from './designLibrary';
+import { DRAW_VERSION, drawOne, flavourNotes, legacySvgRoute, redrawLibraryDeck, scriptSlideOf, slideProblems, styleFromPack, templateRoute } from './designLibrary';
+import { addPhotoSlides, SLIDES_MAX, slideCountLine } from './photoSlides';
 import { coverKeyOf, styleIdOf, flavourPass } from './flavour';
 import { canSplitLayout, splitSpec } from './splitSlide';
 import { presetKey, presetPackFor, presetThumbSvg, setCurrentScheme } from './presets';
@@ -816,6 +817,7 @@ export default function CarouselPage() {
   const GEN_LABEL = 'Generate from your text';
   const generate = async (override?: unknown) => {
     if (busy) return;
+    setPhotoMsg(null);
     // "Use quick templates instead" after a failed Designed run: this one time the templates fill the slides.
     const quickAfter = typeof (override as { quickAfterFail?: unknown } | undefined)?.quickAfterFail === 'string' ? (override as { quickAfterFail: string }).quickAfterFail : null;
     // A chosen style that is missing or broken is an error, never a reason to generate: the picker stays and no model is called.
@@ -1038,6 +1040,44 @@ export default function CarouselPage() {
     return pictures.filter((p) => p.kind === 'photo' && free.has(p.id));
   })();
   const unusedLine = doc.designed?.library?.plan ? picturesUnusedLine(picturesUnusedOf(doc.designed.library.plan.specs, pictures)) : null;
+  // Round R: the slide-count line, and the room for photo slides (the platform's cap, or the app's maximum)
+  const photoSlideCount = doc.designed?.library?.plan?.specs.filter((s) => s.photoSlide).length ?? 0;
+  const countLine = slideCountLine({ asked: slidesAsked, total: slides.length, photo: photoSlideCount, keep: doc.designed?.library?.keepEverySentence !== false, missing: notOnSlides.count });
+  const slideMax = Math.min(SLIDE_RANGE[doc.format][1], SLIDES_MAX, doc.format === 'carousel' && platformOf(options.platform) ? platformOf(options.platform)!.max : Infinity);
+  const photoRoom = doc.designed?.library?.plan ? slideMax - doc.designed.library.plan.specs.length : 0;
+  const unusedPhotos = doc.designed?.library?.plan ? unusedPictures(doc.designed.library.plan.specs, photoInfos).filter((p) => p.content !== 'screenshot').length : 0;
+  /** Round R: "Add as photo slide": the unused photos go on photo slides (photoSlides.ts) just before the closing slide, as many as there is room for. No model call; Undo takes it back. */
+  const addPhotoSlidesNow = async (): Promise<void> => {
+    const d = docRef.current;
+    const lib = d.designed?.library;
+    if (!d.script || !d.designed || !lib?.plan) return;
+    const src = lib.source ?? 'reference';
+    const pack = src === 'reference' ? (activeReference()?.pack ?? null) : presetPackFor(src);
+    if (!pack) return setPhotoMsg('The style of this deck is not available, so no slide can be added.');
+    setAddingPhotos(true);
+    try {
+      const look = { pack, hasPhoto: hasPhotoLook, images: photoInfos, site: profileWebsite() };
+      const style = styleFromPack(pack).style;
+      const ps = await addPhotoSlides(lib.plan.specs, photoInfos, photoRoom, style, async (sp, i, deck) => {
+        const dr = await drawOne(sp, 0, style, { handle: pickHandle(), index: i, total: deck.length, cut: 'plain', invert: false, density: 'normal' });
+        return dr.built && !dr.problems.length ? dr.built.images ?? [] : null;
+      }, { beforeClosing: true });
+      if (!ps.added.length) return setPhotoMsg('None of these pictures can fill a photo slide (each must show large without cutting more than a quarter of it).');
+      const at = (k: number) => ps.specs.indexOf(lib.plan!.specs[k]);
+      const slides = ps.specs.map((s) => { const k = lib.plan!.specs.indexOf(s); return k >= 0 ? d.script!.slides[k] : (scriptSlideOf(s.layout, s.fields) as unknown as (typeof d.script.slides)[number]); });
+      const checked = validateScriptText(JSON.stringify({ ...d.script, slides }), d.format);
+      if (!checked.script) return setPhotoMsg('The photo slides could not be added: ' + (checked.errors[0]?.message ?? 'unknown problem'));
+      const script = { ...checked.script, brand: { ...checked.script.brand, handle: d.script.brand.handle } };
+      const out = await redrawLibraryDeck({ ...lib, plan: { ...lib.plan, specs: ps.specs } }, look, pickHandle());
+      const choices: typeof d.choices = {};
+      for (const [k, v] of Object.entries(d.choices)) choices[String(at(Number(k)))] = v;
+      const done = apply({ label: `Add ${ps.added.length} photo slide${ps.added.length === 1 ? '' : 's'}`, ops: [{ path: ['script'], value: script }, { path: ['choices'], value: choices }, { path: ['designed'], value: { ...d.designed, slides: out.slides, layouts: out.layouts, fallbacks: {}, library: out.library } }] });
+      if (!done.ok) return setPhotoMsg(done.reasons[0]);
+      setPhotoMsg(`Added ${ps.added.length} photo slide${ps.added.length === 1 ? '' : 's'} before the closing slide (${ps.added.map((a) => a.names.join(' and ')).join('; ')}). Undo takes it back.`);
+    } finally {
+      setAddingPhotos(false);
+    }
+  };
   /** For each picture, the slides (1-based) that show it now. */
   const pictureUsage: Record<string, number[]> = (() => {
     const out: Record<string, number[]> = {};
@@ -1346,6 +1386,9 @@ export default function CarouselPage() {
   const previewSlots = hasWork ? pictureSlotsOf(Math.min(sel, Math.max(0, slides.length - 1))) : undefined;
   const [editTab, setEditTab] = useState<EditTab | null>(null);
   const [slotOpen, setSlotOpen] = useState<string | null>(null);
+  // Round R: the "Add as photo slide" button: busy, and what it did
+  const [addingPhotos, setAddingPhotos] = useState(false);
+  const [photoMsg, setPhotoMsg] = useState<string | null>(null);
   useEffect(() => setSlotOpen(null), [sel]);
   const picturesState: 'none' | 'free' | 'used' = pictures.filter((p) => p.kind === 'photo').length === 0 ? 'none' : unusedList.length > 0 ? 'free' : 'used';
   const si = Math.min(sel, Math.max(0, slides.length - 1));
@@ -1590,16 +1633,10 @@ export default function CarouselPage() {
             </span>
           )}
         </p>
-        {hasWork && slidesAsked !== null && slides.length > slidesAsked && (
-          // Round O: the deck has more slides than the person picked (the writer's answer is kept whole: never a slide removed); a plain line, not a warning
-          <p className="small cr-info" data-testid="slide-count-line">
-            {/* Round Q: the line never contradicts the notice below it: "no sentence is lost" only when the count of sentences on no slide is 0; with the switch off it says nothing about sentences */}
-            {doc.designed?.library?.keepEverySentence === false
-              ? `The writer made ${slides.length} slides instead of ${slidesAsked}.`
-              : notOnSlides.count === 0
-                ? `Your text needed ${slides.length} slides instead of ${slidesAsked} so no sentence is lost.`
-                : `Your text needed ${slides.length} slides instead of ${slidesAsked}, but ${notOnSlides.count} sentence${notOnSlides.count === 1 ? '' : 's'} still did not fit; ${notOnSlides.count === 1 ? 'it is' : 'they are'} listed below.`}
-          </p>
+        {hasWork && countLine && (
+          // Round O: the deck has more slides than the person picked (the writer's answer is kept whole: never a slide removed); a plain line, not a warning. Round Q: it never contradicts the
+          // sentences notice. Round R: photo slides that filled the slides the text did not need are said so (photoSlides.slideCountLine)
+          <p className="small cr-info" data-testid="slide-count-line">{countLine}</p>
         )}
         {hasWork && notOnSlides.count > 0 && (
           // Round M: sentences of the person's text that are on no slide (measured, never changed); no notice when every sentence is on a slide. Round O: a neutral note, not the red of a phone warning
@@ -1613,8 +1650,15 @@ export default function CarouselPage() {
         )}
         {hasWork && ready && !!doc.designed?.library?.plan && unusedLine && (
           // Round Q: the pictures the person added that no slide uses, by their names (recomputed from the deck: a pick, a restyle or a text edit changes it with no call); the picker places them
-          <p className="small cr-info" data-testid="pictures-unused">{unusedLine}</p>
+          <div className="cr-unused-pictures">
+            <p className="small cr-info" data-testid="pictures-unused">{unusedLine}</p>
+            {/* Round R: the unused photos go on photo slides before the closing, while there is room under the slide maximum (the platform's cap, or 10); no model call */}
+            {photoRoom > 0 && unusedPhotos > 0 && (
+              <button type="button" className="btn btn-outline cr-add-photo" data-testid="add-photo-slides" disabled={addingPhotos} onClick={() => void addPhotoSlidesNow()}>{addingPhotos ? 'Adding…' : 'Add as photo slide'}</button>
+            )}
+          </div>
         )}
+        {hasWork && photoMsg && <p className="small muted" role="status" data-testid="add-photo-slides-msg">{photoMsg}</p>}
 
             <PreviewStage overlay={previewSlots && previewSlots.length ? <SlotOverlay index={si} slots={previewSlots} open={slotOpen} onOpen={(field) => { setSlotOpen(field); if (field) { setEditTab('pictures'); setStep(4); setEditView(true); } }} onChange={(field, change) => slotChange(si, field, change)} /> : undefined} count={hasWork ? slides.length : 0} items={slides.map((_, i) => views[i] ?? { status: 'drawing' })} selected={sel} onSelect={setSel} onOpen={setOpen} />
             {hasWork && style && (
