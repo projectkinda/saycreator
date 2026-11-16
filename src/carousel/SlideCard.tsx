@@ -1,5 +1,6 @@
 // One slide as a card: the picture, its phone checks, every field of its script, its tags, and the per-slide actions.
 // Every action is a patch, so Undo and Redo cover all of them.
+import type { ArrangeOp } from './slideEdit';
 import { useMemo, useState } from 'react';
 import { Icon } from '../components/Icon';
 import { ReplayButton } from '../live/Replay';
@@ -59,7 +60,7 @@ const TABS: { id: EditTab; label: string }[] = [
 ];
 
 /** The editor of ONE slide, as four tabs: Layout | Text | Pictures | Fine-tune. There is no second preview here: the big preview and the thumbnail strip stay on the left. */
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, pickerBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, ownNote, onSplit, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, pickerBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, ownNote, onSplit, onArrange, removeBlocked, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -102,6 +103,10 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   onOpenSlot: (field: string | null) => void;
   /** A slide with too many words: cuts it in two at a sentence end (every word kept); says what happened. */
   onSplit?: () => Promise<string>;
+  /** Round S: remove this slide, or move it one place up or down (the deck is drawn again from its plan; Undo takes it back). */
+  onArrange?: (op: ArrangeOp) => Promise<string>;
+  /** Why "Remove slide" is disabled (the deck has the fewest slides it may have). */
+  removeBlocked?: string;
   /** A pasted script: a line about this slide (it uses the simple layout, or its text is too long for any layout). */
   ownNote?: { kind: 'info' | 'warn'; text: string };
   /** 'none': the project has no pictures; 'free': there are unused ones; 'used': all are on other slides. */
@@ -119,6 +124,9 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   const [elementsOpen, setElementsOpen] = useState(false);
   const [splitMsg, setSplitMsg] = useState('');
   const [splitBusy, setSplitBusy] = useState(false);
+  const [arrangeBusy, setArrangeBusy] = useState(false);
+  const [arrangeMsg, setArrangeMsg] = useState('');
+  const arrange = async (op: ArrangeOp) => { setArrangeBusy(true); setArrangeMsg(''); const m = await onArrange!(op); setArrangeBusy(false); if (!/^(Removed|Moved) slide/.test(m)) setArrangeMsg(m); };
   const tooManyWords = !!view?.rendered?.lint.some((l) => l.id === 'words' && !l.pass);
   const [addMsg, setAddMsg] = useState('');
   const [addBusy, setAddBusy] = useState(false);
@@ -273,6 +281,17 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
           </div>
         )}
         {splitMsg && <p className="small" role="status" data-testid="split-msg">{splitMsg}</p>}
+        {onArrange && (
+          <div className="cr-arrange" data-testid="arrange-box">
+            <div className="row-actions" role="group" aria-label={`Arrange slide ${index + 1}`}>
+              <button type="button" className="btn btn-outline btn-sm cr-arrange-btn" data-testid="move-up" aria-label={`Move slide ${index + 1} up`} disabled={arrangeBusy || index === 0} onClick={() => void arrange({ kind: 'move', by: -1 })}>Move up</button>
+              <button type="button" className="btn btn-outline btn-sm cr-arrange-btn" data-testid="move-down" aria-label={`Move slide ${index + 1} down`} disabled={arrangeBusy || index === count - 1} onClick={() => void arrange({ kind: 'move', by: 1 })}>Move down</button>
+              <button type="button" className="btn btn-outline btn-sm cr-arrange-btn" data-testid="remove-slide" aria-label={`Remove slide ${index + 1}`} disabled={arrangeBusy || !!removeBlocked} onClick={() => void arrange({ kind: 'remove' })}>Remove slide</button>
+            </div>
+            {removeBlocked && <p className="small muted" data-testid="remove-blocked">{removeBlocked}</p>}
+            {arrangeMsg && <p className="small cr-problem" role="alert" data-testid="arrange-msg">{arrangeMsg}</p>}
+          </div>
+        )}
         {ownNote && <p className={`small ${ownNote.kind === 'warn' ? 'cr-warn' : 'muted'}`} role="status" data-testid="own-note">{ownNote.kind === 'warn' && <span aria-hidden="true">⚠ </span>}{ownNote.text}</p>}
         {view?.error && <p className="small cr-problem" role="alert">{view.error}</p>}
       </div>

@@ -19,6 +19,7 @@ import { DRAW_VERSION, drawOne, flavourNotes, legacySvgRoute, redrawLibraryDeck,
 import { addPhotoSlides, SLIDES_MAX, slideCountLine } from './photoSlides';
 import { coverKeyOf, styleIdOf, flavourPass } from './flavour';
 import { canSplitLayout, splitSpec } from './splitSlide';
+import { arrangeLabel, arrangeOrder, minSlides, newIndexOf, recordEdit, remapKeys, removeBlockedLine, reorder, type ArrangeOp } from './slideEdit';
 import { presetKey, presetPackFor, presetThumbSvg, setCurrentScheme } from './presets';
 import { ColoursRow } from './ColoursRow';
 import { BrandEditor, type BrandDraft } from './BrandEditor';
@@ -1155,7 +1156,7 @@ export default function CarouselPage() {
     try {
       const look = { pack, hasPhoto: hasPhotoLook, images: photoInfos, site: profileWebsite() };
       const style = styleFromPack(pack).style;
-      const fp = pack.look?.flavour ? flavourPass(lib.plan.specs, style, look, pack.name.replace(/ pack$/, ''), coverKeyOf(lib.plan.title, lib.plan.specs, styleIdOf(pack))) : { specs: lib.plan.specs, swaps: [], kept: [] };
+      const fp = pack.look?.flavour ? flavourPass(lib.plan.specs, style, look, pack.name.replace(/ pack$/, ''), coverKeyOf(lib.plan.title, lib.plan.specs, styleIdOf(pack)), { ends: !(lib.manualEdits?.removed.length || lib.manualEdits?.moved.length) }) : { specs: lib.plan.specs, swaps: [], kept: [] };
       const out = await redrawLibraryDeck({ ...lib, plan: { ...lib.plan, specs: fp.specs } }, look, pickHandle());
       // a slide whose layout changed gets the script form of its new layout (the words are the same ones)
       let script = d.script;
@@ -1263,6 +1264,50 @@ export default function CarouselPage() {
       return `Split slide ${i + 1} into two slides (${i + 1} and ${i + 2}). Every word is kept. Undo takes it back.`;
     } catch (e) {
       return 'The slide could not be split: ' + (e as Error).message;
+    }
+  };
+  /**
+   * Round S: "Remove slide", "Move up", "Move down" in Edit slides. The person's own choice: the slide goes or swaps with its neighbour, every other slide keeps its layout, variant pin, fields,
+   * accents and pictures, and the deck is drawn again from its plan by code (no model call): the page numbers, the cut and variant rotation and the grounds follow the new positions. The
+   * build rules (no picture layout twice in a row, the cap, the closing last) are not applied again. ONE undo step (the project's own undo): the plan, the script and the per-slide choices move together.
+   */
+  const arrangeSlide = async (i: number, op: ArrangeOp): Promise<string> => {
+    const d = docRef.current;
+    const lib = d.designed?.library;
+    if (!d.script || !d.designed || !lib?.plan || !lib.plan.specs[i]) return 'This deck has no stored plan to draw from.';
+    const order = arrangeOrder(lib.plan.specs.length, i, op, minSlides(d.format));
+    if (typeof order === 'string') return order;
+    const src = lib.source ?? 'reference';
+    const pack = src === 'reference' ? (activeReference()?.pack ?? null) : presetPackFor(src);
+    if (!pack) return 'The style of this deck is not available, so the slides cannot be changed.';
+    const look = { pack, hasPhoto: hasPhotoLook, images: photoInfos, site: profileWebsite() };
+    const checked = validateScriptText(JSON.stringify({ ...d.script, slides: reorder(d.script.slides, order) }), d.format);
+    if (!checked.script) return 'The slides could not be used as a script: ' + (checked.errors[0]?.message ?? 'unknown problem');
+    const script = { ...checked.script, brand: { ...checked.script.brand, handle: d.script.brand.handle } };
+    // a removal: the sentences of the text that were on a slide before and are on none after (the notice says the person removed that slide)
+    let gone: string[] = [];
+    if (op.kind === 'remove' && d.topic?.trim()) {
+      const texts = lib.plan.specs.map((_, k) => visibleTextOf((d.designed!.slides[String(k)]?.built?.layers ?? []) as never));
+      const before = new Set(sourceNotOnSlidesOf(d.topic, texts).sentences);
+      gone = sourceNotOnSlidesOf(d.topic, texts.filter((_, k) => k !== i)).sentences.filter((x) => !before.has(x));
+    }
+    const manualEdits = recordEdit(lib.manualEdits, i, op, lib.plan.specs[i].layout, gone);
+    const lib2 = { ...lib, plan: { ...lib.plan, specs: reorder(lib.plan.specs, order) }, ...(lib.ownMarks ? { ownMarks: reorder(lib.ownMarks, order) } : {}), manualEdits };
+    try {
+      const out = await redrawLibraryDeck(lib2, look, pickHandle());
+      const choices = remapKeys(d.choices, order);
+      const requests = d.imageRequests?.flatMap((r) => { const k = newIndexOf(order, r.slide); return k < 0 ? [] : [{ ...r, slide: k }]; });
+      const designedOut = { ...d.designed, slides: out.slides, layouts: out.layouts, fallbacks: {}, library: { ...out.library, manualEdits, ...(lib2.ownMarks ? { ownMarks: lib2.ownMarks } : {}) } };
+      const label = arrangeLabel(i, op);
+      const done = apply({ label, ops: [{ path: ['script'], value: script }, { path: ['choices'], value: choices }, { path: ['designed'], value: designedOut }, ...(requests ? [{ path: ['imageRequests'], value: requests }] : [])] });
+      if (!done.ok) return done.reasons[0];
+      setGen((g) => (g.phase === 'done' && g.message ? { ...g, message: g.message.replace(/Your \d+ (slides|cards)/, `Your ${script.slides.length} $1`) } : g));
+      setSel(op.kind === 'remove' ? Math.min(i, script.slides.length - 1) : i + op.by);
+      const msg = op.kind === 'remove' ? `Removed slide ${i + 1}. The deck has ${script.slides.length} slides now.` : `Moved slide ${i + 1} ${op.by < 0 ? 'up' : 'down'}: it is slide ${i + 1 + op.by} now.`;
+      setArrange({ label, msg });
+      return msg;
+    } catch (e) {
+      return 'The slides could not be changed: ' + (e as Error).message;
     }
   };
   /** Pictures tab, a slide with no picture slot: the slide moves to the first picture layout that fits what it says (the layout gallery's own rule), and one unused picture goes in. No model call. */
@@ -1389,6 +1434,8 @@ export default function CarouselPage() {
   // Round R: the "Add as photo slide" button: busy, and what it did
   const [addingPhotos, setAddingPhotos] = useState(false);
   const [photoMsg, setPhotoMsg] = useState<string | null>(null);
+  /** Round S: the last remove or move (its undo label and what it did): the status line with its Undo shows while that is the last step. */
+  const [arrange, setArrange] = useState<{ label: string; msg: string } | null>(null);
   useEffect(() => setSlotOpen(null), [sel]);
   const picturesState: 'none' | 'free' | 'used' = pictures.filter((p) => p.kind === 'photo').length === 0 ? 'none' : unusedList.length > 0 ? 'free' : 'used';
   const si = Math.min(sel, Math.max(0, slides.length - 1));
@@ -1418,6 +1465,8 @@ export default function CarouselPage() {
         openSlot={slotOpen}
         onOpenSlot={setSlotOpen}
         picturesState={picturesState}
+        onArrange={doc.designed?.library?.plan?.specs[i] ? (op) => arrangeSlide(i, op) : undefined}
+        removeBlocked={slides.length <= minSlides(doc.format) ? removeBlockedLine(minSlides(doc.format)) : undefined}
         onSplit={doc.designed?.library?.plan?.specs[i] && canSplitLayout(doc.designed.library.plan.specs[i].layout) ? () => splitSlideAt(i) : undefined}
         ownNote={(() => {
           const lib = doc.designed?.library;
@@ -1664,6 +1713,13 @@ export default function CarouselPage() {
           </div>
         )}
         {hasWork && photoMsg && <p className="small muted" role="status" data-testid="add-photo-slides-msg">{photoMsg}</p>}
+        {hasWork && arrange && lastLabel === arrange.label && (
+          // Round S: the last remove or move, with a one-step Undo (the project's own undo) until the next edit
+          <div className="cr-arrange-status" role="status" data-testid="arrange-status">
+            <span className="small">{arrange.msg}</span>
+            <button type="button" className="btn btn-outline cr-arrange-btn" data-testid="arrange-undo" aria-label={`Undo: ${arrange.label}`} onClick={undo}>Undo</button>
+          </div>
+        )}
 
             <PreviewStage overlay={previewSlots && previewSlots.length ? <SlotOverlay index={si} slots={previewSlots} open={slotOpen} onOpen={(field) => { setSlotOpen(field); if (field) { setEditTab('pictures'); setStep(4); setEditView(true); } }} onChange={(field, change) => slotChange(si, field, change)} /> : undefined} count={hasWork ? slides.length : 0} items={slides.map((_, i) => views[i] ?? { status: 'drawing' })} selected={sel} onSelect={setSel} onOpen={setOpen} />
             {hasWork && style && (

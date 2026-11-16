@@ -611,3 +611,9 @@
 /* Round R: "Add as photo slide" under the unused-pictures line: a small button, at least 44 px tall to tap */
 .cr-unused-pictures { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .cr-unused-pictures .cr-add-photo { min-height: 44px; padding: 0 16px; font-size: 14px; }
+
+/* Round S: remove / move a slide in Edit slides, and the status line with its Undo (each tap target at least 44 px) */
+.cr-arrange { margin-top: 8px; }
+.cr-arrange .row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cr-arrange .btn.cr-arrange-btn, .cr-arrange-status .btn.cr-arrange-btn { min-height: 44px; min-width: 44px; }
+.cr-arrange-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }

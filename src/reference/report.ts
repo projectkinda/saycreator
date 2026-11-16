@@ -151,6 +151,8 @@ export async function buildReport(o: ReportOptions): Promise<{ json: string; com
     picturesUnused: o.doc.designed?.library?.plan ? picturesUnusedOf(o.doc.designed.library.plan.specs, o.doc.photos ?? []) : null,
     // Round R: the photo slides the code added for unused photos (no text on them), as the deck is now
     photoSlidesAdded: o.doc.designed?.library?.plan ? photoSlidesOf(o.doc.designed.library.plan.specs, o.doc.photos ?? []) : null,
+    // Round S: the slides the person removed and moved in Edit slides (slide numbers as they were at the time); the slides below are numbered as the deck is now
+    manualEdits: o.doc.designed?.library?.manualEdits ? { removed: o.doc.designed.library.manualEdits.removed.map((r) => ({ slide: r.slide, layout: r.layout })), moved: o.doc.designed.library.manualEdits.moved.map((m) => ({ from: m.from, to: m.to })) } : { removed: [], moved: [] },
     designed: o.doc.designed ? { calls: o.doc.designed.calls, tokens: o.doc.designed.tokens ?? null, layouts: o.doc.designed.layouts ?? null, fallbacks: o.doc.designed.fallbacks, notes: o.doc.designed.notes, requestBytes: o.doc.designed.requestBytes ?? null, library: o.doc.designed.library ?? null, model: 'DRAW_MODEL, else CAROUSEL_MODEL, else sonnet (server setting)' } : o.doc.route?.error ? { failed: true, error: o.doc.route.error, requestBytes: o.doc.route.requestBytes ?? null } : null,
     slides: composed.slides.map((s, i) => ({
       number: i + 1,

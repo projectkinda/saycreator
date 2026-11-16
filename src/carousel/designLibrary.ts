@@ -1326,6 +1326,8 @@ export interface LibraryReport {
   pictureRescue?: RescueRow[];
   /** Round R: the photo slides the code added (the writer made `slidesBefore` slides): where each is, its layout and its pictures. */
   photoSlidesAdded?: { count: number; slidesBefore: number; slides: PhotoSlideAdded[] };
+  /** Round S: the slides the person removed and moved in Edit slides (slideEdit.ts). A redraw keeps it; a new deck has none. */
+  manualEdits?: import('./slideEdit').ManualEdits;
   /** Round 15: slides that failed one of the phone checks when drawn and were drawn again by the code (never a model call): what failed, and what the slide is now. */
   /** Round 16: one row per writer call: what was sent and what it cost (null where the provider does not say). */
   writes?: { call: number; promptChars: number; promptBytes: number; requestBytes: number | null; numTurns: number | null; durationApiMs: number | null; effort: string | null; inputTokens: number | null; outputTokens: number | null; seconds: number }[];

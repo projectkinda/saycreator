@@ -107,7 +107,7 @@ function closingCard(spec: SlideSpec, layout: string): { layout: LayoutId; field
   return { layout: 'statement-card', fields, dropped: flat(own).filter(lost), droppedCore, current: false };
 }
 
-export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look, name = 'this style', deckKey = ''): FlavourResult {
+export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look, name = 'this style', deckKey = '', opts: { /** Round S: false on a deck the person reordered or cut in Edit slides: the first and last slides are not moved to a cover or closing layout (the person chose the order). */ ends?: boolean } = {}): FlavourResult {
   const fl = style.flavour;
   const specs = specs0.map((s) => ({ ...s }));
   const swaps: FlavourSwap[] = [];
@@ -149,7 +149,10 @@ export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look,
   // a preset's own cover form is never changed to plain "statement", and a question cover takes the preset's question form (statement-question) when it has one
   const q = fl.coverQuestion;
   const head0 = String(specs[0].fields.headline ?? specs[0].fields.question ?? '').trim();
-  if (q && /\?\s*$/.test(head0) && specs[0].layout !== q && swaps.length < cap && !picturedLayout(specs[0].layout)) {
+  const ends = opts.ends !== false;
+  if (!ends) {
+    // the person chose which slide is first: it keeps its layout
+  } else if (q && /\?\s*$/.test(head0) && specs[0].layout !== q && swaps.length < cap && !picturedLayout(specs[0].layout)) {
     const r = tryLayout(0, q);
     if (r.ok) apply(0, q, r.fields, r.dropped, `the hook of the cover is a question, so the cover of ${name} is "${q}"`);
     else kept.push({ slide: 1, layout: specs[0].layout, why: `question cover stays: ${r.why}` });
@@ -186,7 +189,7 @@ export function flavourPass(specs0: SlideSpec[], style: LayoutStyle, look: Look,
   // the closing slide (library.byType.closing): a preset can say which layout its closing is (and the variant) and which layouts a closing avoids. A closing that carries contact details
   // or a person keeps its layout; any other closing moves to the preset's closing layout when that layout takes ALL of its core text. The variant is pinned (so the rotation keeps it).
   const cl = style.closingLayout;
-  if (cl && n >= 2 && specs[n - 1].layout !== cl.layout) {
+  if (ends && cl && n >= 2 && specs[n - 1].layout !== cl.layout) {
     const i = n - 1;
     const cur = specs[i].layout;
     if (cur === 'contact-closing' || picturedLayout(cur)) kept.push({ slide: n, layout: cur, why: 'the closing keeps its layout: it carries contact details or a picture' });
