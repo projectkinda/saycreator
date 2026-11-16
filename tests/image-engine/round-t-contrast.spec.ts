@@ -58,7 +58,8 @@ test('T1 the check reads the photo: light text with no scrim fails on every pict
       const d = await DL.drawOne({ layout: 'title-over-photo', fields: f, accents: [] }, 0, style, o);
       const app = await PC.measurePhotoContrast(d.built);
       const rows = await DL.photoContrastOf([d], ['title-over-photo']);
-      out[n] = { bare: bare.roles[0], app: app.roles[0], pass: app.pass, ms: app.ms, rows, boxes: PC.pictureBoxesOfSvg(d.built.svg), images: d.built.images.map((p: any) => ({ x: p.x, y: p.y, w: p.w, h: p.h })) };
+      const title = (m: any) => m.roles.find((q: any) => q.role === 'title');
+      out[n] = { bare: title(bare), app: title(app), side: app.roles.find((q: any) => q.role === 'side-label') ?? null, ms: app.ms, rows, boxes: PC.pictureBoxesOfSvg(d.built.svg), images: d.built.images.map((p: any) => ({ x: p.x, y: p.y, w: p.w, h: p.h })) };
     }
     return out;
   }, pics);
@@ -67,10 +68,14 @@ test('T1 the check reads the photo: light text with no scrim fails on every pict
     expect(x.bare.threshold, `${n}: a headline is large text`).toBe(3);
     expect(x.bare.pass, `${n} with no scrim: ${x.bare.ratio}`).toBe(false);
     expect(x.app.tone, n).toBe('light');
-    expect(x.pass, `${n} as drawn: ${x.app.ratio}`).toBe(true);
+    expect(x.app.pass, `${n} as drawn: ${x.app.ratio}`).toBe(true);
+    // style-1 sets the handle upright along the right edge (a 36 px side label, page chrome): over the photo it is measured too, at 4.5:1
+    expect(x.side, `${n}: the side label crosses the photo`).not.toBeNull();
+    expect(x.side.threshold, n).toBe(4.5);
+    expect(x.rows[0].pass, n).toBe(x.app.pass && x.side.pass);
     expect(x.app.ratio, n).toBeGreaterThanOrEqual(3);
     expect(x.rows, n).toHaveLength(1);
-    expect(x.rows[0].roles[0].ratio, n).toBe(x.app.ratio);
+    expect(x.rows[0].roles.find((q: any) => q.role === 'title').ratio, n).toBe(x.app.ratio);
     // the picture boxes read from the drawing cover the plan's own (a photo drawn whole adds its inner rectangle)
     for (const b of x.images) expect(x.boxes, n).toContainEqual(b);
   }
@@ -78,6 +83,9 @@ test('T1 the check reads the photo: light text with no scrim fails on every pict
   expect(r['near-white'].bare.ratio).toBeLessThan(1.5);
   expect(r['busy-check'].bare.ratio).toBeLessThan(2);
   expect(r['sky-tower'].bare.ratio).toBeLessThan(3);
+  // the side label (muted ink, 36 px) does not reach 4.5:1 on the near-white and busy pictures: measured and reported, the drawing is not changed (Round T part 1)
+  expect(r['near-white'].side.pass).toBe(false);
+  expect(r['busy-check'].side.pass).toBe(false);
 });
 
 test('T2 only text that crosses a picture is measured: a caption on its panel, a slide with no picture and a deck with no pictures draw nothing extra', async ({ page }) => {
@@ -116,13 +124,26 @@ test('T3 the sentence that replaces "not checked" on a slide with text over a pi
     const FC: any = await import('/src/reference/faithfulChecks.ts');
     return {
       ok: PC.photoContrastSentence({ roles: [{ role: 'title', ratio: 8.66, threshold: 3, pass: true }, { role: 'body', ratio: 5.1, threshold: 4.5, pass: true }], pass: true, ms: 40 }),
-      low: PC.photoContrastSentence({ roles: [{ role: 'title', ratio: 2.39, threshold: 3, pass: false }, { role: 'recurring', ratio: 4, threshold: 4.5, pass: false }], pass: false, ms: 40 }),
+      low: PC.photoContrastSentence({ roles: [{ role: 'title', ratio: 2.39, threshold: 3, pass: false }, { role: 'recurring', ratio: 4, threshold: 4.5, pass: false }, { role: 'side-label', ratio: 1.23, threshold: 4.5, pass: false }], pass: false, ms: 40 }),
+      side: PC.sideLabelsOfSvg('<svg><text transform="translate(1054 690) rotate(-90)" text-anchor="middle" font-family="Inter" font-size="36" font-weight="500" fill="#B5B2A6">@saycreator</text></svg>'),
       unchecked: FC.UNCHECKED[0],
+      gradSvg: '<svg><defs><linearGradient id="htext" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1000" y2="0"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#FFFFFF"/></linearGradient></defs></svg>',
     };
   });
   expect(s.ok).toBe('Text over the picture, measured on the slide as drawn (90th percentile of the pixels behind light text, 10th behind dark text): title 8.66:1 (needs 3:1); body 5.10:1 (needs 4.5:1).');
-  expect(s.low).toBe('Text over the picture, measured on the slide as drawn (90th percentile of the pixels behind light text, 10th behind dark text): title 2.39:1 (needs 3:1, too low); page chrome 4.00:1 (needs 4.5:1, too low).');
+  expect(s.low).toBe('Text over the picture, measured on the slide as drawn (90th percentile of the pixels behind light text, 10th behind dark text): title 2.39:1 (needs 3:1, too low); page chrome 4.00:1 (needs 4.5:1, too low); side label (page chrome) 1.23:1 (needs 4.5:1, too low).');
+  expect(s.side).toHaveLength(1);
+  expect(s.side[0]).toMatchObject({ text: '@saycreator', ink: '#B5B2A6', size: 36 });
+  expect(s.side[0].box.h).toBeCloseTo(11 * 36 * 0.58, 1);
   expect(s.unchecked).toMatch(/^Contrast over gradients/);
+  // a gradient headline: each line is read only at the colours the gradient takes over that line's box
+  const g = await page.evaluate(async (svg) => { const PC: any = await import('/src/carousel/photoContrast.ts'); return { left: PC.gradientInksOver(svg, { x: 0, y: 0, w: 500, h: 50 }), right: PC.gradientInksOver(svg, { x: 500, y: 0, w: 500, h: 50 }), none: PC.gradientInksOver('<svg/>', { x: 0, y: 0, w: 10, h: 10 }) }; }, s.gradSvg);
+  expect(g.left).toHaveLength(11);
+  expect(g.left[0]).toBe('#000000');
+  expect(g.left[10]).toBe('#808080');
+  expect(g.right[0]).toBe('#808080');
+  expect(g.right[10]).toBe('#ffffff');
+  expect(g.none).toBeNull();
 });
 
 // ---- the app: the deck stores the rows, report.json lists them, a style switch measures again; 0 writer calls after the build
@@ -176,7 +197,8 @@ test('T4 the app: the deck stores one row per slide with text over a picture, re
   expect(rows.map((r: any) => r.slide)).toEqual(over);
   for (const r of rows) {
     expect(r.layout).toBe('title-over-photo');
-    expect(r.pass).toBe(true);
+    expect(r.pass).toBe(r.roles.every((q: any) => q.pass));
+    expect(r.roles.find((q: any) => q.role === 'title').pass).toBe(true);
     expect(r.roles.find((q: any) => q.role === 'title').threshold).toBe(3);
   }
   const rep = await report(page);
@@ -208,6 +230,7 @@ test('T4 the app: the deck stores one row per slide with text over a picture, re
   await page.waitForTimeout(1500);
   const d2 = await stored(page);
   expect(d2.designed.library.photoContrast.map((r: any) => r.slide)).toEqual(over);
-  expect(d2.designed.library.photoContrast.every((r: any) => r.pass)).toBe(true);
+  // Mono editorial glow (style-1): the headline still reads
+  expect(d2.designed.library.photoContrast.every((r: any) => r.roles.find((q: any) => q.role === 'title').pass)).toBe(true);
   expect(f.calls, 'no writer call after the build').toBe(made);
 });

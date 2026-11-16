@@ -6,7 +6,6 @@
 import { layoutText } from '../image-engine/draw/text';
 import type { TextLayer } from '../image-engine/types';
 import { svgToPng } from '../reference/faithful';
-import { along, gradientStopsOf } from '../reference/faithfulChecks';
 import type { Built } from './layouts';
 
 /** The text size (px at 1080 wide) from which a slot counts as large text (3:1); under it, 4.5:1. */
@@ -55,7 +54,20 @@ export interface PhotoContrastReading {
 }
 
 const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-interface LineBox { layer: TextLayer; box: Box; size: number }
+interface LineBox { key: unknown; role: string; text: string; ink: string; box: Box; size: number }
+/**
+ * The page chrome a style's devices draw as text of their own (not a text layer): the side label (the handle set upright along the right edge, devices.ts). Read from the drawing, so the deck and the
+ * export renderer measure the same thing. Its box is estimated the way the builder estimates text (0.58 em per character).
+ */
+export function sideLabelsOfSvg(svg: string): { text: string; ink: string; size: number; box: Box }[] {
+  const out: { text: string; ink: string; size: number; box: Box }[] = [];
+  for (const m of svg.matchAll(/<text transform="translate\(([\d.]+) ([\d.]+)\) rotate\(-90\)"[^>]*font-size="([\d.]+)"[^>]*fill="(#[0-9A-Fa-f]{6})">([^<]*)<\/text>/g)) {
+    const [cx, cy, size] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const len = m[5].length * size * 0.58;
+    out.push({ text: m[5].replace(/&amp;/g, '&').replace(/&lt;/g, '<'), ink: m[4], size, box: { x: cx - size * 0.75, y: cy - len / 2, w: size * 0.95, h: len } });
+  }
+  return out;
+}
 /**
  * The pictures of a drawn slide, read from its drawing: every picture the layout engine draws is clipped by a clipPath with id "pic<slide>x<n>" (build.ts), a rectangle or a circle. Used where only
  * the drawing is at hand (the export renderer); the deck code passes the plan's own boxes.
@@ -85,9 +97,10 @@ export function linesOverPictures(b: Pick<Built, 'layers' | 'images'> & { svg?: 
       const x0 = Math.min(...ws.map((w) => w.x)), x1 = Math.max(...ws.map((w) => w.x + w.width));
       const box = { x: l.x + x0, y: l.y + line.y + block.lineStep * 0.12, w: x1 - x0, h: block.lineStep * 0.8 };
       if (box.w <= 0 || box.h <= 0 || !pics.some((p) => overlaps(p, box))) continue;
-      out.push({ layer: l, box, size: block.size });
+      out.push({ key: l, role: l.name ?? 'text', text: l.text.trim().slice(0, 40), ink: l.style?.color ?? '', box, size: block.size });
     }
   }
+  if (b.svg) for (const sl of sideLabelsOfSvg(b.svg)) if (pics.some((p) => overlaps(p, sl.box))) out.push({ key: 'side-label', role: 'side-label', text: sl.text, ink: sl.ink, box: sl.box, size: sl.size });
   return out;
 }
 /** Whether a slide has any text over a picture (no drawing needed). */
@@ -104,6 +117,28 @@ export async function bareSlide(svg: string): Promise<{ g: OffscreenCanvasRender
   return { g, k: bm.width / 1080, w: bm.width, h: bm.height };
 }
 
+/**
+ * A headline drawn in a gradient (url(#htext), devices.ts): the colours the gradient takes over one line box. The gradient runs along the line from (x1, y1) to (x2, y2) in slide units with evenly spaced
+ * stops; a line shows only the stretch between its box corners' positions on it, sampled at 11 points. null when the slide has no gradient headline.
+ */
+export function gradientInksOver(svg: string, box: Box): string[] | null {
+  const g = /<linearGradient id="htext"([^>]*)>([\s\S]*?)<\/linearGradient>/.exec(svg);
+  if (!g) return null;
+  const at = new Map([...g[1].matchAll(/(x1|y1|x2|y2)="(-?[\d.]+)"/g)].map((m) => [m[1], Number(m[2])]));
+  const stops = [...g[2].matchAll(/stop-color="(#[0-9a-fA-F]{6})"/g)].map((m) => hexRgb(m[1])!).filter(Boolean);
+  if (stops.length < 2) return null;
+  const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map((k) => at.get(k) ?? 0);
+  const dx = x2 - x1, dy = y2 - y1, dd = dx * dx + dy * dy || 1;
+  const tOf = (x: number, y: number) => Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / dd));
+  const ts = [tOf(box.x, box.y), tOf(box.x + box.w, box.y), tOf(box.x, box.y + box.h), tOf(box.x + box.w, box.y + box.h)];
+  const t0 = Math.min(...ts), t1 = Math.max(...ts);
+  const colourAt = (t: number) => {
+    const p = t * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(p)), f = p - i;
+    return '#' + stops[i].map((v, k) => Math.round(v + (stops[i + 1][k] - v) * f).toString(16).padStart(2, '0')).join('');
+  };
+  return Array.from({ length: 11 }, (_, k) => colourAt(t0 + ((t1 - t0) * k) / 10));
+}
+
 const pct = (sorted: number[], p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round((p / 100) * (sorted.length - 1))))];
 
 /** Measures every text slot that crosses a picture, on the slide as drawn. A slide with no text over a picture is not drawn at all. */
@@ -112,11 +147,10 @@ export async function measurePhotoContrast(b: Pick<Built, 'layers' | 'svg'> & { 
   const lines = linesOverPictures(b);
   if (!lines.length) return { roles: [], pass: true, ms: 0 };
   const px = await bareSlide(b.svg);
-  // a headline drawn in a gradient (url(#htext)) is read at every colour along its gradient: the worst one counts
-  const stops = gradientStopsOf(b.svg);
-  const byLayer = new Map<TextLayer, PhotoContrastRole>();
-  for (const { layer, box, size } of lines) {
-    const inks = layer.name === 'title' && stops ? along(stops) : [layer.style?.color ?? ''];
+  const byLayer = new Map<unknown, PhotoContrastRole>();
+  for (const { key, role, text, ink: ink0, box, size } of lines) {
+    // a headline drawn in a gradient is read at every colour the gradient takes over this line: the worst one counts
+    const inks = (role === 'title' ? gradientInksOver(b.svg, box) : null) ?? [ink0];
     const lumsInk = inks.map((c) => ({ c, l: lumOfHex(c) })).filter((x): x is { c: string; l: number } => x.l !== null);
     if (!lumsInk.length) continue;
     const x0 = Math.max(0, Math.floor(box.x * px.k)), x1 = Math.min(px.w, Math.ceil((box.x + box.w) * px.k));
@@ -135,8 +169,8 @@ export async function measurePhotoContrast(b: Pick<Built, 'layers' | 'svg'> & { 
     }
     const { ink, tone, ratio } = worst!;
     const threshold = size >= LARGE_TEXT_PX - 0.5 ? LARGE_MIN : SMALL_MIN;
-    const prev = byLayer.get(layer);
-    if (!prev || ratio < prev.ratio) byLayer.set(layer, { role: layer.name ?? 'text', text: layer.text.trim().slice(0, 40), size: Math.round(size), ink, tone, ratio, threshold, pass: ratio >= threshold });
+    const prev = byLayer.get(key);
+    if (!prev || ratio < prev.ratio) byLayer.set(key, { role, text, size: Math.round(size), ink, tone, ratio, threshold, pass: ratio >= threshold });
   }
   const roles = [...byLayer.values()];
   return { roles, pass: roles.every((r) => r.pass), ms: Math.round(performance.now() - t0) };
@@ -144,6 +178,6 @@ export async function measurePhotoContrast(b: Pick<Built, 'layers' | 'svg'> & { 
 
 /** The sentence that takes the place of "contrast over gradients ... is not checked" on a slide with text over a picture: the measured result, slot by slot. */
 export function photoContrastSentence(m: PhotoContrastReading): string {
-  const part = (r: PhotoContrastRole) => `${r.role === 'recurring' ? 'page chrome' : r.role} ${r.ratio.toFixed(2)}:1 (needs ${r.threshold}:1${r.pass ? '' : ', too low'})`;
+  const part = (r: PhotoContrastRole) => `${r.role === 'recurring' ? 'page chrome' : r.role === 'side-label' ? 'side label (page chrome)' : r.role} ${r.ratio.toFixed(2)}:1 (needs ${r.threshold}:1${r.pass ? '' : ', too low'})`;
   return `Text over the picture, measured on the slide as drawn (${LIGHT_PERCENTILE}th percentile of the pixels behind light text, ${100 - LIGHT_PERCENTILE}th behind dark text): ${m.roles.map(part).join('; ')}.`;
 }
