@@ -48,6 +48,9 @@ async function addPictures(page: Page, n: number) {
 }
 async function make(page: Page) {
   await page.getByLabel('Your text or topic').fill(TEXT);
+  // Round R: 3 slides asked for the 3-slide plan, so no spare slide is filled with photo slides (this spec is about pictures left unused)
+  await toStep(page, 2);
+  await page.getByTestId('options').getByRole('combobox').first().selectOption('3');
   await toStep(page, 3);
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Warm editorial collage/ }).first().click();
   await page.getByRole('button', { name: 'Make carousel', exact: true }).click();

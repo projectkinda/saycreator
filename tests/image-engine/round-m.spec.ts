@@ -47,7 +47,7 @@ test('M2: the sentence rule: a sentence is on a slide when 80% of its words are 
     };
   });
   expect(r.split).toEqual(['One two three.', "Here's how it works:", 'Paste your text', 'Pick a look', 'Done!']);
-  expect(r.all).toEqual({ count: 0, total: 2, percentOfSentences: 0, sentences: [] });
+  expect(r.all).toEqual({ count: 0, total: 2, percentOfSentences: 0, sentences: [], emojis: [] });
   expect([r.eight, r.seven, r.spread, r.shuffled]).toEqual([0, 1, 1, 1]);
 });
 
@@ -70,7 +70,7 @@ test('M2: writer route: "2 of 7 sentences from your text are not on any slide." 
   await notice.scrollIntoViewIfNeeded();
   (await import('node:fs')).mkdirSync('out/round-m', { recursive: true });
   await page.locator('p[role=status]').filter({ hasText: /Saved in this browser/ }).first().locator('xpath=..').screenshot({ path: 'out/round-m/not-on-slides-notice.png' });
-  expect(await report(page)).toEqual({ count: 2, percentOfSentences: 28.6, sentences: ['Paste your text and pick a look.', 'Nothing reruns when you edit.'] });
+  expect(await report(page)).toEqual({ count: 2, percentOfSentences: 28.6, sentences: ['Paste your text and pick a look.', 'Nothing reruns when you edit.'], emojis: [] });
   // a text edit puts one of them on a slide: 1 left
   await openTab(page, 'Text', 1);
   const fields = page.getByTestId('text-tab-0').locator('input, textarea');
@@ -107,6 +107,6 @@ test('M2: pasted route (every paragraph a slide): every sentence is on a slide, 
   await expect(page.locator('.cr-film img').first()).toBeVisible({ timeout: 90_000 });
   await page.waitForTimeout(2500);
   await expect(page.getByTestId('not-on-slides')).toHaveCount(0);
-  expect(await report(page)).toEqual({ count: 0, percentOfSentences: 0, sentences: [] });
+  expect(await report(page)).toEqual({ count: 0, percentOfSentences: 0, sentences: [], emojis: [] });
   expect(f.calls).toBe(0);
 });
