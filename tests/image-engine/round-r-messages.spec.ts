@@ -53,7 +53,7 @@ async function make(page: Page, asked: number, keep = true) {
   await toStep(page, 3);
   await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Warm editorial collage/ }).first().click();
   await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
-  await expect(page.getByTestId('slide-count-line').or(page.getByTestId('pictures-unused')).or(page.locator('.cr-film li').nth(asked - 1))).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByTestId('slide-count-line').or(page.getByTestId('pictures-unused')).or(page.locator('.cr-film li').nth(asked - 1)).first()).toBeVisible({ timeout: 120_000 });
   await page.waitForTimeout(2000);
 }
 const stored = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem('creator.carousel.project.v1') ?? '{}').project?.doc);
