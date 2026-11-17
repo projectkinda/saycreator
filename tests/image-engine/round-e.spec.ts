@@ -155,6 +155,9 @@ test('F: a photo shown whole is feathered into its dissolve (a mask on the pictu
   const r: any = await page.evaluate(async () => {
     const H = (window as any).__H;
     const out: any = {};
+    // Round U: this test is about a photo drawn WHOLE; the wide photo could fill photo-full-caption (a cut under 40%, its detail in the middle), so "Fill the slide" is switched off for both photos here
+    const FS: any = await import('/src/carousel/layouts/fillSlide.ts');
+    FS.setFillOverrides([['portrait', 'off'], ['wide', 'off']]);
     for (const style of ['dark-quiet', 'style-1']) {
       const st = H.D.styleFromPack(H.PR.presetPackFor(style, false)).style;
       for (const [k, w, h, photo] of [['portrait photo', 1000, 1500, true], ['wide photo', 2400, 1230, true], ['portrait screenshot', 1000, 1500, false]] as [string, number, number, boolean][]) {
@@ -163,6 +166,7 @@ test('F: a photo shown whole is feathered into its dissolve (a mask on the pictu
         out[`${style}/${k}`] = { mask: /<mask id="pic\d+x\d+m"/.test(svg), maskedImage: /<image [^>]*mask="url\(#pic/.test(svg), blur: /feGaussianBlur stdDeviation="32"/.test(svg) /* Round U: the dissolve's blurred mirror */, dark: !/fill="#000000" fill-opacity=/.test(svg) /* Round U: nothing is darkened (no veil) */, clipped: /<image [^>]*clip-path="url\(#pic/.test(svg) };
       }
     }
+    FS.setFillOverrides([]);
     return out;
   });
   for (const style of ['dark-quiet', 'style-1']) {
