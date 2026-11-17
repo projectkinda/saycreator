@@ -3,7 +3,8 @@
 //   - the important part is a saliency box measured on the photo's own pixels (a 400 px copy, already read for the drawing). Blocks of 8 x 8 px are scored by local contrast (detail) and by how
 //     far their colour is from the colour of the photo's border (a subject against its background), weighted towards the middle of the photo and towards its focus point (fx, fy). Blocks under
 //     30% of the strongest score are left out (a plain wall, a sky); the box spans the middle 90% of what is left along each axis;
-//   - the kept part is the NARROWEST a fill may ever keep: 60% of the photo's width (or height) around its focus point (the focus point is never moved). The choice does not depend on the slot
+//   - the kept part is the NARROWEST a fill may ever keep: 60% of the photo's width (or height), centred on the person's focus point when they set one (kept exactly), otherwise (Round V)
+//     on the middle of the saliency box, held inside the photo; a fill is then drawn at that centre. The choice does not depend on the slot
 //     as drawn, so a style switch (a profile header makes the picture zone shorter), a colour or brand switch, a reload, a move or a remove never change it;
 //   - at least 90% of the saliency box must be inside it; otherwise the photo stays whole (the dissolve).
 // The person can switch it for a picture ("Fill the slide", in the picture row): on fills even when the measure says no (still at most 40%), off keeps the photo whole. "Keep the full picture"
@@ -129,6 +130,12 @@ export interface FillChoice {
   /** The share of the saliency box inside the narrowest kept part (null when the picture could not be read). */
   inside: number | null;
   box: UnitBox | null;
+  /** Round V: where the kept part is centred along the cut axis (0..1): the person's focus point, or (none set) the middle of the saliency box, held inside the photo. */
+  centre: number;
+  /** Round V: the focus point a fill is drawn at (the person's own, or the saliency box's middle on the cut axis when none was set). */
+  focus: { fx: number; fy: number };
+  /** Round V: the window was centred on the saliency box (no focus point set). */
+  auto: boolean;
   /** fills: the measure said yes; subject-cut: the measure said no; on / off: the person's switch; unread: the picture could not be read (kept whole). */
   why: 'fills' | 'subject-cut' | 'on' | 'off' | 'unread';
 }
@@ -145,15 +152,20 @@ export async function fillChoice(layout: string, slot: Box, ref: PicRef | null, 
   const across = l.w >= l.h; // the cut takes the sides (a photo wider than its slot) or the top and bottom
   const base = { cut: r3(cut), sides: across ? ('sides' as const) : ('top and bottom' as const) };
   const o = fillOverride(ref.id);
+  const own = across ? ref.fx : ref.fy;
   const box = await salientBox(src, ref.fx, ref.fy);
-  if (!box) return { ...base, fill: o === 'on', inside: null, box: null, why: o ?? 'unread' };
-  const [k0, k1] = keptWindow(across ? ref.fx : ref.fy);
+  if (!box) return { ...base, fill: o === 'on', inside: null, box: null, centre: own, focus: { fx: ref.fx, fy: ref.fy }, auto: false, why: o ?? 'unread' };
+  // Round V: no focus point set: the kept part is centred on the saliency box (held inside the photo); a focus point the person set is kept exactly
+  const auto = !ref.focusSet;
+  const [k0, k1] = keptWindow(auto ? ((across ? box.x0 + box.x1 : box.y0 + box.y1) / 2) : own);
+  const centre = r3((k0 + k1) / 2);
+  const focus = auto ? (across ? { fx: centre, fy: ref.fy } : { fx: ref.fx, fy: centre }) : { fx: ref.fx, fy: ref.fy };
   const [b0, b1] = across ? [box.x0, box.x1] : [box.y0, box.y1];
   const inside = r3(Math.max(0, Math.min(b1, k1) - Math.max(b0, k0)) / Math.max(1e-9, b1 - b0));
   // the person's switch wins; the measure is still reported (the picture row says what the automatic choice would be)
-  if (o) return { ...base, fill: o === 'on', inside, box, why: o };
+  if (o) return { ...base, fill: o === 'on', inside, box, centre, focus, auto, why: o };
   const ok = inside >= SALIENT_KEEP - 1e-9;
-  return { ...base, fill: ok, inside, box, why: ok ? 'fills' : 'subject-cut' };
+  return { ...base, fill: ok, inside, box, centre, focus, auto, why: ok ? 'fills' : 'subject-cut' };
 }
 
 /** The note in plain words for a photo's choice (the picture row and the slide notes). */

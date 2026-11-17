@@ -36,22 +36,28 @@ export interface PicRef {
   fy: number;
   /** The zoom, 1 to 4 (1 = the picture just covers the slot). */
   z: number;
+  /** Round V: the person set the focus point (in the picture editor, written "fs=1"; or an older reference whose focus is not one of the defaults). Otherwise the fill rule may centre its crop on
+   *  the photo's saliency box. */
+  focusSet?: boolean;
 }
-export const makeRef = (r: { id: string; w: number; h: number; fx?: number; fy?: number; z?: number; photo?: boolean }): string => `picture:${r.id}#w=${Math.round(r.w)}&h=${Math.round(r.h)}&fx=${Math.round((r.fx ?? 0.5) * 1000) / 1000}&fy=${Math.round((r.fy ?? 0.5) * 1000) / 1000}&z=${Math.round((r.z ?? 1) * 100) / 100}${r.photo ? '&k=p' : ''}`;
+export const makeRef = (r: { id: string; w: number; h: number; fx?: number; fy?: number; z?: number; photo?: boolean; focusSet?: boolean }): string => `picture:${r.id}#w=${Math.round(r.w)}&h=${Math.round(r.h)}&fx=${Math.round((r.fx ?? 0.5) * 1000) / 1000}&fy=${Math.round((r.fy ?? 0.5) * 1000) / 1000}&z=${Math.round((r.z ?? 1) * 100) / 100}${r.photo ? '&k=p' : ''}${r.focusSet ? '&fs=1' : ''}`;
 const frag = (s: string) => Object.fromEntries((s.split('#')[1] ?? '').split('&').filter(Boolean).map((kv) => kv.split('=') as [string, string]));
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+/** Round V: the focus point counts as the person's when the reference says so (fs=1) or when it is not one of the defaults the code writes (the middle, or near the top of a tall picture). */
+const focusWasSet = (f: Record<string, string>, fx: number, fy: number): boolean => f.fs === '1' || !(Math.abs(fx - 0.5) < 1e-6 && (Math.abs(fy - 0.5) < 1e-6 || Math.abs(fy - 0.1) < 1e-6));
 /** A project picture reference (null for a data: URL or anything else). */
 export function parseRef(v: unknown): PicRef | null {
   if (typeof v !== 'string' || !PICTURE_REF.test(v.trim())) return null;
   const s = v.trim();
   const f = frag(s);
   const num = (k: string, d: number) => (Number.isFinite(Number(f[k])) && f[k] !== undefined ? Number(f[k]) : d);
-  return { id: s.slice('picture:'.length).split('#')[0], ...(f.k === 'p' ? { photo: true } : {}), ...(f.w && f.h ? { w: num('w', 0), h: num('h', 0) } : {}), fx: clamp(num('fx', 0.5), 0, 1), fy: clamp(num('fy', 0.5), 0, 1), z: clamp(num('z', 1), 1, 4) };
+  return { id: s.slice('picture:'.length).split('#')[0], ...(f.k === 'p' ? { photo: true } : {}), ...(f.w && f.h ? { w: num('w', 0), h: num('h', 0) } : {}), fx: clamp(num('fx', 0.5), 0, 1), fy: clamp(num('fy', 0.5), 0, 1), z: clamp(num('z', 1), 1, 4), ...(focusWasSet(f, num('fx', 0.5), num('fy', 0.5)) ? { focusSet: true } : {}) };
 }
 /** The same reference with a new focus point and zoom. */
 export const withCrop = (ref: string, c: { fx?: number; fy?: number; z?: number }): string => {
   const r = parseRef(ref);
-  return r && r.w && r.h ? makeRef({ id: r.id, w: r.w, h: r.h, fx: c.fx ?? r.fx, fy: c.fy ?? r.fy, z: c.z ?? r.z, ...(r.photo ? { photo: true } : {}) }) : ref;
+  // Round V: a focus point set here is the person's (fs=1), so the fill rule keeps it exactly
+  return r && r.w && r.h ? makeRef({ id: r.id, w: r.w, h: r.h, fx: c.fx ?? r.fx, fy: c.fy ?? r.fy, z: c.z ?? r.z, ...(r.photo ? { photo: true } : {}), ...(r.focusSet || c.fx !== undefined || c.fy !== undefined ? { focusSet: true } : {}) }) : ref;
 };
 /**
  * Where the whole picture sits so that it covers the slot (cover fit), at the reference's zoom, with the focus point as near the slot's middle as the picture allows. Pure, so the engine

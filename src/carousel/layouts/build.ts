@@ -86,6 +86,8 @@ export interface SlideFill {
   sides: 'sides' | 'top and bottom';
   inside: number | null;
   why: 'fills' | 'subject-cut' | 'on' | 'off' | 'unread';
+  /** Round V: the window was centred on the saliency box (no focus point set). */
+  auto?: boolean;
 }
 
 const TOKENS = /\$(accentText|accentDisplay|accent2Text|accent2|accent3|onAccent2|onAccent|bg|text|muted|accent|surface)\b/g;
@@ -415,13 +417,16 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   if (pics.length) {
     // the crop budget: a picture a cover-crop would cut by more than 10% is drawn whole, on a panel in its own average edge colour
     const whole = new Map<number, { rect: { x: number; y: number; w: number; h: number }; bg: string; photo: boolean }>();
+    const refocus = new Map<number, { fx: number; fy: number }>();
     for (const [i, p] of pics.entries()) {
       const ref = parseRef(p.src);
       if (p.circle || !ref || !needsContain(p, ref)) continue;
       // Round U part 3: on a full-bleed layout a photo may fill its slot (a cover crop up to 40%) when the important part of it stays inside; otherwise it is drawn whole and dissolves
       const fc = await fillChoice(layoutId, p, ref, p.src);
-      if (fc) fills.push({ picture: ref.id, index: i, fill: fc.fill, cut: fc.cut, sides: fc.sides, inside: fc.inside, why: fc.why });
+      if (fc) fills.push({ picture: ref.id, index: i, fill: fc.fill, cut: fc.cut, sides: fc.sides, inside: fc.inside, why: fc.why, ...(fc.auto ? { auto: true } : {}) });
       if (fc?.fill) {
+        // Round V: no focus point set: the fill is drawn centred on the photo's saliency box (the person's own focus point is kept exactly)
+        if (fc.auto) refocus.set(i, fc.focus);
         notes.push(`picture ${i + 1}: ${fillSentence(fc)}`);
         continue;
       }
@@ -434,7 +439,8 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       const clip = p.circle ? `<circle cx="${p.x + p.w / 2}" cy="${p.y + p.h / 2}" r="${p.w / 2}"/>` : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}"/>`;
       // a project picture (a reference with its natural size) is cropped here, with its focus point and zoom; any other picture is cropped by the browser (centred)
       const w0 = whole.get(i);
-      const cr = w0 ? { x: w0.rect.x, y: w0.rect.y, w: w0.rect.w, h: w0.rect.h } : cropRect(p, parseRef(p.src));
+      const rf = refocus.get(i), pr0 = parseRef(p.src);
+      const cr = w0 ? { x: w0.rect.x, y: w0.rect.y, w: w0.rect.w, h: w0.rect.h } : cropRect(p, rf && pr0 ? { ...pr0, ...rf } : pr0);
       // Round U: a photo shown whole dissolves into the slide (its mirrored, blurred edge fading into what lies under the slot); a screenshot sits on a flat panel in its edge colour
       const panel = w0 ? (w0.photo ? dissolveFill(id, p, w0.rect, p.src, !!p.bleed) : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" fill="${w0.bg}"/>`) : '';
       const box = cr ? `x="${Math.round(cr.x * 10) / 10}" y="${Math.round(cr.y * 10) / 10}" width="${Math.round(cr.w * 10) / 10}" height="${Math.round(cr.h * 10) / 10}" preserveAspectRatio="none"` : `x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" preserveAspectRatio="xMidYMid slice"`;
