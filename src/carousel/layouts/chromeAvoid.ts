@@ -1,4 +1,4 @@
-// Round 16: pictures keep clear of the slide's chrome, and a photo drawn whole sits on a blurred copy of itself.
+// Round 16: pictures keep clear of the slide's chrome. (A photo drawn whole dissolves into the slide: layouts/dissolve.ts, Round U.)
 import type { PlanImage } from './types';
 
 interface Chrome {
@@ -43,18 +43,3 @@ export function avoidChrome(images: PlanImage[], rec: Chrome[]): PlanImage[] {
   });
 }
 
-/**
- * The backdrop of a photo drawn whole: the same photo, covering the slot, blurred and darkened, clipped to the slot (rounded as the slot is). No flat bars. `crop` is the cover rectangle of the
- * photo in the slot (null: the browser crops it). The copy is drawn 12% larger so the blur has no soft edge inside the slot.
- */
-/** The copy is drawn this much larger on every side (6%), so the blur has no soft edge inside the slot. */
-export const BACKDROP_GROW = 0.06;
-export function blurredBackdrop(id: string, p: PlanImage, src: string, crop: Box | null, veil = 0.42): string {
-  const r = (n: number) => Math.round(n * 10) / 10;
-  const grow = BACKDROP_GROW;
-  const c = crop ?? { x: p.x, y: p.y, w: p.w, h: p.h };
-  const x = c.x - c.w * grow, y = c.y - c.h * grow, w = c.w * (1 + 2 * grow), h = c.h * (1 + 2 * grow);
-  const href = src.replace(/&/g, '&amp;');
-  return `<defs><clipPath id="${id}s"><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}"/></clipPath><filter id="${id}b" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="30"/></filter></defs>`
-    + `<g clip-path="url(#${id}s)"><image href="${href}" x="${r(x)}" y="${r(y)}" width="${r(w)}" height="${r(h)}" preserveAspectRatio="none" filter="url(#${id}b)"/><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="#000000" fill-opacity="${veil}"/></g>`;
-}

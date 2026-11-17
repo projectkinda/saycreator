@@ -6,7 +6,7 @@ import fs from 'node:fs';
 
 test.setTimeout(5 * 60_000);
 
-test('A: a photo shown whole is feathered into its blurred fill over at least 24 px (10% to 90% of a Gaussian of that blur), the backdrop is unchanged', async ({ page }) => {
+test('A: a photo shown whole is feathered into its fill over at least 24 px (10% to 90% of a Gaussian of that blur); Round U: the fill is the dissolve, nothing darkened', async ({ page }) => {
   await page.goto('/images/carousel');
   const r: any = await page.evaluate(async () => {
     const dl: any = await import('/src/carousel/designLibrary.ts');
@@ -21,9 +21,9 @@ test('A: a photo shown whole is feathered into its blurred fill over at least 24
   expect(2 * 1.2816 * r.blur, 'transition width at 1080 wide').toBeGreaterThanOrEqual(24);
   expect(r.inset, 'the 10% point must not be outside the picture edge by more than a pixel').toBeGreaterThanOrEqual(1.2816 * r.blur - 2);
   expect(r.svg).toContain(`stdDeviation="${r.blur}"`);
-  // the backdrop is the same as before: blur 30, a 42% black veil, and the picture is clipped as before
-  expect(r.svg).toContain('stdDeviation="30"');
-  expect(r.svg).toContain('fill-opacity="0.42"');
+  // Round U: the fill is the dissolve (the photo's own edge mirrored, blurred 32, faded into the slide), never a darkened copy
+  expect(r.svg).toContain('<feGaussianBlur stdDeviation="32" edgeMode="duplicate"/>');
+  expect(r.svg).not.toContain('fill="#000000" fill-opacity=');
 });
 
 test('B: the phone frame\'s speaker slot sits in the bezel, clear of the screen, and no word is lost', async ({ page }) => {

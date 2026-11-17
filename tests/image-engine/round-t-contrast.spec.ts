@@ -14,23 +14,24 @@ const REAL = ['sky-tower.jpg', 'sunrays-palms.jpg'];
 const hasReal = REAL.every((f) => fs.existsSync(path.join(DIR, f)));
 const b64 = (f: string) => 'data:image/jpeg;base64,' + fs.readFileSync(path.join(DIR, f)).toString('base64');
 
-/** The two hard pictures (1280 x 960), made in the page: a near-white wall and a fine high-contrast checkerboard. */
-const makeHard = (page: Page) => page.evaluate(() => {
-  const mk = (kind: 'snow' | 'busy') => {
+/** The hard pictures (1280 x 960), made in the page: a near-white wall, a fine high-contrast checkerboard, and (Round U) a mid-grey wall, where the side label needs a plate in its own ink. */
+const makeHard = (page: Page, withMid = false) => page.evaluate((withMid) => {
+  const mk = (kind: 'snow' | 'busy' | 'mid') => {
     const c = document.createElement('canvas'); c.width = 1280; c.height = 960; const g = c.getContext('2d')!;
-    const im = g.createImageData(1280, 960); let seed = kind === 'snow' ? 11 : 29;
+    const im = g.createImageData(1280, 960); let seed = kind === 'snow' ? 11 : kind === 'mid' ? 41 : 29;
     const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     for (let y = 0; y < 960; y++) for (let x = 0; x < 1280; x++) {
       const k = (y * 1280 + x) * 4; let r: number, gg: number, bb: number;
       if (kind === 'snow') { const v = 238 + 12 * (1 - y / 960) + (rnd() - 0.5) * 10 - Math.sin(x / 90) * 4; r = v - 2; gg = v; bb = Math.min(255, v + 4); }
+      else if (kind === 'mid') { const v = 150 + (rnd() - 0.5) * 8 - Math.sin(x / 120) * 5; r = v; gg = v; bb = v; }
       else { const cell = ((x >> 4) + (y >> 4)) & 1; const n = (rnd() - 0.5) * 70; const v = cell ? 225 + n * 0.4 : 25 + n * 0.4; r = v * 0.8; gg = v; bb = v * 0.6; }
       im.data[k] = Math.max(0, Math.min(255, r)); im.data[k + 1] = Math.max(0, Math.min(255, gg)); im.data[k + 2] = Math.max(0, Math.min(255, bb)); im.data[k + 3] = 255;
     }
     g.putImageData(im, 0, 0);
     return c.toDataURL('image/jpeg', 0.92);
   };
-  return { 'near-white': mk('snow'), 'busy-check': mk('busy') };
-});
+  return { 'near-white': mk('snow'), 'busy-check': mk('busy'), ...(withMid ? { 'mid-grey': mk('mid') } : {}) };
+}, withMid);
 
 test('T1 the check reads the photo: light text with no scrim fails on every picture; as the app draws title-over-photo (its own scrim) every headline passes 3:1', async ({ page }) => {
   test.skip(!hasReal, 'the real test photos are not on this computer');
@@ -262,7 +263,7 @@ test('T4 the app: the deck stores one row per slide with text over a picture, re
 
 test('T5 each repair is reached on its own fixture: a gradient headline gets a stronger scrim; a side label gets a plate, or the other ink on a plate; words, layout and picture never change', async ({ page }) => {
   await page.goto('/images/carousel');
-  const pics = await makeHard(page);
+  const pics = await makeHard(page, true);
   const r = await page.evaluate(async (pics) => {
     const DL: any = await import('/src/carousel/designLibrary.ts');
     const PR: any = await import('/src/carousel/presets.ts');
@@ -291,7 +292,8 @@ test('T5 each repair is reached on its own fixture: a gradient headline gets a s
     };
     return {
       gradient: await one('style-8', 'busy-check', 0, 0),
-      plate: await one('style-1', 'near-white', 0, 0),
+      // Round U: a photo drawn whole now dissolves into the slide (no darkened copy under its feathered edge), so the near-white wall needs the other ink; a mid-grey wall gets the plate in its own ink
+      plate: await one('style-1', 'mid-grey', 0, 0),
       otherInk: await one('style-1', 'busy-check', 1, 0),
       reads: await one('style-3', 'busy-check', 0, 0),
     };

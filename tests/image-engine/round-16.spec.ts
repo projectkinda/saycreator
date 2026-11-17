@@ -90,7 +90,7 @@ test('C: a slide that fails a check is redrawn by the code in a layout that fits
   for (const w of r.oldWords) expect(r.newWords, `the repaired slide keeps "${w}"`).toContain(w);
 });
 
-test('E: a photo that a cover-crop would cut by more than 25% is shown whole on a blurred, darkened copy of itself; a screenshot keeps 10% and a flat panel; the sheet is saved', async ({ page }) => {
+test('E: a photo that a cover-crop would cut by more than 25% is shown whole and dissolves into the slide (Round U; it was a blurred, darkened copy); a screenshot keeps 10% and a flat panel; the sheet is saved', async ({ page }) => {
   await page.route('**/api/carousel/status', (r) => r.fulfill({ json: { available: false } }));
   await page.goto('/images/carousel');
   await page.evaluate(HELP);
@@ -141,7 +141,7 @@ test('E: a photo that a cover-crop would cut by more than 25% is shown whole on 
   for (const x of pick('title-over-photo', 'p34')) expect(x.blur, `${x.style} 3:4 in title-over-photo is cropped (21% is inside the 25% budget)`).toBe(false);
   for (const x of r.shotFlags) expect(x.blur, `a screenshot (${x.shape}) never gets a blurred backdrop`).toBe(false);
   expect(r.shotFlags.find((x: any) => x.shape === 'p43').notes, 'a screenshot keeps the 10% budget and its flat panel').toMatch(/10%/);
-  expect(r.flags.filter((x: any) => x.blur).every((x: any) => /25%.*blurred/.test(x.notes))).toBe(true);
+  expect(r.flags.filter((x: any) => x.blur).every((x: any) => /25%.*dissolve into the slide/.test(x.notes))).toBe(true);
 });
 
 test('G: beside a picture the headline fits in 4 lines (shrunk down to 70% before a fifth), avoids a one-word "and" line; photo-full-caption with 12 words or fewer has a 64 px headline and a 40 px body, the panel grows', async ({ page }) => {
