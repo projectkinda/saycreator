@@ -168,13 +168,13 @@ export async function fillChoice(layout: string, slot: Box, ref: PicRef | null, 
   return { ...base, fill: ok, inside, box, centre, focus, auto, why: ok ? 'fills' : 'subject-cut' };
 }
 
-/** The note in plain words for a photo's choice (the picture row and the slide notes). */
+/** The note in plain words for a photo's choice, one line (the picture row and the slide notes; Round V: shortened). */
 export function fillSentence(c: Pick<FillChoice, 'fill' | 'cut' | 'sides' | 'why' | 'inside'>): string {
   const pct = Math.round(c.cut * 100);
   const cutOff = `${pct}% of the ${c.sides} ${pct === 1 ? 'is' : 'are'} cut off.`;
-  if (c.fill && c.why === 'on' && c.inside !== null && c.inside < SALIENT_KEEP) return `Fills the slide, as you chose. ${cutOff} Part of what matters in the photo may be cut.`;
+  if (c.fill && c.why === 'on' && c.inside !== null && c.inside < SALIENT_KEEP) return `Fills the slide, as you chose; ${pct}% cut, maybe part of what matters.`;
   if (c.fill) return `Fills the slide. ${cutOff}`;
   if (c.why === 'off') return 'Shown whole; its edges melt into the slide.';
-  if (c.why === 'subject-cut') return `Shown whole: filling the slide would cut ${pct}% of the ${c.sides} and part of what matters in the photo. Its edges melt into the slide.`;
+  if (c.why === 'subject-cut') return `Shown whole: filling would cut part of what matters.`;
   return 'Shown whole; its edges melt into the slide.';
 }

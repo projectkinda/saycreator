@@ -81,7 +81,8 @@ test('U3b the switch overrides: on fills the group photo (and says part of what 
   const on = await draw(page, { pics, layout: 'title-over-photo', v: 0, styleId: 'style-1', id: 'group', overrides: [['group', 'on']] });
   expect(on.fills[0]).toMatchObject({ fill: true, why: 'on' });
   expect(mirrored(on.svg)).toBe(false);
-  expect(on.notes.join(' ')).toMatch(/Fills the slide, as you chose\. \d+% of the sides are cut off\. Part of what matters in the photo may be cut\./);
+  // Round V: the note is one line
+  expect(on.notes.join(' ')).toMatch(/Fills the slide, as you chose; \d+% cut, maybe part of what matters\./);
   const off = await draw(page, { pics, layout: 'title-over-photo', v: 0, styleId: 'style-1', id: 'central', overrides: [['central', 'off']] });
   expect(off.fills[0]).toMatchObject({ fill: false, why: 'off' });
   expect(mirrored(off.svg)).toBe(true);
@@ -178,11 +179,16 @@ test('U3d the app: the picture row says what each photo does and its switch over
   await expect(page.getByTestId('image-1-fill-switch')).toBeChecked();
   await expect(page.getByTestId('image-1-fill-note')).toHaveText(`Fills the slide. ${pct}% of the sides are cut off.`);
   await expect(page.getByTestId('image-0-fill-switch')).not.toBeChecked();
-  await expect(page.getByTestId('image-0-fill-note')).toContainText('Shown whole: filling the slide would cut');
-  await expect(page.getByTestId('image-0-fill')).toContainText('On: the photo covers the slide edge to edge');
+  await expect(page.getByTestId('image-0-fill-note')).toHaveText('Shown whole: filling would cut part of what matters.');
+  // Round V: what the switch does is said once for the row, not under each picture
+  await expect(page.getByTestId('images-fill-help')).toHaveCount(1);
+  await expect(page.getByTestId('images-fill-help')).toContainText('On: the photo covers the slide edge to edge');
+  await expect(page.getByTestId('image-0-fill')).not.toContainText('On: the photo covers');
+  // the switch is a 44 px tap target
+  expect((await page.getByTestId('image-0-fill').locator('label').boundingBox())!.height).toBeGreaterThanOrEqual(44);
   // the switch: the group photo fills (as the person chose), the slide is drawn again, no writer call
   await page.getByTestId('image-0-fill-switch').click();
-  await expect(page.getByTestId('image-0-fill-note')).toContainText('Fills the slide, as you chose.', { timeout: 60_000 });
+  await expect(page.getByTestId('image-0-fill-note')).toContainText('Fills the slide, as you chose;', { timeout: 60_000 });
   const d2 = await stored(page);
   const g2 = fillsOf(d2).find((x: any) => x.picture === ids[0]);
   expect(g2).toMatchObject({ fill: true, why: 'on' });

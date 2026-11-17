@@ -108,7 +108,6 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
                         <span>Fill the slide</span>
                       </label>
                       <span data-testid={`image-${i}-fill-note`}>{keepsBars ? 'Off while the full picture is kept: a photo kept with its black bars is never cut.' : fillSentence(fi)}</span>
-                      <span className="muted">On: the photo covers the slide edge to edge, and its edges are cut. Off: the whole photo is shown, and its edges melt into the slide.</span>
                     </span>
                   );
                 })()}
@@ -122,6 +121,8 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
           })}
         </ul>
       )}
+      {/* Round V: what the switch does, said once for the whole row (not under every picture) */}
+      {photos.some((p) => fillInfo?.[p.id] && contentOr(p.content) !== 'screenshot') && <p className="small muted" data-testid="images-fill-help">Fill the slide. On: the photo covers the slide edge to edge, and its edges are cut. Off: the whole photo is shown, and its edges melt into the slide.</p>}
       {photos.length > 0 && <p className="small muted" data-testid="images-name-hint">Name each picture in words from your slide, for example: pick a look. A named picture goes on the slide with those words.</p>}
       {status && <p className="small" role="status" aria-live="polite" data-testid="images-status">{status}</p>}
     </div>
