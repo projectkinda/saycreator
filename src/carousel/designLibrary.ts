@@ -23,7 +23,7 @@ import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImag
 import { pictureUseOf, pinnedPicture, placeImages, usedIds } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { settleScrim } from './scrim';
-import { measurePhotoContrast, repairSideLabel, type PhotoContrastRole } from './photoContrast';
+import { measurePhotoContrast, repairChromeText, repairSideLabel, type PhotoContrastRole } from './photoContrast';
 import { namePass } from './pictureNames';
 import { heroPass, picturePass, screenshotPass, separatePictureRuns, type PictureSwap } from './picturePass';
 import { isTallShot, shapePass, tallShotTooSmall, type ShapeRow } from './photoShape';
@@ -1428,12 +1428,24 @@ export async function settlePhotoContrast(drawn0: (Drawn | null | undefined)[], 
         notes.push(`slide ${i + 1}: ${fix.repair}, so the side label reads on the picture (${fix.ratio}:1${fix.pass ? '' : ', still under 4.5:1'}).`);
       }
     }
+    // Round V: page chrome (the handle, the page number, the footer) over a photo that bleeds to the slide's edges: a plate behind it, the other ink, or both (repairChromeText)
+    for (const r of m.roles.filter((q) => q.role === 'recurring' && !q.pass)) {
+      const pal = d.built!.palette ?? {};
+      const fix = await repairChromeText(d.built!, [pal.text, pal.bg].filter(Boolean), r.text);
+      if (fix && fix.ratio > r.ratio) {
+        d = { ...d, built: { ...d.built!, svg: fix.svg, layers: fix.layers } };
+        const m4 = await read(d);
+        if (m4) { ms += m4.ms; m = m4; }
+        repairs.set('recurring|' + r.text, fix.repair);
+        notes.push(`slide ${i + 1}: ${fix.repair}, so it reads on the picture (${fix.ratio}:1${fix.pass ? '' : ', still under 4.5:1'}).`);
+      }
+    }
     // the scrim drawOne itself raised (the Round N rule), when it raised one
     const own = typeof d.scrim === 'number' && d.scrim > 0 ? `the title-over-photo scrim was raised to level ${d.scrim} of 3` : undefined;
     drawn[i] = d;
     rows.push({
       slide: i + 1, layout: layouts[i] ?? '', pass: m.roles.every((r) => r.pass), ms,
-      roles: m.roles.map((r) => { const how = repairs.get(r.role) ?? (r.role === 'title' || r.role === 'body' ? own : undefined); return how ? { ...r, repair: how } : r; }),
+      roles: m.roles.map((r) => { const how = repairs.get(r.role + '|' + r.text) ?? repairs.get(r.role) ?? (r.role === 'title' || r.role === 'body' ? own : undefined); return how ? { ...r, repair: how } : r; }),
     });
   }
   return { rows, drawn, notes };

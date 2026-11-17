@@ -114,6 +114,7 @@ export const nearSquare = (a: number): boolean => a >= 0.7 && a <= 1.4;
 /** A tall or portrait picture (a phone screenshot, a portrait photo) is shown in a half-and-half split, edge to edge. */
 const panelShape = (src: string): boolean => { const k = shapeOf(src)?.kind; return k === 'tall' || k === 'portrait'; };
 const SLIDE_W = 1080;
+const SLIDE_H = 1350;
 /** The picture zone: between the handle row (y 109) and the page counter (y 1258), so no page chrome is ever over a picture. */
 const ZONE_TOP = 116;
 const ZONE_BOTTOM = 1250;
@@ -609,7 +610,9 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         // the picture takes the rest of the picture zone; the caption panel (the card colour) at least 254 px
         const picY = v === 0 ? ZONE_TOP : ZONE_TOP + panelH;
         const panelY = v === 0 ? ZONE_TOP + picH : ZONE_TOP;
-        d.image(img, 0, picY, SLIDE_W, picH, { rx: 0 });
+        // Round V: the photo runs on to the slide's edge on the side away from the caption panel (no strip of ground under the page chrome)
+        // (a photo of the project only, as on title-over-photo)
+        d.image(img, 0, picY, SLIDE_W, picH, { rx: 0, ...(parseRef(img)?.photo ? { bleed: v === 0 ? { x: 0, y: 0, w: SLIDE_W, h: picY + picH } : { x: 0, y: picY, w: SLIDE_W, h: SLIDE_H - picY } } : {}) });
         d.rect(0, panelY, SLIDE_W, panelH, '$surface', { rx: 0 });
         d.y = v === 0 ? panelY + 24 + Math.max(0, Math.round((panelH - room - th) / 2)) : panelY + 40 + Math.max(0, Math.round((panelH - room - th) / 2));
         texts(d);
@@ -695,7 +698,10 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       const level = Math.max(0, Math.min(3, cx.scrim ?? 0));
       const ZONE_TOP = zoneTopOf(st);
       const d = place(st, cx, 'top', (d) => {
-        d.image(img, 0, ZONE_TOP, SLIDE_W, ZONE_BOTTOM - ZONE_TOP, { rx: 0 });
+        // Round V: the photo covers the whole slide, edge to edge (the page chrome sits over it); the plan keeps the picture zone, so the text does not move
+        // (a photo of the project only: a screenshot is never cropped more than before, and a stand-in picture keeps its place)
+        const bleed = !!parseRef(img)?.photo;
+        d.image(img, 0, ZONE_TOP, SLIDE_W, ZONE_BOTTOM - ZONE_TOP, { rx: 0, ...(bleed ? { bleed: { x: 0, y: 0, w: SLIDE_W, h: SLIDE_H } } : {}) });
         const texts = (t: Draw) => {
           t.text('title', head, { size: 112, max: 120, weight: 800, font: 'h', lines: 3, min: 72, gap: line ? 18 : 0 });
           if (line) t.text('body', line, { size: 48, max: 52, lines: 1, min: 40 });
@@ -710,10 +716,15 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         const a = [0.82, 0.92, 0.97, 1][level];
         const solidFrom = level === 3 ? (low ? (y0 - 40 - sy0) / (sy1 - sy0) : 0) : level === 2 ? (low ? (y0 - 90 - sy0) / (sy1 - sy0) : 0) : 1;
         const id = 'scrim' + (low ? 'L' : 'H');
-        const stops = low
-          ? `<stop offset="0" stop-color="$bg" stop-opacity="0"/><stop offset="${r3(Math.max(0.05, Math.min(0.9, solidFrom < 1 ? solidFrom : 0.55)))}" stop-color="$bg" stop-opacity="${a}"/><stop offset="1" stop-color="$bg" stop-opacity="${a}"/>`
-          : `<stop offset="0" stop-color="$bg" stop-opacity="${a}"/><stop offset="${r3(level >= 2 ? 0.7 : 0.45)}" stop-color="$bg" stop-opacity="${a}"/><stop offset="1" stop-color="$bg" stop-opacity="0"/>`;
-        d.shape(`<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${stops}</linearGradient></defs><rect x="0" y="${sy0}" width="${SLIDE_W}" height="${sy1 - sy0}" fill="url(#${id})"/>`, { y0: sy0, y1: sy1 });
+        // the stops over the scrim's range sy0..sy1 (offset 0..1 along it, opacity)
+        const range: [number, number][] = low ? [[0, 0], [Math.max(0.05, Math.min(0.9, solidFrom < 1 ? solidFrom : 0.55)), a], [1, a]] : [[0, a], [level >= 2 ? 0.7 : 0.45, a], [1, 0]];
+        // Round V: the photo now reaches the slide's edge, so the scrim's rectangle does too (from sy0 to the foot of the slide, or from its top to sy1); the stops are moved onto the longer
+        // rectangle so that over sy0..sy1 the scrim is exactly as before, and past it the scrim carries on at its end strength
+        const ry0 = low || !bleed ? sy0 : 0, ry1 = low && bleed ? SLIDE_H : sy1;
+        const at = (o: number) => r3((sy0 + o * (sy1 - sy0) - ry0) / (ry1 - ry0));
+        const all: [number, number][] = [...(low ? [] : [[0, a] as [number, number]]), ...range.map(([o, op]): [number, number] => [at(o), op]), ...(low ? [[1, a] as [number, number]] : [])];
+        const stops = all.map(([o, op]) => `<stop offset="${o}" stop-color="$bg" stop-opacity="${op}"/>`).join('');
+        d.shape(`<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${stops}</linearGradient></defs><rect x="0" y="${ry0}" width="${SLIDE_W}" height="${ry1 - ry0}" fill="url(#${id})"/>`, { y0: sy0, y1: sy1 });
         d.y = y0;
         texts(d);
       });

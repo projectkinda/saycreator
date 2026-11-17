@@ -98,6 +98,8 @@ export interface PlanImage {
   circle?: boolean;
   /** Drawn above the plane shapes and cards (a portrait on a band); otherwise right after the ground, so badges and shapes of the layout sit over it. */
   front?: boolean;
+  /** Round V: the picture is drawn in this larger box, out to the slide's edges (under the page chrome, which the photo-contrast repair keeps readable); the plan keeps x, y, w, h, so the text and the layout placement do not change. */
+  bleed?: { x: number; y: number; w: number; h: number };
 }
 export interface FieldSpec {
   name: string;

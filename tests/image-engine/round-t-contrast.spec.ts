@@ -81,8 +81,8 @@ test('T1 the check reads the photo: light text with no scrim fails on every pict
     expect(x.app.ratio, n).toBeGreaterThanOrEqual(3);
     expect(x.rows, n).toHaveLength(1);
     expect(x.rows[0].roles.find((q: any) => q.role === 'title').ratio, n).toBe(x.app.ratio);
-    // the picture boxes read from the drawing cover the plan's own (a photo drawn whole adds its inner rectangle)
-    for (const b of x.images) expect(x.boxes, n).toContainEqual(b);
+    // the picture boxes read from the drawing cover the plan's own (Round V: title-over-photo is drawn over the whole slide; a photo drawn whole adds its inner rectangle)
+    for (const b of x.images) expect(x.boxes.some((q: any) => q.x <= b.x && q.y <= b.y && q.x + q.w >= b.x + b.w && q.y + q.h >= b.y + b.h), n).toBe(true);
   }
   // the hard cases are the worst with no scrim
   expect(r['near-white'].bare.ratio).toBeLessThan(1.5);
@@ -115,11 +115,14 @@ test('T2 only text that crosses a picture is measured: a caption on its panel, a
       rows: await DL.photoContrastOf([cap, plain], ['photo-full-caption', 'statement']),
     };
   }, pics);
-  expect(r.capOver, 'the caption sits on its own panel, not on the photo').toBe(false);
-  expect(r.cap).toEqual({ roles: [], pass: true, ms: 0 });
+  // Round V: photo-full-caption's photo runs on to the slide's top edge, under the page chrome, so the chrome is text over the picture; the caption sits on its own panel and is never measured
+  expect(r.capOver, 'the page chrome over the photo').toBe(true);
+  expect(r.cap.roles.every((q: any) => q.role === 'recurring' || q.role === 'side-label'), JSON.stringify(r.cap.roles)).toBe(true);
+  expect(r.cap.roles.some((q: any) => q.role === 'title' || q.role === 'body')).toBe(false);
   expect(r.plainOver).toBe(false);
   expect(r.plain).toEqual({ roles: [], pass: true, ms: 0 });
-  expect(r.rows).toEqual([]);
+  expect(r.rows.map((x: any) => x.layout)).toEqual(['photo-full-caption']);
+  expect(r.rows[0].pass, JSON.stringify(r.rows[0].roles)).toBe(true);
 });
 
 test('T3 the sentence that replaces "not checked" on a slide with text over a picture', async ({ page }) => {
@@ -199,19 +202,27 @@ test('T4 the app: the deck stores one row per slide with text over a picture, re
   const over = specs.map((s: any, i: number) => (s.layout === 'title-over-photo' && Object.values(s.fields).some((v: any) => typeof v === 'string' && v.startsWith('picture:')) ? i + 1 : 0)).filter(Boolean);
   expect(over.length, 'the deck has a headline over a photo').toBeGreaterThan(0);
   const rows = d.designed.library.photoContrast;
-  expect(rows.map((r: any) => r.slide)).toEqual(over);
-  for (const r of rows) {
+  // Round V: a photo-full-caption slide's photo runs on under the page chrome, so it has a row too (page chrome only)
+  const titleRows = (x: any[]) => x.filter((r: any) => r.layout === 'title-over-photo');
+  expect(titleRows(rows).map((r: any) => r.slide)).toEqual(over);
+  for (const r of rows.filter((x: any) => x.layout !== 'title-over-photo')) {
+    expect(r.layout).toBe('photo-full-caption');
+    expect(r.roles.every((q: any) => q.role === 'recurring' || q.role === 'side-label')).toBe(true);
+    expect(r.pass, JSON.stringify(r.roles)).toBe(true);
+  }
+  for (const r of titleRows(rows)) {
     expect(r.layout).toBe('title-over-photo');
     expect(r.pass).toBe(r.roles.every((q: any) => q.pass));
     expect(r.roles.find((q: any) => q.role === 'title').pass).toBe(true);
     expect(r.roles.find((q: any) => q.role === 'title').threshold).toBe(3);
   }
   const rep = await report(page);
-  expect(rep.photoContrast.map((r: any) => r.slide)).toEqual(over);
-  expect(rep.photoContrast[0].roles[0]).toMatchObject({ role: 'title', threshold: 3, pass: true });
-  expect(rep.photoContrast[0].roles[0].ratio).toBe(rows[0].roles.find((q: any) => q.role === 'title').ratio);
-  expect(rep.slides[over[0] - 1].photoContrast[0]).toMatchObject({ role: 'title', threshold: 3, pass: true });
-  expect(rep.slides.filter((s: any) => s.photoContrast).length).toBe(over.length);
+  expect(rep.photoContrast.map((r: any) => r.slide)).toEqual(rows.map((r: any) => r.slide));
+  const repT = rep.photoContrast.find((r: any) => r.slide === over[0]);
+  expect(repT.roles.find((q: any) => q.role === 'title')).toMatchObject({ role: 'title', threshold: 3, pass: true });
+  expect(repT.roles.find((q: any) => q.role === 'title').ratio).toBe(titleRows(rows)[0].roles.find((q: any) => q.role === 'title').ratio);
+  expect(rep.slides[over[0] - 1].photoContrast.find((q: any) => q.role === 'title')).toMatchObject({ role: 'title', threshold: 3, pass: true });
+  expect(rep.slides.filter((s: any) => s.photoContrast).length).toBe(rows.length);
   // the export renderer: on the slide with text over a photo the measured result takes the place of "contrast over gradients ... is not checked"; on a slide with no photo the sentence stays
   const warn = await page.evaluate(async (ks) => {
     const R: any = await import('/src/carousel/render.ts');
@@ -234,7 +245,7 @@ test('T4 the app: the deck stores one row per slide with text over a picture, re
   await expect.poll(async () => (await stored(page)).designed.library.source, { timeout: 60_000 }).toBe('style-1');
   await page.waitForTimeout(1500);
   const d2 = await stored(page);
-  expect(d2.designed.library.photoContrast.map((r: any) => r.slide)).toEqual(over);
+  expect(titleRows(d2.designed.library.photoContrast).map((r: any) => r.slide)).toEqual(over);
   // Mono editorial glow (style-1): the headline still reads, and its side label over the photo is repaired, so every row passes; the layouts and words are those of the plan
   const rows2 = d2.designed.library.photoContrast;
   expect(rows2.every((r: any) => r.pass), JSON.stringify(rows2)).toBe(true);
@@ -295,7 +306,8 @@ test('T5 each repair is reached on its own fixture: a gradient headline gets a s
       // Round U: a photo drawn whole now dissolves into the slide (no darkened copy under its feathered edge), so the near-white wall needs the other ink; a mid-grey wall gets the plate in its own ink
       plate: await one('style-1', 'mid-grey', 0, 0),
       otherInk: await one('style-1', 'busy-check', 1, 0),
-      reads: await one('style-3', 'busy-check', 0, 0),
+      // Round V: the page chrome sits over the photo too; on the near-white wall style-3's dark text and chrome read as drawn
+      reads: await one('style-3', 'near-white', 0, 0),
     };
   }, pics);
   // the gradient headline (style-8): fails as the layout draws it, reads after its own scrim is raised

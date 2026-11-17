@@ -408,7 +408,10 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   // The pictures (an image field): clipped to their slots and drawn behind the text, right after the ground
   // Round 16: no picture reaches under the chrome (the profile header with its avatar, the handle, the page counter, the footer): a picture that would overlap an item of it gives that edge up
   // (the picture area shrinks from the side of the chrome; the picture itself is never cut by moving the chrome over it)
-  const pics = avoidChrome(plan.images ?? [], rec);
+  const planned = avoidChrome(plan.images ?? [], rec);
+  // Round V: a picture with a bleed box is drawn in it, out to the slide's edges (under the page chrome); the plan's box (planned) stays what the slide reports as its picture,
+  // so the layout placement and the devices do not change
+  const pics = planned.map((p, i) => { const b = (plan.images ?? [])[i]?.bleed; return b ? { ...p, x: b.x, y: b.y, w: b.w, h: b.h } : p; });
   if (pics.length) {
     // the crop budget: a picture a cover-crop would cut by more than 10% is drawn whole, on a panel in its own average edge colour
     const whole = new Map<number, { rect: { x: number; y: number; w: number; h: number }; bg: string; photo: boolean }>();
@@ -433,11 +436,11 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       const w0 = whole.get(i);
       const cr = w0 ? { x: w0.rect.x, y: w0.rect.y, w: w0.rect.w, h: w0.rect.h } : cropRect(p, parseRef(p.src));
       // Round U: a photo shown whole dissolves into the slide (its mirrored, blurred edge fading into what lies under the slot); a screenshot sits on a flat panel in its edge colour
-      const panel = w0 ? (w0.photo ? dissolveFill(id, p, w0.rect, p.src) : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" fill="${w0.bg}"/>`) : '';
+      const panel = w0 ? (w0.photo ? dissolveFill(id, p, w0.rect, p.src, !!p.bleed) : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" fill="${w0.bg}"/>`) : '';
       const box = cr ? `x="${Math.round(cr.x * 10) / 10}" y="${Math.round(cr.y * 10) / 10}" width="${Math.round(cr.w * 10) / 10}" height="${Math.round(cr.h * 10) / 10}" preserveAspectRatio="none"` : `x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" preserveAspectRatio="xMidYMid slice"`;
       // Round E, U: a photo shown whole is feathered into its dissolve: a mask (the picture's rectangle moved in, blurred; dissolve.featherMask) fades its edge instead of cutting a hard line. The picture is not moved or resized.
       const feather = !!(w0 && w0.photo);
-      const maskDef = feather ? featherMask(id, p, w0!.rect) : '';
+      const maskDef = feather ? featherMask(id, p, w0!.rect, !!p.bleed) : '';
       return `<clipPath id="${id}">${w0 ? `<rect x="${w0.rect.x}" y="${w0.rect.y}" width="${w0.rect.w}" height="${w0.rect.h}"/>` : clip}</clipPath>${maskDef}${panel}<image href="${p.src.replace(/&/g, '&amp;')}" ${box} ${feather ? `mask="url(#${id}m)"` : `clip-path="url(#${id})"`}/>`;
     }).join('');
     const indexed = pics.map((p, i) => ({ p, i }));
@@ -470,7 +473,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     done = ad.svg;
     const od = overDevices(cx, [...bd.placed, ...ad.placed], shapeBoxes, plan.photo ? { x: plan.photo.x, y: plan.photo.y, w: plan.photo.w, h: plan.photo.h } : undefined);
     // vector art from the preset's pack (deco.art): only where no text, shape or picture is
-    const art = artDevices(cx, [...bd.placed, ...ad.placed, ...od.placed], shapeBoxes, pics.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })));
+    const art = artDevices(cx, [...bd.placed, ...ad.placed, ...od.placed], shapeBoxes, planned.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })));
     done = done.replace(/<\/svg>\s*$/i, () => ad.over + od.svg + art.over + '</svg>');
     // a glow sits behind ALL content: right after the ground (and the inset card, when the style has one)
     if (art.behind) done = done.replace(ig.applied ? /(<rect id="bg"[^>]*\/><rect [^>]*rx="[\d.]+"[^>]*\/>)/ : /(<rect id="bg"[^>]*\/>)/, (m) => m + art.behind);
@@ -494,5 +497,5 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   }
   // The text-fits rule: the real text boxes stay inside the margins, off the page counter and the swipe footer, and off each other. A drawing that breaks it is not accepted (the layout does not fit this text).
   problems.push(...textFitProblems(r.layers as never, recurringLayers(rec, pack, 'c' + o.index) as never));
-  return { ...(pics.length ? { images: pics } : {}), ...(fills.length ? { fills } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: withLayoutTag(done, layoutId), layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
+  return { ...(planned.length ? { images: planned } : {}), ...(fills.length ? { fills } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: withLayoutTag(done, layoutId), layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
 }

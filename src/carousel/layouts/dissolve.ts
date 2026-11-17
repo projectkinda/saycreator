@@ -28,18 +28,19 @@ export const fadeAt = (t: number): number => {
 const EASE = [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1];
 
 export interface SideFade {
-  /** How the side ends: 'fade' over the room beside the photo, 'soft' at the slot's own edge (thin room), 'bleed' (the slot's edge is the slide's edge: no fade). */
-  kind: 'fade' | 'soft' | 'bleed';
+  /** How the side ends: 'fade' over the room beside the photo, 'soft' at the slot's own edge (thin room), 'bleed' (no room: the photo itself is the edge, not feathered), 'extend' (Round V: the
+   *  continuation fills the room to the slot's edge at full strength, no fade; the photo is feathered into it). */
+  kind: 'fade' | 'soft' | 'bleed' | 'extend';
   /** The room beside the photo on this side (px). */
   room: number;
   /** The length of the fade (px): 0 for 'bleed'. */
   len: number;
 }
 const CANVAS = { w: 1080, h: 1350 };
-/** How each side of the slot ends. */
-export function sideFades(slot: Box, rect: Box): { top: SideFade; bottom: SideFade; left: SideFade; right: SideFade } {
+/** How each side of the slot ends. With `extend` (Round V, a picture that bleeds to the slide's edges): every side with room is filled to its edge, no fade. */
+export function sideFades(slot: Box, rect: Box, extend = false): { top: SideFade; bottom: SideFade; left: SideFade; right: SideFade } {
   const side = (room: number, along: number, atCanvasEdge: boolean): SideFade =>
-    room >= DISSOLVE_MIN_GAP ? { kind: 'fade', room, len: Math.min(room, DISSOLVE_FADE_MAX, along) } : atCanvasEdge ? { kind: 'bleed', room, len: 0 } : { kind: 'soft', room, len: DISSOLVE_EDGE_SOFT };
+    extend ? (room > 0.5 ? { kind: 'extend', room, len: 0 } : { kind: 'bleed', room, len: 0 }) : room >= DISSOLVE_MIN_GAP ? { kind: 'fade', room, len: Math.min(room, DISSOLVE_FADE_MAX, along) } : atCanvasEdge ? { kind: 'bleed', room, len: 0 } : { kind: 'soft', room, len: DISSOLVE_EDGE_SOFT };
   return {
     top: side(rect.y - slot.y, rect.h, slot.y <= 0.5),
     bottom: side(slot.y + slot.h - (rect.y + rect.h), rect.h, slot.y + slot.h >= CANVAS.h - 0.5),
@@ -60,7 +61,7 @@ export function axisStops(s0: number, s1: number, r0: number, r1v: number, a: Si
     for (const t of [...EASE].reverse()) out.push({ o: at(r0 - t * a.len), a: fadeAt(t) });
   } else if (a.kind === 'soft') {
     for (const t of [...EASE].reverse()) out.push({ o: at(s0 + (1 - t) * a.len), a: fadeAt(t) });
-  } else out.push({ o: 0, a: 1 });
+  } else out.push({ o: 0, a: 1 }); // 'bleed' and 'extend': full to the edge
   // the high end, mirrored
   if (b.kind === 'fade') {
     for (const t of EASE) out.push({ o: at(r1v + t * b.len), a: fadeAt(t) });
@@ -83,8 +84,8 @@ export const FEATHER_BLUR = 32;
 export const FEATHER_INSET = 75;
 /** The feather of a photo of this size: the full 75 / 32 from a short side of 400 px up, less on a small photo (a row of small pictures), never under a quarter. */
 export const featherOf = (rect: Box): { inset: number; blur: number } => { const k = Math.max(0.25, Math.min(1, Math.min(rect.w, rect.h) / 400)); return { inset: Math.round(FEATHER_INSET * k * 10) / 10, blur: Math.round(FEATHER_BLUR * k * 10) / 10 }; };
-export function featherMask(id: string, slot: Box, rect: Box): string {
-  const f = sideFades(slot, rect);
+export function featherMask(id: string, slot: Box, rect: Box, extend = false): string {
+  const f = sideFades(slot, rect, extend);
   const { inset, blur } = featherOf(rect);
   const out = 3 * blur;
   const x0 = f.left.kind === 'bleed' ? rect.x - out : rect.x + inset, x1 = f.right.kind === 'bleed' ? rect.x + rect.w + out : rect.x + rect.w - inset;
@@ -98,9 +99,9 @@ export function featherMask(id: string, slot: Box, rect: Box): string {
  * The SVG of the dissolve behind a photo drawn whole: `id` is the picture's id (pic<slide>x<i>), `slot` its slot (clipped with its corner radius `rx`), `rect` where the photo is drawn whole, `src`
  * the picture. The group is clipped with the clip path `<id>s` (the slot), which the photo-contrast check reads as the picture's box, so text over the dissolve is measured as text over the picture.
  */
-export function dissolveFill(id: string, slot: Box & { rx?: number }, rect: Box, src: string): string {
+export function dissolveFill(id: string, slot: Box & { rx?: number }, rect: Box, src: string, extend = false): string {
   const href = src.replace(/&/g, '&amp;');
-  const f = sideFades(slot, rect);
+  const f = sideFades(slot, rect, extend);
   const img = (extra: string) => `<image href="${href}" x="${r1(rect.x)}" y="${r1(rect.y)}" width="${r1(rect.w)}" height="${r1(rect.h)}" preserveAspectRatio="none"${extra}/>`;
   // the mirrors: the photo flipped about each edge where there is room
   const mirrors: string[] = [];
@@ -117,7 +118,9 @@ export function dissolveFill(id: string, slot: Box & { rx?: number }, rect: Box,
     const pad = sd * 3;
     return `<filter id="${fid}" filterUnits="userSpaceOnUse" x="${r1(slot.x - pad)}" y="${r1(slot.y - pad)}" width="${r1(slot.w + 2 * pad)}" height="${r1(slot.h + 2 * pad)}"><feGaussianBlur stdDeviation="${sd}" edgeMode="duplicate"/></filter>`;
   };
-  const pics = img('') + mirrors.join('');
+  // Round V (extend): under the photo and its mirrors, the photo stretched over the whole slot, so the continuation reaches every edge even where a mirror is too short (a very wide photo)
+  const base = extend ? `<image href="${href}" x="${slot.x}" y="${slot.y}" width="${slot.w}" height="${slot.h}" preserveAspectRatio="none"/>` : '';
+  const pics = base + img('') + mirrors.join('');
   return `<defs><clipPath id="${id}s"><rect x="${slot.x}" y="${slot.y}" width="${slot.w}" height="${slot.h}" rx="${slot.rx ?? 0}"/></clipPath>`
     + filter(`${id}b`, DISSOLVE_BLUR)
     + grad(`${id}gv`, true, vStops) + grad(`${id}gh`, false, hStops) + mask(`${id}dv`, `${id}gv`) + mask(`${id}dh`, `${id}gh`) + `</defs>`

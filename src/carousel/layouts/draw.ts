@@ -187,8 +187,8 @@ export class Draw {
     return slot;
   }
   /** A picture in a slot (cover fit, rounded or a circle): drawn behind the text by the engine; the slot counts toward the block's extent. */
-  image(src: string, x: number, y: number, w: number, h: number, o: { rx?: number; circle?: boolean; front?: boolean } = {}) {
-    this.images.push({ src, x: r(x), y: r(y), w: r(w), h: r(h), rx: o.rx ?? 0, ...(o.circle ? { circle: true } : {}), ...(o.front ? { front: true } : {}) });
+  image(src: string, x: number, y: number, w: number, h: number, o: { rx?: number; circle?: boolean; front?: boolean; bleed?: { x: number; y: number; w: number; h: number } } = {}) {
+    this.images.push({ src, x: r(x), y: r(y), w: r(w), h: r(h), rx: o.rx ?? 0, ...(o.circle ? { circle: true } : {}), ...(o.front ? { front: true } : {}), ...(o.bleed ? { bleed: o.bleed } : {}) });
     this.track(y, y + h);
   }
   /** A static shape (rect, circle, path ...) at an absolute place; `box` is for the extent. */

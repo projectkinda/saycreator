@@ -82,9 +82,13 @@ export function pictureBoxesOfSvg(svg: string): Box[] {
   }
   return out;
 }
-/** The laid-out line boxes of the text slots that cross a picture of the slide (the plan's picture boxes, else the ones read from the drawing). */
+/** The picture boxes of a slide: the plan's, and (Round V) the ones read from the drawing, which reach the slide's edges where a picture bleeds under the page chrome. */
+export function pictureBoxesOf(b: Pick<Built, 'images'> & { svg?: string }): Box[] {
+  return [...(b.images ?? []).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })), ...(b.svg ? pictureBoxesOfSvg(b.svg) : [])];
+}
+/** The laid-out line boxes of the text slots that cross a picture of the slide (the plan's picture boxes and the ones read from the drawing). */
 export function linesOverPictures(b: Pick<Built, 'layers' | 'images'> & { svg?: string }): LineBox[] {
-  const pics: Box[] = b.images?.length ? b.images.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })) : b.svg ? pictureBoxesOfSvg(b.svg) : [];
+  const pics: Box[] = pictureBoxesOf(b);
   if (!pics.length) return [];
   const out: LineBox[] = [];
   for (const l of b.layers as unknown as TextLayer[]) {
@@ -192,7 +196,7 @@ export interface SideLabelRepair { svg: string; repair: string; ratio: number; p
  * Nothing moves and no word changes. When nothing passes, the best reading is kept (pass false). null: the slide has no side label over a picture.
  */
 export async function repairSideLabel(b: Pick<Built, 'layers' | 'svg'> & { images?: Built['images'] }, inks: string[]): Promise<SideLabelRepair | null> {
-  const pics: Box[] = b.images?.length ? b.images.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })) : pictureBoxesOfSvg(b.svg);
+  const pics: Box[] = pictureBoxesOf(b);
   const label = sideLabelsOfSvg(b.svg).find((sl) => pics.some((p) => overlaps(p, sl.box)));
   if (!label) return null;
   const m = /<text transform="translate\([\d.]+ [\d.]+\) rotate\(-90\)"[^>]*>[^<]*<\/text>/.exec(b.svg);
@@ -216,6 +220,47 @@ export async function repairSideLabel(b: Pick<Built, 'layers' | 'svg'> & { image
     if (!r) continue;
     if (r.pass) return { svg: t.svg, repair: t.repair, ratio: r.ratio, pass: true };
     if (!best || r.ratio > best.ratio) best = { svg: t.svg, repair: t.repair, ratio: r.ratio, pass: false };
+  }
+  return best;
+}
+
+/**
+ * Round V: page chrome drawn as text of its own (the handle, the page number, the footer: text layers named "recurring") that sits over a photo bleeding to the slide's edges and does not read at
+ * 4.5:1 is repaired the way the side label is (Round T), stopping at the first that passes: a plate behind that text only (0.3, 0.45 then 0.6 opacity, dark under light ink, light under dark
+ * ink), then the other ink of the slide's palette, then that ink on a plate. Nothing moves and no word changes. null: no such text over a picture, or its drawing could not be found.
+ */
+export async function repairChromeText(b: Pick<Built, 'layers' | 'svg'> & { images?: Built['images'] }, inks: string[], text: string): Promise<(SideLabelRepair & { layers: Built['layers'] }) | null> {
+  const layer = (b.layers as unknown as TextLayer[]).find((l) => l.kind === 'text' && l.name === 'recurring' && (l.text ?? '').trim().slice(0, 40) === text);
+  if (!layer) return null;
+  const escd = (layer.text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const literal = escd.replace(/[.*+?^$()|[\]\\{}]/g, (c) => '\\' + c);
+  const re = new RegExp('<text [^>]*fill="(#[0-9A-Fa-f]{6})"[^>]*>' + literal + '</text>');
+  const m = re.exec(b.svg);
+  if (!m) return null;
+  const el = m[0];
+  const ink0 = m[1];
+  const key = (layer.text ?? '').trim().slice(0, 40);
+  // the check reads a text layer's ink from the layer: a try in another ink changes the layer too
+  const layersIn = (ink: string) => (b.layers as unknown as TextLayer[]).map((l) => (l === layer ? { ...l, style: { ...l.style, color: ink } } : l)) as unknown as Built['layers'];
+  const read = async (svg: string, ink: string) => (await measurePhotoContrast({ ...b, svg, layers: layersIn(ink) })).roles.find((r) => r.role === 'recurring' && r.text === key);
+  const withInk = (ink: string) => el.replace(/fill="#[0-9A-Fa-f]{6}"/, `fill="${ink}"`);
+  // the text's own box, from its layer (the builder's estimate), with a little air
+  const box = { x: layer.x - 12, y: layer.y - 6, w: layer.width + 24, h: layer.height + 12 };
+  const plate = (ink: string, a: number) => {
+    const light = (lumOfHex(ink) ?? 0) > 0.18;
+    return `<rect data-role="chrome-plate" x="${Math.round(box.x)}" y="${Math.round(box.y)}" width="${Math.round(box.w)}" height="${Math.round(box.h)}" rx="${Math.round(box.h / 2)}" fill="${light ? '#000000' : '#FFFFFF'}" fill-opacity="${a}"/>`;
+  };
+  const tries: { svg: string; repair: string; ink: string }[] = [];
+  for (const a of PLATES) tries.push({ svg: b.svg.replace(el, () => plate(ink0, a) + el), repair: `a ${a} plate behind the page chrome "${key}"`, ink: ink0 });
+  const others = [...new Set(inks.map((c) => c.toUpperCase()))].filter((c) => /^#[0-9A-F]{6}$/.test(c) && c !== ink0.toUpperCase());
+  for (const c of others) tries.push({ svg: b.svg.replace(el, () => withInk(c)), repair: `the page chrome "${key}" in the other ink (${c})`, ink: c });
+  for (const c of others) for (const a of PLATES) tries.push({ svg: b.svg.replace(el, () => plate(c, a) + withInk(c)), repair: `the page chrome "${key}" in the other ink (${c}) on a ${a} plate`, ink: c });
+  let best: (SideLabelRepair & { layers: Built['layers'] }) | null = null;
+  for (const t of tries) {
+    const r = await read(t.svg, t.ink);
+    if (!r) continue;
+    if (r.pass) return { svg: t.svg, layers: layersIn(t.ink), repair: t.repair, ratio: r.ratio, pass: true };
+    if (!best || r.ratio > best.ratio) best = { svg: t.svg, layers: layersIn(t.ink), repair: t.repair, ratio: r.ratio, pass: false };
   }
   return best;
 }

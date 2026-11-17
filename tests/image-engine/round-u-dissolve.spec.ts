@@ -63,24 +63,25 @@ test('U2b: drawn: the photo whole on top of its mirrored, blurred, faded edge; n
     const bm = await createImageBitmap(await FA.svgToPng(bare, 1080));
     const cv = new OffscreenCanvas(bm.width, bm.height); const gg = cv.getContext('2d', { willReadFrequently: true })!; gg.drawImage(bm, 0, 0);
     const row = (y: number) => { const d = gg.getImageData(100, y, 880, 1).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; return s / (d.length / 4); };
-    const rows: number[] = []; for (let y = 120; y <= 300; y += 2) rows.push(Math.round(row(y) * 10) / 10);
-    const ground = row(60);
+    const rows: number[] = []; for (let y = 4; y <= 290; y += 2) rows.push(Math.round(row(y) * 10) / 10);
+    const ground = Math.round((([r0, g0, b0]) => 0.2126 * r0 + 0.7152 * g0 + 0.0722 * b0)([1, 3, 5].map((i) => parseInt(top.fieldBg.slice(i, i + 2), 16))));
     return { svg: top.svg, notes: top.notes, shot: shot.svg, boxes: PC.pictureBoxesOfSvg(top.svg), rows, ground: Math.round(ground) };
   });
-  // the photo is drawn whole (4:3 in the 1080 x 1134 zone: 1080 x 810 at y 278), on top, feathered; under it the dissolve: the picture and its two mirrors, blurred, in the slot's clip
-  expect(r.svg).toContain('<image href="picture:p1#w=1280&amp;h=960&amp;fx=0.5&amp;fy=0.5&amp;z=1&amp;k=p" x="0" y="278" width="1080" height="810" preserveAspectRatio="none" mask="url(#pic1x0m)"/>');
-  expect(r.svg).toContain('transform="matrix(1 0 0 -1 0 556)"');
-  expect(r.svg).toContain('transform="matrix(1 0 0 -1 0 2176)"');
+  // Round V: title-over-photo is drawn over the whole slide: the photo whole (4:3 in 1080 x 1350: 1080 x 810 at y 270), on top, feathered; under it the continuation: the picture and its two
+  // mirrors, blurred, in the slot's clip (the whole slide), at full strength to the slide's edges
+  expect(r.svg).toContain('<image href="picture:p1#w=1280&amp;h=960&amp;fx=0.5&amp;fy=0.5&amp;z=1&amp;k=p" x="0" y="270" width="1080" height="810" preserveAspectRatio="none" mask="url(#pic1x0m)"/>');
+  expect(r.svg).toContain('transform="matrix(1 0 0 -1 0 540)"');
+  expect(r.svg).toContain('transform="matrix(1 0 0 -1 0 2160)"');
   expect(r.svg).toContain('<feGaussianBlur stdDeviation="32" edgeMode="duplicate"/>');
-  expect(r.svg).toMatch(/<clipPath id="pic1x0s"><rect x="0" y="116" width="1080" height="1134"/);
-  expect(r.svg, 'nothing is darkened').not.toMatch(/fill="#000000" fill-opacity=/);
+  expect(r.svg).toMatch(/<clipPath id="pic1x0s"><rect x="0" y="0" width="1080" height="1350"/);
+  expect(r.svg, 'nothing is darkened').not.toMatch(/fill="#000000" fill-opacity="[\d.]+"\/><\/g>/);
   expect(r.notes.join(' ')).toMatch(/drawn whole and its edges dissolve into the slide/);
   // the contrast check still sees the whole slot as the picture (text over the dissolve is measured)
-  expect(r.boxes.some((b: any) => b.y === 116 && b.h === 1134)).toBe(true);
-  // the fill above the photo: never darker than the photo's own darkest edge band (no dark band), and it ends at the ground at the slot's top edge, smoothly (no step over 6 levels per 2 px)
+  expect(r.boxes.some((b: any) => b.y === 0 && b.h === 1350)).toBe(true);
+  // the fill above the photo, from the slide's top edge: never darker than the photo's own darkest edge band (no dark band), the photo's colours to the very top (not the ground), smoothly
   expect(Math.min(...r.rows)).toBeGreaterThanOrEqual(0.2126 * 0x5a + 0.7152 * 0x5a + 0.0722 * 0x5a - 4);
-  expect(Math.abs(r.rows[0] - r.ground)).toBeLessThanOrEqual(6);
-  for (let i = 1; i < r.rows.length; i++) expect(Math.abs(r.rows[i] - r.rows[i - 1]), `row ${120 + 2 * i}`).toBeLessThanOrEqual(6);
+  expect(Math.abs(r.rows[0] - r.ground), `top row ${r.rows[0]} against the ground ${r.ground}`).toBeGreaterThan(30);
+  for (let i = 1; i < r.rows.length; i++) expect(Math.abs(r.rows[i] - r.rows[i - 1]), `row ${4 + 2 * i}`).toBeLessThanOrEqual(6);
   // a screenshot drawn whole: its flat edge-colour panel and a hard clip, as before (no dissolve, no mirror)
   expect(r.shot).not.toContain('matrix(1 0 0 -1');
   expect(r.shot).not.toContain('edgeMode="duplicate"');
