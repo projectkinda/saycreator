@@ -1,7 +1,7 @@
 // Round W: a prose slide with a long block of running text gets a visual hierarchy instead of a wall: the first sentence becomes a lead (larger, heavier, in the headline font), the rest is
 // body text at 44 px or more with a capped line length, grouped into short paragraphs at the sentence boundaries the text already has. Decided by CODE from the text alone (never by the
 // writer); not one word, mark or emoji is changed, moved, dropped or added: the text is only cut where a sentence ends. Slides under the threshold never come here (they stay as they were).
-import { measureWidth } from '../../image-engine/draw/text';
+import { measureWidth, xHeight } from '../../image-engine/draw/text';
 import { measure, nearestWeight, type Draw } from './draw';
 import type { Cx, LayoutStyle } from './types';
 
@@ -14,6 +14,10 @@ export const LEAD_RATIOS = [1.7, 1.6, 1.5, 1.4];
 /** The body measure: at most this many characters per line (the box is narrowed at small sizes), and the body size is never so big that lines hold fewer than CPL_MIN. */
 export const CPL_MAX = 40;
 export const CPL_MIN = 28;
+/** With a lead, the body starts where a line holds this many characters (the middle of the measure), so the lead has room. */
+export const CPL_LEAD = 32;
+/** A lead takes at most this share of the free field's height. */
+export const LEAD_SHARE = 0.45;
 export const BODY_MIN = 44;
 /** The engine's headline floor on a content slide (designed.ts titleFloor): a lead (the slide's title) is never set smaller. */
 const TITLE_FLOOR = 72;
@@ -60,8 +64,8 @@ export function paragraphs(ss: string[]): string[] {
 }
 
 export interface LongProse {
-  /** 'lead': the first sentence is a lead; 'paragraphs': no lead (a heading is there, or the first sentence is over 25 words), the first paragraph is set heavier; 'flat': the lead fell back to body size. */
-  kind: 'lead' | 'paragraphs' | 'flat';
+  /** 'lead': the first sentence is a lead; 'paragraphs': no lead (a heading is there, the first sentence is over 25 words, or no lead fits), the first paragraph is set heavier. */
+  kind: 'lead' | 'paragraphs';
   lead?: string;
   paras: string[];
   body: number;
@@ -100,40 +104,45 @@ export function planLong(st: LayoutStyle, cx: Cx, head: string, paras0: string[]
   const bodyH = (z: number, w: number) => paras.reduce((a, p) => a + measure(p, st.fonts.body, bw(st), z, w, 1.35).h, 0) + Math.round(0.7 * z) * Math.max(0, paras.length - 1);
   const leadH = (z: number) => (lead ? measure(lead, st.fonts.headline, hw(st), z, full, 1.12).h : 0);
   const ruleH = (z: number) => (lead ? (st.devices.underline ? 2 * Math.round(0.5 * z) + 8 : Math.round(0.8 * z)) : 0);
-  // every (body size, lead ratio) that fits; the body may give up to 15% of the biggest size that fits so the lead can be larger: within that, the largest ratio wins, then the biggest body
-  const fitsL: { z: number; r: number; L: number; w: number }[] = [];
-  for (const z of BODY_SIZES) {
-    const m = measureOf(st, all || lead || '', z, full);
-    if (m.cpl < CPL_MIN && z > BODY_MIN) continue;
-    if (!lead) {
-      if (bodyH(z, m.w) + extra(z) <= room) return { kind: 'paragraphs', paras, body: z, bodyW: m.w };
-      continue;
+  // Round W2: with a lead the body starts where a line holds CPL_LEAD characters (the middle of the measure); when it does not fit (or the lead would take more than LEAD_SHARE of the
+  // field's height), room is given in this order: the lead ratio down to 1.4, then the body down to 44 px (the ratio tried from 1.7 again at each size), then the form without a lead
+  if (lead) {
+    for (const z of BODY_SIZES) {
+      const m = measureOf(st, all, z, full);
+      if (m.cpl < CPL_LEAD && z > BODY_MIN) continue;
+      for (const r of LEAD_RATIOS) {
+        const L = Math.min(150, Math.max(TITLE_FLOOR, Math.ceil(z * 1.4), Math.min(Math.floor(z * 1.7), Math.round(z * r))));
+        if (L / z < LEAD_RATIOS[LEAD_RATIOS.length - 1]) continue;
+        const lh = leadH(L);
+        if (lh <= LEAD_SHARE * fh && lh + ruleH(z) + bodyH(z, m.w) + extra(z) <= room && measure(lead, st.fonts.headline, hw(st), L, full, 1.12).n <= 5) return { kind: 'lead', lead, paras, body: z, leadSize: L, ratio: Math.round((L / z) * 100) / 100, bodyW: m.w };
+      }
     }
-    for (const r of LEAD_RATIOS) {
-      const L = Math.min(150, Math.max(TITLE_FLOOR, Math.ceil(z * 1.4), Math.min(Math.floor(z * 1.7), Math.round(z * r))));
-      if (L / z >= LEAD_RATIOS[LEAD_RATIOS.length - 1] && leadH(L) + ruleH(z) + bodyH(z, m.w) + extra(z) <= room && measure(lead, st.fonts.headline, hw(st), L, full, 1.12).n <= 5) fitsL.push({ z, r, L, w: m.w });
-    }
   }
-  if (lead && fitsL.length) {
-    const zmax = Math.max(...fitsL.map((c) => c.z));
-    const best = fitsL.filter((c) => c.z >= 0.85 * zmax).sort((a, b) => b.r - a.r || b.z - a.z)[0];
-    return { kind: 'lead', lead, paras, body: best.z, leadSize: best.L, ratio: Math.round((best.L / best.z) * 100) / 100, bodyW: best.w };
-  }
-  // the fall-back: the lead at body size (still its own paragraph in the headline font), the body at the biggest size (within the measure rule) that fits
+  // no lead (none allowed, or none fits): every sentence in short paragraphs, the first one heavier; the body at the biggest size within the measure that fits, 44 px at the least
+  const flat = lead ? [first, ...paras0.slice(1).map(sentences)].filter((ss) => ss.length).flatMap(paragraphs) : paras;
+  const flatH = (z: number, w: number) => flat.reduce((a, p) => a + measure(p, st.fonts.body, bw(st), z, w, 1.35).h, 0) + Math.round(0.7 * z) * Math.max(0, flat.length - 1);
   for (const z of BODY_SIZES) {
-    const m = measureOf(st, all || lead || '', z, full);
+    const m = measureOf(st, flat.join(' '), z, full);
     if (m.cpl < CPL_MIN && z > BODY_MIN) continue;
-    if (leadH(z) + ruleH(z) + bodyH(z, m.w) + extra(z) <= room || z === BODY_MIN) return { kind: lead ? 'flat' : 'paragraphs', ...(lead ? { lead, leadSize: z, ratio: 1 } : {}), paras, body: z, bodyW: m.w };
+    if (flatH(z, m.w) + extra(z) <= room || z === BODY_MIN) return { kind: 'paragraphs', paras: flat, body: z, bodyW: m.w };
   }
-  return { kind: 'paragraphs', paras, body: BODY_MIN, bodyW: full };
+  return { kind: 'paragraphs', paras: flat, body: BODY_MIN, bodyW: full };
+}
+
+/**
+ * Round W2: the pull line (the strongest sentence, bold, in the headline font) is never smaller than the body: its size is at least the body + 4 px (as before Round W), and more when the headline
+ * font's lower case is smaller than the body font's at the same size (Schibsted Grotesk next to Instrument Sans), so its x-height is at least the body's.
+ */
+export function pullSize(st: LayoutStyle, z: number): number {
+  const k = xHeight(st.fonts.body, bw(st), 100) / Math.max(1, xHeight(st.fonts.headline, hw(st), 100));
+  return Math.max(z + 4, Math.ceil(z * k));
 }
 
 /** Draws the lead, the style's own rule (only when the style has the underline device), and the paragraphs. The lead is the slide's title when there is no heading, so the engine marks the accent phrase on it with the style's accent and its contrast guard. */
 export function drawLong(d: Draw, p: LongProse, tail: boolean, noHead: boolean) {
   const z = p.body;
   if (p.lead) {
-    // the fall-back lead (body size) is a bold body paragraph: as the slide's title the engine would raise it to its 72 px headline floor
-    d.text(p.kind === 'flat' ? 'body' : 'title', p.lead, { size: p.leadSize!, max: p.leadSize!, weight: 800, font: 'h', lines: 6, min: p.kind === 'flat' ? BODY_MIN : TITLE_FLOOR, lh: 1.12, gap: d.st.devices.underline ? Math.round(0.5 * z) : Math.round(0.8 * z) });
+    d.text('title', p.lead, { size: p.leadSize!, max: p.leadSize!, weight: 800, font: 'h', lines: 6, min: TITLE_FLOOR, lh: 1.12, gap: d.st.devices.underline ? Math.round(0.5 * z) : Math.round(0.8 * z) });
     if (d.st.devices.underline) {
       d.rect(d.x0, d.y, 120, 8, '$accent2', { rx: 4 });
       d.y += 8;

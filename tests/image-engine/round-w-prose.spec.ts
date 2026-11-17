@@ -16,6 +16,8 @@ const WALLS: [string, Record<string, unknown>, string, 'lead' | 'paragraphs'][] 
   ['70 words', { p1: W70a, p2: W70b }, 'Most of us write the post in ten minutes and then lose the whole evening to the slides.', 'lead'],
   ['45 words', { p1: W45 }, 'Most of us write the post in ten minutes and then lose the whole evening to the slides.', 'lead'],
   ['first sentence of 33 words', { p1: LONG1 }, '', 'paragraphs'],
+  ['45 words + pull', { p1: W45, pull: 'One layer. Two jobs.' }, 'Most of us write the post in ten minutes and then lose the whole evening to the slides.', 'lead'],
+  ['70 words + pull', { p1: W70a, p2: W70b.split(' That is')[0], pull: 'That is the one job we always wanted to hand over to the code.' }, 'Most of us write the post in ten minutes and then lose the whole evening to the slides.', 'lead'],
 ];
 
 const DRAW = `(async ({ items, styleId, brand }) => {
@@ -34,10 +36,10 @@ const DRAW = `(async ({ items, styleId, brand }) => {
       const d = await DL.drawOne(sp, it.v ?? 0, style, { handle: '@saycreator', index: 1, total: 7, cut: 'plain', invert: false, density: 'normal', ground: it.ground ?? 0 });
       PL.proseLeadRule.on = true;
       if (!d.built) { res[on ? 'on' : 'off'] = { failed: d.problems }; continue; }
-      const texts = d.built.layers.filter((l) => l.kind === 'text' && l.name !== 'recurring').sort((a, b) => a.y - b.y || a.x - b.x).map((l) => ({ name: l.name, text: l.text, size: l.style.size, font: l.style.font, w: l.width, y: l.y, h: l.height }));
+      const texts = d.built.layers.filter((l) => l.kind === 'text' && l.name !== 'recurring').sort((a, b) => a.y - b.y || a.x - b.x).map((l) => ({ name: l.name, text: l.text, size: l.style.size, weight: l.style.weight, font: l.style.font, w: l.width, y: l.y, h: l.height }));
       const field = d.built.field; const fill = (Math.max(...texts.map((t) => t.y + t.h)) - Math.min(...texts.map((t) => t.y))) / (field.y1 - field.y0);
       const fails = FC.faithfulChecks(d.built.layers, { canvas: { w: 1080, h: 1350 }, bg: d.built.fieldBg ?? style.palette.bg, k: 1, slideType: String(DL.scriptSlideOf('prose', it.fields).type ?? 'content'), prose: true, svg: d.built.svg, devices: d.built.devices }).filter((q) => !q.pass).map((q) => q.id + ': ' + q.reason);
-      res[on ? 'on' : 'off'] = { svg: d.built.svg, texts, fill, fails, long: d.built.plan.longProse ?? null, fonts: style.fonts, underline: !!style.devices.underline, marker: style.accentStyle === 'marker' };
+      res[on ? 'on' : 'off'] = { svg: d.built.svg, texts, fill, fieldH: field.y1 - field.y0, fails, long: d.built.plan.longProse ?? null, fonts: style.fonts, underline: !!style.devices.underline, marker: style.accentStyle === 'marker' };
     }
     out.push(res);
   }
@@ -68,6 +70,15 @@ test('W1 the real walls and the synthetic sizes: same words and marks before and
       expect(have(on), tag).toEqual(have(off));
       expect(on.fails, tag).toEqual([]);
       expect(on.long?.kind, tag).toBe(kind);
+      expect(off.long, `${tag}: without the rule, the one-block slide`).toBeNull();
+      // Round W2: the pull line (the strongest sentence) is never smaller than the body and keeps its bold weight
+      if (fields.pull) {
+        const pt = on.texts.find((t: any) => t.text === fields.pull); const po = off.texts.find((t: any) => t.text === fields.pull);
+        expect(pt.size, `${tag}: pull >= body`).toBeGreaterThanOrEqual(on.long.body);
+        expect(pt.size, `${tag}: pull >= every body paragraph`).toBeGreaterThanOrEqual(Math.max(...on.texts.filter((t: any) => t.name !== 'title' && t !== pt).map((t: any) => t.size)));
+        expect(pt.weight, `${tag}: pull keeps its bold weight`).toBe(po.weight);
+        expect(pt.font, tag).toBe(on.fonts.headline);
+      }
       // the house rule of every layout: the drawing fills at least 65% of the free height
       expect(on.fill, tag).toBeGreaterThanOrEqual(0.65);
       const title = on.texts.find((t: any) => t.name === 'title');
@@ -77,6 +88,8 @@ test('W1 the real walls and the synthetic sizes: same words and marks before and
         expect(title.font, tag).toBe(on.fonts.headline);
         expect(title.size / on.long.body, tag).toBeGreaterThanOrEqual(1.4);
         expect(title.size, tag).toBeLessThanOrEqual(Math.max(72, Math.round(1.7 * on.long.body)));
+        // Round W2: the lead takes at most 45% of the free height
+        expect(title.h / on.fieldH, `${tag}: lead share`).toBeLessThanOrEqual(0.45 + 0.003);
         // the style's own rule between lead and body, only when the style has the underline device
         expect(/<rect[^>]*width="120" height="8"/.test(on.svg), tag).toBe(on.underline);
       } else expect(title, tag).toBeUndefined();
@@ -145,4 +158,35 @@ test('W4 accents stay where they are: an accent phrase in the lead is highlighte
       expect(new RegExp(`<tspan[^>]*fill="#[0-9A-Fa-f]{6}"[^>]*>[^<]*${word}`).test(t), tag).toBe(true);
     }
   }
+});
+
+test('W5 the order of concessions when room runs short: the lead ratio goes down to 1.4 first, then the body down to 44 px, then no lead; the pull never below the body', async ({ page }) => {
+  const r = await page.evaluate(async ({ p1, pull }) => {
+    const DL: any = await import('/src/carousel/designLibrary.ts'); const PR: any = await import('/src/carousel/presets.ts');
+    const PL: any = await import('/src/carousel/layouts/proseLead.ts'); const DR: any = await import('/src/carousel/layouts/draw.ts');
+    const fonts: any = await import('/src/image-engine/fonts.ts'); await fonts.loadFonts();
+    const { style } = DL.styleFromPack(PR.presetPackFor('editorial-collage', false, null));
+    const out = [];
+    // the free field made shorter step by step (1000 px is a real slide's)
+    for (let h = 1000; h >= 380; h -= 20) {
+      const cx = { field: { x0: 48, w: 978, y0: 190, y1: 190 + h } };
+      const extra = (z: number) => DR.measure(pull, style.fonts.headline, DR.nearestWeight(style.fonts.headline, 800), PL.pullSize(style, z), 978, 1.2).h + Math.round(0.8 * z);
+      const p = PL.planLong(style, cx, '', [p1], extra);
+      out.push({ h, kind: p.kind, body: p.body, ratio: p.ratio ?? null, pull: PL.pullSize(style, p.body), lead: p.leadSize ?? null });
+    }
+    return out;
+  }, { p1: W45, pull: 'One layer. Two jobs.' });
+  console.log('W5 ' + JSON.stringify(r.map((x) => [x.h, x.kind[0], x.body, x.ratio])));
+  const leads = r.filter((x) => x.kind === 'lead');
+  expect(leads.length).toBeGreaterThan(3);
+  expect(r.some((x) => x.kind === 'paragraphs'), 'a field short enough drops the lead').toBe(true);
+  // once the lead is gone it never comes back on a shorter field; the pull is always >= the body
+  const firstFlat = r.findIndex((x) => x.kind === 'paragraphs');
+  expect(r.slice(firstFlat).every((x) => x.kind === 'paragraphs')).toBe(true);
+  for (const x of r) expect(x.pull, String(x.h)).toBeGreaterThanOrEqual(x.body);
+  // the body never grows as the field shrinks (at each body size the ratio is tried from 1.7 down to 1.4, or to the 72 px headline floor, before the next smaller body)
+  for (let i = 1; i < leads.length; i++) expect(leads[i].body, String(leads[i].h)).toBeLessThanOrEqual(leads[i - 1].body);
+  for (const x of leads) expect(x.ratio, String(x.h)).toBeGreaterThanOrEqual(Math.min(1.4, 72 / x.body) - 0.005);
+  // the lead is given up only after the body reached its floor: the last slide with a lead has a 44 px body
+  expect(leads[leads.length - 1].body).toBe(44);
 });

@@ -5,7 +5,7 @@ import { measureWidth } from '../../image-engine/draw/text';
 import { star } from './devices';
 import { CARD_PAD, measure, nearestWeight, S, arrow, type Draw } from './draw';
 import { arr, kickerOf, layoutDef, mk, place, str, withAccent } from './library';
-import { drawLong, isLongProse, planLong } from './proseLead';
+import { drawLong, isLongProse, planLong, pullSize } from './proseLead';
 import type { Cx, LayoutDef, LayoutStyle } from './types';
 
 /** The size a text is really drawn at: its planned size on the type scale, up to its own largest size. */
@@ -22,7 +22,7 @@ function longProse(st: LayoutStyle, cx: Cx, head0: string, num: string, paras0: 
   const ts = 88;
   const extra = (z: number) => (head ? measure(head, st.fonts.headline, hw(st), ts, cx.field.w, 1.05).h + 52 : 0)
     + bullets.reduce((a, b) => a + Math.max(measure(b, st.fonts.body, bw(st), z, cx.field.w - 56, 1.25).h, 60) + 20, 0)
-    + (pull ? measure(pull, st.fonts.headline, hw(st), z, cx.field.w, 1.2).h + Math.round(0.8 * z) : 0);
+    + (pull ? measure(pull, st.fonts.headline, hw(st), pullSize(st, z), cx.field.w, 1.2).h + Math.round(0.8 * z) : 0);
   const p = planLong(st, cx, head, paras0, extra);
   const d = place(st, cx, 'center', (d) => {
     if (head) d.text('title', head, { size: ts, max: ts, weight: 800, font: 'h', lines: 3, min: 72, gap: 52 });
@@ -33,7 +33,8 @@ function longProse(st: LayoutStyle, cx: Cx, head0: string, num: string, paras0: 
       d.circle(d.x0 + 12, d.y + h / 2, 9, '$accent2');
       d.text('body', b, { x: d.x0 + 56, w: d.w - 56, size: p.body, max: p.body, lines: 3, min: 44, boxH: h, gap: i < bullets.length - 1 || pull ? 20 : 0 });
     });
-    if (pull) d.text('body', pull, { size: p.body, max: p.body, weight: 800, font: 'h', lines: 3, min: 44, lh: 1.2 });
+    // the pull line: bold, never smaller than the body (its fit floor is the body size)
+    if (pull) { const ps = pullSize(st, p.body); d.text('body', pull, { size: ps, max: ps, weight: 800, font: 'h', lines: 4, min: p.body, lh: 1.2 }); }
   });
   const title = head || (p.kind === 'lead' ? p.lead! : '');
   const items = [...(p.lead && p.kind !== 'lead' ? [p.lead] : []), ...p.paras, ...bullets, ...(pull ? [pull] : [])];

@@ -13,6 +13,13 @@ function measureCtx() {
 
 export const fontString = (font: FontFamily, weight: number, size: number) => `${weight} ${size}px "${font}"`;
 
+/** The x-height of a font at a size (the height of a lower-case x above the baseline), from the loaded font. */
+export function xHeight(font: FontFamily, weight: number, size: number): number {
+  const c = measureCtx();
+  c.font = fontString(font, weight, size);
+  return c.measureText('x').actualBoundingBoxAscent;
+}
+
 export function measureWidth(text: string, font: FontFamily, weight: number, size: number): number {
   const c = measureCtx();
   c.font = fontString(font, weight, size);
