@@ -2006,7 +2006,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   specs.forEach((s, i) => {
     const d = drawn.get(i);
     if (!d?.built) return;
-    const ds: DesignedSlide = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}), ...(d.built.images ? { images: d.built.images } : {}) } };
+    const ds: DesignedSlide = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}), ...(d.built.images ? { images: d.built.images } : {}), ...(d.built.fills ? { fills: d.built.fills } : {}) } };
     designed.slides[String(i)] = ds;
     designed.layouts![String(i)] = s.layout;
   });
@@ -2143,7 +2143,7 @@ export async function redrawLibraryDeck(lib: LibraryReport, look: Look, handle: 
   drawn.forEach((d, i) => {
     adjustments.push(...d.adjustments);
     if (d.built) {
-      slides[String(i)] = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}), ...(d.built.images ? { images: d.built.images } : {}) } };
+      slides[String(i)] = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}), ...(d.built.images ? { images: d.built.images } : {}), ...(d.built.fills ? { fills: d.built.fills } : {}) } };
       layouts[String(i)] = specs[i].layout;
     }
   });

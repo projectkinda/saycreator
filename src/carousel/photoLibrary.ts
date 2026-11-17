@@ -28,6 +28,8 @@ export interface PictureMeta {
   crop?: CropRect;
   /** Round N: the person switched on "Keep the full picture": the crop is not used. */
   fullPicture?: boolean;
+  /** Round U: "Fill the slide" as the person set it: 'on' fills even when the measure says no (at most 40% cut), 'off' keeps the photo whole; missing: the measure decides. */
+  fill?: 'on' | 'off';
 }
 
 export const MAX_FILE_BYTES = 60 * 1024 * 1024;

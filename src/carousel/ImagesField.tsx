@@ -8,10 +8,12 @@ import type { PictureMeta } from './photoLibrary';
 import { PictureThumb } from './PictureThumb';
 import type { AddFiles } from './PhotoControls';
 import { contentOr } from './pictureKind';
+import { fillSentence } from './layouts/fillSlide';
+import type { SlideFill } from './layouts/build';
 
 const LABEL = { portrait: 'Portrait', landscape: 'Landscape', square: 'Square' } as const;
 
-export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, onLabel, onFullPicture, disabled }: {
+export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, onLabel, onFullPicture, fillInfo, onFill, disabled }: {
   /** The project's pictures (photos only are listed here). */
   pictures: PictureMeta[];
   addFiles: AddFiles;
@@ -24,6 +26,10 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
   onLabel?: (id: string, label: string) => void;
   /** Round N: a photo with letterbox bars: keep the full picture (true) or draw it without its bars (false). */
   onFullPicture?: (id: string, full: boolean) => void;
+  /** Round U: per photo on a full-bleed slide where filling is a question (a cover crop would cut 25% to 40%): what the slide draws. */
+  fillInfo?: Record<string, SlideFill>;
+  /** Round U: "Fill the slide" on or off for a photo. */
+  onFill?: (id: string, on: boolean) => void;
   disabled?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -91,6 +97,21 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
                     </label>
                   </span>
                 )}
+                {fillInfo?.[p.id] && contentOr(p.content) !== 'screenshot' && (() => {
+                  const fi = fillInfo[p.id];
+                  // a photo kept with its letterbox bars is never cut: the switch is off and says why (the two switches never pull against each other)
+                  const keepsBars = !!(p.crop && p.fullPicture);
+                  return (
+                    <span className="cr-pic-bars cr-pic-fill small" data-testid={`image-${i}-fill`}>
+                      <label className="cr-pic-bars-switch">
+                        <input type="checkbox" role="switch" aria-checked={fi.fill && !keepsBars} checked={fi.fill && !keepsBars} disabled={disabled || !onFill || keepsBars} data-testid={`image-${i}-fill-switch`} onChange={(e) => onFill?.(p.id, e.target.checked)} />
+                        <span>Fill the slide</span>
+                      </label>
+                      <span data-testid={`image-${i}-fill-note`}>{keepsBars ? 'Off while the full picture is kept: a photo kept with its black bars is never cut.' : fillSentence(fi)}</span>
+                      <span className="muted">On: the photo covers the slide edge to edge, and its edges are cut. Off: the whole photo is shown, and its edges melt into the slide.</span>
+                    </span>
+                  );
+                })()}
                 <span className="row-actions">
                   <button type="button" className="btn btn-outline btn-sm" disabled={i === 0} onClick={() => onMove(p.id, -1)} aria-label={`Move image ${i + 1} earlier`}>←</button>
                   <button type="button" className="btn btn-outline btn-sm" disabled={i === photos.length - 1} onClick={() => onMove(p.id, 1)} aria-label={`Move image ${i + 1} later`}>→</button>

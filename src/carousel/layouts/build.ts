@@ -14,6 +14,7 @@ import { avoidChrome } from './chromeAvoid';
 import { cropRect, parseRef } from './images';
 import { containRect, edgeColour, needsContain } from './pictureFit';
 import { dissolveFill, featherMask } from './dissolve';
+import { fillChoice, fillSentence } from './fillSlide';
 import { artDevices } from './artDevices';
 import { centreButtons } from './buttons';
 import { accentDevices, behindDevices, insetGround, overDevices, shapeBoxesOf, siteText, type Box, type DeviceCtx, type PlacedDevice } from './devices';
@@ -73,6 +74,18 @@ export interface Built {
   images?: PlanImage[];
   /** The generic devices drawn on this slide (see reference/deco.ts), with their boxes. */
   devices?: PlacedDevice[];
+  /** Round U: the photos on a full-bleed layout that a cover crop would cut by 25% to 40%: filled (cut) or kept whole (the dissolve), and why. */
+  fills?: SlideFill[];
+}
+/** Round U: one photo's fill choice on a slide (layouts/fillSlide.ts). */
+export interface SlideFill {
+  picture: string;
+  index: number;
+  fill: boolean;
+  cut: number;
+  sides: 'sides' | 'top and bottom';
+  inside: number | null;
+  why: 'fills' | 'subject-cut' | 'on' | 'off' | 'unread';
 }
 
 const TOKENS = /\$(accentText|accentDisplay|accent2Text|accent2|accent3|onAccent2|onAccent|bg|text|muted|accent|surface)\b/g;
@@ -291,6 +304,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   const devices = { ...st.devices, slides: 1, counts: { marker: 0, profileHeader: 0, underline: 0 } } as SignatureDevices;
   let pack: StylePack = { ...parsed.pack, palette, fonts: { headline: st.fonts.headline, body: st.fonts.body }, devices, designs: { ...parsed.pack.designs, [key]: layers }, slotMeta: { ...parsed.pack.slotMeta, [key]: slotMetaOf(layers) } };
   const notes: string[] = [];
+  const fills: SlideFill[] = [];
   const problems: string[] = [];
   if (!partitioned && cut !== 'plain' && plan.span > g.field.y1 - g.field.y0 + 6) problems.push(`the content is ${Math.round(plan.span)} px tall and the free field above the ${cut} plane is ${Math.round(g.field.y1 - g.field.y0)} px.`);
   // The existing fit, balance, collision and final checks, in the order the Designed mode runs them.
@@ -401,6 +415,13 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     for (const [i, p] of pics.entries()) {
       const ref = parseRef(p.src);
       if (p.circle || !ref || !needsContain(p, ref)) continue;
+      // Round U part 3: on a full-bleed layout a photo may fill its slot (a cover crop up to 40%) when the important part of it stays inside; otherwise it is drawn whole and dissolves
+      const fc = await fillChoice(layoutId, p, ref, p.src);
+      if (fc) fills.push({ picture: ref.id, index: i, fill: fc.fill, cut: fc.cut, sides: fc.sides, inside: fc.inside, why: fc.why });
+      if (fc?.fill) {
+        notes.push(`picture ${i + 1}: ${fillSentence(fc)}`);
+        continue;
+      }
       const rect = containRect(p, ref, p.rx);
       whole.set(i, { rect, bg: ref.photo ? '#000000' : (await edgeColour(p.src)) ?? '#808080', photo: !!ref.photo });
       notes.push(ref.photo ? `picture ${i + 1}: a cover-crop would cut more than 25% of this photo, so it is drawn whole and its edges dissolve into the slide.` : `picture ${i + 1}: a cover-crop would cut more than 10% of it, so it is drawn whole on a panel of its edge colour.`);
@@ -473,5 +494,5 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   }
   // The text-fits rule: the real text boxes stay inside the margins, off the page counter and the swipe footer, and off each other. A drawing that breaks it is not accepted (the layout does not fit this text).
   problems.push(...textFitProblems(r.layers as never, recurringLayers(rec, pack, 'c' + o.index) as never));
-  return { ...(pics.length ? { images: pics } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: withLayoutTag(done, layoutId), layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
+  return { ...(pics.length ? { images: pics } : {}), ...(fills.length ? { fills } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: withLayoutTag(done, layoutId), layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
 }

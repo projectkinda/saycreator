@@ -80,6 +80,8 @@ import { PASTE_KEY, readStore, useProject, writeStore } from './useProject';
 import { onCancel, startJob, type JobHandle } from '../live/jobs';
 import { ReportPanel } from '../reference/ReportPanel';
 import { NewStyleBox } from './QuickStart';
+import { setFillOverrides } from './layouts/fillSlide';
+import type { SlideFill } from './layouts/build';
 import type { ReaderControl, ReaderState } from '../reference/ReferenceStylePage';
 
 const ReferenceStylePage = lazy(() => import('../reference/ReferenceStylePage'));
@@ -457,6 +459,12 @@ export default function CarouselPage() {
   const photoInfos = pictures.filter((p) => p.kind === 'photo').map((p) => ({ id: p.id, ...drawnSize({ ...p, content: contentOr(p.content) }), content: contentOr(p.content), ...(p.label?.trim() ? { label: p.label.trim() } : {}) }));
   // the drawing knows which pictures are drawn without their bars (a change draws those pictures again)
   useEffect(() => syncPictureCrops(pictures.map((p) => ({ ...p, content: contentOr(p.content) }))), [pictures]);
+  // Round U: what the person chose for "Fill the slide" per photo (a photo kept with its letterbox bars is never cut: it counts as off)
+  const fillOverridesOf = (metas: typeof pictures): [string, 'on' | 'off'][] => metas.filter((p) => p.kind === 'photo').flatMap((p): [string, 'on' | 'off'][] => (p.crop && p.fullPicture ? [[p.id, 'off']] : p.fill ? [[p.id, p.fill]] : []));
+  useEffect(() => { setFillOverrides(fillOverridesOf(pictures)); }, [pictures]);
+  // Round U: for each photo on a full-bleed slide where filling is a question, what was drawn (the first such slide in the deck)
+  const fillInfo: Record<string, SlideFill> = {};
+  for (const k of Object.keys(doc.designed?.slides ?? {}).sort((a, b) => Number(a) - Number(b))) for (const f of doc.designed?.slides?.[k]?.built?.fills ?? []) if (!fillInfo[f.picture]) fillInfo[f.picture] = f;
   // (a deck whose pictures are all screenshots still has pictures: picture layouts are allowed; only the person's-own-photo layout is refused, see slideProblems)
   const hasPhotoLook = pictures.length > 0;
   const libVersion = useLibraryVersion();
@@ -703,6 +711,7 @@ export default function CarouselPage() {
     const nextMetas = pictures.map((p) => (p.id === id ? { ...p, fullPicture: full || undefined } : p));
     setPhotos(() => nextMetas);
     syncPictureCrops(nextMetas.map((p) => ({ ...p, content: contentOr(p.content) })));
+    setFillOverrides(fillOverridesOf(nextMetas));
     const lib = doc.designed?.library;
     const d0 = doc.designed;
     const meta = nextMetas.find((p) => p.id === id);
@@ -718,6 +727,18 @@ export default function CarouselPage() {
     const images = photoInfos.map((p) => (p.id === id ? { ...p, ...size } : p));
     const out = await redrawLibraryDeck({ ...lib, plan: { ...lib.plan, specs } }, { pack, hasPhoto: hasPhotoLook, images, site: profileWebsite() }, options.handle.trim() || doc.script?.brand.handle || '');
     apply(patches.setDesigned({ ...d0, slides: out.slides, layouts: out.layouts, library: out.library }, full ? 'Keep the full picture' : 'Crop off the black bars'));
+  };
+  /** Round U: "Fill the slide" on or off for a photo: the slides are drawn again (the picture references do not change; one undo step, no model call). */
+  const setFill = async (id: string, on: boolean) => {
+    const nextMetas = pictures.map((p) => (p.id === id ? { ...p, fill: on ? ('on' as const) : ('off' as const) } : p));
+    setPhotos(() => nextMetas);
+    setFillOverrides(fillOverridesOf(nextMetas));
+    const lib = doc.designed?.library;
+    const d0 = doc.designed;
+    if (!lib?.plan || !d0) return;
+    const pack = presetPackFor(doc.style) ?? activeReference()?.pack ?? null;
+    const out = await redrawLibraryDeck(lib, { pack, hasPhoto: hasPhotoLook, images: photoInfos, site: profileWebsite() }, options.handle.trim() || doc.script?.brand.handle || '');
+    apply(patches.setDesigned({ ...d0, slides: out.slides, layouts: out.layouts, library: out.library }, on ? 'Fill the slide' : 'Show the whole photo'));
   };
   const moveImage = (id: string, dir: -1 | 1) =>
     setPhotos((before) => {
@@ -1755,7 +1776,7 @@ export default function CarouselPage() {
 
       <div hidden={editOn} className="cr-wiz-body">
         <div hidden={step !== 1} data-step="1">
-          <MakeIt part="content" {...makeProps} images={<ImagesField pictures={pictures} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onMove={moveImage} onContent={setContent} onLabel={setLabel} onFullPicture={(id, full) => void setFullPicture(id, full)} disabled={busy} />} scriptBox={scriptBox} scriptMode={scriptMode} onScriptMode={setScriptMode} />
+          <MakeIt part="content" {...makeProps} images={<ImagesField pictures={pictures} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onMove={moveImage} onContent={setContent} onLabel={setLabel} onFullPicture={(id, full) => void setFullPicture(id, full)} fillInfo={fillInfo} onFill={(id, on) => void setFill(id, on)} disabled={busy} />} scriptBox={scriptBox} scriptMode={scriptMode} onScriptMode={setScriptMode} />
           <div className="row-actions cr-wiz-nav"><button type="button" className="btn btn-dark btn-lg" onClick={() => goStep(2)}>Next: Format</button></div>
         </div>
         <div hidden={step !== 2} data-step="2">
