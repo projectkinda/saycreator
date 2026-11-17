@@ -5,7 +5,8 @@ import { measureWidth } from '../../image-engine/draw/text';
 import { star } from './devices';
 import { CARD_PAD, measure, nearestWeight, S, arrow, type Draw } from './draw';
 import { arr, kickerOf, layoutDef, mk, place, str, withAccent } from './library';
-import type { LayoutDef, LayoutStyle } from './types';
+import { drawLong, isLongProse, planLong } from './proseLead';
+import type { Cx, LayoutDef, LayoutStyle } from './types';
 
 /** The size a text is really drawn at: its planned size on the type scale, up to its own largest size. */
 const eff = (size: number, max: number) => Math.min(max, S(size));
@@ -15,6 +16,33 @@ const hw = (st: LayoutStyle, wt = 800) => nearestWeight(st.fonts.headline, wt);
 const widest = (st: LayoutStyle, text: string, size: number) => Math.max(...text.split(/\s+/).filter(Boolean).map((w) => measureWidth(w, st.fonts.headline, hw(st), size)));
 
 /** A checklist-type slide: the headline and the texts of every body slot in reading order (the engine fills each row from them). */
+/** Round W: a long prose slide (proseLead.ts): heading (if any), lead, the style's rule, paragraphs, bullets, pull line; every size fixed by planLong (the type scale does not grow them). */
+function longProse(st: LayoutStyle, cx: Cx, head0: string, num: string, paras0: string[], pull: string, bullets: string[]) {
+  const head = head0 ? (num ? `${num}. ${head0}` : head0) : '';
+  const ts = 88;
+  const extra = (z: number) => (head ? measure(head, st.fonts.headline, hw(st), ts, cx.field.w, 1.05).h + 52 : 0)
+    + bullets.reduce((a, b) => a + Math.max(measure(b, st.fonts.body, bw(st), z, cx.field.w - 56, 1.25).h, 60) + 20, 0)
+    + (pull ? measure(pull, st.fonts.headline, hw(st), z, cx.field.w, 1.2).h + Math.round(0.8 * z) : 0);
+  const p = planLong(st, cx, head, paras0, extra);
+  const d = place(st, cx, 'center', (d) => {
+    if (head) d.text('title', head, { size: ts, max: ts, weight: 800, font: 'h', lines: 3, min: 72, gap: 52 });
+    drawLong(d, p, bullets.length > 0 || !!pull, !head);
+    bullets.forEach((b, i) => {
+      const m = measure(b, st.fonts.body, bw(st), p.body, d.w - 56, 1.25);
+      const h = Math.max(m.h + 2, 60);
+      d.circle(d.x0 + 12, d.y + h / 2, 9, '$accent2');
+      d.text('body', b, { x: d.x0 + 56, w: d.w - 56, size: p.body, max: p.body, lines: 3, min: 44, boxH: h, gap: i < bullets.length - 1 || pull ? 20 : 0 });
+    });
+    if (pull) d.text('body', pull, { size: p.body, max: p.body, weight: 800, font: 'h', lines: 3, min: 44, lh: 1.2 });
+  });
+  const title = head || (p.kind === 'lead' ? p.lead! : '');
+  const items = [...(p.lead && p.kind !== 'lead' ? [p.lead] : []), ...p.paras, ...bullets, ...(pull ? [pull] : [])];
+  const plan = items.length <= 1
+    ? mk(d, { type: 'content', fitAs: 'prose', slide: { type: 'content', ...(title ? { headline: title } : {}), body: items[0] ?? '' } })
+    : mk(d, { type: 'checklist', fitAs: 'prose', slide: { type: 'checklist', ...(title ? { headline: title } : {}), items } });
+  return { ...plan, longProse: { kind: p.kind, body: p.body, ...(p.leadSize ? { lead: p.leadSize, ratio: p.ratio } : {}), bodyW: p.bodyW, paras: p.paras.length } };
+}
+
 const rowsSlide = (d: Draw, headline: string): Record<string, unknown> => ({ type: 'checklist', ...(headline ? { headline } : {}), items: [...d.slots].filter((s) => s.role === 'body').sort((a, b) => a.y - b.y || a.x - b.x).map((s) => s.text) });
 
 export const MORE_LAYOUTS: LayoutDef[] = [
@@ -43,6 +71,8 @@ export const MORE_LAYOUTS: LayoutDef[] = [
       const bullets = arr(f, 'bullets').slice(0, 4);
       const big = v === 1;
       const rows = paras.length + bullets.length + (pull ? 1 : 0);
+      // Round W: a long block of running text (25 words or more, the text alone decides) gets a lead and short paragraphs instead of one wall; shorter prose is drawn exactly as before
+      if (isLongProse(paras, pull)) return longProse(st, cx, head, num, paras, pull, bullets);
       // the base size: the biggest body size at which all the text fits 90% of the free height (tried in steps of 2 px, so the text takes the room it has) (short text starts big and the type scale takes it further; long text starts small)
       const fh = cx.field.y1 - cx.field.y0;
       const fits = (sz: number) => {

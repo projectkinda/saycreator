@@ -282,6 +282,8 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   // A highlight the person (or the writer) chose is carried to the drawing by EVERY layout, not only the ones that read it themselves: the engine marks it on the slide's title text.
   // (Without a chosen phrase nothing is added here: the layouts that default to the last word of the headline keep doing so.)
   if (!slide.accent && (Array.isArray(fields.accent) ? fields.accent.length > 0 : typeof fields.accent === 'string' && fields.accent.trim())) Object.assign(slide, withAccent(slide, '', fields, st));
+  // Round W: a long prose slide's lead is the person's own first sentence: its closing mark stays (the marker trim above is for written headlines)
+  if (plan.longProse && typeof plan.slide.headline === 'string') slide.headline = plan.slide.headline;
   if (bodySlots.length >= 2) slide.items = bodySlots.map((s) => s.text);
   // The surface the headline sits on decides the engine's palette (accent phrases are guarded against it); the other surface's tokens point at its own roles.
   const S: 'f' | 'p' = slots.find((s) => s.role === 'title')?.plane ? 'p' : 'f';

@@ -160,6 +160,8 @@ export interface Cx {
 export interface Plan {
   /** The pictures of this slide (an optional image field): drawn behind the text, at their slots. */
   images?: PlanImage[];
+  /** Round W: a long prose slide's hierarchy (proseLead.ts): which form, the body and lead sizes, the body width, the number of paragraphs. */
+  longProse?: { kind: 'lead' | 'paragraphs' | 'flat'; body: number; lead?: number; ratio?: number; bodyW: number; paras: number };
   type: 'cover' | 'stat' | 'step' | 'content' | 'checklist' | 'quote' | 'closing';
   /** Which layout name the engine's type scale uses (hero layouts get the 110 to 150 px headline). */
   fitAs: string;
