@@ -6,6 +6,7 @@ import { star } from './devices';
 import { CARD_PAD, measure, nearestWeight, S, arrow, type Draw } from './draw';
 import { arr, kickerOf, layoutDef, mk, place, str, withAccent } from './library';
 import { drawLong, isLongProse, planLong, pullSize } from './proseLead';
+import { closingPlan } from './closingLooks';
 import type { Cx, LayoutDef, LayoutStyle } from './types';
 
 /** The size a text is really drawn at: its planned size on the type scale, up to its own largest size. */
@@ -141,6 +142,7 @@ export const MORE_LAYOUTS: LayoutDef[] = [
       short: { headline: 'Meet Quick Flip' },
     },
     plan(f, v, st, cx) {
+      if (cx.closing) { const p = closingPlan(cx.closing, 'statement-card', f, st, cx); if (p) return p; }
       const head = str(f, 'headline');
       const kick = str(f, 'kicker');
       const cap = cx.density === 'statement' ? '' : str(f, 'caption');

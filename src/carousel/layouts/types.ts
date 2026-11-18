@@ -155,6 +155,10 @@ export interface Cx {
   scrim?: number;
   /** The real laid-out headline height (px), from a first drawing: a card layout sizes its card from it (see Plan.hug). */
   titleH?: number;
+  /** Round Y: this slide is the deck's closing, and the look the code chose for it from its text and the style (closingLooks.ts); absent on every other slide. */
+  closing?: import('./closingLooks').ClosingLook;
+  /** The "line" closing look of a headline of two sentences: where its first sentence ends (characters), found on the person's own text before the style's case. */
+  closingSplit?: number;
 }
 
 export interface Plan {
@@ -162,6 +166,10 @@ export interface Plan {
   images?: PlanImage[];
   /** Round W: a long prose slide's hierarchy (proseLead.ts): which form, the body and lead sizes, the body width, the number of paragraphs. */
   longProse?: { kind: 'lead' | 'paragraphs'; body: number; lead?: number; ratio?: number; bodyW: number; paras: number };
+  /** Round Y: the closing look this plan draws (closingLooks.ts). */
+  closingLook?: import('./closingLooks').ClosingLook;
+  /** The headline is drawn with every mark as written (the marker style's trim of a trailing full stop is not applied). */
+  keepMarks?: true;
   type: 'cover' | 'stat' | 'step' | 'content' | 'checklist' | 'quote' | 'closing';
   /** Which layout name the engine's type scale uses (hero layouts get the 110 to 150 px headline). */
   fitAs: string;

@@ -8,6 +8,7 @@ import { IMAGE_LAYOUTS } from './images';
 import { MORE_LAYOUTS } from './more';
 import { COVER_LAYOUTS } from './covers';
 import { PHOTO_ONLY_LAYOUTS } from './photoOnly';
+import { closingPlan } from './closingLooks';
 import type { Cut, Cx, Fields, LayoutDef, LayoutId, LayoutStyle, Plan, Slot } from './types';
 
 export const str = (f: Fields, k: string) => (typeof f[k] === 'string' ? (f[k] as string).trim() : '');
@@ -118,6 +119,7 @@ const BASE_LIST: LayoutDef[] = [
       short: { headline: 'Meet Quick Flip' },
     },
     plan(f, v, st, cx) {
+      if (cx.closing) { const p = closingPlan(cx.closing, 'statement', f, st, cx); if (p) return p; }
       const al = v === 0 ? 'left' : 'center';
       const dense = cx.density === 'statement';
       const head = str(f, 'headline');
@@ -592,6 +594,7 @@ const BASE_LIST: LayoutDef[] = [
       short: { headline: 'Join us today', button: 'Back it' },
     },
     plan(f, v, st, cx) {
+      if (cx.closing) { const p = closingPlan(cx.closing, 'cta-button', f, st, cx); if (p) return p; }
       const head = str(f, 'headline');
       const label = str(f, 'button');
       const al = v === 0 ? 'left' : 'center';

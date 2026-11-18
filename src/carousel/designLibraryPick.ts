@@ -187,11 +187,13 @@ export async function redrawLibrarySlide(lib: LibraryReport, look: Look, handle:
   const spec: SlideSpec = { layout, fields, accents, ...(density === 'statement' ? { density } : {}) };
   const problems = slideProblems(spec, look);
   if (problems.length) return { ok: false, reasons: problems };
-  const d = await drawOne(spec, variant, style, { handle, index: i, total: lib.plan.specs.length, cut, invert, density, ...(lib.grounds?.[i] != null ? { ground: lib.grounds[i]! } : {}) });
+  // Round Y: a layout or a variant the person chose in the picker is theirs: a closing then keeps the layout's own look (a text edit leaves the look to the code)
+  const own = { ...(cur.pin?.layout || (ch.layout && ch.layout !== cur.layout) ? { layout: true as const } : {}), ...(cur.pin?.look || ch.variant !== undefined ? { look: true as const } : {}) };
+  const d = await drawOne({ ...spec, ...(Object.keys(own).length ? { pin: own } : {}) }, variant, style, { handle, index: i, total: lib.plan.specs.length, cut, invert, density, ...(lib.grounds?.[i] != null ? { ground: lib.grounds[i]! } : {}) });
   if (!d.built) return { ok: false, reasons: d.problems };
   // (a picture the person pinned stays pinned through any later redraw of the slide: the pin is merged, never replaced)
   // Round N: a layout the person chose in the Layout tab is theirs: the photo shape rule never moves it
-  const pinObj = { ...cur.pin, ...ch.pin, variant, cut: d.cut, invert: d.invert ? invert || 'full' : false, ...(ch.layout && ch.layout !== cur.layout ? { layout: true as const } : {}) } as NonNullable<SlideSpec['pin']>;
+  const pinObj = { ...cur.pin, ...ch.pin, variant, cut: d.cut, invert: d.invert ? invert || 'full' : false, ...own } as NonNullable<SlideSpec['pin']>;
   for (const k of Object.keys(pinObj) as (keyof typeof pinObj)[]) if (pinObj[k] === undefined) delete pinObj[k];
   const pinned: SlideSpec = { ...spec, pin: pinObj };
   const specs = lib.plan.specs.map((s, k) => (k === i ? pinned : s));

@@ -25,6 +25,7 @@ import { validateSlideContent } from './pick';
 import { textFitProblems, tightenBox } from './textFits';
 import type { Cut, Cx, Fields, Gradient, LayoutStyle, Plan, PlaneTone, PlanImage, Slot } from './types';
 import { isPhotoOnly } from './photoOnly';
+import { closingLookOf, splitFirst } from './closingLooks';
 
 // Round F, N, U: the feather of a photo drawn whole lives with the dissolve (layouts/dissolve.ts: featherMask, 100 px, none where the photo runs off the slide).
 export { FEATHER_BLUR, FEATHER_INSET } from './dissolve';
@@ -51,6 +52,8 @@ export interface BuildOpts {
   /** Profile header: the name shown beside the avatar (default: made from the handle) and an optional picture (a data: URL is safest for PNG export). */
   name?: string;
   avatarUrl?: string;
+  /** Round Y: the slide is the deck's closing and the person did not set its layout or variant: the code may draw a closing look (closingLooks.ts). */
+  closing?: boolean;
 }
 export interface Built {
   ok: boolean;
@@ -238,7 +241,13 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   const def = layoutDef(layoutId)!;
   if (!cutsOf(layoutId).includes(cut)) return fail([`${layoutId} does not support the cut "${cut}" (it supports ${cutsOf(layoutId).join(', ')}).`]);
   await loadFonts();
-  const mkCx = (field: Cx['field'], extra: Partial<Cx> = {}): Cx => ({ cut, field, density: o.density ?? 'normal', weight: o.weight ?? 'equal', ...(o.scrim !== undefined ? { scrim: o.scrim } : {}), ...(o.hugged !== undefined ? { titleH: o.hugged } : {}), ...extra });
+  // Round Y: the closing look, chosen by code from the closing's own text and the style (closingLooks.ts); every other slide has none
+  // (read from the person's own text: a lower-case style would hide where a sentence ends; the split point is carried to the cased text, which has the same length)
+  const closingLook = o.closing ? closingLookOf(layoutId, fields0, st0, { cut, density: o.density ?? 'normal' }).look : undefined;
+  const head0 = typeof fields0.headline === 'string' ? fields0.headline.trim() : '';
+  const split0 = closingLook === 'line' ? splitFirst(head0) : null;
+  const closingSplit = split0 && typeof fields.headline === 'string' && fields.headline.trim().length === head0.length ? split0.first.length : undefined;
+  const mkCx = (field: Cx['field'], extra: Partial<Cx> = {}): Cx => ({ cut, field, density: o.density ?? 'normal', weight: o.weight ?? 'equal', ...(o.scrim !== undefined ? { scrim: o.scrim } : {}), ...(o.hugged !== undefined ? { titleH: o.hugged } : {}), ...(closingLook && closingLook !== 'own' ? { closing: closingLook, ...(closingSplit ? { closingSplit } : {}) } : {}), ...extra });
   const side = { x0: 48, w: 978, y0: 190, y1: 1190 };
   let g!: Geometry;
   let plan!: Plan;
@@ -283,7 +292,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   // (Without a chosen phrase nothing is added here: the layouts that default to the last word of the headline keep doing so.)
   if (!slide.accent && (Array.isArray(fields.accent) ? fields.accent.length > 0 : typeof fields.accent === 'string' && fields.accent.trim())) Object.assign(slide, withAccent(slide, '', fields, st));
   // Round W: a long prose slide's lead is the person's own first sentence: its closing mark stays (the marker trim above is for written headlines)
-  if (plan.longProse && typeof plan.slide.headline === 'string') slide.headline = plan.slide.headline;
+  if ((plan.longProse || plan.keepMarks) && typeof plan.slide.headline === 'string') slide.headline = plan.slide.headline;
   if (bodySlots.length >= 2) slide.items = bodySlots.map((s) => s.text);
   // The surface the headline sits on decides the engine's palette (accent phrases are guarded against it); the other surface's tokens point at its own roles.
   const S: 'f' | 'p' = slots.find((s) => s.role === 'title')?.plane ? 'p' : 'f';
@@ -505,5 +514,5 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   }
   // The text-fits rule: the real text boxes stay inside the margins, off the page counter and the swipe footer, and off each other. A drawing that breaks it is not accepted (the layout does not fit this text).
   problems.push(...textFitProblems(r.layers as never, recurringLayers(rec, pack, 'c' + o.index) as never));
-  return { ...(planned.length ? { images: planned } : {}), ...(fills.length ? { fills } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: withLayoutTag(done, layoutId), layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
+  return { ...(planned.length ? { images: planned } : {}), ...(fills.length ? { fills } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: plan.closingLook ? withLayoutTag(done, layoutId).replace(/<svg\b/, () => `<svg data-closing-look="${plan.closingLook}"`) : withLayoutTag(done, layoutId), layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
 }

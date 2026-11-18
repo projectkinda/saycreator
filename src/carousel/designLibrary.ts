@@ -603,7 +603,7 @@ export interface SlideSpec {
   /** A slide of the person's own script whose text is longer than the layout can show: its words are kept exactly as written and the code never trims them (it is drawn with the style's template until the text is shortened). */
   keepAsWritten?: boolean;
   /** What the person chose for this slide in the layout picker: the deck rotation and the style toggles keep it. */
-  pin?: { variant?: 0 | 1; cut?: Cut; invert?: false | 'full' | 'tint'; /** The picture picker: "none", or the id of the picture the person chose (their choice is never moved or removed). */ picture?: string; /** The slide as the deck's own placement made it, kept while a picture is pinned so "Auto" can bring it back. */ auto?: { layout: string; fields: Fields; accents: string[] }; /** Round N: the person chose this slide's layout in the Layout tab: no automatic rule moves it. */ layout?: true };
+  pin?: { variant?: 0 | 1; cut?: Cut; invert?: false | 'full' | 'tint'; /** The picture picker: "none", or the id of the picture the person chose (their choice is never moved or removed). */ picture?: string; /** The slide as the deck's own placement made it, kept while a picture is pinned so "Auto" can bring it back. */ auto?: { layout: string; fields: Fields; accents: string[] }; /** Round N: the person chose this slide's layout in the Layout tab: no automatic rule moves it. */ layout?: true; /** Round Y: the person chose this slide's variant in the Layout tab: a closing keeps the layout's own look. */ look?: true };
   /** A text slide the code turned into a picture layout because a picture was left unused: the pictures the writer's own picture layouts need are placed first. */
   pictureUpgrade?: boolean;
   /** Round 18: the writer's suggestion for a NAMED picture (its number, 1-based). The code keeps it only when the layout rules allow it. */
@@ -1531,7 +1531,9 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
   let last: Built | null = null;
   let scrim: Drawn['scrim'];
   for (const [k, t] of tries.entries()) {
-    const opts = { handle: o.handle, index: o.index, total: o.total, cut: cutsOf(spec.layout).includes(t.cut) ? t.cut : ('plain' as Cut), invert: t.invert, density: t.density, ...(o.ground !== undefined ? { ground: o.ground } : {}) };
+    // Round Y: the deck's last slide is its closing: the code may give it a closing look, unless the person set its layout or variant in the picker
+    const closing = o.total >= 2 && o.index === o.total - 1 && !spec.pin?.layout && !spec.pin?.look;
+    const opts = { handle: o.handle, index: o.index, total: o.total, cut: cutsOf(spec.layout).includes(t.cut) ? t.cut : ('plain' as Cut), invert: t.invert, density: t.density, ...(o.ground !== undefined ? { ground: o.ground } : {}), ...(closing ? { closing } : {}) };
     let b: Built;
     if (spec.layout === 'title-over-photo' && typeof f.image === 'string' && f.image) {
       // a headline on a picture: the scrim is the weakest one at which every word reads at 4.5:1 over 95% of the pixels behind it, measured on the real picture; if even the solid panel does not read, the slide is the full-photo caption layout
