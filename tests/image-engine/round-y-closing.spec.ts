@@ -19,6 +19,8 @@ const CASES = [
   C('highlight in the second sentence', 'statement-card', { headline: 'Back home by eight. The whole day feels lighter.' }, 'own', ['lighter']),
   C('kicker', 'statement-card', { kicker: 'One last thing', headline: 'Back home by eight.' }, 'own'),
 ];
+/** The look in style-5 (its own closing card): a statement card keeps the card instead of quiet or big. */
+const want5 = (c: { spec: { layout: string }; want: string }) => (c.spec.layout === 'statement-card' && (c.want === 'big' || c.want === 'quiet') ? 'own' : c.want);
 const LOOKS: [string, unknown][] = [['editorial-collage', null], ['style-1', null], ['style-5', null], ['style-6', null], ['style-4', null], ['style-3', { colours: ['#E11D48', '#111827'] }]];
 
 const DRAW = `(async ({ cases, styleId, brand, grounds }) => {
@@ -69,8 +71,8 @@ test('Y1 the rule picks the documented look from the text and the style', async 
     };
   }, CASES);
   for (const [i, [k, l]] of r.plain.entries()) expect(l, k).toBe(CASES[i].want);
-  // a style that declares its own closing card (style-5) keeps the card where the rule would draw a big statement; every other look is the same
-  for (const [i, [k, l]] of r.style5.entries()) expect(l, k).toBe(CASES[i].want === 'big' ? 'own' : CASES[i].want);
+  // a style that declares its own closing card (style-5) keeps the card where the rule would draw a quiet or a big statement on a statement card (the line look is drawn inside the card)
+  for (const [i, [k, l]] of r.style5.entries()) expect(l, k).toBe(want5(CASES[i]));
   // a plane, a statement density or another closing layout keeps the layout's own look
   expect(r.plane.every((l: string) => l === 'own')).toBe(true);
   expect(r.dense.every((l: string) => l === 'own')).toBe(true);
@@ -86,7 +88,7 @@ for (const [styleId, brand] of LOOKS) {
       const tag = `${styleId} ${r.key} v${r.v} g${r.g}`;
       expect(r.on.failed, tag).toBeUndefined();
       expect(r.on.look, tag).toBe(r.rule.look);
-      expect(r.on.look, tag).toBe(styleId === 'style-5' && c.want === 'big' ? 'own' : c.want);
+      expect(r.on.look, tag).toBe(styleId === 'style-5' ? want5(c) : c.want);
       expect(r.on.fails, tag).toEqual([]);
       const f = c.spec.fields;
       if (r.on.look === 'own') expect(r.on.svg === r.off.svg, `${tag}: the own look is drawn exactly as before`).toBe(true);
@@ -97,7 +99,7 @@ for (const [styleId, brand] of LOOKS) {
         expect(head.size, tag).toBeGreaterThanOrEqual(48);
         for (const t of r.on.texts) expect(t.size, `${tag}: ${t.text}`).toBeGreaterThanOrEqual(t.text.toLowerCase() === String(f.button ?? '').toLowerCase() ? 40 : 44);
         // the style's rule only where the style declares one (180 x 10, the accent's second colour)
-        expect(/<rect[^>]*width="180" height="10"/.test(r.on.svg), tag).toBe(r.underline && r.on.look !== 'split');
+        expect(/<rect[^>]*width="180" height="10"/.test(r.on.svg), tag).toBe(r.underline && r.on.look !== 'split' && !(styleId === 'style-5' && c.spec.layout === 'statement-card'));
       }
       // a button only when the fields have one
       expect(r.on.texts.some((t: any) => !!f.button && t.text.toLowerCase() === f.button.toLowerCase()), tag).toBe(!!f.button);

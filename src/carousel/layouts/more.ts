@@ -142,7 +142,7 @@ export const MORE_LAYOUTS: LayoutDef[] = [
       short: { headline: 'Meet Quick Flip' },
     },
     plan(f, v, st, cx) {
-      if (cx.closing) { const p = closingPlan(cx.closing, 'statement-card', f, st, cx); if (p) return p; }
+      if (cx.closing) { const p = closingPlan(cx.closing, 'statement-card', f, st, cx, v); if (p) return p; }
       const head = str(f, 'headline');
       const kick = str(f, 'kicker');
       const cap = cx.density === 'statement' ? '' : str(f, 'caption');

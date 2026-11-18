@@ -8,13 +8,13 @@
 //  - A closing with no button (statement, statement-card) and no kicker:
 //      5 words or fewer, nothing else              -> "quiet": a calm, centred headline at a modest size, the style's rule under it;
 //      a caption, or two sentences or more         -> "line": the headline (or its first sentence) large, the rest as a smaller supporting line, the style's rule between;
-//      12 words or fewer                           -> "big": one big statement, left and low, the style's rule above it
-//                                                     (a style that declares its own closing card keeps the card instead);
+//      12 words or fewer                           -> "big": one big statement, left and low, the style's rule above it;
+//    a style that declares its own closing card (style-5) keeps the card instead of quiet and big, and draws the line look inside the card;
 //      longer                                      -> the layout's own look (the card, or the statement).
 //  - Always the layout's own look: a kicker; a highlight outside the first sentence (the "line" look); a slide with a cut (a plane) or statement density; a pinned layout or variant.
 import { measureWidth } from '../../image-engine/draw/text';
 import { arrow, measure, nearestWeight } from './draw';
-import { mk, place, str, withAccent } from './library';
+import { layoutDef, mk, place, str, withAccent } from './library';
 import { sentences } from './proseLead';
 import type { Cx, Fields, LayoutStyle, Plan } from './types';
 
@@ -49,15 +49,18 @@ export function closingLookOf(layout: string, f: Fields, st: LayoutStyle, cx?: P
   if (str(f, 'kicker')) return { look: 'own', why: 'it has a kicker' };
   const n = words(head);
   const cap = str(f, 'caption');
-  if (!cap && n <= QUIET_MAX) return { look: 'quiet', why: `${n} words, nothing else` };
+  // a style that declares its own closing card (style-5) keeps the card: no quiet or big statement off it; the line look is drawn inside the card
+  const card = layout === 'statement-card' && st.closingLayout?.layout === 'statement-card';
+  if (!cap && n <= QUIET_MAX) return card ? { look: 'own', why: 'the style declares its own closing card' } : { look: 'quiet', why: `${n} words, nothing else` };
   const two = cap ? null : splitFirst(head);
   if (cap || two) {
     // the highlight is drawn on the large text: a highlight in the supporting line keeps the layout's own look
     if (two && accentsOf(f).some((a) => !has(two.first, a))) return { look: 'own', why: 'the highlight is outside the first sentence' };
+    if (card && cap) return { look: 'own', why: 'the closing card of the style already draws its caption' };
     return { look: 'line', why: cap ? 'a headline and a caption' : 'two sentences or more' };
   }
   if (n <= BIG_MAX) {
-    if (layout === 'statement-card' && st.closingLayout?.layout === 'statement-card') return { look: 'own', why: 'the style declares its own closing card' };
+    if (card) return { look: 'own', why: 'the style declares its own closing card' };
     return { look: 'big', why: `one sentence of ${n} words` };
   }
   return { look: 'own', why: `${n} words: the layout's own look` };
@@ -73,7 +76,7 @@ const RULE_W = 180;
 const RULE_H = 10;
 
 /** The plan of a closing look (null: the layout draws its own look). Every size is fixed here (the type scale does not grow them); the headline keeps every mark (Plan.keepMarks). */
-export function closingPlan(look: ClosingLook, _layout: string, f: Fields, st: LayoutStyle, cx: Cx): Plan | null {
+export function closingPlan(look: ClosingLook, _layout: string, f: Fields, st: LayoutStyle, cx: Cx, v: 0 | 1 = 0): Plan | null {
   if (look === 'own') return null;
   const head = str(f, 'headline');
   const fh = cx.field.y1 - cx.field.y0;
@@ -130,6 +133,12 @@ export function closingPlan(look: ClosingLook, _layout: string, f: Fields, st: L
   // the split point was found on the person's own text (Cx.closingSplit); without it the headline is not split and the layout draws its own look
   const two = cap ? null : cx.closingSplit ? { first: head.trim().slice(0, cx.closingSplit), rest: head.trim().slice(cx.closingSplit).trim() } : null;
   if (!cap && !two) return null;
+  // the style's own closing card: the first sentence is the card's headline and the rest its line under it (the card draws both)
+  if (_layout === 'statement-card' && st.closingLayout?.layout === 'statement-card') {
+    if (!two) return null;
+    const p = layoutDef('statement-card')!.plan({ ...f, headline: two.first, caption: two.rest }, v, st, { ...cx, closing: undefined, closingSplit: undefined });
+    return { ...p, closingLook: 'line', keepMarks: true, slide: { ...p.slide, headline: two.first, body: two.rest } };
+  }
   const big = two ? two.first : head;
   const support = two ? two.rest : cap;
   const bwt = nearestWeight(st.fonts.body, 500);
