@@ -23,6 +23,8 @@ import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImag
 import { pictureUseOf, pinnedPicture, placeImages, usedIds } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { settleScrim } from './scrim';
+import { FACE_COVER, faceCoverOf, facesOf } from './faceFind';
+import { parseRef } from './layouts/images';
 import { measurePhotoContrast, repairChromeText, repairSideLabel, type PhotoContrastRole } from './photoContrast';
 import { namePass } from './pictureNames';
 import { heroPass, picturePass, screenshotPass, separatePictureRuns, type PictureSwap } from './picturePass';
@@ -1371,6 +1373,8 @@ export interface Drawn {
   scrim?: number | 'caption';
   /** Round T: draws the same slide again with the title-over-photo scrim starting at a higher level (set by drawOne; never stored). */
   redo?: (scrimFrom: number) => Promise<Drawn>;
+  /** Round AA: the headline was put on the other side of the photo (this variant) because the first one covered a face. */
+  faceVariant?: 0 | 1;
 }
 /** Round T: one slide's text over its picture, measured on the slide as drawn (photoContrast.ts). */
 export interface PhotoContrastSlide { slide: number; layout: string; pass: boolean; roles: PhotoContrastRole[]; ms: number }
@@ -1530,14 +1534,36 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
   if (o.invert) tries.push({ cut: 'plain', invert: false, density: 'normal' });
   let last: Built | null = null;
   let scrim: Drawn['scrim'];
+  let faceVariant: 0 | 1 | undefined;
   for (const [k, t] of tries.entries()) {
     // Round Y: the deck's last slide is its closing: the code may give it a closing look, unless the person set its layout or variant in the picker
+    faceVariant = undefined;
     const closing = o.total >= 2 && o.index === o.total - 1 && !spec.pin?.layout && !spec.pin?.look;
     const opts = { handle: o.handle, index: o.index, total: o.total, cut: cutsOf(spec.layout).includes(t.cut) ? t.cut : ('plain' as Cut), invert: t.invert, density: t.density, ...(o.ground !== undefined ? { ground: o.ground } : {}), ...(closing ? { closing } : {}) };
     let b: Built;
     if (spec.layout === 'title-over-photo' && typeof f.image === 'string' && f.image) {
       // a headline on a picture: the scrim is the weakest one at which every word reads at 4.5:1 over 95% of the pixels behind it, measured on the real picture; if even the solid panel does not read, the slide is the full-photo caption layout
-      const sc = await settleScrim((level) => buildSlide(spec.layout, variant, f, style, { ...opts, scrim: level }), o.scrimFrom ?? 0);
+      const settle = (v: 0 | 1) => settleScrim((level) => buildSlide(spec.layout, v, f, style, { ...opts, scrim: level }), o.scrimFrom ?? 0);
+      let sc = await settle(variant);
+      // Round AA: the headline is kept off faces. When the person did not pick the variant and the words cover a face found in the photo (faceFind.ts), the other side
+      // (text low or text high) is drawn too and kept if it covers fewer faces, or less of them. No face known (no model, no face, a stand-in picture): drawn as before.
+      const ref = parseRef(f.image);
+      if (sc.reads && ref && !spec.pin?.look) {
+        const faces = await facesOf(f.image);
+        if (faces?.length) {
+          const a = faceCoverOf(sc.built, ref.id, faces);
+          if (a.worst >= FACE_COVER) {
+            const other = (1 - variant) as 0 | 1;
+            const sc2 = await settle(other);
+            const b = sc2.reads ? faceCoverOf(sc2.built, ref.id, faces) : null;
+            if (b && (b.covered < a.covered || (b.covered === a.covered && b.total < a.total - 1e-9))) {
+              sc = sc2;
+              faceVariant = other;
+              adjustments.push(`slide ${o.index + 1}: the headline was moved ${other === 0 ? 'low' : 'high'} on the photo so it does not cover a face.`);
+            }
+          }
+        }
+      }
       if (sc.reads) {
         b = sc.built;
         scrim = sc.level;
@@ -1552,7 +1578,7 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
     if (b.ok) {
       if (k > 0) adjustments.push(`slide ${o.index + 1}: drawn with ${t.cut}${t.invert ? ' + invert' : ''}${t.density === 'statement' ? ' + statement density' : ''} instead of ${o.cut}${o.invert ? ' + invert' : ''}${density === 'statement' ? ' + statement density' : ''} (that did not fit: ${tries[k - 1] && last ? 'content too big for it' : ''}).`);
       if (b.cut !== t.cut) adjustments.push(`slide ${o.index + 1}: the ${t.cut} plane would hold no content for ${spec.layout}, so it is drawn with no plane.`);
-      return { built: b, cut: b.cut, invert: !!t.invert, density: t.density, adjustments, problems: [], ...(scrim !== undefined ? { scrim, redo: (scrimFrom: number) => drawOne(spec, variant, style, { ...o, scrimFrom }) } : {}) };
+      return { built: b, cut: b.cut, invert: !!t.invert, density: t.density, adjustments, problems: [], ...(scrim !== undefined ? { scrim, redo: (scrimFrom: number) => drawOne(spec, variant, style, { ...o, scrimFrom }) } : {}), ...(faceVariant !== undefined ? { faceVariant } : {}) };
     }
   }
   return { built: null, cut: 'plain', invert: false, density: 'normal', adjustments, problems: (last?.errors ?? ['it could not be drawn']).slice(0, 4) };

@@ -70,6 +70,35 @@
       }
     },
     {
+      "id": "ultraface-rfb-320",
+      "label": "UltraFace version-RFB-320 (face finder: keeps slide text off faces)",
+      "status": "approved",
+      "file": "version-RFB-320.onnx",
+      "url": "https://github.com/onnx/models/raw/main/validated/vision/body_analysis/ultraface/models/version-RFB-320.onnx",
+      "bytes": 1270727,
+      "sha256": "34cd7e60aeff28744c657de7a3dc64e872d506741de66987f3426f2b79f88017",
+      "licence": "MIT",
+      "licenceSources": [
+        "https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB/blob/master/LICENSE",
+        "https://github.com/onnx/models/tree/main/validated/vision/body_analysis/ultraface (README: License MIT)"
+      ],
+      "input": {
+        "width": 320,
+        "height": 240,
+        "mean": [
+          127,
+          127,
+          127
+        ],
+        "std": [
+          128,
+          128,
+          128
+        ],
+        "output": "scores 1x4420x2, boxes 1x4420x4"
+      }
+    },
+    {
       "id": "selftest",
       "label": "Pipeline self-test (NOT a real remover: brightness becomes the mask)",
       "status": "approved",

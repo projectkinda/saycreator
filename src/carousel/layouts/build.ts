@@ -79,6 +79,8 @@ export interface Built {
   devices?: PlacedDevice[];
   /** Round U: the photos on a full-bleed layout that a cover crop would cut by 25% to 40%: filled (cut) or kept whole (the dissolve), and why. */
   fills?: SlideFill[];
+  /** Round AA: where each project picture is drawn on the slide (its whole image box: the cover crop, or the photo shown whole), so a face found in the photo can be put on the slide. */
+  drawnPictures?: { id: string; x: number; y: number; w: number; h: number }[];
 }
 /** Round U: one photo's fill choice on a slide (layouts/fillSlide.ts). */
 export interface SlideFill {
@@ -318,6 +320,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   let pack: StylePack = { ...parsed.pack, palette, fonts: { headline: st.fonts.headline, body: st.fonts.body }, devices, designs: { ...parsed.pack.designs, [key]: layers }, slotMeta: { ...parsed.pack.slotMeta, [key]: slotMetaOf(layers) } };
   const notes: string[] = [];
   const fills: SlideFill[] = [];
+  const drawnPictures: { id: string; x: number; y: number; w: number; h: number }[] = [];
   const problems: string[] = [];
   if (!partitioned && cut !== 'plain' && plan.span > g.field.y1 - g.field.y0 + 6) problems.push(`the content is ${Math.round(plan.span)} px tall and the free field above the ${cut} plane is ${Math.round(g.field.y1 - g.field.y0)} px.`);
   // The existing fit, balance, collision and final checks, in the order the Designed mode runs them.
@@ -452,6 +455,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       const w0 = whole.get(i);
       const rf = refocus.get(i), pr0 = parseRef(p.src);
       const cr = w0 ? { x: w0.rect.x, y: w0.rect.y, w: w0.rect.w, h: w0.rect.h } : cropRect(p, rf && pr0 ? { ...pr0, ...rf } : pr0);
+      if (pr0 && cr) drawnPictures.push({ id: pr0.id, x: cr.x, y: cr.y, w: cr.w, h: cr.h });
       // Round U: a photo shown whole dissolves into the slide (its mirrored, blurred edge fading into what lies under the slot); a screenshot sits on a flat panel in its edge colour
       const panel = w0 ? (w0.photo ? dissolveFill(id, p, w0.rect, p.src, !!p.bleed) : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" fill="${w0.bg}"/>`) : '';
       const box = cr ? `x="${Math.round(cr.x * 10) / 10}" y="${Math.round(cr.y * 10) / 10}" width="${Math.round(cr.w * 10) / 10}" height="${Math.round(cr.h * 10) / 10}" preserveAspectRatio="none"` : `x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" preserveAspectRatio="xMidYMid slice"`;
@@ -514,5 +518,5 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   }
   // The text-fits rule: the real text boxes stay inside the margins, off the page counter and the swipe footer, and off each other. A drawing that breaks it is not accepted (the layout does not fit this text).
   problems.push(...textFitProblems(r.layers as never, recurringLayers(rec, pack, 'c' + o.index) as never));
-  return { ...(planned.length ? { images: planned } : {}), ...(fills.length ? { fills } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: plan.closingLook ? withLayoutTag(done, layoutId).replace(/<svg\b/, () => `<svg data-closing-look="${plan.closingLook}"`) : withLayoutTag(done, layoutId), layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
+  return { ...(planned.length ? { images: planned } : {}), ...(fills.length ? { fills } : {}), ...(drawnPictures.length ? { drawnPictures } : {}), ...(placed ? { devices: placed } : {}), ok: problems.length === 0, errors: problems, svg: plan.closingLook ? withLayoutTag(done, layoutId).replace(/<svg\b/, () => `<svg data-closing-look="${plan.closingLook}"`) : withLayoutTag(done, layoutId), layers: [...r.layers, ...pics.map((p, i): Layer => ({ kind: 'image', id: `c${o.index}-pic${i}`, name: 'picture', role: 'content', x: p.x, y: p.y, width: p.w, height: p.h, rotation: 0, opacity: 1, src: p.src, fit: 'cover' }) as Layer), ...recurringLayers(rec, pack, 'c' + o.index)], notes, palette, fieldBg: F.bg, planeBg: P.bg, plan, cut, field: g.field, fieldBottom: partitioned ? 1210 : g.fieldBottom, geometry: g, edgeDrawn: colours.edge, partitioned };
 }
