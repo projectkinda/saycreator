@@ -17,6 +17,10 @@
 //   - litGrain >= 0.62 and litTop16 < 0.90.
 // On 96 labelled pictures (out/round-ab/classify.md) the 4 dark photos have litGrain 0.672 or more and litTop16 0.843 or less; every true screenshot has litGrain 0.574 or less; the two
 // stand-ins with litGrain over 0.62 have litTop16 1.0. Anything below 0.62 stays a screenshot (safe by default). A picture with no dark part reads the same both times.
+// Round AC: SMOOTH PHOTOS. A photo with clear camera grain but a smooth subject on a plain dark sky (the moon: grain 0.574, top16 0.931) failed the 0.85 top16 guard. That guard is there
+// for flat pictures whose compression lifts their grain, and those have very few distinct colours. So a picture with grain >= 0.50 is ALSO a photo when its distinct exact colours are at
+// least 5% of its pixels (`colourShare`, on the same 160 px copy). On the labelled set (out/round-ac/moon.md): every photo 0.118 or more (the moon is the lowest), the two stand-ins with
+// grain over 0.50 and top16 1.0 have 0.015 and 0.002; no true screenshot has grain 0.50 or more, so none can pass this way. The unsure band (0.47 to 0.50) is not touched.
 // A picture whose content is unknown (added before this rule, or unreadable) counts as a screenshot: see `contentOr`.
 export type PictureContent = 'screenshot' | 'photo';
 export interface ContentReading {
@@ -29,13 +33,15 @@ export interface ContentReading {
   /** Round AB: grain and top16 leaving out the flat near-black pixels. */
   litGrain?: number;
   litTop16?: number;
+  /** Round AC: distinct exact colours as a share of the pixels read. */
+  colourShare?: number;
   /** Round L: true when the grain is in the unsure band (the picture is then a screenshot). */
   unsure?: boolean;
   /** Round L: why, in a few words (for the report and the tests). */
   why?: string;
 }
 /** Round L: a photo from this much grain up (with top16 under `top16Max`); between `grainUnsure` and `grainPhoto` the reading is unsure, which is a screenshot. */
-export const PHOTO_RULE = { grainPhoto: 0.5, grainUnsure: 0.47, top16Max: 0.85, litGrainPhoto: 0.62, litTop16Max: 0.9 };
+export const PHOTO_RULE = { grainPhoto: 0.5, grainUnsure: 0.47, top16Max: 0.85, litGrainPhoto: 0.62, litTop16Max: 0.9, colourShareMin: 0.05 };
 /** Round AB: a pixel this dark (luminance 0..255) is near black; a pair of near-black pixels within 2 of each other is a flat dark part. */
 const DARK_LUM = 20;
 /** A file that is a screenshot by its type or its name, whatever its pixels say. */
@@ -47,11 +53,13 @@ const lum = (d: Uint8ClampedArray, i: number) => 0.299 * d[i] + 0.587 * d[i + 1]
 /** The reading of RGBA pixel data (w x h). Pure, so tests and the app agree. `png`: the file is a PNG (a stricter test for "photo"). */
 export function readContent(d: Uint8ClampedArray, w: number, h: number, png = false, name = ''): ContentReading {
   const counts = new Map<number, number>(), litCounts = new Map<number, number>();
+  const exact = new Set<number>();
   let n = 0, litN = 0;
   for (let i = 0; i < w * h; i++) {
     if (d[i * 4 + 3] < 8) continue;
     const key = ((d[i * 4] >> 4) << 8) | ((d[i * 4 + 1] >> 4) << 4) | (d[i * 4 + 2] >> 4);
     counts.set(key, (counts.get(key) ?? 0) + 1);
+    exact.add((d[i * 4] << 16) | (d[i * 4 + 1] << 8) | d[i * 4 + 2]);
     n++;
     if (lum(d, i * 4) < DARK_LUM) continue;
     litCounts.set(key, (litCounts.get(key) ?? 0) + 1);
@@ -83,13 +91,14 @@ export function readContent(d: Uint8ClampedArray, w: number, h: number, png = fa
   const edges = edgePx / pairs, grain = grainPx / pairs, litGrain = litGrainPx / Math.max(1, litPairs);
   const R = PHOTO_RULE;
   const byFile = screenshotByFile(png, name);
-  const grainPhoto = n > 0 && grain >= R.grainPhoto && top16 < R.top16Max;
+  const colourShare = n ? exact.size / n : 0;
+  const grainPhoto = n > 0 && grain >= R.grainPhoto && (top16 < R.top16Max || colourShare >= R.colourShareMin);
   const darkPhoto = n > 0 && litN > 0 && !grainPhoto && litGrain >= R.litGrainPhoto && litTop16 < R.litTop16Max;
   const clearlyPhoto = !byFile && (grainPhoto || darkPhoto);
   const unsure = !byFile && !clearlyPhoto && grain >= R.grainUnsure && grain < R.grainPhoto;
   const why = byFile ? (png ? 'a PNG' : 'named a screenshot') : clearlyPhoto ? (darkPhoto ? 'camera grain outside its dark parts' : 'camera grain') : unsure ? 'unsure (grain between ' + R.grainUnsure + ' and ' + R.grainPhoto + ')' : grain >= R.grainPhoto ? 'too few colours for a photo' : 'no camera grain';
   const r3 = (v: number) => Math.round(v * 1000) / 1000;
-  return { content: clearlyPhoto ? 'photo' : 'screenshot', top16: r3(top16), flat: r3(flat), edges: r3(edges), buckets: counts.size, grain: r3(grain), litGrain: r3(litGrain), litTop16: r3(litTop16), ...(unsure ? { unsure: true } : {}), why };
+  return { content: clearlyPhoto ? 'photo' : 'screenshot', top16: r3(top16), flat: r3(flat), edges: r3(edges), buckets: counts.size, grain: r3(grain), litGrain: r3(litGrain), litTop16: r3(litTop16), colourShare: r3(colourShare), ...(unsure ? { unsure: true } : {}), why };
 }
 
 /** Reads a picture (any image source the canvas can draw) at 160 px and classifies it. Unreadable: a screenshot. */
