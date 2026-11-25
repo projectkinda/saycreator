@@ -3,6 +3,8 @@
 //   AB1 the real pictures (skipped when they are not on this computer): every ground-truth photo is a photo, every true screenshot stays one, the unsure feed screenshot stays one.
 //   AB2 pictures made at test time (always runs): a dark photo is a photo; a dark-mode screenshot, an all-black picture, a dark photo as PNG or named "screenshot" stay screenshots.
 //   AB3 the person's chip still wins: a dark photo shows "Photo" and switches to "Screenshot"; a dark-mode screenshot shows "Screenshot" and switches to "Photo".
+// Round AC: the moon photo ("11.30.44 AM": grain 0.574, top16 0.931) is a photo by its distinct colours (colourShare >= 0.05 with grain >= 0.50); the phone screenshot of a video
+// ("11.30.44 AM (1)") stays a screenshot; the stand-ins busy-check and near-white and a made-up checkerboard stay screenshots.
 // ZERO writer calls.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -54,22 +56,25 @@ const MAKE = `window.__AB = (() => {
     g.fillStyle = '#fff'; g.font = 'bold 72px sans-serif'; g.fillText('Library', 60, 200);
     return c;
   };
+  // a checkerboard (two colours, sharp edges) saved as JPEG, like the busy-check stand-in
+  const checker = () => { const c = document.createElement('canvas'); c.width = 1200; c.height = 1500; const g = c.getContext('2d'); for (let y = 0; y < 1500; y += 12) for (let x = 0; x < 1200; x += 12) { g.fillStyle = ((x + y) / 12) % 2 ? '#2f6b1f' : '#c8e04a'; g.fillRect(x, y, 12, 12); } return c; };
   const black = () => { const c = document.createElement('canvas'); c.width = 1200; c.height = 1500; const g = c.getContext('2d'); g.fillStyle = '#050505'; g.fillRect(0, 0, 1200, 1500); return c; };
   const blob = (c, type, q) => new Promise((res) => c.toBlob((b) => res(b), type, q));
   const b64 = async (b) => { const u = new Uint8Array(await b.arrayBuffer()); let t = ''; for (const x of u) t += String.fromCharCode(x); return btoa(t); };
-  return { darkPhoto, darkShot, black, blob, b64 };
+  return { darkPhoto, darkShot, checker, black, blob, b64 };
 })();`;
 
 test('AB1 the real pictures: every ground-truth photo is a photo (the 4 dark ones by their lit grain), every true screenshot stays a screenshot, the unsure feed screenshot stays one', async ({ page }) => {
   test.skip(!fs.existsSync(EVENT), `${EVENT} is not on this computer (the real pictures are kept on the developer's computer, not in git)`);
   const labels: Record<string, string> = fs.existsSync(path.join(DIR, 'labels.json')) ? JSON.parse(fs.readFileSync(path.join(DIR, 'labels.json'), 'utf8')) : {};
   const photos = [
-    ...fs.readdirSync(EVENT).filter((f) => /unsplash|^event photo \d+\./i.test(f) || /11\.30\.43 AM\.jpe?g$/.test(f)).map((f) => path.join(EVENT, f)),
+    ...fs.readdirSync(EVENT).filter((f) => /unsplash|^event photo \d+\./i.test(f) || /11\.30\.4[34] AM\.jpe?g$/.test(f)).map((f) => path.join(EVENT, f)),
     ...Object.keys(labels).filter((f) => labels[f] === 'photo').map((f) => path.join(DIR, f)),
   ].filter((p) => fs.existsSync(p));
   const shots = [
     ...Object.keys(labels).filter((f) => labels[f] !== 'photo').map((f) => path.join(DIR, f)),
-    ...['WhatsApp Image 2026-10-27 at 11.30.44 AM.jpeg', 'WhatsApp Image 2026-10-27 at 11.30.44 AM (1).jpeg'].map((f) => path.join(EVENT, f)),
+    // the phone screenshot of a video ("11.30.44 AM" without the suffix is the moon photo, a photo since Round AC)
+    path.join(EVENT, 'WhatsApp Image 2026-10-27 at 11.30.44 AM (1).jpeg'),
     ...(fs.existsSync(SWP) ? fs.readdirSync(SWP).filter((f) => /\.(png|jpe?g)$/i.test(f)).map((f) => path.join(SWP, f)) : []),
   ].filter((p) => fs.existsSync(p));
   const bad: string[] = [];
@@ -86,7 +91,24 @@ test('AB1 the real pictures: every ground-truth photo is a photo (the 4 dark one
   expect(photos.length).toBeGreaterThanOrEqual(30);
   expect(shots.length).toBeGreaterThanOrEqual(30);
   expect(bad).toEqual([]);
-  for (const k of ['bruno', 'emanuel', 'hendrik', 'julien']) expect(dark[k], k).toBe('camera grain outside its dark parts');
+  // bruno-bd needs the lit reading (grain 0.314); the other three pass by their colours (Round AC) before it is needed
+  expect(dark.bruno).toBe('camera grain outside its dark parts');
+  for (const k of ['emanuel', 'hendrik', 'julien']) expect(dark[k], k).toMatch(/^camera grain/);
+  // Round AC: the moon photo is a photo by its colours (its top16 is over the 0.85 guard); the stand-ins keep their verdict
+  const moon = path.join(EVENT, 'WhatsApp Image 2026-10-27 at 11.30.44 AM.jpeg');
+  if (fs.existsSync(moon)) {
+    const r = await readFile(page, moon);
+    expect(r.content).toBe('photo');
+    expect(r.top16).toBeGreaterThanOrEqual(0.85);
+    expect(r.colourShare).toBeGreaterThanOrEqual(0.05);
+  }
+  for (const f of ['busy-check.jpg', 'near-white.jpg']) {
+    const p = path.join(DIR, 'synthetic', f);
+    if (!fs.existsSync(p)) continue;
+    const r = await readFile(page, p);
+    expect(r.content, f).toBe('screenshot');
+    expect(r.why, f).toBe('too few colours for a photo');
+  }
   const feed = path.join(SWP, 'mock-feed-phone.jpg');
   if (fs.existsSync(feed)) {
     const r = await readFile(page, feed);
@@ -105,6 +127,7 @@ test('AB2 pictures made at test time: a dark photo is a photo; a dark-mode scree
       photo: await read(dp, 'arch.jpg'),
       shot: await read(AB.darkShot(), 'library.jpg', 'image/jpeg', 0.8),
       black: await read(AB.black(), 'black.jpg'),
+      checker: await read(AB.checker(), 'checker.jpg', 'image/jpeg', 0.75),
       png: await read(dp, 'arch.png', 'image/png'),
       named: await read(dp, 'arch screenshot.jpg'),
       rule: K.PHOTO_RULE,
@@ -114,7 +137,7 @@ test('AB2 pictures made at test time: a dark photo is a photo; a dark-mode scree
   expect(r.photo.content, JSON.stringify(r.photo)).toBe('photo');
   expect(r.photo.why).toBe('camera grain outside its dark parts');
   expect(r.photo.grain >= r.rule.grainPhoto && r.photo.top16 < r.rule.top16Max, JSON.stringify(r.photo)).toBe(false);
-  for (const k of ['shot', 'black', 'png', 'named']) expect(r[k].content, `${k} ${JSON.stringify(r[k])}`).toBe('screenshot');
+  for (const k of ['shot', 'black', 'checker', 'png', 'named']) expect(r[k].content, `${k} ${JSON.stringify(r[k])}`).toBe('screenshot');
   // the dark-mode screen is far from the line, not near it
   expect(r.shot.litGrain, JSON.stringify(r.shot)).toBeLessThan(r.rule.litGrainPhoto - 0.1);
   expect(r.png.why).toBe('a PNG');
