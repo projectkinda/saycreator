@@ -321,5 +321,6 @@ export default defineConfig({
   worker: { format: 'es' },
   // Cross-origin isolation lets the WASM backend use several threads. 'credentialless' keeps
   // third-party resources such as Google Fonts working without extra headers.
-  server: { port: 5173, headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'credentialless' } },
+  // localhost only: the dev routes (the writer runs Claude Code on this computer) are never on the network. Vite's own default, written down.
+  server: { host: 'localhost', port: 5173, headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'credentialless' } },
 });

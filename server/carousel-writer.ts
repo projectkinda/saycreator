@@ -241,16 +241,62 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+// ---------- who may call the writer (this computer only), the per-run cap and the one-line log ----------
+
+/** At most this many writer calls per run of the server (WRITER_CALL_CAP changes it); the next one is refused until the server is restarted. */
+export const DEFAULT_CALL_CAP = 50;
+const LOOPBACK_NAME = /^(?:localhost|(?:[^.]+\.)*localhost|127(?:\.\d{1,3}){3}|\[::1\])$/i;
+const isLoopbackAddress = (a: string | undefined) => !!a && (a === '::1' || /^(?:::ffff:)?127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(a));
+const hostnameOf = (hostPort: string) => (hostPort.startsWith('[') ? hostPort.slice(0, hostPort.indexOf(']') + 1) : hostPort.replace(/:\d+$/, ''));
+/**
+ * Why a write request is refused, or null when it may go on. It must come from this computer (a loopback address), name this computer as its Host, and, when a
+ * browser sends it (an Origin or Sec-Fetch-Site header), come from the page's own origin: another web page open in the browser cannot make it run.
+ */
+export function refuseWrite(req: IncomingMessage): string | null {
+  if (!isLoopbackAddress(req.socket?.remoteAddress)) return 'The writer only answers requests from this computer.';
+  const host = String(req.headers.host ?? '');
+  if (!host || !LOOPBACK_NAME.test(hostnameOf(host))) return 'The writer only answers requests addressed to this computer (localhost).';
+  const origin = req.headers.origin;
+  if (origin !== undefined) {
+    let o: URL | null = null;
+    try {
+      o = new URL(String(origin));
+    } catch {
+      /* "null" or not a URL */
+    }
+    if (!o || !/^https?:$/.test(o.protocol) || o.host.toLowerCase() !== host.toLowerCase()) return "The writer only answers the app's own page, not another web page.";
+  }
+  const site = req.headers['sec-fetch-site'];
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') return "The writer only answers the app's own page, not another web page.";
+  return null;
+}
+/** One line per writer call: time, provider, kind, result, duration and sizes. Never the prompt text, the answer or a key. */
+export function callLine(x: { provider: Provider; kind: WriteKind; n: number; cap: number; ms: number; promptChars: number; images: number; result: string }) {
+  return `[writer ${x.provider}] ${new Date().toISOString()} call ${x.n}/${x.cap} ${x.kind} ${x.result} ${(x.ms / 1000).toFixed(1)} s, prompt ${x.promptChars} chars, ${x.images} picture${x.images === 1 ? '' : 's'}`;
+}
+
 export type Provider = 'dev-cli' | 'api';
-/** A Connect-style handler for one provider. `base` is the route prefix, for example "/__carousel". */
-export function carouselHandler(provider: Provider, opts: { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch } = {}) {
+/** A Connect-style handler for one provider. `base` is the route prefix, for example "/__carousel". `log` is a test seam (default: the server terminal). */
+export function carouselHandler(provider: Provider, opts: { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch; log?: (line: string) => void } = {}) {
   const env = opts.env ?? process.env;
+  const log = opts.log ?? ((line: string) => console.log(line));
+  const capIn = Number.parseInt(env.WRITER_CALL_CAP ?? '', 10);
+  const cap = Number.isFinite(capIn) && capIn >= 0 ? capIn : DEFAULT_CALL_CAP;
+  let calls = 0;
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = (req.url ?? '').split('?')[0];
     if (req.method === 'GET' && url === '/status') return send(res, 200, provider === 'dev-cli' ? cliStatus(env) : apiStatus(env));
     if (req.method === 'POST' && url === '/write') {
+      const refused = refuseWrite(req);
+      if (refused) {
+        req.resume();
+        log(`[writer ${provider}] ${new Date().toISOString()} refused a request: ${refused}`);
+        return send(res, 403, { error: refused, kind: 'unavailable' });
+      }
       const ctl = new AbortController();
       res.on('close', () => !res.writableEnded && ctl.abort());
+      let t0 = 0;
+      let line: Omit<Parameters<typeof callLine>[0], 'ms' | 'result'> | null = null;
       try {
         const body = JSON.parse(await readBody(req)) as { prompt?: unknown; kind?: unknown; images?: unknown; effort?: unknown };
         // an effort level the request names (or WRITER_EFFORT on the server); anything else is the command line's own default
@@ -264,9 +310,16 @@ export function carouselHandler(provider: Provider, opts: { env?: NodeJS.Process
           const png = i.mime === 'image/png';
           return { name: `ref${n + 1}.${png ? 'png' : 'jpg'}`, mime: png ? 'image/png' : 'image/jpeg', base64: i.base64 };
         });
+        if (calls >= cap) throw new WriterFailure(429, 'unavailable', `The writer has made ${cap} calls since the dev server started, the most for one run (WRITER_CALL_CAP). Restart the dev server to write again.`);
+        calls++;
+        line = { provider, kind, n: calls, cap, promptChars: body.prompt.length, images: images.length };
+        t0 = Date.now();
         const r = provider === 'dev-cli' ? await writeWithCli(body.prompt, ctl.signal, env, undefined, undefined, kind, images, effort) : await writeWithApi(body.prompt, ctl.signal, env, opts.fetchImpl, undefined, kind, images);
+        log(callLine({ ...line, ms: Date.now() - t0, result: 'ok' }));
         return send(res, 200, r);
       } catch (e) {
+        if (line) log(callLine({ ...line, ms: Date.now() - t0, result: e instanceof WriterFailure ? `${e.kind} (HTTP ${e.status})` : 'failed' }));
+        else if (e instanceof WriterFailure && e.status === 429) log(`[writer ${provider}] ${new Date().toISOString()} refused: the cap of ${cap} calls is reached`);
         if (e instanceof WriterFailure) return send(res, e.status, { error: e.message, kind: e.kind });
         return send(res, 400, { error: 'The request could not be read.', kind: 'failed' });
       }
