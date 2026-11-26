@@ -66,6 +66,18 @@ async function smallCopy(blob: Blob): Promise<string> {
   return url.slice(url.indexOf(',') + 1);
 }
 
+/** A caption made to fit the name box (40 characters): whole words only, never a word cut in two or a dangling "at". */
+export function fitName(caption: string, max = 40): string {
+  const words = caption.trim().split(/\s+/).filter(Boolean);
+  let out = '';
+  for (const w of words) {
+    const next = out ? `${out} ${w}` : w;
+    if (next.length > max) break;
+    out = next;
+  }
+  // a caption that ends on a small linking word reads cut off: drop it
+  return out.replace(/(?:\s+(?:a|an|the|at|of|in|on|with|and|or|near|by|to|from|under|over|between))+$/i, '');
+}
 export interface DescribeIn { id: string; blob: Blob }
 /**
  * Captions for pictures (id -> caption; a picture with no usable caption is left out). Cached captions are used first; the rest go to the describer in ONE request (or one per 12).
@@ -95,7 +107,7 @@ export async function describePictures(pics: DescribeIn[], fetchImpl: typeof fet
       const j = (await r.json()) as { captions?: unknown };
       const caps = Array.isArray(j.captions) ? j.captions : [];
       batch.forEach((b, k) => {
-        const c = typeof caps[k] === 'string' ? (caps[k] as string).trim().slice(0, 40) : '';
+        const c = typeof caps[k] === 'string' ? fitName(caps[k] as string) : '';
         if (c) cache[b.key] = c;
       });
     } catch {

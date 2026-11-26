@@ -126,3 +126,11 @@ test('the guard, the cap and the request checks: another web page is refused bef
     await s.close();
   }
 });
+
+test('a caption longer than the 40-character name box keeps whole words and never ends on a linking word', async () => {
+  const { fitName } = await import('../../src/carousel/pictureCaptions');
+  expect(fitName('person walking near reflective water at sunset')).toBe('person walking near reflective water');
+  expect(fitName('dry maple leaf on dark wood')).toBe('dry maple leaf on dark wood');
+  expect(fitName('boats in sea cave with cliffs and the open sea beyond')).toBe('boats in sea cave with cliffs');
+  expect(fitName('')).toBe('');
+});
