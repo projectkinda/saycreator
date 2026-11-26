@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { WriterFailure, apiStatus, cliStatus, findClaudeCli, killTree, logUsage } from './carousel-writer';
+import { DEFAULT_CALL_CAP, WriterFailure, apiStatus, cliStatus, findClaudeCli, killTree, logUsage, refuseWrite } from './carousel-writer';
 
 export const READER_SYSTEM = 'You describe the visual style of reference images as strict JSON, using only the vocabulary you are given. You never write code, SVG or drawing instructions, and you never copy text, logos or faces from the images.';
 const MAX_BODY = 40_000_000;
@@ -194,12 +194,27 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-/** A Connect-style handler for one provider. */
-export function referenceHandler(provider: 'dev-cli' | 'api', opts: { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch } = {}) {
+/**
+ * A Connect-style handler for one provider. The two POST routes answer only this computer and only the app's own page (the writer's guard, refuseWrite), and /read
+ * stops after READER_CALL_CAP calls per run of the dev server (default 50, the writer's default). `log` and `launcher` (a stand-in program) are test seams.
+ */
+export function referenceHandler(provider: 'dev-cli' | 'api', opts: { env?: NodeJS.ProcessEnv; fetchImpl?: typeof fetch; log?: (line: string) => void; launcher?: { bin: string; args: string[] } } = {}) {
   const env = opts.env ?? process.env;
+  const log = opts.log ?? ((line: string) => console.error(line));
+  const capIn = Number.parseInt(env.READER_CALL_CAP ?? '', 10);
+  const cap = Number.isFinite(capIn) && capIn >= 0 ? capIn : DEFAULT_CALL_CAP;
+  let calls = 0;
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = (req.url ?? '').split('?')[0];
     if (req.method === 'GET' && url === '/status') return send(res, 200, provider === 'dev-cli' ? cliStatus(env) : apiStatus(env));
+    if (req.method === 'POST' && (url === '/log' || url === '/read')) {
+      const refused = refuseWrite(req, 'The reference reader');
+      if (refused) {
+        req.resume();
+        log(`[reference ${provider}] ${new Date().toISOString()} refused a request: ${refused}`);
+        return send(res, 403, { error: refused, kind: 'unavailable' });
+      }
+    }
     if (req.method === 'POST' && url === '/log') {
       try {
         console.error(`[reference ${provider}] ${(await readBody(req)).replace(/sk-[A-Za-z0-9_-]+/g, '[key]').slice(0, 600)}`);
@@ -221,7 +236,12 @@ export function referenceHandler(provider: 'dev-cli' | 'api', opts: { env?: Node
             /* a log that cannot be written is not an error */
           }
         }
-        const r = provider === 'dev-cli' ? await readWithCli(call, ctl.signal, env) : await readWithApi(call, ctl.signal, env, opts.fetchImpl);
+        if (calls >= cap) {
+          log(`[reference ${provider}] ${new Date().toISOString()} refused: the cap of ${cap} calls is reached`);
+          throw new WriterFailure(429, 'unavailable', `The reference reader has made ${cap} calls since the dev server started, the most for one run (READER_CALL_CAP). Restart the dev server to read again.`);
+        }
+        calls++;
+        const r = provider === 'dev-cli' ? await readWithCli(call, ctl.signal, env, undefined, opts.launcher) : await readWithApi(call, ctl.signal, env, opts.fetchImpl);
         return send(res, 200, r);
       } catch (e) {
         if (e instanceof WriterFailure) {

@@ -258,10 +258,10 @@ const hostnameOf = (hostPort: string) => (hostPort.startsWith('[') ? hostPort.sl
  * Why a write request is refused, or null when it may go on. It must come from this computer (a loopback address), name this computer as its Host, and, when a
  * browser sends it (an Origin or Sec-Fetch-Site header), come from the page's own origin: another web page open in the browser cannot make it run.
  */
-export function refuseWrite(req: IncomingMessage): string | null {
-  if (!isLoopbackAddress(req.socket?.remoteAddress)) return 'The writer only answers requests from this computer.';
+export function refuseWrite(req: IncomingMessage, who = 'The writer'): string | null {
+  if (!isLoopbackAddress(req.socket?.remoteAddress)) return `${who} only answers requests from this computer.`;
   const host = String(req.headers.host ?? '');
-  if (!host || !LOOPBACK_NAME.test(hostnameOf(host))) return 'The writer only answers requests addressed to this computer (localhost).';
+  if (!host || !LOOPBACK_NAME.test(hostnameOf(host))) return `${who} only answers requests addressed to this computer (localhost).`;
   const origin = req.headers.origin;
   if (origin !== undefined) {
     let o: URL | null = null;
@@ -270,10 +270,10 @@ export function refuseWrite(req: IncomingMessage): string | null {
     } catch {
       /* "null" or not a URL */
     }
-    if (!o || !/^https?:$/.test(o.protocol) || o.host.toLowerCase() !== host.toLowerCase()) return "The writer only answers the app's own page, not another web page.";
+    if (!o || !/^https?:$/.test(o.protocol) || o.host.toLowerCase() !== host.toLowerCase()) return `${who} only answers the app's own page, not another web page.`;
   }
   const site = req.headers['sec-fetch-site'];
-  if (site !== undefined && site !== 'same-origin' && site !== 'none') return "The writer only answers the app's own page, not another web page.";
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') return `${who} only answers the app's own page, not another web page.`;
   return null;
 }
 /** One line per writer call: time, provider, kind, result, duration and sizes. Never the prompt text, the answer or a key. */

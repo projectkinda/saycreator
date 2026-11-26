@@ -78,7 +78,7 @@ test('the HTTP routes: status says whether each provider is available, and a bad
     const res = { statusCode: 200, setHeader: (k: string, v: string) => (headers[k] = v), end: (s: string) => (out = s), on: () => undefined, writableEnded: false } as never;
     const chunks = body ? [Buffer.from(body)] : [];
     const listeners: Record<string, ((...a: unknown[]) => void)[]> = {};
-    const req = { method, url, on: (e: string, f: (...a: unknown[]) => void) => { (listeners[e] ??= []).push(f); if (e === 'end') setTimeout(() => { chunks.forEach((c) => listeners.data?.forEach((d) => d(c))); f(); }, 0); } } as never;
+    const req = { method, url, socket: { remoteAddress: '127.0.0.1' }, headers: { host: 'localhost:5173' }, resume: () => undefined, on: (e: string, f: (...a: unknown[]) => void) => { (listeners[e] ??= []).push(f); if (e === 'end') setTimeout(() => { chunks.forEach((c) => listeners.data?.forEach((d) => d(c))); f(); }, 0); } } as never;
     await handler(req, res, () => (out = 'NEXT'));
     status = (res as unknown as { statusCode: number }).statusCode;
     return { status, out };
