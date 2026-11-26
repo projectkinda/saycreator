@@ -124,16 +124,22 @@ export function killTree(pid: number | undefined) {
   }
 }
 
-/** Runs `claude -p` once with the prompt on stdin. No tools, no saved session, in an empty temp folder so no project files are read. */
-export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, timeoutMs = CLI_TIMEOUT_MS, launcher?: { bin: string; args: string[] }, kind: WriteKind = 'write', images: WriteImage[] = [], effort?: string): Promise<{ text: string; ms: number; usage?: WriteUsage; meta?: WriteMeta }> {
+/**
+ * Keeps the person's own Claude Code setup out of a writer call while still using their login: only project and local settings (the empty temp folder has
+ * neither, so no user settings, hooks or plugins), no MCP server (none is given with --mcp-config), no skills or slash commands.
+ */
+export const ISOLATION_ARGS = ['--setting-sources', 'project,local', '--strict-mcp-config', '--disable-slash-commands'];
+/** Runs `claude -p` once with the prompt on stdin. No tools, no saved session, in an empty temp folder so no project files are read; ISOLATION_ARGS keep the user setup out. */
+export function writeWithCli(prompt: string, signal: AbortSignal, env: NodeJS.ProcessEnv = process.env, timeoutMs = CLI_TIMEOUT_MS, launcher?: { bin: string; args: string[]; realArgs?: boolean }, kind: WriteKind = 'write', images: WriteImage[] = [], effort?: string): Promise<{ text: string; ms: number; usage?: WriteUsage; meta?: WriteMeta }> {
   const bin = launcher?.bin ?? findClaudeCli(env);
   if (!bin) return Promise.reject(new WriterFailure(503, 'unavailable', cliStatus(env).reason!));
   const t0 = Date.now();
   return new Promise((resolve, reject) => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'carousel-writer-'));
     for (const i of images) fs.writeFileSync(path.join(cwd, i.name), Buffer.from(i.base64, 'base64'));
-    // `launcher` is a test seam: a stand-in program instead of the real command line.
-    const args = launcher?.args ?? ['-p', '--output-format', 'json', '--no-session-persistence', ...(images.length ? ['--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'dontAsk'] : ['--tools', '']), '--system-prompt', SYSTEM_PROMPT, '--model', modelFor(kind, env), ...(effort ? ['--effort', effort] : [])];
+    // `launcher` is a test seam: a stand-in program instead of the real command line (with `realArgs`, it gets the real arguments after its own).
+    const real = ['-p', '--output-format', 'json', '--no-session-persistence', ...ISOLATION_ARGS, ...(images.length ? ['--tools', 'Read', '--allowedTools', 'Read', '--permission-mode', 'dontAsk'] : ['--tools', '']), '--system-prompt', SYSTEM_PROMPT, '--model', modelFor(kind, env), ...(effort ? ['--effort', effort] : [])];
+    const args = launcher ? (launcher.realArgs ? [...launcher.args, ...real] : launcher.args) : real;
     const child = spawn(bin, args, { cwd, env: { ...env, CLAUDE_CODE_ENTRYPOINT: 'carousel-writer' }, windowsHide: true, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
