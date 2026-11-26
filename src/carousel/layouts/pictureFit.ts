@@ -6,6 +6,11 @@ import type { PicRef } from './images';
 export const CROP_BUDGET = 0.1;
 /** A photo (not a screenshot) may lose more: 25%. Beyond it the whole photo is shown, and its edges dissolve into the slide (Round U, layouts/dissolve.ts). */
 export const PHOTO_CROP_BUDGET = 0.25;
+/**
+ * Round AD: a photo drawn whole that covers less than this share of its slot is drawn SHARP on the flat ground (the style's corner radius, no blurred mirror, no faded edge): a small
+ * photo in a wide blur looked like a low-quality picture. At this share or more it still dissolves into the slide (Round U).
+ */
+export const SHARP_WHOLE_SHARE = 0.7;
 type Slot = { x: number; y: number; w: number; h: number };
 /** The share of the picture's width and height that a cover-crop at zoom 1 removes (0 when the picture has the slot's shape). Null for a picture with no known size. */
 export function coverLoss(slot: Slot, ref: PicRef | null): { w: number; h: number } | null {

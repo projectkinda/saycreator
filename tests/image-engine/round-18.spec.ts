@@ -106,18 +106,19 @@ test('C: stemming and scoring: "style" matches "styles", "edit" matches "editing
   expect(r).toEqual({ styleStyles: 1, editEditing: 1, editsEdited: 1, none: 0, two: 2, punct: 2, stop: 0, empty: 0 });
 });
 
-test('A: the Content step: a number and a "What is this?" box on every picture, 40 characters at most, saved with the project and back after a reload', async ({ page }) => {
+test('A: the Content step: a number and a "What is in it?" box on every picture, 40 characters at most, saved with the project and back after a reload', async ({ page }) => {
   await rig(page);
   await page.goto('/images/carousel');
   await addPictures(page);
-  await expect(page.getByTestId('images-name-hint')).toContainText('pick a look');
+  await expect(page.getByTestId('images-name-hint')).toHaveText('Name your pictures so they go on the slides that talk about them');
   for (let i = 0; i < 4; i++) {
     await expect(page.getByTestId(`image-${i}`).getByTestId('thumb-num')).toHaveText(String(i + 1));
-    await expect(page.getByTestId(`image-${i}-label`)).toHaveAttribute('placeholder', 'What is this?');
+    await expect(page.getByTestId(`image-${i}-label`)).toHaveAttribute('placeholder', 'What is in it? (puts it on the right slide)');
   }
   await page.getByTestId('image-1-label').fill('x'.repeat(60));
   expect((await page.getByTestId('image-1-label').inputValue()).length).toBe(40);
   await nameThem(page, NAMES);
+  await expect(page.getByTestId('images-name-hint'), 'the hint goes once a picture has a name').toHaveCount(0);
   // the thumbnails: at least 96 x 120, each in its own shape (the box is the same height, the picture inside is never squashed)
   const boxes = await page.getByTestId('thumb-box').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); const im = e.querySelector('img')!; return { w: r.width, h: r.height, fit: getComputedStyle(im).objectFit, nat: im.naturalWidth / im.naturalHeight, shown: im.getBoundingClientRect().width / im.getBoundingClientRect().height, box: r.width / r.height }; }));
   for (const b of boxes) { expect(b.w).toBeGreaterThanOrEqual(96); expect(b.h).toBeGreaterThanOrEqual(120); expect(b.fit).toBe('contain'); }

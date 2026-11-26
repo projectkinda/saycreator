@@ -137,7 +137,8 @@ test('E: a photo that a cover-crop would cut by more than 25% is shown whole and
   const pick = (layout: string, shape: string) => r.flags.filter((x: any) => x.layout === layout && x.shape === shape);
   // title-over-photo slot 1080x1134 (0.95): 4:3 loses 28.6% (> 25%: blur), 3:4 loses 21% (<= 25%: cropped), 2:1 loses 52% (blur)
   for (const x of pick('title-over-photo', 'p43')) expect(x.blur, `${x.style} 4:3 in title-over-photo`).toBe(true);
-  for (const x of pick('title-over-photo', 'p21')) expect(x.blur, `${x.style} 2:1 in title-over-photo`).toBe(true);
+  // Round AD: drawn whole, 2:1 covers 48% of the 1080 x 1134 slot (under 70%): it is drawn sharp on the ground, no blurred mirror (4:3 covers 71%: it still dissolves)
+  for (const x of pick('title-over-photo', 'p21')) expect(x.blur, `${x.style} 2:1 in title-over-photo is drawn sharp`).toBe(false);
   for (const x of pick('title-over-photo', 'p34')) expect(x.blur, `${x.style} 3:4 in title-over-photo is cropped (21% is inside the 25% budget)`).toBe(false);
   for (const x of r.shotFlags) expect(x.blur, `a screenshot (${x.shape}) never gets a blurred backdrop`).toBe(false);
   expect(r.shotFlags.find((x: any) => x.shape === 'p43').notes, 'a screenshot keeps the 10% budget and its flat panel').toMatch(/10%/);

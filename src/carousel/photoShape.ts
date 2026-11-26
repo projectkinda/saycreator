@@ -7,7 +7,7 @@ import type { Look } from './designed';
 import type { SlideSpec } from './designLibrary';
 import { TALL_SHOT_SMALL, withoutImages } from './imagePlace';
 import { fieldsFor, keepsText, type PictureSwap } from './picturePass';
-import { containRect, coverLoss, needsContain, PHOTO_CROP_BUDGET } from './layouts/pictureFit';
+import { containRect, coverLoss, needsContain, PHOTO_CROP_BUDGET, SHARP_WHOLE_SHARE } from './layouts/pictureFit';
 import { TEXT_OVER_PICTURE, hasEnoughPictures, imageSlotsOf, imagesNeeded, isScreenshot, makeRef, parseRef, type PicInfo } from './layouts/images';
 import type { Fields } from './layouts';
 import type { PlanImage } from './layouts/types';
@@ -77,6 +77,8 @@ export function photoFitOf(images: DrawnPicture[] | undefined, id: string, layou
 export const looksRight = (f: PhotoFit): boolean => (f.whole ? f.slotShare >= SHAPE_KEEP_SHARE : f.crop <= PHOTO_CROP_BUDGET + 1e-6);
 /** What the comparison ranks by: the share of the slide the photo covers, a photo drawn whole counting for less. */
 export const shapeScore = (f: PhotoFit): number => f.slideShare * (f.whole ? SHAPE_WHOLE_WEIGHT : 1);
+/** Round AD: a photo drawn whole on less than 70% of its slot (it is then drawn small and sharp on the ground): kept only when no layout that keeps every word fits the photo. */
+export const smallWhole = (f: PhotoFit): boolean => f.whole && f.slotShare < SHARP_WHOLE_SHARE - 1e-9;
 
 export interface ShapeRow {
   slide: number;
@@ -201,7 +203,10 @@ export async function shapePass(specs0: SlideSpec[], look: Look, draw: ShapeDraw
         cands.push({ fit, spec });
       }
     }
-    if (keepWhole) {
+    // Round AD: a small whole photo is accepted only when no candidate fits the photo better (fills its slot within the budget, or drawn whole covers 70% of it or more)
+    const fitting = cands.filter((c) => !smallWhole(c.fit));
+    if (fitting.length && fitting.length < cands.length) cands.splice(0, cands.length, ...fitting);
+    if (keepWhole && !smallWhole(before)) {
       const bigger = cands.filter((c) => c.spec !== sp && !c.fit.whole && c.fit.slideShare >= before.slideShare * SHAPE_BIGGER);
       if (!bigger.length) {
         rows.push({ slide: i + 1, picture: pic.id, before, after: before, why: `kept: drawn whole it still covers ${Math.round(before.slotShare * 100)}% of its slot, and no layout that keeps every word fills a slot with it at least 15% larger` });
@@ -222,7 +227,8 @@ export async function shapePass(specs0: SlideSpec[], look: Look, draw: ShapeDraw
     }
     if (pick.spec.layout !== sp.layout) movedTo[pick.spec.layout] = (movedTo[pick.spec.layout] ?? 0) + 1;
     const where = pick.spec.layout === sp.layout ? 'its other variant' : `"${pick.spec.layout}"`;
-    const why = `the photo was ${before.whole ? `drawn whole on ${Math.round(before.slotShare * 100)}% of its slot` : `cut by ${Math.round(before.crop * 100)}%`} in "${sp.layout}"; ${where} shows it ${Math.round((pick.fit.slideShare / before.slideShare - 1) * 100)}% larger${pick.fit.whole ? ' (whole)' : `, ${Math.round(pick.fit.crop * 100)}% cut`}, every word kept`;
+    const grow = Math.round((pick.fit.slideShare / before.slideShare - 1) * 100);
+    const why = `the photo was ${before.whole ? `drawn whole on ${Math.round(before.slotShare * 100)}% of its slot` : `cut by ${Math.round(before.crop * 100)}%`} in "${sp.layout}"; ${where} shows it ${grow >= 0 ? `${grow}% larger` : `filling its slot (${-grow}% smaller on the slide)`}${pick.fit.whole ? ' (whole)' : `, ${Math.round(pick.fit.crop * 100)}% cut`}, every word kept`;
     swaps.push({ slide: i + 1, from: sp.layout, to: pick.spec.layout, why: 'photo shape: ' + why });
     rows.push({ slide: i + 1, picture: pic.id, before, after: pick.fit, why: 'moved: ' + why });
     moved.push(i);

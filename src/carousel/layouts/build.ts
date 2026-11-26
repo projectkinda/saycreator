@@ -12,7 +12,7 @@ import { balanceVertical, clampSlots, finalGuards, fitSlots, readingOrder, recur
 import { avatarMarkup, chromeFor } from './chrome';
 import { avoidChrome } from './chromeAvoid';
 import { cropRect, parseRef } from './images';
-import { containRect, edgeColour, needsContain } from './pictureFit';
+import { containRect, edgeColour, needsContain, SHARP_WHOLE_SHARE } from './pictureFit';
 import { dissolveFill, featherMask } from './dissolve';
 import { fillChoice, fillSentence } from './fillSlide';
 import { artDevices } from './artDevices';
@@ -430,7 +430,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   const pics = planned.map((p, i) => { const b = (plan.images ?? [])[i]?.bleed; return b ? { ...p, x: b.x, y: b.y, w: b.w, h: b.h } : p; });
   if (pics.length) {
     // the crop budget: a picture a cover-crop would cut by more than 10% is drawn whole, on a panel in its own average edge colour
-    const whole = new Map<number, { rect: { x: number; y: number; w: number; h: number }; bg: string; photo: boolean }>();
+    const whole = new Map<number, { rect: { x: number; y: number; w: number; h: number }; bg: string; photo: boolean; sharp?: number }>();
     const refocus = new Map<number, { fx: number; fy: number }>();
     for (const [i, p] of pics.entries()) {
       const ref = parseRef(p.src);
@@ -442,6 +442,15 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
         // Round V: no focus point set: the fill is drawn centred on the photo's saliency box (the person's own focus point is kept exactly)
         if (fc.auto) refocus.set(i, fc.focus);
         notes.push(`picture ${i + 1}: ${fillSentence(fc)}`);
+        continue;
+      }
+      // Round AD: a photo drawn whole on less than 70% of its slot (the slot the slide reports, not its bleed box) is drawn sharp, whole and centred there, with the style's corner radius, on the
+      // flat ground: no blurred mirror and no faded edge
+      const slot0 = planned[i] ?? p;
+      const inSlot = containRect(slot0, ref, slot0.rx);
+      if (ref.photo && (inSlot.w * inSlot.h) / (slot0.w * slot0.h) < SHARP_WHOLE_SHARE - 1e-9) {
+        whole.set(i, { rect: inSlot, bg: '', photo: true, sharp: Math.max(12, Math.min(48, st0.radius ?? 28)) });
+        notes.push(`picture ${i + 1}: a cover-crop would cut more than 25% of this photo and drawn whole it covers ${Math.round(((inSlot.w * inSlot.h) / (slot0.w * slot0.h)) * 100)}% of its slot, so it is drawn whole and sharp on the ground, with rounded corners.`);
         continue;
       }
       const rect = containRect(p, ref, p.rx);
@@ -457,12 +466,12 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       const cr = w0 ? { x: w0.rect.x, y: w0.rect.y, w: w0.rect.w, h: w0.rect.h } : cropRect(p, rf && pr0 ? { ...pr0, ...rf } : pr0);
       if (pr0 && cr) drawnPictures.push({ id: pr0.id, x: cr.x, y: cr.y, w: cr.w, h: cr.h });
       // Round U: a photo shown whole dissolves into the slide (its mirrored, blurred edge fading into what lies under the slot); a screenshot sits on a flat panel in its edge colour
-      const panel = w0 ? (w0.photo ? dissolveFill(id, p, w0.rect, p.src, !!p.bleed) : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" fill="${w0.bg}"/>`) : '';
+      const panel = w0?.sharp !== undefined ? '' : w0 ? (w0.photo ? dissolveFill(id, p, w0.rect, p.src, !!p.bleed) : `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" fill="${w0.bg}"/>`) : '';
       const box = cr ? `x="${Math.round(cr.x * 10) / 10}" y="${Math.round(cr.y * 10) / 10}" width="${Math.round(cr.w * 10) / 10}" height="${Math.round(cr.h * 10) / 10}" preserveAspectRatio="none"` : `x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" preserveAspectRatio="xMidYMid slice"`;
       // Round E, U: a photo shown whole is feathered into its dissolve: a mask (the picture's rectangle moved in, blurred; dissolve.featherMask) fades its edge instead of cutting a hard line. The picture is not moved or resized.
-      const feather = !!(w0 && w0.photo);
+      const feather = !!(w0 && w0.photo && w0.sharp === undefined);
       const maskDef = feather ? featherMask(id, p, w0!.rect, !!p.bleed) : '';
-      return `<clipPath id="${id}">${w0 ? `<rect x="${w0.rect.x}" y="${w0.rect.y}" width="${w0.rect.w}" height="${w0.rect.h}"/>` : clip}</clipPath>${maskDef}${panel}<image href="${p.src.replace(/&/g, '&amp;')}" ${box} ${feather ? `mask="url(#${id}m)"` : `clip-path="url(#${id})"`}/>`;
+      return `<clipPath id="${id}">${w0 ? `<rect x="${w0.rect.x}" y="${w0.rect.y}" width="${w0.rect.w}" height="${w0.rect.h}"${w0.sharp !== undefined ? ` rx="${w0.sharp}"` : ''}/>` : clip}</clipPath>${maskDef}${panel}<image href="${p.src.replace(/&/g, '&amp;')}" ${box} ${feather ? `mask="url(#${id}m)"` : `clip-path="url(#${id})"`}/>`;
     }).join('');
     const indexed = pics.map((p, i) => ({ p, i }));
     // a picture goes right after the ground (the layout's badges and shapes sit over it); a `front` one goes above the plane shapes and cards, below the text

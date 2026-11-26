@@ -22,7 +22,7 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
   onMove: (id: string, dir: -1 | 1) => void;
   /** Switches a picture between a screenshot and a photo. */
   onContent?: (id: string, content: 'screenshot' | 'photo') => void;
-  /** Round 18: sets what the person calls a picture ("What is this?", at most 40 characters). */
+  /** Round 18: sets what the person calls a picture (the "What is in it?" box, at most 40 characters). */
   onLabel?: (id: string, label: string) => void;
   /** Round N: a photo with letterbox bars: keep the full picture (true) or draw it without its bars (false). */
   onFullPicture?: (id: string, full: boolean) => void;
@@ -84,7 +84,7 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
                 <PictureThumb meta={p} number={i + 1} />
                 <label className="cr-pic-name small">
                   <span className="visually-hidden">What is picture {i + 1}?</span>
-                  <input type="text" maxLength={40} value={p.label ?? ''} placeholder="What is this?" data-testid={`image-${i}-label`} disabled={disabled || !onLabel} onChange={(e) => onLabel?.(p.id, e.target.value.slice(0, 40))} />
+                  <input type="text" maxLength={40} value={p.label ?? ''} placeholder="What is in it? (puts it on the right slide)" data-testid={`image-${i}-label`} disabled={disabled || !onLabel} onChange={(e) => onLabel?.(p.id, e.target.value.slice(0, 40))} />
                 </label>
                 <span className="small" data-testid={`image-${i}-orientation`}>{LABEL[o]} · {p.width}×{p.height}</span>
                 <button type="button" className="chip-btn" data-testid={`image-${i}-content`} data-content={contentOr(p.content) === 'screenshot' ? 'screenshot' : 'photo'} aria-label={contentOr(p.content) === 'screenshot' ? `Image ${i + 1} is a screenshot. Switch it to a photo.` : `Image ${i + 1} is a photo. Switch it to a screenshot.`} title={contentOr(p.content) === 'screenshot' ? 'A screenshot never goes behind text. Click to make it a photo.' : 'Click if this is a screenshot: a screenshot never goes behind text.'} disabled={disabled || !onContent} onClick={() => onContent?.(p.id, contentOr(p.content) === 'screenshot' ? 'photo' : 'screenshot')}>{contentOr(p.content) === 'screenshot' ? 'Screenshot' : 'Photo'}</button>
@@ -123,7 +123,8 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
       )}
       {/* Round V: what the switch does, said once for the whole row (not under every picture) */}
       {photos.some((p) => fillInfo?.[p.id] && contentOr(p.content) !== 'screenshot') && <p className="small muted" data-testid="images-fill-help">Fill the slide. On: the photo covers the slide edge to edge, and its edges are cut. Off: the whole photo is shown, and its edges melt into the slide.</p>}
-      {photos.length > 0 && <p className="small muted" data-testid="images-name-hint">Name each picture in words from your slide, for example: pick a look. A named picture goes on the slide with those words.</p>}
+      {/* Round AD: said only while no picture has a name */}
+      {photos.length > 0 && !photos.some((p) => p.label?.trim()) && <p className="small muted" data-testid="images-name-hint">Name your pictures so they go on the slides that talk about them</p>}
       {status && <p className="small" role="status" aria-live="polite" data-testid="images-status">{status}</p>}
     </div>
   );

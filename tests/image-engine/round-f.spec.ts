@@ -13,8 +13,12 @@ test('A: a photo shown whole is feathered into its fill over at least 24 px (10%
     const presets: any = await import('/src/carousel/presets.ts');
     const bd: any = await import('/src/carousel/layouts/build.ts');
     const { style } = dl.styleFromPack(presets.presetPackFor('style-3', false));
-    const sp = { layout: 'photo-full-caption', fields: { headline: 'The idea took ten minutes', line: 'The slides took the rest of the night.', image: 'picture:phseam#w=1200&h=1800&k=p' }, accents: [] };
+    // Round AD: a 1.7:1 photo (a cover crop cuts 28%: drawn whole) covers 72% of the 1080 x 880 slot, so it still dissolves (a 2:3 photo here covers 54% and is now drawn sharp: round-ad-sharp.spec)
+    const FS: any = await import('/src/carousel/layouts/fillSlide.ts');
+    FS.setFillOverrides([['phseam', 'off']]);
+    const sp = { layout: 'photo-full-caption', fields: { headline: 'The idea took ten minutes', line: 'The slides took the rest of the night.', image: 'picture:phseam#w=1700&h=1000&k=p' }, accents: [] };
     const d = await dl.drawOne(sp, 0, style, { handle: '@saycreator', index: 2, total: 7, cut: 'plain', invert: false, density: 'normal' });
+    FS.setFillOverrides([]);
     return { svg: d.built.svg, blur: bd.FEATHER_BLUR, inset: bd.FEATHER_INSET };
   });
   // the mask: the picture's rectangle moved `inset` px in and blurred by `blur`: the picture is 10% to 90% visible over 2 x 1.2816 x blur px

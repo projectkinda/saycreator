@@ -157,20 +157,23 @@ test('F: a photo shown whole is feathered into its dissolve (a mask on the pictu
     const out: any = {};
     // Round U: this test is about a photo drawn WHOLE; the wide photo could fill photo-full-caption (a cut under 40%, its detail in the middle), so "Fill the slide" is switched off for both photos here
     const FS: any = await import('/src/carousel/layouts/fillSlide.ts');
-    FS.setFillOverrides([['portrait', 'off'], ['wide', 'off']]);
+    FS.setFillOverrides([['portrait', 'off'], ['wide', 'off'], ['near', 'off']]);
     for (const style of ['dark-quiet', 'style-1']) {
       const st = H.D.styleFromPack(H.PR.presetPackFor(style, false)).style;
-      for (const [k, w, h, photo] of [['portrait photo', 1000, 1500, true], ['wide photo', 2400, 1230, true], ['portrait screenshot', 1000, 1500, false]] as [string, number, number, boolean][]) {
-        const d = await H.D.drawOne({ layout: 'photo-full-caption', fields: { headline: 'The hoodie that becomes a backpack', line: 'Ten seconds, one zip.', image: H.IM.makeRef({ id: w === 1000 ? 'portrait' : 'wide', w, h, ...(photo ? { photo: true } : {}) }) }, accents: [] }, 0, st, { handle: '@h', index: 2, total: 7, cut: 'plain', invert: false, density: 'normal' });
+      for (const [k, w, h, photo] of [['portrait photo', 1000, 1500, true], ['wide photo', 2400, 1230, true], ['near-wide photo', 1700, 1000, true], ['portrait screenshot', 1000, 1500, false]] as [string, number, number, boolean][]) {
+        const d = await H.D.drawOne({ layout: 'photo-full-caption', fields: { headline: 'The hoodie that becomes a backpack', line: 'Ten seconds, one zip.', image: H.IM.makeRef({ id: w === 1000 ? 'portrait' : w === 1700 ? 'near' : 'wide', w, h, ...(photo ? { photo: true } : {}) }) }, accents: [] }, 0, st, { handle: '@h', index: 2, total: 7, cut: 'plain', invert: false, density: 'normal' });
         const svg: string = d.built.svg;
-        out[`${style}/${k}`] = { mask: /<mask id="pic\d+x\d+m"/.test(svg), maskedImage: /<image [^>]*mask="url\(#pic/.test(svg), blur: /feGaussianBlur stdDeviation="32"/.test(svg) /* Round U: the dissolve's blurred mirror */, dark: !/fill="#000000" fill-opacity=/.test(svg) /* Round U: nothing is darkened (no veil) */, clipped: /<image [^>]*clip-path="url\(#pic/.test(svg) };
+        out[`${style}/${k}`] = { mask: /<mask id="pic\d+x\d+m"/.test(svg), maskedImage: /<image [^>]*mask="url\(#pic/.test(svg), blur: /feGaussianBlur stdDeviation="32"/.test(svg) /* Round U: the dissolve's blurred mirror */, dark: !/fill="#000000" fill-opacity=/.test(svg) /* Round U: nothing is darkened (no veil) */, clipped: /<image [^>]*clip-path="url\(#pic/.test(svg), rounded: /<clipPath id="pic\d+x\d+"><rect [^>]*rx="\d+"\/><\/clipPath>/.test(svg) };
       }
     }
     FS.setFillOverrides([]);
     return out;
   });
   for (const style of ['dark-quiet', 'style-1']) {
-    for (const k of ['portrait photo', 'wide photo']) expect(r[`${style}/${k}`], `${style} ${k}`).toMatchObject({ mask: true, maskedImage: true, blur: true, dark: true });
+    // Round AD: in photo-full-caption's 1080 x 880 slot a 2:3 photo drawn whole covers 54% of it and a 1.95:1 photo 63%: under 70%, drawn sharp with rounded corners on the ground (no mask, no blur)
+    for (const k of ['portrait photo', 'wide photo']) expect(r[`${style}/${k}`], `${style} ${k}`).toMatchObject({ mask: false, maskedImage: false, blur: false, dark: true, clipped: true, rounded: true });
+    // a 1.7:1 photo (a cover crop cuts 28%) drawn whole covers 72%: it still dissolves
+    expect(r[`${style}/near-wide photo`], `${style} near-wide photo`).toMatchObject({ mask: true, maskedImage: true, blur: true, dark: true });
     expect(r[`${style}/portrait screenshot`], `${style} screenshot`).toMatchObject({ mask: false, clipped: true });
   }
 });
