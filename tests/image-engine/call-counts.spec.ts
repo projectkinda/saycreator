@@ -1,5 +1,6 @@
 // Every writer call costs money. This spec counts the calls the app makes to the writer (a FAKE model that counts) for the normal ways of making and changing a carousel, so an extra call
 // can never slip in unseen. Expected: text only 1, text with pictures 1, a style switch 0, a text edit 0, a split 0, a pasted script 0.
+// Round AE: picture descriptions are counted too (a FAKE describer): ONE call when pictures are added with an empty name box and the switch is on, and nothing else ever makes one.
 // (A closing that breaks the closing rule is sent back for ONE targeted retry by design; the fake answers here keep the rule, so a count above 1 means a duplicate call.)
 import { expect, test, type Page, type Route } from '@playwright/test';
 import fs from 'node:fs';
@@ -15,12 +16,14 @@ const TEXT = 'Stop storing your life in your head. Hold things in a system you t
 const SAMPLE = fs.readFileSync(path.join('sample-scripts', 'agency-client-brief.json'), 'utf8');
 
 async function counting(page: Page, answer: unknown) {
-  const f = { calls: 0 };
+  const f = { calls: 0, describes: 0, described: 0, prompts: [] as string[] };
+  // Round AE: the describer (fake): counts its calls and answers one caption per picture
+  await page.route('**/__picture/describe', (r) => { f.describes++; const n = (JSON.parse(r.request().postData() ?? '{}').images ?? []).length; f.described += n; return r.fulfill({ json: { captions: Array.from({ length: n }, (_, k) => ['red brick wall', 'blue sea under sky', 'yellow field'][k % 3]), calls: 1 } }); });
   await page.route('**/__carousel/status', (r) => r.fulfill({ json: { available: true } }));
   await page.route('**/api/carousel/status', (r) => r.fulfill({ json: { available: false, reason: 'no key' } }));
   await page.route('**/__reference/status', (r) => r.fulfill({ json: { available: false, reason: 'x' } }));
   await page.route('**/api/reference/status', (r) => r.fulfill({ json: { available: false, reason: 'x' } }));
-  const write = (r: Route) => { f.calls++; return r.fulfill({ json: { text: JSON.stringify(answer), ms: 5, usage: { input: 10, output: 5 } } }); };
+  const write = (r: Route) => { f.calls++; f.prompts.push(JSON.parse(r.request().postData() ?? '{}').prompt ?? ''); return r.fulfill({ json: { text: JSON.stringify(answer), ms: 5, usage: { input: 10, output: 5 } } }); };
   await page.route('**/__carousel/write', write);
   await page.route('**/api/carousel/write', write);
   return f;
@@ -66,6 +69,7 @@ test('text with pictures: ONE writer call (the pictures are placed by code)', as
   await deckDrawn(page, 3);
   await settle(page);
   expect(f.calls).toBe(1);
+  expect(f.describes, 'the switch is off in the test browsers: no describe call').toBe(0);
 });
 
 test('a text edit and a style switch on a made deck: ZERO more calls', async ({ page }) => {
@@ -232,4 +236,74 @@ test('naming a picture, changing a name, picking it for a slide and a restyle af
   await page.waitForTimeout(2000);
   await settle(page);
   expect(f.calls, 'naming, renaming, a pick and a restyle: no new writer call').toBe(afterDeck);
+});
+
+test('Round AE: describing happens ONLY when pictures are added with an empty name box (ONE call for all of them); the deck, renaming, a style switch, a move, a removal, a reload and the same picture again make ZERO; a typed name wins', async ({ page }) => {
+  const plan = { title: 'Walls', slides: [
+    { layout: 'statement', fields: { headline: 'Three walls I walked past this week.' }, accents: [] },
+    { layout: 'split-text', fields: { headline: 'A red brick wall', paragraph: 'It was warm from the sun.' }, accents: [] },
+    { layout: 'split-text', fields: { headline: 'A blue sea under the sky', paragraph: 'Behind the harbour wall.' }, accents: [] },
+    { layout: 'cta-button', fields: { headline: 'Tell me your favourite wall.', button: 'Comment below' }, accents: [] },
+  ] };
+  const f = await counting(page, plan);
+  await page.goto('/images/carousel');
+  await page.evaluate(() => localStorage.setItem('creator.carousel.describe.v1', 'on'));
+  await page.reload();
+  await expect(page.getByTestId('images-describe').getByRole('checkbox')).toBeChecked();
+  const pic = async (i: number) => {
+    const b64 = await page.evaluate(async (i) => {
+      const c = document.createElement('canvas'); c.width = 1500; c.height = 1000; const g = c.getContext('2d')!; g.fillStyle = `hsl(${i * 97},60%,45%)`; g.fillRect(0, 0, 1500, 1000);
+      const blob: Blob = await new Promise((res) => c.toBlob((b) => res(b!), 'image/jpeg', 0.8)); const u = new Uint8Array(await blob.arrayBuffer()); let t = ''; for (const x of u) t += String.fromCharCode(x); return btoa(t);
+    }, i);
+    return { name: `w${i}.jpg`, mimeType: 'image/jpeg', buffer: Buffer.from(b64, 'base64') };
+  };
+  const files = [await pic(0), await pic(1)];
+  await page.getByLabel('Choose images for the slides').setInputFiles(files);
+  await expect(page.getByTestId(/^image-\d+$/)).toHaveCount(2, { timeout: 60_000 });
+  await expect(page.getByTestId('image-1-label')).toHaveValue('blue sea under sky', { timeout: 30_000 });
+  expect(f.describes, 'two pictures added: ONE describe call for both').toBe(1);
+  expect(f.described).toBe(2);
+  await expect(page.getByTestId('image-0-label')).toHaveValue('red brick wall');
+  await expect(page.getByTestId('image-0-auto')).toHaveText('auto');
+  // the person types over a caption: their name wins and the mark goes
+  await page.getByTestId('image-0-label').fill('red brick wall in sun');
+  await expect(page.getByTestId('image-0-auto')).toHaveCount(0);
+  // the deck: ONE writer call, ZERO describe calls; every picture is named, so the writer is told the names and the "picture": N rule
+  await page.getByLabel('Your text or topic').fill('Three walls I walked past this week. A red brick wall, warm from the sun. A blue sea under the sky, behind the harbour wall. Tell me your favourite wall. Comment below.');
+  await toStep(page, 3);
+  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Hot flat/ }).first().click();
+  await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
+  await deckDrawn(page, 4);
+  await settle(page);
+  expect(f.calls).toBe(1);
+  expect(f.prompts[0]).toContain('named "red brick wall in sun"');
+  expect(f.prompts[0]).toContain('named "blue sea under sky"');
+  expect(f.prompts[0]).toContain('give that slide "picture": the number of that picture');
+  // renaming, a style switch, a move, a reload, a removal: ZERO describe calls
+  await toStep(page, 1);
+  await page.getByTestId('image-1-label').fill('harbour');
+  await toStep(page, 3);
+  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Quiet dark minimal/ }).first().click();
+  await page.waitForTimeout(1500);
+  await toStep(page, 1);
+  await page.getByRole('button', { name: 'Move image 1 later' }).click();
+  await page.reload();
+  await expect(page.getByTestId(/^image-\d+$/)).toHaveCount(2, { timeout: 60_000 });
+  await toStep(page, 1);
+  await page.getByRole('button', { name: 'Remove image 2' }).click();
+  await expect(page.getByTestId(/^image-\d+$/)).toHaveCount(1, { timeout: 30_000 });
+  await settle(page);
+  expect(f.describes, 'nothing but adding describes').toBe(1);
+  // the same picture added again: its caption is remembered by its content, ZERO calls
+  await page.getByLabel('Choose images for the slides').setInputFiles([files[0]]);
+  await expect(page.getByTestId(/^image-\d+$/)).toHaveCount(2, { timeout: 60_000 });
+  await expect(page.getByTestId('image-1-label')).toHaveValue('red brick wall', { timeout: 30_000 });
+  // the switch off: a new picture is not described
+  await page.getByTestId('images-describe').getByRole('checkbox').uncheck();
+  await page.getByLabel('Choose images for the slides').setInputFiles([await pic(5)]);
+  await expect(page.getByTestId(/^image-\d+$/)).toHaveCount(3, { timeout: 60_000 });
+  await settle(page);
+  await expect(page.getByTestId('image-2-label')).toHaveValue('');
+  expect(f.describes, 'the switch off: no call').toBe(1);
+  expect(f.calls, 'and no writer call after the deck').toBe(1);
 });

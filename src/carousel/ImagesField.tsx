@@ -13,7 +13,7 @@ import type { SlideFill } from './layouts/build';
 
 const LABEL = { portrait: 'Portrait', landscape: 'Landscape', square: 'Square' } as const;
 
-export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, onLabel, onFullPicture, fillInfo, onFill, disabled }: {
+export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, onLabel, onFullPicture, fillInfo, onFill, describe, onDescribe, disabled }: {
   /** The project's pictures (photos only are listed here). */
   pictures: PictureMeta[];
   addFiles: AddFiles;
@@ -30,6 +30,9 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
   fillInfo?: Record<string, SlideFill>;
   /** Round U: "Fill the slide" on or off for a photo. */
   onFill?: (id: string, on: boolean) => void;
+  /** Round AE: "Describe my pictures automatically" (the switch is shown only when the page can describe). */
+  describe?: boolean;
+  onDescribe?: (on: boolean) => void;
   disabled?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -74,6 +77,11 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
         <button type="button" className="btn btn-outline btn-sm" disabled={disabled || busy} onClick={() => input.current?.click()}>Add images</button>
         <span className="small muted">Choose, drop or paste pictures. They stay in this browser. The writer sees only each picture's number, its shape and the name you give it, never the picture itself.</span>
       </div>
+      {onDescribe && (
+        <label className="cr-pic-bars-switch small" data-testid="images-describe">
+          <input type="checkbox" checked={!!describe} disabled={disabled} onChange={(e) => onDescribe(e.target.checked)} /> Describe my pictures automatically
+        </label>
+      )}
       <input ref={input} type="file" multiple accept="image/*" className="visually-hidden" tabIndex={-1} aria-label="Choose images for the slides" onChange={(e) => { void go([...(e.target.files ?? [])]); e.target.value = ''; }} />
       {photos.length > 0 && (
         <ul className="cr-pic-list" aria-label={`${photos.length} image${photos.length === 1 ? '' : 's'} for the slides`} data-testid="images-list">
@@ -85,6 +93,7 @@ export function ImagesField({ pictures, addFiles, onRemove, onMove, onContent, o
                 <label className="cr-pic-name small">
                   <span className="visually-hidden">What is picture {i + 1}?</span>
                   <input type="text" maxLength={40} value={p.label ?? ''} placeholder="What is in it? (puts it on the right slide)" data-testid={`image-${i}-label`} disabled={disabled || !onLabel} onChange={(e) => onLabel?.(p.id, e.target.value.slice(0, 40))} />
+                  {p.labelAuto && p.label?.trim() && <span className="chip-btn small" data-testid={`image-${i}-auto`} title="Filled in automatically from what is in the picture. Type to change it.">auto</span>}
                 </label>
                 <span className="small" data-testid={`image-${i}-orientation`}>{LABEL[o]} · {p.width}×{p.height}</span>
                 <button type="button" className="chip-btn" data-testid={`image-${i}-content`} data-content={contentOr(p.content) === 'screenshot' ? 'screenshot' : 'photo'} aria-label={contentOr(p.content) === 'screenshot' ? `Image ${i + 1} is a screenshot. Switch it to a photo.` : `Image ${i + 1} is a photo. Switch it to a screenshot.`} title={contentOr(p.content) === 'screenshot' ? 'A screenshot never goes behind text. Click to make it a photo.' : 'Click if this is a screenshot: a screenshot never goes behind text.'} disabled={disabled || !onContent} onClick={() => onContent?.(p.id, contentOr(p.content) === 'screenshot' ? 'photo' : 'screenshot')}>{contentOr(p.content) === 'screenshot' ? 'Screenshot' : 'Photo'}</button>

@@ -16,6 +16,7 @@ export default defineConfig({
   },
   webServer: {
     command: 'npx vite --port 5200 --strictPort',
+    env: { PICTURE_CAP: '0' },
     cwd: '../..',
     url: 'http://localhost:5200/videos/record',
     reuseExistingServer: true,

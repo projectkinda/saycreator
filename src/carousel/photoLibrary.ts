@@ -24,6 +24,8 @@ export interface PictureMeta {
   content?: PictureContent;
   /** Round 18: what the person says this picture is ("What is this?", at most 40 characters). Saved with the project; the code (and the writer) place the picture on the slide whose words match it. */
   label?: string;
+  /** Round AE: the name box was filled by the automatic description (the person has not typed it). Typing in the box clears this; a typed name is never overwritten. */
+  labelAuto?: boolean;
   /** Round N: black letterbox bars found when the picture was added (a photo only): the part of the picture without them, in its own pixels. The file is never changed. */
   crop?: CropRect;
   /** Round N: the person switched on "Keep the full picture": the crop is not used. */

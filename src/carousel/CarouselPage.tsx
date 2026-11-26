@@ -62,7 +62,8 @@ import { CutoutEditor, type CutoutSaved } from './CutoutEditor';
 import { cutoutPicture, useCutoutIds } from './cutoutAction';
 import { listCutouts, putCutout, type CutoutRecord } from '../image-engine/cutout/cutoutStore';
 import type { AddFiles } from './PhotoControls';
-import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, syncPictureCrops, useLibraryVersion, type PictureMeta } from './photoLibrary';
+import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, syncPictureCrops, useLibraryVersion, workBlobOf, type PictureMeta } from './photoLibrary';
+import { describeOn, describePictures, setDescribeOn } from './pictureCaptions';
 import { drawnSize } from './letterbox';
 import { TALL_SHOT_REFUSAL, isTallShot, tallShotTooSmall } from './photoShape';
 import { SlideCard, type EditTab, type SlideView } from './SlideCard';
@@ -499,6 +500,8 @@ export default function CarouselPage() {
   }, [tplLoaded, tplVersion, doc.style]);
   const hasPhotoStyle = !!style?.spec.photo;
   const [lowRoom, setLowRoom] = useState('');
+  // Round AE: "Describe my pictures automatically" (dev only: the describer runs Claude Code on this computer)
+  const [describe, setDescribe] = useState(() => describeOn());
   // After a refresh the pictures come back out of the browser's storage.
   useEffect(() => {
     void hydrate(pictures);
@@ -696,6 +699,15 @@ export default function CarouselPage() {
       }
     }
     if (added.length) setPhotos((before) => [...before, ...added]);
+    // Round AE: the new photos with an empty name box are described ONCE, together; a caption fills a box only while it is still empty (a typed name always wins). Not awaited: adding
+    // does not wait for it, and a failure says nothing.
+    const toDescribe = added.filter((m) => m.kind === 'photo' && !m.label?.trim());
+    if (import.meta.env.DEV && describe && toDescribe.length) {
+      const blobs = toDescribe.map((m) => ({ id: m.id, blob: workBlobOf(m.id) })).filter((x): x is { id: string; blob: Blob } => !!x.blob);
+      void describePictures(blobs).then((caps) => {
+        if (Object.keys(caps).length) setPhotos((before) => before.map((p) => (caps[p.id] && !p.label?.trim() ? { ...p, label: caps[p.id], labelAuto: true } : p)));
+      });
+    }
     const prob = currentStorageProblem();
     if (prob) messages.push(prob);
     setLowRoom(await storageRoomNote());
@@ -704,7 +716,7 @@ export default function CarouselPage() {
   const usedOn = (id: string) => slides.filter((s) => s.plan.meta?.photoSlots?.some((p) => p.photo === id)).length + Object.values(doc.choices).filter((c) => c.object?.id === id).length;
   /** Puts a picture one place earlier or later (the order is the order the code tries the pictures in when it places them). */
   /** The chip on a picture: switch it between "Screenshot" and "Photo" (what the code does with it follows). */
-  const setLabel = (id: string, label: string) => setPhotos((before) => before.map((p) => (p.id === id ? { ...p, label: label.slice(0, 40) } : p)));
+  const setLabel = (id: string, label: string) => setPhotos((before) => before.map((p) => (p.id === id ? { ...p, label: label.slice(0, 40), labelAuto: undefined } : p)));
   const setContent = (id: string, content: 'screenshot' | 'photo') => setPhotos((before) => before.map((p) => (p.id === id ? { ...p, content } : p)));
   /** Round N: "Keep the full picture" (letterbox bars kept) or not: the slides that show the picture are drawn again at its new shape (one undo step, no model call). */
   const setFullPicture = async (id: string, full: boolean) => {
@@ -1776,7 +1788,7 @@ export default function CarouselPage() {
 
       <div hidden={editOn} className="cr-wiz-body">
         <div hidden={step !== 1} data-step="1">
-          <MakeIt part="content" {...makeProps} images={<ImagesField pictures={pictures} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onMove={moveImage} onContent={setContent} onLabel={setLabel} onFullPicture={(id, full) => void setFullPicture(id, full)} fillInfo={fillInfo} onFill={(id, on) => void setFill(id, on)} disabled={busy} />} scriptBox={scriptBox} scriptMode={scriptMode} onScriptMode={setScriptMode} />
+          <MakeIt part="content" {...makeProps} images={<ImagesField pictures={pictures} addFiles={addFiles} onRemove={(id) => void removePictureEverywhere(id)} onMove={moveImage} onContent={setContent} onLabel={setLabel} onFullPicture={(id, full) => void setFullPicture(id, full)} fillInfo={fillInfo} onFill={(id, on) => void setFill(id, on)} describe={describe} onDescribe={import.meta.env.DEV ? (on) => { setDescribe(on); setDescribeOn(on); } : undefined} disabled={busy} />} scriptBox={scriptBox} scriptMode={scriptMode} onScriptMode={setScriptMode} />
           <div className="row-actions cr-wiz-nav"><button type="button" className="btn btn-dark btn-lg" onClick={() => goStep(2)}>Next: Format</button></div>
         </div>
         <div hidden={step !== 2} data-step="2">
