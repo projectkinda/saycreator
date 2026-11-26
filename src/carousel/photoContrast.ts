@@ -96,12 +96,20 @@ export function linesOverPictures(b: Pick<Built, 'layers' | 'images'> & { svg?: 
     let block;
     try { block = layoutText(l); } catch { continue; }
     for (const line of block.lines) {
-      const ws = line.words.filter((w) => !w.highlighted);
-      if (!ws.length) continue;
-      const x0 = Math.min(...ws.map((w) => w.x)), x1 = Math.max(...ws.map((w) => w.x + w.width));
-      const box = { x: l.x + x0, y: l.y + line.y + block.lineStep * 0.12, w: x1 - x0, h: block.lineStep * 0.8 };
-      if (box.w <= 0 || box.h <= 0 || !pics.some((p) => overlaps(p, box))) continue;
-      out.push({ key: l, role: l.name ?? 'text', text: l.text.trim().slice(0, 40), ink: l.style?.color ?? '', box, size: block.size });
+      // Round AE: a word on a marker bar reads on its bar (its own ink), so the line is read in RUNS of the words between the bars: one box spanning a bar would read the bar's colour
+      // against the line's ink ("get low or get high" with "low" on a dark-red bar measured 1.77:1 at every scrim level)
+      const runs: (typeof line.words)[] = [[]];
+      for (const w of line.words) {
+        if (w.highlighted) { if (runs[runs.length - 1].length) runs.push([]); continue; }
+        runs[runs.length - 1].push(w);
+      }
+      for (const ws of runs) {
+        if (!ws.length) continue;
+        const x0 = Math.min(...ws.map((w) => w.x)), x1 = Math.max(...ws.map((w) => w.x + w.width));
+        const box = { x: l.x + x0, y: l.y + line.y + block.lineStep * 0.12, w: x1 - x0, h: block.lineStep * 0.8 };
+        if (box.w <= 0 || box.h <= 0 || !pics.some((p) => overlaps(p, box))) continue;
+        out.push({ key: l, role: l.name ?? 'text', text: l.text.trim().slice(0, 40), ink: l.style?.color ?? '', box, size: block.size });
+      }
     }
   }
   if (b.svg) for (const sl of sideLabelsOfSvg(b.svg)) if (pics.some((p) => overlaps(p, sl.box))) out.push({ key: 'side-label', role: 'side-label', text: sl.text, ink: sl.ink, box: sl.box, size: sl.size });
