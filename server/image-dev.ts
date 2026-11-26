@@ -2,6 +2,7 @@
 // The key, the model name and the endpoint are read ONLY from the server environment (IMAGE_API_KEY, IMAGE_MODEL, IMAGE_API_URL). Without a key and a model it is off.
 // The tests never call it (they use the fake provider in the browser). Only the prompt text is sent on; nothing else from the page.
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { refuseWrite } from './carousel-writer';
 
 const DEFAULT_URL = 'https://api.openai.com/v1/images/generations';
 const json = (res: ServerResponse, code: number, body: unknown) => {
@@ -22,6 +23,12 @@ export function imageHandler({ env }: { env: NodeJS.ProcessEnv }) {
     const url = (req.url ?? '').split('?')[0];
     if (req.method === 'GET' && url === '/status') return json(res, 200, imageAvailable(env));
     if (req.method !== 'POST' || url !== '/generate') return json(res, 404, { error: 'not found' });
+    // only this computer and only the app's own page (the writer's guard): another web page open in the browser cannot spend the picture key
+    const refused = refuseWrite(req, 'Picture generation');
+    if (refused) {
+      req.resume();
+      return json(res, 403, { error: refused });
+    }
     const st = imageAvailable(env);
     if (!st.available) return json(res, 503, { error: st.reason });
     try {

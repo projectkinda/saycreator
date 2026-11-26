@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { refuseWrite } from './carousel-writer';
 
 export const CUTOUT_FILE = 'birefnet-lite.onnx';
 export const CUTOUT_SIZE = 1024;
@@ -62,6 +63,12 @@ export function cutoutHandler(opts: { env?: NodeJS.ProcessEnv } = {}) {
     const found = findCutoutModel(opts.env);
     if (req.method === 'GET' && url === '/status') return json(res, 200, 'path' in found ? { available: true, model: 'BiRefNet_lite (MIT)', size: CUTOUT_SIZE, where: path.basename(path.dirname(found.path)) } : { available: false, reason: found.reason });
     if (req.method !== 'POST' || url !== '/infer') return json(res, 404, { error: 'not found' });
+    // only this computer and only the app's own page (the writer's guard): another web page open in the browser cannot make it run
+    const refused = refuseWrite(req, 'Background removal');
+    if (refused) {
+      req.resume();
+      return json(res, 403, { error: refused });
+    }
     if (!('path' in found)) return json(res, 503, { error: found.reason });
     try {
       const body = await readBody(req);
