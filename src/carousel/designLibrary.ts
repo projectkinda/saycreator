@@ -1979,7 +1979,9 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     const type = String(scriptSlideOf(sp.layout, sp.fields).type ?? 'content');
     return faithfulChecks(d.built.layers as never, { canvas: { w: 1080, h: 1350 }, bg: d.built.fieldBg ?? style.palette.bg, k: 1, slideType: type, prose: /data-layout="prose"/.test(d.built.svg), svg: d.built.svg, devices: d.built.devices }).filter((q) => !q.pass).map((q) => q.id + ': ' + q.reason).concat(slideCheckHook ? slideCheckHook(d.built.layers as unknown[], sp) : []);
   };
-  if (!own) {
+  // The person's own script (own): only the colour repair runs (its slides never move to another layout), and the slide is drawn again with the cut, tint and ground the deck gave it, so
+  // only the colour changes. Without it a gradient headline that the check reads at its worst point (Round G part D) stayed failing on an own script (style-8 on its tint, 3.5:1).
+  {
     const isContrast = (q: string) => q.startsWith('contrast:');
     for (let i = 0; i < specs.length; i++) {
       let failed = phoneFailures(drawn.get(i), specs[i]);
@@ -1992,7 +1994,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
       if (failed.some(isContrast)) {
         const fixedStyle = readableStyle(style, groundsUnderTitle(drawn.get(i)?.built?.layers as never, drawn.get(i)?.built?.fieldBg ?? style.palette.bg));
         if (fixedStyle) {
-          const dc = await drawOne(sp, rot.variants[i], fixedStyle, { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
+          const dc = await drawOne(sp, rot.variants[i], fixedStyle, own ? { handle, index: i, total: specs.length, cut: rot.cuts[i].cut, invert: rot.cuts[i].invert, density: sp.density ?? 'normal', ground: rot.cuts[i].ground } : { handle, index: i, total: specs.length, cut: 'plain', invert: false, density: 'normal' });
           if (dc.built && !dc.problems.length) {
             const after = phoneFailures(dc, sp);
             if (after.filter(isContrast).length < failed.filter(isContrast).length) {
@@ -2007,7 +2009,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
         if (how !== 'colour') repairs.push({ slide: i + 1, from: sp.layout, to: sp.layout, failed: failed.filter(isContrast), result: 'not repaired', how: 'colour' });
         failed = failed.filter((q) => !isContrast(q));
       }
-      if (!failed.length) continue;
+      if (own || !failed.length) continue;
       let fixed: { d: Drawn; spec: SlideSpec } | null = null;
       for (const opt of layoutOptionsFor(sp, look)) {
         if (opt.current || opt.dropped.length || opt.droppedCore.length) continue;
