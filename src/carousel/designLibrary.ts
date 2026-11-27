@@ -24,6 +24,7 @@ import { pictureUseOf, pinnedPicture, placeImages, usedIds } from './imagePlace'
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
 import { settleScrim } from './scrim';
 import { FACE_COVER, faceCoverOf, facesOf } from './faceFind';
+import { keepListNumbers } from './listNumbers';
 import { parseRef } from './layouts/images';
 import { measurePhotoContrast, repairChromeText, repairSideLabel, type PhotoContrastRole } from './photoContrast';
 import { namePass } from './pictureNames';
@@ -1093,6 +1094,7 @@ export function trimNote(t: Trim): string {
   if (t.field === 'highlight') return `slide ${t.slide}: the highlight "${t.from}" was longer than ${t.max} word${t.max === 1 ? '' : 's'}, so the code kept the last words: "${t.to}".`;
   if (t.field === 'step swap') return `slide ${t.slide}: only one slide in the deck is a step, so the code drew it as split-text with the same words (step-numeral is for two or more steps of one sequence).`;
   if (t.field === 'closing cta') return t.from ? `slide ${t.slide}: the closing button "${t.from}" was not the call to action the text asks for, so the code used "${t.to}".` : `slide ${t.slide}: the closing had no call to action, so the code made it "${t.to}".`;
+  if (t.field === 'list number') return t.to ? (/^\d+$/.test(t.to) ? `slide ${t.slide} is item ${t.to} of the numbered list in your text, so the code shows its number ${t.to}.` : `slide ${t.slide} is an item of the numbered list in your text, so the code put its number in front: "${t.to}".`) : `slide ${t.slide} is item ${t.max} of the numbered list in your text, but its number would make the headline too long for this layout, so it is shown without it.`;
   if (t.field === 'emoji') return `slide ${t.slide}: the writer left out the ${t.from} of your text, so the code put it back after the same words: "${t.to}".`;
   if (t.field === 'invented button') return `slide ${t.slide}: the button "${t.from}" is not your words (${t.to.split(';')[0]}), so the code left it out:${t.to.split(';').slice(1).join(';')}.`;
   if (t.field === 'closing sub line') return `slide ${t.slide}: the line under the closing headline, "${t.from}", uses words that are not in the text, so the code left it out (an offer or promise is never invented).`;
@@ -1743,6 +1745,12 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     const ls = swapLoneStep(specs);
     specs = ls.specs;
     tr.trims.push(...ls.trims);
+  }
+  // Round AI: a numbered list in the text keeps its numbers: each item's slide shows the item's number (listNumbers.ts; the writer route only, a pasted script keeps its own numbering)
+  if (!own) {
+    const ln = keepListNumbers(specs, req.text);
+    specs = ln.specs;
+    tr.trims.push(...ln.trims);
   }
   const suggested = { cut: specs.map((s) => s.cut ?? null), invert: specs.map((s) => !!s.invert), density: specs.map((s) => s.density ?? null) };
   // A preset's flavour: layouts it avoids move to ones it prefers where the slide's text fits (deterministic, no model call; references have no flavour).
