@@ -303,7 +303,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       // Round AG: a portrait or tall PHOTO the panel above cannot take (its headline too long for the panel's column, or the "picture above" variant) is drawn beside the words in a left or
       // right half that narrows until they fit (sideSplit, split-half's side form: picture right for "picture below", left for "picture above"), not whole and small in a wide band.
       // cover-art hands its portrait pictures to this layout, so it gets the same. A screenshot keeps the forms below.
-      if (panelShape(img) && parseRef(img)?.photo) {
+      if (panelShape(img) && parseRef(img)?.photo && !cx.noSide) {
         const s = sideSplit(img, head, str(f, 'body'), v, st, cx, { type: 'content', headline: head, body: str(f, 'body') });
         if (s) return s;
       }
@@ -415,7 +415,9 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       };
       const sh = shapeOf(img);
       // a tall or portrait picture is never cropped into a circle: a half-and-half split shows it (its top)
-      if (panelShape(img)) return layoutDef('headline-body-image')!.plan({ headline: str(f, 'headline'), ...(sub ? { body: sub } : { body: '' }), image: img }, v, st, cx);
+      // Round AG: on the deck's first slide (the cover) not in a picture half beside the words, which reads as a content slide: the photo is shown as before and the shape pass gives the
+      // cover its full-bleed form (title-over-photo) when that shows the photo larger
+      if (panelShape(img)) return layoutDef('headline-body-image')!.plan({ headline: str(f, 'headline'), ...(sub ? { body: sub } : { body: '' }), image: img }, v, st, cx.first ? { ...cx, noSide: true } : cx);
       // a circle only for a nearly square picture (aspect 0.7 to 1.4); any other shape takes the wide block
       const round = v === 0 && (!sh || nearSquare(sh.aspect));
       const d = place(st, cx, 'center', (d) => {

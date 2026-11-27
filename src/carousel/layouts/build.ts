@@ -253,7 +253,7 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
   const head0 = typeof fields0.headline === 'string' ? fields0.headline.trim() : '';
   const split0 = closingLook === 'line' ? splitFirst(head0) : null;
   const closingSplit = split0 && typeof fields.headline === 'string' && fields.headline.trim().length === head0.length ? split0.first.length : undefined;
-  const mkCx = (field: Cx['field'], extra: Partial<Cx> = {}): Cx => ({ cut, field, density: o.density ?? 'normal', weight: o.weight ?? 'equal', ...(o.scrim !== undefined ? { scrim: o.scrim } : {}), ...(o.hugged !== undefined ? { titleH: o.hugged } : {}), ...(closingLook && closingLook !== 'own' ? { closing: closingLook, ...(closingSplit ? { closingSplit } : {}) } : {}), ...extra });
+  const mkCx = (field: Cx['field'], extra: Partial<Cx> = {}): Cx => ({ cut, field, density: o.density ?? 'normal', weight: o.weight ?? 'equal', ...(o.scrim !== undefined ? { scrim: o.scrim } : {}), ...(o.hugged !== undefined ? { titleH: o.hugged } : {}), ...(closingLook && closingLook !== 'own' ? { closing: closingLook, ...(closingSplit ? { closingSplit } : {}) } : {}), ...(o.index === 0 ? { first: true } : {}), ...extra });
   const side = { x0: 48, w: 978, y0: 190, y1: 1190 };
   let g!: Geometry;
   let plan!: Plan;

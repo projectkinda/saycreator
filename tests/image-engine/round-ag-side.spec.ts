@@ -1,4 +1,4 @@
-// Round AG: a portrait photo beside the words in a picture half that narrows until the words fit (images.sideSplit), instead of whole and small in a wide band.
+// Round AG: (a cover keeps its full-bleed form: cover-art on the first slide takes no picture half) a portrait photo beside the words in a picture half that narrows until the words fit (images.sideSplit), instead of whole and small in a wide band.
 //   - split-half: the 655 px half first; when the headline and the body do not fit its column, 20 px narrower at a time down to 486 px, so long as filling the half cuts at most 40%;
 //   - headline-body-image (both variants) and cover-art: a portrait PHOTO the narrow panel cannot take uses the same half (picture right for variant 1, left for variant 2);
 //   - a screenshot keeps the 655 px half only (then the band); a landscape photo is unchanged; every word is kept; the same drawing twice.
@@ -72,4 +72,23 @@ test('AG2 headline-body-image (both variants) and cover-art: a portrait photo be
   expect(cover.slot.x).toBe(0);
   expect(cutOf(1694 / 2400, cover.slot.w, cover.slot.h)).toBeLessThanOrEqual(0.4);
   for (const x of words("A calm look from someone who knows something you don't.")) expect(cover.text).toContain(x);
+});
+
+test('AG3 the cover: cover-art on the first slide keeps a portrait photo out of the picture half (a cover, not a content slide); on any other slide it takes the half', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const at = (index: number) => page.evaluate(async (index) => {
+    const DL: any = await import('/src/carousel/designLibrary.ts'); const PR: any = await import('/src/carousel/presets.ts'); const FA: any = await import('/src/reference/faithful.ts');
+    const fonts: any = await import('/src/image-engine/fonts.ts'); await fonts.loadFonts();
+    const c = document.createElement('canvas'); c.width = 1694; c.height = 2400; const g = c.getContext('2d')!; g.fillStyle = '#c9d1db'; g.fillRect(0, 0, 1694, 2400); g.fillStyle = '#2471a3'; g.fillRect(600, 700, 500, 900);
+    const u = c.toDataURL('image/jpeg', 0.9); FA.setPictureResolver(async () => u);
+    const { style } = DL.styleFromPack(PR.presetPackFor('editorial-collage', false, null));
+    const d = await DL.drawOne({ layout: 'cover-art', fields: { headline: "I didn't plan this road trip.", subtitle: 'I just had a free weekend and a full tank.', image: 'picture:pc#w=1694&h=2400&fx=0.5&fy=0.5&z=1&k=p' }, accents: [] }, 1, style, { handle: '', index, total: 7, cut: 'plain', invert: false, density: 'normal' });
+    return d.built.images[0];
+  }, index);
+  const cover = await at(0);
+  expect(cover.h, 'slide 1: not the 1114 px picture half').not.toBe(1114);
+  expect(cover.w).toBe(1080);
+  const inside = await at(4);
+  expect(inside.h, 'slide 5: the picture half').toBe(1114);
+  expect(inside.w).toBeLessThanOrEqual(655);
 });

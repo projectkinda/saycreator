@@ -159,6 +159,10 @@ export interface Cx {
   closing?: import('./closingLooks').ClosingLook;
   /** The "line" closing look of a headline of two sentences: where its first sentence ends (characters), found on the person's own text before the style's case. */
   closingSplit?: number;
+  /** Round AG: this slide is the deck's first (its cover): cover-art keeps its portrait photo out of the picture half there (the shape pass then gives it the full-bleed cover). */
+  first?: boolean;
+  /** Round AG: draw no picture half (images.sideSplit) for this slide: cover-art on the first slide hands this to headline-body-image. */
+  noSide?: boolean;
 }
 
 export interface Plan {
