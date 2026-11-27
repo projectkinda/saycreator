@@ -297,6 +297,13 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         }));
         return mk(d, { noBalance: true, type: slideType(d), fitAs: 'headline-body-image', slide: rowsSlide(d, head) });
       }
+      // Round AG: a portrait or tall PHOTO the panel above cannot take (its headline too long for the panel's column, or the "picture above" variant) is drawn beside the words in a left or
+      // right half that narrows until they fit (sideSplit, split-half's side form: picture right for "picture below", left for "picture above"), not whole and small in a wide band.
+      // cover-art hands its portrait pictures to this layout, so it gets the same. A screenshot keeps the forms below.
+      if (panelShape(img) && parseRef(img)?.photo) {
+        const s = sideSplit(img, head, str(f, 'body'), v, st, cx, { type: 'content', headline: head, body: str(f, 'body') });
+        if (s) return s;
+      }
       // "picture above": the hero band, edge to edge over more than half of the slide (a tall picture too: it shows its top). A tall picture with a headline too long for the split column is the stacked version below
       if (v === 1) {
         const d = place(st, cx, 'top', (d) => {

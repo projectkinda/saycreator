@@ -156,6 +156,8 @@ export async function fillChoice(layout: string, slot: Box, ref: PicRef | null, 
   if ((!FILL_LAYOUTS.includes(layout) && !inSlot) || !ref || !ref.photo || ref.z > 1 || !ref.w || !ref.h) return null;
   // Round AF: a picture the person pinned to a slot layout is drawn as before (whole)
   if (inSlot && opts.pinned) return null;
+  // Round AG: cover-art shows a portrait photo in a picture half (images.sideSplit) and its other pictures in a block beside the words: the faces count there too, as on the slots
+  const faceAware = inSlot || layout === 'cover-art';
   const l = coverLoss(slot, ref);
   if (!l) return null;
   const cut = Math.max(l.w, l.h);
@@ -170,15 +172,15 @@ export async function fillChoice(layout: string, slot: Box, ref: PicRef | null, 
   const auto = !ref.focusSet;
   const [b0, b1] = across ? [box.x0, box.x1] : [box.y0, box.y1];
   // Round AF: on a picture slot the faces count as the important part too (the full-bleed layouts are unchanged: no faces read there)
-  const faces: FaceBox[] | null = inSlot ? await facesOf(src) : null;
+  const faces: FaceBox[] | null = faceAware ? await facesOf(src) : null;
   const spans = (faces ?? []).map((f): [number, number] => (across ? [f.x0, f.x1] : [f.y0, f.y1]));
   const lo = Math.min(b0, ...spans.map((s) => s[0])), hi = Math.max(b1, ...spans.map((s) => s[1]));
-  const [k0, k1] = keptWindow(auto ? (inSlot ? (lo + hi) / 2 : (b0 + b1) / 2) : own);
+  const [k0, k1] = keptWindow(auto ? (faceAware ? (lo + hi) / 2 : (b0 + b1) / 2) : own);
   const centre = r3((k0 + k1) / 2);
   const focus = auto ? (across ? { fx: centre, fy: ref.fy } : { fx: ref.fx, fy: centre }) : { fx: ref.fx, fy: ref.fy };
   const inside = r3(Math.max(0, Math.min(b1, k1) - Math.max(b0, k0)) / Math.max(1e-9, b1 - b0));
   const facesIn = spans.every(([a, b]) => a >= k0 - 1e-6 && b <= k1 + 1e-6);
-  const faceInfo = inSlot ? { faces: faces ? { found: faces.length, inside: facesIn } : null } : {};
+  const faceInfo = faceAware ? { faces: faces ? { found: faces.length, inside: facesIn } : null } : {};
   // the person's switch wins; the measure is still reported (the picture row says what the automatic choice would be)
   if (o) return { ...base, fill: o === 'on', inside, box, centre, focus, auto, why: o, ...faceInfo };
   const ok = inside >= SALIENT_KEEP - 1e-9 && facesIn;
