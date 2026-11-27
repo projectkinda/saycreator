@@ -14,16 +14,20 @@ test('AD1: a whole photo under 70% of its slot is drawn sharp with rounded corne
     const PC: any = await import('/src/carousel/photoContrast.ts');
     const fonts: any = await import('/src/image-engine/fonts.ts'); await fonts.loadFonts();
     const pic = (w: number, h: number) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d')!; g.fillStyle = '#5a7a4a'; g.fillRect(0, 0, w, h); g.fillStyle = '#c9b48a'; g.fillRect(w * 0.3, h * 0.3, w * 0.4, h * 0.4); return c.toDataURL('image/png'); };
-    const urls: Record<string, string> = { sq: pic(1200, 1200), wide: pic(1150, 1000) };
+    const urls: Record<string, string> = { sq: pic(900, 1200), wide: pic(1150, 1000) };
     FA.setPictureResolver(async (ref: string) => urls[ref.slice(8).split('#')[0]] ?? urls.sq);
     const { style } = DL.styleFromPack(PR.presetPackFor('editorial-collage', false, null));
     const draw = async (layout: string, id: string, w: number, h: number, v: 0 | 1) => (await DL.drawOne({ layout, fields: { headline: 'The best part was the empty road.', ...(layout === 'title-over-photo' ? { line: 'Trees on both sides.' } : { body: 'Trees on both sides.' }), image: `picture:${id}#w=${w}&h=${h}&fx=0.5&fy=0.5&z=1&k=p` }, accents: [] }, v, style, { handle: '', index: 3, total: 7, cut: 'plain', invert: false, density: 'normal' })).built;
-    const small = await draw('headline-body-image', 'sq', 1200, 1200, 1);
-    // a photo of 1.15 : 1 in the same wide slot: a cover crop cuts 28% (drawn whole), and drawn whole it covers 72% of the slot
+    // Round AF: a 3:4 photo in the wide slot (a cover crop would cut 53%, past the 40% a picture slot may fill): drawn whole
+    const small = await draw('headline-body-image', 'sq', 900, 1200, 1);
+    // a photo of 1.15 : 1 in the same wide slot: a cover crop cuts 28%; with "Fill the slide" off (Round AF: else it fills its slot) it is drawn whole and covers 72% of the slot
+    const FS: any = await import('/src/carousel/layouts/fillSlide.ts');
+    FS.setFillOverrides([['wide', 'off']]);
     const big = await draw('headline-body-image', 'wide', 1150, 1000, 1);
+    FS.setFillOverrides([]);
     const bigIn = PF.containRect(big.images[0], { w: 1150, h: 1000, z: 1 }, big.images[0].rx);
     const slot = small.images[0];
-    const inSlot = PF.containRect(slot, { w: 1200, h: 1200, z: 1 }, slot.rx);
+    const inSlot = PF.containRect(slot, { w: 900, h: 1200, z: 1 }, slot.rx);
     return { svg: small.svg, notes: small.notes, slot, inSlot, share: (inSlot.w * inSlot.h) / (slot.w * slot.h), radius: Math.max(12, Math.min(48, style.radius ?? 28)), bigSvg: big.svg, bigNotes: big.notes, bigShare: (bigIn.w * bigIn.h) / (big.images[0].w * big.images[0].h), boxes: PC.pictureBoxesOfSvg(small.svg), threshold: PF.SHARP_WHOLE_SHARE };
   });
   expect(r.threshold).toBe(0.7);
