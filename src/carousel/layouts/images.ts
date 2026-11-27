@@ -680,7 +680,9 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
         // Round V: the photo runs on to the slide's edge on the side away from the caption panel (no strip of ground under the page chrome)
         // (a photo of the project only, as on title-over-photo)
         d.image(img, 0, picY, SLIDE_W, picH, { rx: 0, ...(parseRef(img)?.photo ? { bleed: v === 0 ? { x: 0, y: 0, w: SLIDE_W, h: picY + picH } : { x: 0, y: picY, w: SLIDE_W, h: SLIDE_H - picY } } : {}) });
-        d.rect(0, panelY, SLIDE_W, panelH, '$surface', { rx: 0 });
+        // Round AH: the caption panel below the photo runs on to the slide's bottom edge (under the page chrome), so the band and the strip under it are one colour (the card colour); a strip of
+        // ground under a card-coloured band read as a stray grey band on a light ground (dark-quiet). The text keeps its place; the panel above the photo is as before
+        d.rect(0, panelY, SLIDE_W, v === 0 ? SLIDE_H - panelY : panelH, '$surface', { rx: 0 });
         d.y = v === 0 ? panelY + 24 + Math.max(0, Math.round((panelH - room - th) / 2)) : panelY + 40 + Math.max(0, Math.round((panelH - room - th) / 2));
         texts(d);
       });
