@@ -112,6 +112,49 @@ export function sourceAction(raw: string): { label: string } | null {
   return { label: found[found.length - 1].label };
 }
 
+/** Round AJ: words a label never ends on (it would read cut off: "Save this for", "Tell me which"). */
+const DANGLING = new Set(['a', 'an', 'the', 'to', 'of', 'and', 'or', 'for', 'in', 'on', 'at', 'with', 'from', 'by', 'as', 'your', 'my', 'our', 'their', 'his', 'her', 'so', 'if', 'then', 'which', 'what', 'that', 'who', 'how', 'when', 'where', 'but']);
+/**
+ * Round AJ: the action phrases of the text's call to action, as button labels made from the clause's own start: in the last three sentences, every clause (split at , ; : and before "and",
+ * "then", "or") that opens with an action verb (`verbs`; "please", "just", "and", "then", "so" may come before it) gives the clause's first words, at most 4 words and 20 characters, never
+ * ending on a small linking word ("Save this for your next shoot" -> "Save this"; "and tell me which one you'll try first" -> "Tell me which one"). At least 2 words. In text order.
+ */
+export function clauseLabels(raw: string, verbs: ReadonlySet<string>): string[] {
+  const text = raw.replace(/\s+/g, ' ').trim();
+  const sentences = text.match(/[^.!?]+(?:[.!?]+|$)/g) ?? [text];
+  const out: string[] = [];
+  for (const s of sentences.slice(-3)) {
+    for (const clause0 of s.split(/[,;:]|\s(?=(?:and|then|or)\s)/i)) {
+      const words = clause0.replace(/[.!?"“”]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+      while (words.length && /^(?:and|then|or|please|just|so|also|now)$/i.test(words[0])) words.shift();
+      if (!words.length || !verbs.has(words[0].toLowerCase())) continue;
+      const pick: string[] = [];
+      for (const w of words) {
+        if (pick.length === 4 || [...pick, w].join(' ').length > 20) break;
+        pick.push(w);
+      }
+      while (pick.length > 1 && DANGLING.has(pick[pick.length - 1].toLowerCase().replace(/[’']/g, ''))) pick.pop();
+      if (pick.length < 2) continue;
+      const label = cap(pick.join(' '));
+      if (!out.includes(label)) out.push(label);
+    }
+  }
+  return out;
+}
+/**
+ * Round AJ: a writer's button label that is only the START of one of the text's action phrases ("Tell me" of "tell me which one you'll try first") becomes the longer label made from that clause
+ * ("Tell me which one"); any other label (a full phrase, a keyword action, a generic one) is returned as it is.
+ */
+export function fullClauseLabel(label: string, raw: string, verbs: ReadonlySet<string>): string {
+  const lw = wordsOf(label);
+  if (!lw.length) return label;
+  for (const c of clauseLabels(raw, verbs)) {
+    const cw = wordsOf(c);
+    if (cw.length > lw.length && lw.every((w, k) => cw[k] === w)) return c;
+  }
+  return label;
+}
+
 /** Whether the text asks the reader to do something (a phrase action; contact details and links are checked by the caller). */
 export const hasPhraseAction = (text: string): boolean => sourceAction(text) !== null;
 

@@ -36,7 +36,7 @@ import { addPhotoSlides, SLIDES_MAX, type PhotoSlideAdded } from './photoSlides'
 import type { Picked } from './layouts';
 import { TONES } from './writerPrompt';
 import { emojiPlaces, emojisOf } from './sourceCheck';
-import { inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
+import { fullClauseLabel, inSource, isFunctionWord, labelFromSource, labelIsSourcePhrase, sourceAction } from './closingAction';
 
 /** The old route, where the model draws every slide as SVG, stays available behind this flag (off by default): localStorage "creator.legacySvgRoute" = "1" or VITE_LEGACY_SVG_ROUTE=1. */
 export const legacySvgRoute = (): boolean => {
@@ -947,6 +947,18 @@ export function settleClosing(specs: SlideSpec[], text: string): { specs: SlideS
       trims.push({ slide: i + 1, field: 'closing cta', from: label, to: act.label, max: 0 });
     }
   }
+  // Round AJ: a button label that is only the start of an action phrase of the text ("Tell me" of "tell me which one you'll try first") takes the phrase's own start, up to 4 words and 20
+  // characters ("Tell me which one"), when that is still a fine button label of the person's words; a label that is already a whole phrase is kept
+  if (s.layout === 'cta-button' || s.layout === 'cta-pair') {
+    for (const k of ['button', 'button1', 'button2']) {
+      const label = String(s.fields[k] ?? '').trim();
+      if (!label) continue;
+      const full = fullClauseLabel(label, text, ACTION_VERBS);
+      if (full === label || buttonProblem(full, { text }) || !labelOwnWords(full, text)) continue;
+      s = { ...s, fields: { ...s.fields, [k]: full } as Fields };
+      trims.push({ slide: i + 1, field: 'button phrase', from: label, to: full, max: 0 });
+    }
+  }
   for (const k of SUB_FIELDS[s.layout] ?? []) {
     let v = s.fields[k];
     // the rest of a sentence the button took ("Comment slides" + "and I'll send you the link."): the leading "and" goes and the next letter is capital. Nothing else changes.
@@ -1094,6 +1106,7 @@ export function trimNote(t: Trim): string {
   if (t.field === 'highlight') return `slide ${t.slide}: the highlight "${t.from}" was longer than ${t.max} word${t.max === 1 ? '' : 's'}, so the code kept the last words: "${t.to}".`;
   if (t.field === 'step swap') return `slide ${t.slide}: only one slide in the deck is a step, so the code drew it as split-text with the same words (step-numeral is for two or more steps of one sequence).`;
   if (t.field === 'closing cta') return t.from ? `slide ${t.slide}: the closing button "${t.from}" was not the call to action the text asks for, so the code used "${t.to}".` : `slide ${t.slide}: the closing had no call to action, so the code made it "${t.to}".`;
+  if (t.field === 'button phrase') return `slide ${t.slide}: the button "${t.from}" was only the start of what your text asks ("${t.to}"), so the code used "${t.to}".`;
   if (t.field === 'list number') return t.to ? (/^\d+$/.test(t.to) ? `slide ${t.slide} is item ${t.to} of the numbered list in your text, so the code shows its number ${t.to}.` : `slide ${t.slide} is an item of the numbered list in your text, so the code put its number in front: "${t.to}".`) : `slide ${t.slide} is item ${t.max} of the numbered list in your text, but its number would make the headline too long for this layout, so it is shown without it.`;
   if (t.field === 'emoji') return `slide ${t.slide}: the writer left out the ${t.from} of your text, so the code put it back after the same words: "${t.to}".`;
   if (t.field === 'invented button') return `slide ${t.slide}: the button "${t.from}" is not your words (${t.to.split(';')[0]}), so the code left it out:${t.to.split(';').slice(1).join(';')}.`;
