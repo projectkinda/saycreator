@@ -1639,7 +1639,10 @@ export async function applyPhotoShape(specs0: SlideSpec[], look: Look, style: La
     if (slideProblems(sp, look, ctx).length) return null;
     const rc = deckRotation(deck, look, style).cuts[i];
     const d = await drawOne(sp, v, style, { handle, index: i, total: deck.length, cut: rc.cut, invert: rc.invert, density: sp.density ?? 'normal', ground: rc.ground });
-    return d.built && !d.problems.length ? d.built.images ?? [] : null;
+    if (!d.built || d.problems.length) return null;
+    // Round AG: a photo the drawing filled past the 25% budget (Round U, AF) is measured as filling its slot, with that cut
+    const fills = d.built.fills ?? [];
+    return (d.built.images ?? []).map((p) => { const f = fills.find((x) => x.fill && x.picture === parseRef(p.src)?.id); return f ? { ...p, filledCut: f.cut } : p; });
   }, (deck) => deckRotation(deck, look, style));
   return { specs: specs0.map((s, k) => (sh.moved.includes(k) ? sh.specs[k] : s)), swaps: sh.swaps, rows: sh.rows };
 }

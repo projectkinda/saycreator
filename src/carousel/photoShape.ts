@@ -53,12 +53,14 @@ export interface PhotoFit {
   crop: number;
   /** Drawn whole, on a blurred copy of itself. */
   whole: boolean;
+  /** Round AG: the drawing filled the slot with a cut past the 25% budget (Round U, AF: the subject and the faces stay inside); crop is that cut. */
+  filled?: boolean;
   /** Round N part 4: the share of the slide's width the picture is drawn at (a tall screenshot needs at least 22%). */
   widthShare: number;
 }
 const SLIDE = 1080 * 1350;
 /** A picture as a built slide holds it (its slot after the chrome moved it). */
-export type DrawnPicture = Pick<PlanImage, 'src' | 'x' | 'y' | 'w' | 'h'> & { rx?: number; circle?: boolean };
+export type DrawnPicture = Pick<PlanImage, 'src' | 'x' | 'y' | 'w' | 'h'> & { rx?: number; circle?: boolean; /** Round AG: the drawing filled this slot with this cut (built.fills). */ filledCut?: number };
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 /** How the photo `id` is drawn among the built slide's pictures (their slots after the chrome moved them), measured from the geometry the engine draws. Null when it is not there. */
 export function photoFitOf(images: DrawnPicture[] | undefined, id: string, layout: string, variant: 0 | 1): PhotoFit | null {
@@ -66,6 +68,8 @@ export function photoFitOf(images: DrawnPicture[] | undefined, id: string, layou
   const ref = p ? parseRef(p.src) : null;
   if (!p || !ref || !ref.w || !ref.h || p.circle) return null;
   const slot = p.w * p.h;
+  // Round AG: a photo the drawing filled past the 25% budget (it cut it, keeping the subject and the faces inside) covers its slot
+  if (p.filledCut !== undefined) return { layout, variant, slotShare: 1, slideShare: r3(slot / SLIDE), crop: r3(p.filledCut), whole: false, filled: true, widthShare: r3(p.w / 1080) };
   if (needsContain(p, ref)) {
     const c = containRect(p, ref, p.rx);
     return { layout, variant, slotShare: r3((c.w * c.h) / slot), slideShare: r3((c.w * c.h) / SLIDE), crop: 0, whole: true, widthShare: r3(c.w / 1080) };
@@ -74,7 +78,7 @@ export function photoFitOf(images: DrawnPicture[] | undefined, id: string, layou
   return { layout, variant, slotShare: 1, slideShare: r3(slot / SLIDE), crop: r3(l ? Math.max(l.w, l.h) : 0), whole: false, widthShare: r3(p.w / 1080) };
 }
 /** The rule that keeps the writer's layout: the photo fills its slot within the budget, or drawn whole it still covers 55% of the slot. */
-export const looksRight = (f: PhotoFit): boolean => (f.whole ? f.slotShare >= SHAPE_KEEP_SHARE : f.crop <= PHOTO_CROP_BUDGET + 1e-6);
+export const looksRight = (f: PhotoFit): boolean => (f.whole ? f.slotShare >= SHAPE_KEEP_SHARE : f.crop <= PHOTO_CROP_BUDGET + 1e-6 || !!f.filled);
 /** What the comparison ranks by: the share of the slide the photo covers, a photo drawn whole counting for less. */
 export const shapeScore = (f: PhotoFit): number => f.slideShare * (f.whole ? SHAPE_WHOLE_WEIGHT : 1);
 /** Round AD: a photo drawn whole on less than 70% of its slot (it is then drawn small and sharp on the ground): kept only when no layout that keeps every word fits the photo. */
@@ -89,7 +93,7 @@ export interface ShapeRow {
   why: string;
 }
 /** The drawing the pass measures with: the built slide's pictures for a spec in a variant, or null when the slide cannot be drawn (a text that does not fit, a broken minimum size). */
-export type ShapeDraw = (spec: SlideSpec, index: number, variant: 0 | 1, deck: SlideSpec[]) => Promise<PlanImage[] | null>;
+export type ShapeDraw = (spec: SlideSpec, index: number, variant: 0 | 1, deck: SlideSpec[]) => Promise<(PlanImage & { filledCut?: number })[] | null>;
 /** The deck's rotation for a list of slides: each slide's variant, and the slides whose layout the rotation would change (a repeat, a layout used more than twice). */
 export type ShapeRotate = (specs: SlideSpec[]) => { variants: (0 | 1)[]; repeats: { has(i: number): boolean; keys(): IterableIterator<number> } };
 
@@ -169,7 +173,8 @@ export async function shapePass(specs0: SlideSpec[], look: Look, draw: ShapeDraw
     const im0 = await draw(sp, i, v0, specs);
     const before = im0 ? photoFitOf(im0, pic.id, sp.layout, v0) : null;
     if (!before) continue;
-    if (looksRight(before) && !before.whole) {
+    // Round AG: a fill past the 25% budget is kept only when no layout shows the photo at least 15% larger (below), like a large whole photo
+    if (looksRight(before) && !before.whole && !before.filled) {
       rows.push({ slide: i + 1, picture: pic.id, before, after: before, why: `kept: it fills its slot with ${Math.round(before.crop * 100)}% cut` });
       continue;
     }
@@ -199,7 +204,7 @@ export async function shapePass(specs0: SlideSpec[], look: Look, draw: ShapeDraw
         const spec: SlideSpec = { ...sp, layout: to, fields: { ...withoutImages(f), [slot.field]: refStr } as Fields, density: to === sp.layout ? sp.density : undefined, variant: undefined, shaped: pic.id, pictureUpgrade: undefined, ...(pin ? { pin } : {}) };
         const im = await draw(spec, i, v, trial.map((s, k) => (k === i ? spec : s)));
         const fit = im ? photoFitOf(im, pic.id, to, v) : null;
-        if (!fit || fit.crop > PHOTO_CROP_BUDGET + 1e-6) continue;
+        if (!fit || (fit.crop > PHOTO_CROP_BUDGET + 1e-6 && !fit.filled)) continue;
         cands.push({ fit, spec });
       }
     }
@@ -209,7 +214,7 @@ export async function shapePass(specs0: SlideSpec[], look: Look, draw: ShapeDraw
     if (keepWhole && !smallWhole(before)) {
       const bigger = cands.filter((c) => c.spec !== sp && !c.fit.whole && c.fit.slideShare >= before.slideShare * SHAPE_BIGGER);
       if (!bigger.length) {
-        rows.push({ slide: i + 1, picture: pic.id, before, after: before, why: `kept: drawn whole it still covers ${Math.round(before.slotShare * 100)}% of its slot, and no layout that keeps every word fills a slot with it at least 15% larger` });
+        rows.push({ slide: i + 1, picture: pic.id, before, after: before, why: `kept: ${before.filled ? `it fills its slot with ${Math.round(before.crop * 100)}% cut` : `drawn whole it still covers ${Math.round(before.slotShare * 100)}% of its slot`}, and no layout that keeps every word fills a slot with it at least 15% larger` });
         continue;
       }
       cands.splice(0, cands.length, { fit: before, spec: sp }, ...bigger);
