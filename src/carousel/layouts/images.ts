@@ -7,7 +7,8 @@ import { measureWidth } from '../../image-engine/draw/text';
 import { chromeFor } from './chrome';
 import { chromeBoxes } from './chromeAvoid';
 import { arr, layoutDef, mk, place, str, withAccent } from './library';
-import type { Cx, ImageSlotDef, LayoutDef, LayoutStyle, Orientation, PlanImage } from './types';
+import type { Cx, ImageSlotDef, LayoutDef, LayoutStyle, Orientation, Plan, PlanImage } from './types';
+import { FILL_BUDGET } from './fillSlide';
 
 /** The field names that hold a picture (not text: they are left out of every text budget, comparison and word list). */
 export const IMAGE_KEYS = ['image', 'image2', 'image3', 'image4'] as const;
@@ -198,6 +199,52 @@ const panelHeadSize = (st: LayoutStyle, text: string): number | null => {
   return null;
 };
 const IMG = (name: string, note: string) => ({ name, required: false as const, max: 12_000_000, image: true as const, note });
+/** Round AG: a narrower picture half steps by this many pixels. */
+export const SIDE_STEP = 20;
+/**
+ * A tall or portrait picture in a left or right half, the words in the column beside it (split-half's side form). The half is 50% of the slide (655 x 1114 normally); the headline takes the
+ * largest size at which it wraps to 5 lines or fewer in the column (72 px at least) and the headline and the body must fit inside the half's height, with room above and below.
+ * Round AG: when they do not fit, a PHOTO takes a narrower half, 20 px at a time down to the panel width (486 px), so long as filling the narrower half cuts at most the 40% a picture slot may
+ * fill (fillSlide.FILL_BUDGET; whether it really fills is the drawing's choice: the subject and the faces must stay inside). The widest half that fits wins. Null: no width fits (the caller draws
+ * its other form). v 0: the picture on the right; v 1: on the left. The body may be empty. Deterministic: it depends on the words, the style's fonts and the picture's shape only.
+ */
+export function sideSplit(img: string, head: string, body: string, v: 0 | 1, st: LayoutStyle, cx: Cx, slide: Plan['slide']): Plan | null {
+  const sh = shapeOf(img);
+  if (!sh || (sh.kind !== 'tall' && sh.kind !== 'portrait')) return null;
+  const ZONE_TOP = zoneTopOf(st);
+  // the side half is as tall as the zone is; its width keeps it at 50% of the slide (655 px of 1114 normally)
+  const HALF_H = ZONE_BOTTOM - ZONE_TOP - 20;
+  const HALF_W = ZONE_TOP === 116 ? 655 : Math.round((SLIDE_W * 1350 * 0.5) / HALF_H);
+  const widths = [HALF_W];
+  if (parseRef(img)?.photo) for (let w = HALF_W - SIDE_STEP; w >= PANEL_W; w -= SIDE_STEP) widths.push(w);
+  if (widths.length > 1 && widths[widths.length - 1] !== PANEL_W) widths.push(PANEL_W);
+  const wt = nearestWeight(st.fonts.headline, 800);
+  for (const W of widths) {
+    if (W < HALF_W) {
+      const r = W / HALF_H;
+      const cut = sh.aspect > r ? 1 - r / sh.aspect : 1 - sh.aspect / r;
+      if (cut > FILL_BUDGET + 1e-6) continue;
+    }
+    const tw = SLIDE_W - W - 48 - 32;
+    const z = sideHeadSize(head, st, tw, 120);
+    // the headline and the body must both fit the narrow column (inside the half's height, with room above and below)
+    const colH = z ? measure(head, st.fonts.headline, wt, z, tw, 1.05).h + (body ? 24 + measure(body, st.fonts.body, 400, 44, tw, 1.3).h : 0) : 0;
+    if (!z || colH > HALF_H - 160) continue;
+    const d = place(st, cx, 'top', (d) => {
+      const right = v === 0;
+      d.image(img, right ? SLIDE_W - W : 0, ZONE_TOP, W, HALF_H, { rx: 0 });
+      const tx = right ? 48 : W + 32;
+      const texts = (t: Draw) => {
+        t.text('title', head, { x: tx, w: tw, size: z, max: z, weight: 800, font: 'h', lines: 5, min: 72, gap: 24 });
+        if (body) t.text('body', body, { x: tx, w: tw, size: 44, max: 48, lines: 12, min: 44, lh: 1.3 });
+      };
+      d.y = ZONE_TOP + Math.max(0, Math.round((HALF_H - heightOf(d, texts)) / 2));
+      texts(d);
+    });
+    return mk(d, { noBalance: true, type: 'content', fitAs: 'art-side-text', slide, stack: { gap: 24, y0: ZONE_TOP, y1: ZONE_TOP + HALF_H } });
+  }
+  return null;
+}
 
 
 // ----- the rows of a list that sits with a picture (list-under-band, list-beside-picture; Round 17) -----
@@ -637,38 +684,15 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
     },
     plan(f, v, st, cx) {
       const ZONE_TOP = zoneTopOf(st);
-      // the side half is as tall as the zone is; its width keeps it at 50% of the slide (655 px of 1114 normally)
-      const HALF_H = ZONE_BOTTOM - ZONE_TOP - 20;
-      const HALF_W = ZONE_TOP === 116 ? 655 : Math.round((SLIDE_W * 1350 * 0.5) / HALF_H);
       const img = imageOf(f.image);
       const head = str(f, 'headline');
       const body = str(f, 'body');
       if (!img) return layoutDef('split-text')!.plan({ headline: head, paragraph: body }, v, st, cx);
-      const sh = shapeOf(img);
-      const side = !!sh && (sh.kind === 'tall' || sh.kind === 'portrait');
       const slide = withAccent({ type: 'content', headline: head, body }, head, f, st);
-      // a tall or portrait picture: a left or right half (655 x 1114: 50.0% of the slide); the headline takes the largest size at which it wraps to 5 lines or fewer in the text column
-      if (side) {
-        const tw = SLIDE_W - HALF_W - 48 - 32;
-        const wt = nearestWeight(st.fonts.headline, 800);
-        const z = sideHeadSize(head, st, tw, 120);
-        // the headline and the body must both fit the narrow column (inside the half's height, with room above and below); otherwise the picture takes a top or bottom half and the text a full-width band
-        const colH = z ? measure(head, st.fonts.headline, wt, z, tw, 1.05).h + 24 + measure(body, st.fonts.body, 400, 44, tw, 1.3).h : 0;
-        if (z && colH <= HALF_H - 160) {
-          const d = place(st, cx, 'top', (d) => {
-            const right = v === 0;
-            d.image(img, right ? SLIDE_W - HALF_W : 0, ZONE_TOP, HALF_W, HALF_H, { rx: 0 });
-            const tx = right ? 48 : HALF_W + 32;
-            const texts = (t: Draw) => {
-              t.text('title', head, { x: tx, w: tw, size: z, max: z, weight: 800, font: 'h', lines: 5, min: 72, gap: 24 });
-              t.text('body', body, { x: tx, w: tw, size: 44, max: 48, lines: 12, min: 44, lh: 1.3 });
-            };
-            d.y = ZONE_TOP + Math.max(0, Math.round((HALF_H - heightOf(d, texts)) / 2));
-            texts(d);
-          });
-          return mk(d, { noBalance: true, type: 'content', fitAs: 'art-side-text', slide, stack: { gap: 24, y0: ZONE_TOP, y1: ZONE_TOP + HALF_H } });
-        }
-      }
+      // a tall or portrait picture: a left or right half (655 x 1114: 50.0% of the slide); the headline takes the largest size at which it wraps to 5 lines or fewer in the text column.
+      // Round AG: a photo whose words do not fit beside the half takes a narrower half (sideSplit) before it falls back to the top or bottom half below
+      const s = sideSplit(img, head, body, v, st, cx, slide);
+      if (s) return s;
       // any other picture (or a headline too long for the side column): a top or bottom half (1080 x 675: 50.0% of the slide)
       const d = place(st, cx, 'top', (d) => {
         const top = v === 0;
