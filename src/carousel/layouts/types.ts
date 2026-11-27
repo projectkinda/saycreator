@@ -108,6 +108,8 @@ export interface FieldSpec {
   required: boolean;
   /** Character budget (per item for a list). */
   max: number;
+  /** Round AH: the most characters the CODE accepts (the writer prompt still asks for `max`): a longer text wraps onto more lines or is set smaller, never under the layout's floor; the drawing still refuses it when it does not fit. */
+  accept?: number;
   /** Most words allowed (a label). */
   maxWords?: number;
   /** A list field: how many items. */

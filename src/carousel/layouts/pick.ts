@@ -92,7 +92,7 @@ export function validateSlideContent(layoutId: string, fields: Fields): Validati
       continue;
     }
     const t = v.trim();
-    if (t.length > spec.max) errors.push(`${layoutId}: "${spec.name}" is ${t.length} characters; the most is ${spec.max}. Shorten it.`);
+    if (t.length > (spec.accept ?? spec.max)) errors.push(`${layoutId}: "${spec.name}" is ${t.length} characters; the most is ${spec.accept ?? spec.max}. Shorten it.`);
     if (spec.maxWords && t.split(/\s+/).length > spec.maxWords) errors.push(`${layoutId}: "${spec.name}" has ${t.split(/\s+/).length} words; the most is ${spec.maxWords}.`);
     if (spec.percent && (!/^\d{1,3}$/.test(t) || Number(t) > 100)) errors.push(`${layoutId}: "${spec.name}" must be a whole number from 0 to 100.`);
     if (spec.name === 'step' && !/^[1-9]$/.test(t)) errors.push(`${layoutId}: "step" must be a number from 1 to 9.`);

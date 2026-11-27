@@ -200,6 +200,8 @@ const panelHeadSize = (st: LayoutStyle, text: string): number | null => {
 };
 const IMG = (name: string, note: string) => ({ name, required: false as const, max: 12_000_000, image: true as const, note });
 /** Round AG: a narrower picture half steps by this many pixels. */
+/** Round AH: the headline length the code accepts on cover-art (the writer is still asked for 60 characters): a headline over 60 takes a fourth line, at the 72 px floor at the least, so a long first-slide headline keeps its photo. */
+export const COVER_HEAD_ACCEPT = 90;
 export const SIDE_STEP = 20;
 /** Round AG: the room a narrower half leaves beside the headline's longest word (the column is measured this much narrower). */
 export const SIDE_SLACK = 24;
@@ -398,7 +400,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
   // cover-art -----------------------------------------------------------------------------------------------------------------------
   {
     id: 'cover-art', label: 'Cover with art', shapes: ['claim', 'hook', 'photo'], variants: ['circle art', 'wide art'],
-    fields: [{ name: 'headline', required: true, max: 60 }, { name: 'subtitle', required: false, max: 60 }, IMG('image', 'the art block')],
+    fields: [{ name: 'headline', required: true, max: 60, accept: COVER_HEAD_ACCEPT }, { name: 'subtitle', required: false, max: 60 }, IMG('image', 'the art block')],
     samples: {
       normal: { headline: 'A hoodie that flips into a backpack', subtitle: 'One piece. Two jobs.' },
       long: { headline: 'The hoodie that turns into a backpack in ten seconds', subtitle: 'One piece of clothing, two jobs, and no bag at all.' },
@@ -410,7 +412,7 @@ export const IMAGE_LAYOUTS: LayoutDef[] = [
       if (!img) return layoutDef('statement-card')!.plan({ headline: str(f, 'headline'), ...(str(f, 'subtitle') ? { caption: str(f, 'subtitle') } : {}) }, v, st, cx);
       const sub = str(f, 'subtitle');
       const texts = (t: Draw) => {
-        t.text('title', str(f, 'headline'), { size: 112, max: 150, weight: 800, font: 'h', lines: 3, min: 72, lh: 1.02, gap: sub ? 24 : 44 });
+        t.text('title', str(f, 'headline'), { size: 112, max: 150, weight: 800, font: 'h', lines: str(f, 'headline').length > 60 ? 4 : 3, min: 72, lh: 1.02, gap: sub ? 24 : 44 });
         if (sub) t.text('body', sub, { size: 52, max: 56, fill: '$muted', lines: 1, min: 44, gap: 44 });
       };
       const sh = shapeOf(img);
