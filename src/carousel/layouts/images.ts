@@ -172,10 +172,10 @@ const HEAD_REF = 140;
  * most 4 lines (balanced, as the engine sets it) and has no line of one small word ("and", "a"); then the first that gives 4 lines even with such a word; only then a fifth line, down to
  * `floor` (never under it). A word wider than the column at a size rules that size out.
  */
-export function sideHeadSize(head: string, st: LayoutStyle, tw: number, normal: number, floor = 72): number {
+export function sideHeadSize(head: string, st: LayoutStyle, tw: number, normal: number, floor = 72, /** Round AG: room left beside the longest word (the wrap still uses the whole column). */ slack = 0): number {
   const wt = nearestWeight(st.fonts.headline, 800);
   const words = head.split(/\s+/).filter(Boolean);
-  const fits = (s: number) => words.every((x) => measureWidth(x, st.fonts.headline, wt, s) <= tw * 0.98);
+  const fits = (s: number) => words.every((x) => measureWidth(x, st.fonts.headline, wt, s) <= (tw - slack) * 0.98);
   const lines = (s: number) => lineTexts(head, st.fonts.headline, wt, s, tw, 1.05, { phrases: [], marker: false });
   const weak = (ls: string[]) => ls.length > 1 && ls.some((l) => { const w = l.trim().split(/\s+/).filter(Boolean); return w.length === 1 && w[0].length <= 3; });
   const lo = Math.max(floor, Math.round((normal * 0.7) / 4) * 4);
@@ -201,6 +201,8 @@ const panelHeadSize = (st: LayoutStyle, text: string): number | null => {
 const IMG = (name: string, note: string) => ({ name, required: false as const, max: 12_000_000, image: true as const, note });
 /** Round AG: a narrower picture half steps by this many pixels. */
 export const SIDE_STEP = 20;
+/** Round AG: the room a narrower half leaves beside the headline's longest word (the column is measured this much narrower). */
+export const SIDE_SLACK = 24;
 /**
  * A tall or portrait picture in a left or right half, the words in the column beside it (split-half's side form). The half is 50% of the slide (655 x 1114 normally); the headline takes the
  * largest size at which it wraps to 5 lines or fewer in the column (72 px at least) and the headline and the body must fit inside the half's height, with room above and below.
@@ -226,7 +228,8 @@ export function sideSplit(img: string, head: string, body: string, v: 0 | 1, st:
       if (cut > FILL_BUDGET + 1e-6) continue;
     }
     const tw = SLIDE_W - W - 48 - 32;
-    const z = sideHeadSize(head, st, tw, 120);
+    // a narrower half keeps 24 px of room for the headline's longest word (SIDE_SLACK): a word measured at the very edge of the column was set smaller by the text fit afterwards
+    const z = sideHeadSize(head, st, tw, 120, 72, W < HALF_W ? SIDE_SLACK : 0);
     // the headline and the body must both fit the narrow column (inside the half's height, with room above and below)
     const colH = z ? measure(head, st.fonts.headline, wt, z, tw, 1.05).h + (body ? 24 + measure(body, st.fonts.body, 400, 44, tw, 1.3).h : 0) : 0;
     if (!z || colH > HALF_H - 160) continue;
