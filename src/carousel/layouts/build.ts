@@ -49,6 +49,8 @@ export interface BuildOpts {
   tone?: PlaneTone;
   /** The ground of the style's palette rhythm this slide takes (-1 = the closing ground); default: slide index mod the rhythm length. */
   ground?: number;
+  /** Round AF: the person pinned this slide's picture (the picture picker): a picture slot never cuts it to fill (layouts/fillSlide.ts). */
+  pinnedPicture?: boolean;
   /** Profile header: the name shown beside the avatar (default: made from the handle) and an optional picture (a data: URL is safest for PNG export). */
   name?: string;
   avatarUrl?: string;
@@ -93,6 +95,8 @@ export interface SlideFill {
   why: 'fills' | 'subject-cut' | 'on' | 'off' | 'unread';
   /** Round V: the window was centred on the saliency box (no focus point set). */
   auto?: boolean;
+  /** Round AF (picture slots): the faces found and whether all stay inside the kept part; null when the face finder is not available. */
+  faces?: { found: number; inside: boolean } | null;
 }
 
 const TOKENS = /\$(accentText|accentDisplay|accent2Text|accent2|accent3|onAccent2|onAccent|bg|text|muted|accent|surface)\b/g;
@@ -436,8 +440,8 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
       const ref = parseRef(p.src);
       if (p.circle || !ref || !needsContain(p, ref)) continue;
       // Round U part 3: on a full-bleed layout a photo may fill its slot (a cover crop up to 40%) when the important part of it stays inside; otherwise it is drawn whole and dissolves
-      const fc = await fillChoice(layoutId, p, ref, p.src);
-      if (fc) fills.push({ picture: ref.id, index: i, fill: fc.fill, cut: fc.cut, sides: fc.sides, inside: fc.inside, why: fc.why, ...(fc.auto ? { auto: true } : {}) });
+      const fc = await fillChoice(layoutId, p, ref, p.src, { pinned: !!o.pinnedPicture });
+      if (fc) fills.push({ picture: ref.id, index: i, fill: fc.fill, cut: fc.cut, sides: fc.sides, inside: fc.inside, why: fc.why, ...(fc.auto ? { auto: true } : {}), ...(fc.faces !== undefined ? { faces: fc.faces } : {}) });
       if (fc?.fill) {
         // Round V: no focus point set: the fill is drawn centred on the photo's saliency box (the person's own focus point is kept exactly)
         if (fc.auto) refocus.set(i, fc.focus);

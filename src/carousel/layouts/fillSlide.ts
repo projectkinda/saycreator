@@ -11,11 +11,17 @@
 // (a photo with letterbox bars) keeps it whole too.
 // No model and no download: the cut-out editor's model (public/models, onnxruntime) is a background remover the person starts by hand (fetched by npm run fetch:models, not in git), too slow
 // and too large to run on every drawing.
+// Round AF: the same rule for the picture SLOTS of split-half, headline-body-image and art-side-text (SLOT_FILL_LAYOUTS), where a photo drawn whole sat small in the middle of empty ground. There
+// the important part is the saliency box AND every face the face finder (faceFind.ts) sees in the photo: with no focus point set, the kept part is centred on both together, and a face that
+// would leave it keeps the photo whole (sharp, Round AD). A picture the person pinned to the slide (the picture picker) is never cut on these layouts. The full-bleed layouts are unchanged.
+import { facesOf, type FaceBox } from '../faceFind';
 import type { PicRef } from './images';
 import { coverLoss, photoPixels, PHOTO_CROP_BUDGET } from './pictureFit';
 
 /** The layouts where a photo may fill its slot past the 25% budget (their picture is the slide, edge to edge). photo-full is not here: its photo already fills its cell within the budget. */
 export const FILL_LAYOUTS = ['title-over-photo', 'photo-full-caption', 'cover-art'];
+/** Round AF: the layouts with a picture slot beside the words where a photo may fill its slot too (the same 40% budget), keeping the saliency box and every face inside. */
+export const SLOT_FILL_LAYOUTS = ['split-half', 'headline-body-image', 'art-side-text'];
 /** The most a cover crop may cut (width or height) to fill the slot. */
 export const FILL_BUDGET = 0.4;
 /** The share of the saliency box that must stay inside the kept part. */
@@ -138,13 +144,18 @@ export interface FillChoice {
   auto: boolean;
   /** fills: the measure said yes; subject-cut: the measure said no; on / off: the person's switch; unread: the picture could not be read (kept whole). */
   why: 'fills' | 'subject-cut' | 'on' | 'off' | 'unread';
+  /** Round AF (picture slots only): the faces found in the photo and whether every one stays inside the kept part (null: the face finder is not available, the saliency box decides). */
+  faces?: { found: number; inside: boolean } | null;
 }
 /**
  * Whether a photo that a cover crop would cut by more than 25% fills its slot (layout `layout`, slot `slot`). Null when the question does not arise: not a full-bleed layout, not a photo, a
  * zoom the person chose, a cover crop within the 25% budget (it fills already) or over 40% (it stays whole), or no known size.
  */
-export async function fillChoice(layout: string, slot: Box, ref: PicRef | null, src: string): Promise<FillChoice | null> {
-  if (!FILL_LAYOUTS.includes(layout) || !ref || !ref.photo || ref.z > 1 || !ref.w || !ref.h) return null;
+export async function fillChoice(layout: string, slot: Box, ref: PicRef | null, src: string, opts: { pinned?: boolean } = {}): Promise<FillChoice | null> {
+  const inSlot = SLOT_FILL_LAYOUTS.includes(layout);
+  if ((!FILL_LAYOUTS.includes(layout) && !inSlot) || !ref || !ref.photo || ref.z > 1 || !ref.w || !ref.h) return null;
+  // Round AF: a picture the person pinned to a slot layout is drawn as before (whole)
+  if (inSlot && opts.pinned) return null;
   const l = coverLoss(slot, ref);
   if (!l) return null;
   const cut = Math.max(l.w, l.h);
@@ -157,15 +168,21 @@ export async function fillChoice(layout: string, slot: Box, ref: PicRef | null, 
   if (!box) return { ...base, fill: o === 'on', inside: null, box: null, centre: own, focus: { fx: ref.fx, fy: ref.fy }, auto: false, why: o ?? 'unread' };
   // Round V: no focus point set: the kept part is centred on the saliency box (held inside the photo); a focus point the person set is kept exactly
   const auto = !ref.focusSet;
-  const [k0, k1] = keptWindow(auto ? ((across ? box.x0 + box.x1 : box.y0 + box.y1) / 2) : own);
+  const [b0, b1] = across ? [box.x0, box.x1] : [box.y0, box.y1];
+  // Round AF: on a picture slot the faces count as the important part too (the full-bleed layouts are unchanged: no faces read there)
+  const faces: FaceBox[] | null = inSlot ? await facesOf(src) : null;
+  const spans = (faces ?? []).map((f): [number, number] => (across ? [f.x0, f.x1] : [f.y0, f.y1]));
+  const lo = Math.min(b0, ...spans.map((s) => s[0])), hi = Math.max(b1, ...spans.map((s) => s[1]));
+  const [k0, k1] = keptWindow(auto ? (inSlot ? (lo + hi) / 2 : (b0 + b1) / 2) : own);
   const centre = r3((k0 + k1) / 2);
   const focus = auto ? (across ? { fx: centre, fy: ref.fy } : { fx: ref.fx, fy: centre }) : { fx: ref.fx, fy: ref.fy };
-  const [b0, b1] = across ? [box.x0, box.x1] : [box.y0, box.y1];
   const inside = r3(Math.max(0, Math.min(b1, k1) - Math.max(b0, k0)) / Math.max(1e-9, b1 - b0));
+  const facesIn = spans.every(([a, b]) => a >= k0 - 1e-6 && b <= k1 + 1e-6);
+  const faceInfo = inSlot ? { faces: faces ? { found: faces.length, inside: facesIn } : null } : {};
   // the person's switch wins; the measure is still reported (the picture row says what the automatic choice would be)
-  if (o) return { ...base, fill: o === 'on', inside, box, centre, focus, auto, why: o };
-  const ok = inside >= SALIENT_KEEP - 1e-9;
-  return { ...base, fill: ok, inside, box, centre, focus, auto, why: ok ? 'fills' : 'subject-cut' };
+  if (o) return { ...base, fill: o === 'on', inside, box, centre, focus, auto, why: o, ...faceInfo };
+  const ok = inside >= SALIENT_KEEP - 1e-9 && facesIn;
+  return { ...base, fill: ok, inside, box, centre, focus, auto, why: ok ? 'fills' : 'subject-cut', ...faceInfo };
 }
 
 /** The note in plain words for a photo's choice, one line (the picture row and the slide notes; Round V: shortened). */

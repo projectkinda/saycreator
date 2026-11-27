@@ -114,7 +114,8 @@ test('U3c never filled: a screenshot, a zoom the person chose, a photo already i
   expect(r.within).toBeNull();
   expect(r.over).toBeNull();
   expect(r.full).toBeNull();
-  expect(r.split).toBeNull();
+  // Round AF: a split-half picture slot is a fill question too (round-af-slot-fill.spec.ts); this picture cannot be read, so it stays whole
+  expect(r.split).toMatchObject({ fill: false, why: 'unread' });
   expect(r.layouts).toEqual(['title-over-photo', 'photo-full-caption', 'cover-art']);
   expect([r.budget, r.keep]).toEqual([0.4, 0.9]);
   expect(r.window).toEqual([0.2, 0.8]);

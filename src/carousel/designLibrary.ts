@@ -1539,7 +1539,7 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
     // Round Y: the deck's last slide is its closing: the code may give it a closing look, unless the person set its layout or variant in the picker
     faceVariant = undefined;
     const closing = o.total >= 2 && o.index === o.total - 1 && !spec.pin?.layout && !spec.pin?.look;
-    const opts = { handle: o.handle, index: o.index, total: o.total, cut: cutsOf(spec.layout).includes(t.cut) ? t.cut : ('plain' as Cut), invert: t.invert, density: t.density, ...(o.ground !== undefined ? { ground: o.ground } : {}), ...(closing ? { closing } : {}) };
+    const opts = { handle: o.handle, index: o.index, total: o.total, cut: cutsOf(spec.layout).includes(t.cut) ? t.cut : ('plain' as Cut), invert: t.invert, density: t.density, ...(o.ground !== undefined ? { ground: o.ground } : {}), ...(closing ? { closing } : {}), ...(spec.pin?.picture !== undefined ? { pinnedPicture: true } : {}) };
     let b: Built;
     if (spec.layout === 'title-over-photo' && typeof f.image === 'string' && f.image) {
       // a headline on a picture: the scrim is the weakest one at which every word reads at 4.5:1 over 95% of the pixels behind it, measured on the real picture; if even the solid panel does not read, the slide is the full-photo caption layout
