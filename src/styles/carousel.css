@@ -617,3 +617,8 @@
 .cr-arrange .row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .cr-arrange .btn.cr-arrange-btn, .cr-arrange-status .btn.cr-arrange-btn { min-height: 44px; min-width: 44px; }
 .cr-arrange-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+
+/* Round AM part 4: the "Put in a slot…" dropdown of the unused pictures stays inside its tray at 390 px (it took the width of its longest option) */
+.cr-unused-tray { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.cr-unused-tray .cr-strip-item { min-width: 0; max-width: 100%; }
+.cr-unused-put { display: block; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; text-overflow: ellipsis; }

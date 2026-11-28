@@ -15,7 +15,7 @@ export function UnusedPictures({ unused, slots, onPut }: { unused: PictureMeta[]
   if (!unused.length) return null;
   const n = unused.length;
   return (
-    <section className="card" data-testid="unused-pictures" aria-label="Pictures not used in this deck" style={{ display: 'grid', gap: 8 }}>
+    <section className="card cr-unused-tray" data-testid="unused-pictures" aria-label="Pictures not used in this deck" style={{ display: 'grid', gap: 8 }}>
       <p className="small" role="status" data-testid="unused-count" style={{ margin: 0 }}>
         <strong>{n} {n === 1 ? 'picture wasn’t' : 'pictures weren’t'} used.</strong> {slots.length ? 'Drop one into any picture slot.' : 'No slide has a picture slot: pick a picture layout in a slide’s layout gallery.'}
       </p>
@@ -26,7 +26,7 @@ export function UnusedPictures({ unused, slots, onPut }: { unused: PictureMeta[]
             <span className="small">{p.name} · {p.width}×{p.height}</span>
             {slots.length > 0 && (
               <select
-                className="plain-select"
+                className="plain-select cr-unused-put"
                 value=""
                 disabled={busy}
                 aria-label={`Put ${p.name} in a picture slot`}
