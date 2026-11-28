@@ -32,6 +32,7 @@ import { SlidePicker } from './SlidePicker';
 import { flavourLine, plainProblem, plainWords } from './plainWords';
 import { purposeLabel } from './layoutPurpose';
 import { drawGalleryTile, galleryModel, leftOutOf, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
+import { flat as flatWords } from './layoutMap';
 import { LayoutGallery } from './LayoutGallery';
 import { profileWebsite } from './profileSite';
 import { ImagesField } from './ImagesField';
@@ -1350,11 +1351,15 @@ export default function CarouselPage() {
     const lib = docRef.current.designed?.library;
     if (!lib?.plan) return 'This deck has no stored plan to draw from.';
     const model = pickModel(i);
-    // (Round AM part 2: never a layout that leaves out words the slide requires: that one is only picked in the Layout tab, after its question)
-    const tries = (model?.entries ?? []).filter((e) => e.enabled && !e.current && !e.near && (IMAGE_LAYOUT_IDS as readonly string[]).includes(e.layout));
+    // (Round AM part 3: never a layout that leaves out any of the slide's words, optional ones included: the next one that keeps them all; the Layout tab offers the others, after its question)
+    const tries = (model?.entries ?? []).filter((e) => e.enabled && !e.current && !e.near && !e.drops && (IMAGE_LAYOUT_IDS as readonly string[]).includes(e.layout));
     for (const e of tries) {
       const r = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, { layout: e.layout });
       if (!r.ok || usedIds(r.spec.fields).length === 0) continue;
+      // (Round AM part 3: and the slide as drawn shows every word it had; a layout that would not is passed over)
+      const had = flatWords(lib.plan.specs[i].fields);
+      const shows = flatWords(r.spec.fields);
+      if (had.some((t) => !shows.some((u) => u === t || u.includes(t)))) continue;
       const bad = putSlide(i, r, `Add a picture to slide ${i + 1}`);
       return bad ?? `Added a picture to slide ${i + 1}: the layout is now ${r.layout}. Undo takes it back.`;
     }
