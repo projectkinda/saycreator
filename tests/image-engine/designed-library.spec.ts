@@ -48,7 +48,8 @@ const ANSWERS = `
     { layout: 'cta-button', fields: { headline: 'Back Quick Flip today', button: 'Back it now', sub: 'Early backers save 30%.' }, accents: ['today'] },
   ], ...extra });
   const broken = () => { const g = good(); g.slides[3] = { layout: 'stepper', fields: { title: 'Slide and bite', steps: ['Slide the zip', 'Bite the clasp'] } }; g.slides[4].fields.items[1] = 'This checklist item is far longer than the forty-eight character budget allows'; return g; };
-  const fixed = { slides: { '4': good().slides[3], '5': good().slides[4] } };
+  // Round AQ: a redone slide keeps its own words (cuts only), or the code does not use it: the feature slider from the stepper's words, the long item cut
+  const fixed = { slides: { '4': { layout: 'feature-slider', fields: { title: 'Slide and bite', body: 'Slide the zip, bite the clasp.' }, accents: [] }, '5': { layout: 'checklist', fields: { title: 'Why you will love it', items: ['Waterproof shell', 'Far longer than the budget allows', 'Machine washable', 'Flips in 10 seconds'] }, accents: [] } } };
 `;
 
 const REQ = { text: 'Quick Flip is a hoodie that flips into a backpack in 10 seconds. '.repeat(3) + ' Back it on Kickstarter today.', slides: 7, tone: 'clear', format: 'carousel', styleChoice: 'auto', styles: [] };
