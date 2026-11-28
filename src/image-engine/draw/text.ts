@@ -133,6 +133,12 @@ export interface LaidWord {
   x: number;
   width: number;
   highlighted: boolean;
+  /**
+   * Round AP: on a word only PART of which is highlighted (a list number glued to the first word, "3.\u00A0frame" with "frame" marked), where the bar starts and ends, as offsets
+   * from the word's x. Absent when the bar covers the word (to its ending punctuation), as before.
+   */
+  barFrom?: number;
+  barTo?: number;
 }
 export interface LaidLine {
   text: string;
@@ -200,9 +206,30 @@ function markedTok(layer: TextLayer, marked: Set<string>, t: Tok): boolean {
 function inRanges(layer: TextLayer, t: Tok): boolean {
   return !!layer.highlight?.ranges?.some((r) => r.start < t.start + t.text.length && r.end > t.start);
 }
+/**
+ * Round AP: whether a marked token's FIRST character is on the bar. A token glued with a no-break space ("3.\u00A0frame") may be marked only from its second word: its left edge is then
+ * plain text, so it takes no bar padding at the start of a line and no pill gap before it.
+ */
+function markedLeft(layer: TextLayer, marked: Set<string>, t: Tok): boolean {
+  if (!markedTok(layer, marked, t)) return false;
+  return !layer.highlight?.ranges || layer.highlight.ranges.some((r) => r.start <= t.start && r.end > t.start);
+}
+/** Round AP: where the bar starts inside a token whose first part is plain text glued by a no-break space ("3.\u00A0frame" -> the index of "f"); -1 when it does not. */
+function innerStart(layer: TextLayer, marked: Set<string>, t: Tok): number {
+  if (!layer.highlight?.ranges || !(layer.highlight.paddingX > 0) || !markedTok(layer, marked, t) || markedLeft(layer, marked, t)) return -1;
+  const tEnd = t.start + t.text.length;
+  const ms = Math.min(...layer.highlight.ranges.filter((r) => r.start < tEnd && r.end > t.start).map((r) => r.start));
+  return ms > t.start && /[\s\u00A0]/.test(layer.text[ms - 1] ?? '') ? ms : -1;
+}
+/** Round AP: the clear space kept between that plain first part and the bar, as between two words of which one sits on a pill (the no-break space counts toward it). */
+function innerGap(layer: TextLayer, marked: Set<string>, t: Tok, size: number): number {
+  if (innerStart(layer, marked, t) < 0) return 0;
+  const spaceW = measureWidth(' ', layer.style.font, layer.style.weight, size) + (layer.style.letterSpacing ?? 0);
+  return Math.max(0, layer.highlight!.paddingX + MARKER_GAP - spaceW);
+}
 /** Extra space between two neighbouring tokens when exactly one of them sits on a pill: space + extra - padding is at least MARKER_GAP. */
 function pillGap(layer: TextLayer, marked: Set<string>, a: Tok, b: Tok, spaceW: number): number {
-  if (markedTok(layer, marked, a) === markedTok(layer, marked, b)) return 0;
+  if (markedTok(layer, marked, a) === markedLeft(layer, marked, b)) return 0;
   return Math.max(0, layer.highlight!.paddingX + MARKER_GAP - spaceW);
 }
 
@@ -226,9 +253,9 @@ function wrapStyled(layer: TextLayer, maxWidth: number, size: number): { lines: 
   let wordTooWide = false;
   const spaceW = measureWidth(' ', layer.style.font, layer.style.weight, size) + (layer.style.letterSpacing ?? 0);
   const marked = new Set((layer.highlight?.words ?? []).map(wordKey).filter(Boolean));
-  const tokW = (t: Tok) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size) + trailGap(layer, marked, t);
+  const tokW = (t: Tok) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size) + trailGap(layer, marked, t) + innerGap(layer, marked, t, size);
   // a line of left-aligned text that starts with a marked word is set in by the bar's padding, so the bar's left edge stays on the text box's edge (inside the margin)
-  const lead = (t: Tok) => (markedTok(layer, marked, t) ? layer.highlight!.paddingX : 0);
+  const lead = (t: Tok) => (markedLeft(layer, marked, t) ? layer.highlight!.paddingX : 0);
   // a marked word that ends a line leaves the bar's padding at its right: the line must still fit with it
   const tail = (t: Tok) => (markedTok(layer, marked, t) ? layer.highlight!.paddingX : 0);
   let offset = 0;
@@ -290,7 +317,7 @@ function balanceLines(layer: TextLayer, lines: Tok[][], size: number): Tok[][] {
   const n = lines.length;
   if (n < 2) return lines;
   const markedAll = new Set((layer.highlight?.words ?? []).map(wordKey).filter(Boolean));
-  let lo = Math.max(...lines.flat().map((t) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size) + trailGap(layer, markedAll, t)));
+  let lo = Math.max(...lines.flat().map((t) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size) + trailGap(layer, markedAll, t) + innerGap(layer, markedAll, t, size)));
   let hi = layer.width;
   for (let k = 0; k < 14 && hi - lo > 1; k++) {
     const mid = (lo + hi) / 2;
@@ -302,7 +329,8 @@ function balanceLines(layer: TextLayer, lines: Tok[][], size: number): Tok[][] {
   const spaceW = measureWidth(' ', layer.style.font, layer.style.weight, size) + (layer.style.letterSpacing ?? 0);
   const markedSet = new Set((layer.highlight?.words ?? []).map(wordKey).filter(Boolean));
   const padOf = (t: Tok) => (markedTok(layer, markedSet, t) ? layer.highlight!.paddingX : 0);
-  const widthOf = (ts: Tok[]) => ts.reduce((a, t, i) => a + piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size) + (i === ts.length - 1 ? padOf(t) : 0) + (i === 0 ? padOf(t) : 0) + trailGap(layer, markedSet, t, ts[i + 1]) + (i > 0 ? spaceW + pillGap(layer, markedSet, ts[i - 1], t, spaceW) : 0), 0);
+  const padLeft = (t: Tok) => (markedLeft(layer, markedSet, t) ? layer.highlight!.paddingX : 0);
+  const widthOf = (ts: Tok[]) => ts.reduce((a, t, i) => a + piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, size) + (i === ts.length - 1 ? padOf(t) : 0) + (i === 0 ? padLeft(t) : 0) + trailGap(layer, markedSet, t, ts[i + 1]) + innerGap(layer, markedSet, t, size) + (i > 0 ? spaceW + pillGap(layer, markedSet, ts[i - 1], t, spaceW) : 0), 0);
   const last = out[out.length - 1];
   const prev = out[out.length - 2];
   const wordsIn = (ts: Tok[]) => ts.reduce((a, t) => a + t.text.split(/[\s ]+/).filter(Boolean).length, 0);
@@ -362,11 +390,12 @@ function layoutStyled(layer0: TextLayer): TextBlock {
   const lines: LaidLine[] = fit.w.lines.map((toks, i) => {
     // the punctuation that ends a marked word is set clear of its bar (trailGap)
     const gaps = toks.map((t, k) => trailGap(layer, marked, t, toks[k + 1]));
-    const tw = toks.map((t, k) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, fit.size) + gaps[k]);
+    const inner = toks.map((t) => innerGap(layer, marked, t, fit.size));
+    const tw = toks.map((t, k) => piecesWidth(piecesOf(layer, t.start, t.start + t.text.length), layer, fit.size) + gaps[k] + inner[k]);
     const gapAt = (k: number) => (k > 0 ? spaceW + pillGap(layer, marked, toks[k - 1], toks[k], spaceW) : 0);
     const width = Math.max(0, tw.reduce((a, b) => a + b, 0) + toks.reduce((a, _t, k) => a + gapAt(k), 0) - (ls > 0 ? ls : 0));
     // the bar's padding at the ends of the line is part of the line: a marked first word is set in by it, a marked last word keeps it inside the line (whatever the alignment)
-    const lead = toks.length && markedTok(layer, marked, toks[0]) ? layer.highlight!.paddingX : 0;
+    const lead = toks.length && markedLeft(layer, marked, toks[0]) ? layer.highlight!.paddingX : 0;
     const endPad = toks.length && markedTok(layer, marked, toks[toks.length - 1]) ? layer.highlight!.paddingX : 0;
     const boxW = width + lead + endPad;
     const x0 = (s.align === 'center' ? (layer.width - boxW) / 2 : s.align === 'right' ? layer.width - boxW : 0) + lead;
@@ -379,13 +408,35 @@ function layoutStyled(layer0: TextLayer): TextBlock {
       const keys = t.text.split('\u00A0').map(wordKey).filter(Boolean);
       const hit = layer.highlight?.ranges ? keys.length > 0 && inRanges(layer, t) : keys.length > 0 && keys.every((q) => marked.has(q)) && (!firstOnly || keys.every((q) => !used.has(q)));
       if (hit) keys.forEach((q) => used.add(q));
-      words.push({ text: t.text, start: t.start, x: cx, width: tw[k], highlighted: wholeLines.has(i) || hit });
+      // Round AP: a word only part of which is highlighted: the bar covers that part only (the rest keeps the text colour on the slide's own background)
+      let bar: { barFrom?: number; barTo?: number } = {};
+      if (hit && !wholeLines.has(i) && layer.highlight?.ranges) {
+        const tEnd = t.start + t.text.length;
+        const rs = layer.highlight.ranges.filter((r) => r.start < tEnd && r.end > t.start);
+        const ms = Math.max(t.start, Math.min(...rs.map((r) => r.start)));
+        const me = Math.min(tEnd, Math.max(...rs.map((r) => r.end)));
+        const trailN = TRAIL.exec(t.text.replace(/\u00A0/g, ' '))?.[0].length ?? 0;
+        const toEnd = me >= tEnd - (trailN < t.text.length ? trailN : 0);
+        if (ms > t.start) bar.barFrom = piecesWidth(piecesOf(layer, t.start, ms), layer, fit.size) + inner[k];
+        if (!toEnd) bar.barTo = piecesWidth(piecesOf(layer, t.start, me), layer, fit.size) + (me > ms ? inner[k] : 0);
+        if (bar.barFrom === undefined && bar.barTo === undefined) bar = {};
+      }
+      words.push({ text: t.text, start: t.start, x: cx, width: tw[k], highlighted: wholeLines.has(i) || hit, ...bar });
       let px = cx;
       let firstPiece = true;
       // a word whose ending punctuation is set clear of its bar is drawn in two parts: the word, then (after the gap) the punctuation
       const trailLen = gaps[k] > 0 ? (TRAIL.exec(t.text.replace(/ /g, ' '))?.[0].length ?? 0) : 0;
       const end = t.start + t.text.length;
-      const parts = trailLen ? [{ from: t.start, to: end - trailLen, shift: 0 }, { from: end - trailLen, to: end, shift: gaps[k] }] : [{ from: t.start, to: end, shift: 0 }];
+      // the parts of the word: a shift before the bar inside it (Round AP: after a glued list number) and before ending punctuation set clear of its bar
+      const cuts: { at: number; shift: number }[] = [];
+      if (inner[k]) cuts.push({ at: innerStart(layer, marked, t), shift: inner[k] });
+      if (trailLen) cuts.push({ at: end - trailLen, shift: gaps[k] });
+      cuts.sort((a, b) => a.at - b.at);
+      const parts: { from: number; to: number; shift: number }[] = [];
+      let partFrom = t.start;
+      let partShift = 0;
+      for (const c of cuts) { parts.push({ from: partFrom, to: c.at, shift: partShift }); partFrom = c.at; partShift = c.shift; }
+      parts.push({ from: partFrom, to: end, shift: partShift });
       for (const part of parts) {
         px += part.shift;
         for (const p of piecesOf(layer, part.from, part.to)) {
@@ -408,9 +459,11 @@ function layoutStyled(layer0: TextLayer): TextBlock {
       const prev = marks[marks.length - 1];
       const lastWord = words[words.indexOf(w) - 1];
       // A bar never covers the punctuation that ends the marked words (, . ; : ! ?).
-      const wEnd = w.x + w.width - trailWidth(w, layer, fit.size) - gaps[words.indexOf(w)];
-      if (prev && lastWord?.highlighted) prev.width = wEnd - prev.x;
-      else marks.push({ x: w.x, width: wEnd - w.x });
+      const wEnd = w.barTo !== undefined ? w.x + w.barTo : w.x + w.width - trailWidth(w, layer, fit.size) - gaps[words.indexOf(w)];
+      const from = w.x + (w.barFrom ?? 0);
+      // (a word whose bar starts inside it, or follows one whose bar stopped inside it, starts a bar of its own)
+      if (prev && lastWord?.highlighted && w.barFrom === undefined && lastWord.barTo === undefined) prev.width = wEnd - prev.x;
+      else marks.push({ x: from, width: wEnd - from });
     }
     return { text: toks.map((t) => t.text).join(' '), x: x0, y: top + i * fit.lineStep, width, words, marks, segments };
   });

@@ -166,8 +166,11 @@ export function lintSlide(input: CarouselLintInput): CarouselLintResult[] {
     const hl = t.highlight;
     const marked = new Set((hl?.words ?? []).map((w) => w.toLowerCase()));
     for (const line of i.block.lines)
-      for (const w of line.words) {
-        const colour = w.highlighted && hl?.textColor ? hl.textColor : t.style.color;
+      // Round AP: measured as it is DRAWN (fabric-adapter): a line with pieces is drawn piece by piece, each in its own colour (or the text colour); otherwise word by word, a highlighted
+      // word in the highlight's text colour. Before, a word was measured in one colour, so a list number drawn in the text colour on a highlight bar ("3." on "3. frame") passed.
+      // (a piece that is only space draws nothing: it is not measured)
+      for (const w of (line.segments ? line.segments.filter((g) => /\S/.test(g.text)).map((g) => ({ text: g.text, x: g.x, width: g.width, colour: g.color ?? t.style.color })) : line.words.map((x) => ({ text: x.text, x: x.x, width: x.width, colour: x.highlighted && hl?.textColor ? hl.textColor : t.style.color })))) {
+        const colour = w.colour;
         const tl = luminance(...parseColor(colour).rgb);
         const mid = t.y + line.y + i.block.lineStep / 2;
         const r = { x: (t.x + w.x) * input.phoneScale, y: (mid - i.block.size * 0.34) * input.phoneScale, w: Math.max(1, w.width * input.phoneScale), h: Math.max(1, i.block.size * 0.64 * input.phoneScale) };
