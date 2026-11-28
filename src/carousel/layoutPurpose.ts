@@ -124,8 +124,9 @@ export function purposeGrid(entries: PurposeEntry[], failed: ReadonlySet<string>
       continue;
     }
     const cur = clean.find((l) => by.get(l)?.current);
-    // a change that keeps every word comes before one that leaves a line out
-    const changes = [...change.filter((l) => !by.get(l)?.change?.drops?.length), ...change.filter((l) => by.get(l)?.change?.drops?.length)];
+    // a change that keeps every word comes before one that leaves a line out, and one that leaves out less before one that leaves out more (Round AM part 2)
+    const lostOf = (l: string) => by.get(l)?.change?.drops?.length ?? 0;
+    const changes = change.map((l, k) => [l, k] as const).sort((a, b) => lostOf(a[0]) - lostOf(b[0]) || a[1] - b[1]).map(([l]) => l);
     const all = [...clean, ...changes];
     const best = cur ?? all[0];
     tiles.push({ purpose: p, best, more: all.filter((l) => l !== best), current: !!cur, fit: clean.includes(best) ? 'clean' : 'change' });

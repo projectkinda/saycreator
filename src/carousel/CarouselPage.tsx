@@ -1350,7 +1350,8 @@ export default function CarouselPage() {
     const lib = docRef.current.designed?.library;
     if (!lib?.plan) return 'This deck has no stored plan to draw from.';
     const model = pickModel(i);
-    const tries = (model?.entries ?? []).filter((e) => e.enabled && !e.current && (IMAGE_LAYOUT_IDS as readonly string[]).includes(e.layout));
+    // (Round AM part 2: never a layout that leaves out words the slide requires: that one is only picked in the Layout tab, after its question)
+    const tries = (model?.entries ?? []).filter((e) => e.enabled && !e.current && !e.near && (IMAGE_LAYOUT_IDS as readonly string[]).includes(e.layout));
     for (const e of tries) {
       const r = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, { layout: e.layout });
       if (!r.ok || usedIds(r.spec.fields).length === 0) continue;

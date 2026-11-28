@@ -14,7 +14,7 @@ import type { CarouselScript } from '../image-engine/carousel/types';
 import type { WriteProvider } from './writer';
 
 // ----- moving the text between layouts: see layoutMap.ts -----
-import { accentsIn, addedNumber, flat, layoutOptions, layoutRefusals, type LayoutOption } from './layoutMap';
+import { accentsIn, addedNumber, flat, layoutOptions, layoutRefusals, nearOptions, type LayoutOption } from './layoutMap';
 import { BLOCK_LABEL, plainVariant } from './plainWords';
 export { accentsIn, fromCanon, layoutOptions, layoutRefusals, toCanon, type LayoutOption } from './layoutMap';
 
@@ -113,6 +113,8 @@ export interface GalleryEntry {
   change?: { number?: string; drops?: string[]; photoFrom?: number[] };
   /** Round AM: the change in plain words, one line each ("Adds '1.' before the headline", "Leaves out: ...", "Photo also used on slide 3"). */
   badges?: string[];
+  /** Round AM part 2: a layout that leaves out words the slide's own layout requires (nearOptions): only the person picks it, after the question. */
+  near?: true;
 }
 export interface GalleryModel {
   entries: GalleryEntry[];
@@ -136,6 +138,9 @@ export function galleryModel(lib: LibraryReport, look: Look, handle: string, i: 
   // Round AM: the words the picker maps from: the slide's own, or the words kept from before a move that left a line out (so the line comes back)
   const src = sourceOf(spec);
   const options = new Map(layoutOptions(src, look).map((o) => [o.layout as string, o]));
+  // Round AM part 2: and the layouts that leave out words the slide's own layout requires (a closing's buttons): tiles that ask first
+  const near = new Set<string>();
+  for (const o of nearOptions(src, look)) if (!options.has(o.layout)) { options.set(o.layout, o); near.add(o.layout); }
   const why = layoutRefusals(src, look);
   const free = look.images?.length ? unusedPictures(lib.plan.specs, look.images, i) : [];
   const entries: GalleryEntry[] = LAYOUT_IDS.map((id) => {
@@ -155,7 +160,7 @@ export function galleryModel(lib: LibraryReport, look: Look, handle: string, i: 
     const badges = badgesOf(change);
     const reason = noPicture && !pics?.fields ? 'None of your pictures fits this layout\'s picture space.' : badges.length ? badges.join('. ') + '.' : undefined;
     const fit: GalleryEntry['fit'] = current ? 'clean' : noPicture && !pics?.fields ? 'off' : badges.length ? 'change' : 'clean';
-    return { ...base, enabled: true, fit, reason, ...(o?.dropped.length ? { drops: true } : {}), ...(noPicture ? { noPicture: true } : {}), ...(badges.length ? (current ? { badges } : { change, badges }) : {}) };
+    return { ...base, enabled: true, fit, reason, ...(near.has(id) && !current ? { near: true as const } : {}), ...(o?.dropped.length ? { drops: true } : {}), ...(noPicture ? { noPicture: true } : {}), ...(badges.length ? (current ? { badges } : { change, badges }) : {}) };
   });
   entries.sort((a, b) => Number(b.current) - Number(a.current) || Number(b.enabled) - Number(a.enabled));
   const CUT_LABELS = CUT_LABEL;
@@ -246,7 +251,8 @@ async function choiceDraw(lib: LibraryReport, look: Look, handle: string, i: num
   const src = sourceOf(cur);
   let moved: LayoutOption | undefined;
   if (layout !== cur.layout) {
-    const opt = layoutOptions(src, look).find((o) => o.layout === layout);
+    // (Round AM part 2: a layout that leaves out required words is the person's pick in the layout picker, after its question; no deck pass draws through here)
+    const opt = layoutOptions(src, look).find((o) => o.layout === layout) ?? nearOptions(src, look).find((o) => o.layout === layout);
     // (a caller that hands over the fields itself, like the picture picker, has already kept every word)
     if (!opt && !ch.fields) return { ok: false, reasons: [`The text of slide ${i + 1} cannot be moved to "${layout}" without making text up.`] };
     if (opt) {

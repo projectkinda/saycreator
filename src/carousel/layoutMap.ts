@@ -202,6 +202,35 @@ export function layoutOptionsFor(spec: SlideSpec, look: Look, o: { joinStat?: bo
   }
   return out;
 }
+/**
+ * Round AM part 2: the layouts the PERSON may pick that leave out words the slide's own layout requires (a closing's buttons, the sentence of a headline + sentence slide), for the
+ * layout picker only: a tile that says what it leaves out and asks first. layoutOptionsFor() never offers these and no deck pass calls this. Same mapping and the same rules as the
+ * picker's list (fromCanon with pickerCanon, validateSlideContent): nothing is made up. Never left out: the headline (or the question or quote that stands for it), a number, a list's
+ * items, a stat's numbers and labels, a bar's value. Not in the list: the layouts layoutOptions() offers.
+ */
+export function nearOptions(spec: SlideSpec, look: Look): LayoutOption[] {
+  const offered = new Set(layoutOptions(spec, look).map((o) => o.layout as string));
+  const own = Object.fromEntries(Object.entries(spec.fields).filter(([k]) => k !== 'accent')) as Fields;
+  const c = toCanon(spec.layout, own);
+  const head = c.head || c.quote;
+  if (!head) return [];
+  const keep = [head, c.number, c.label, c.bar, ...c.items, ...c.numbers, ...c.labels].map((x) => x.trim()).filter(Boolean);
+  const have = flat(own);
+  const core = (layoutDef(spec.layout)?.fields ?? []).filter((f) => f.required).flatMap((f) => (Array.isArray(own[f.name]) ? (own[f.name] as string[]) : [String(own[f.name] ?? '')])).map((x) => x.trim()).filter(Boolean);
+  const out: LayoutOption[] = [];
+  for (const id of LAYOUT_IDS) {
+    if (id === spec.layout || offered.has(id)) continue;
+    const f = fromCanon(id, pickerCanon(spec.layout, own, c, id), !!look.hasPhoto, look.images);
+    if (!f || !validateSlideContent(id, f).ok) continue;
+    const shown = flat(f);
+    const lost = (t: string) => !shown.some((u) => u === t || u.includes(t));
+    if (keep.some(lost)) continue;
+    const droppedCore = core.filter(lost);
+    if (!droppedCore.length) continue;
+    out.push({ layout: id, fields: f, dropped: have.filter(lost), droppedCore, current: false });
+  }
+  return out;
+}
 // Round AL part 1: what a layout needs, in plain words (no field ids)
 const CANON_WORDS: Record<string, string> = { head: 'a headline', kicker: 'a small line above the headline', sub: 'a line below the headline', body: 'a paragraph', number: 'a number', label: 'a short label', bar: 'a value for the bar', quote: 'a quote', author: 'an author', button: 'a button', items: 'a list', lines: 'a line for each card', numbers: 'numbers', labels: 'labels for the items' };
 const clipText = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t);
@@ -247,22 +276,24 @@ export function layoutRefusals(spec: SlideSpec, look: Look): Record<string, stri
   const out: Record<string, string> = {};
   for (const id of LAYOUT_IDS) {
     if (offered.has(id)) continue;
-    const f = fromCanon(id, c, !!look.hasPhoto, look.images);
+    // Round AM part 2: the text the picker would move (pickerCanon: a numbered item with "1." before its headline), so the reason is the real one
+    const pc = pickerCanon(spec.layout, own, c, id);
+    const f = fromCanon(id, pc, !!look.hasPhoto, look.images);
     if (!f) {
       // a layout with picture slots: the text maps, the pictures are what is missing (how many it needs, how many of the project's fit)
-      if ((IMAGE_LAYOUT_IDS as readonly string[]).includes(id) && fromCanon(id, c, true)) {
+      if ((IMAGE_LAYOUT_IDS as readonly string[]).includes(id) && fromCanon(id, pc, true)) {
         const need = imagesNeeded(id);
         const have = look.images ? fittingPictures(id, look.images) : 0;
         const shape = [...new Set(imageSlotsOf(id).flatMap((s) => s.accepts))].join(' or ');
         out[id] = look.images ? `Needs ${need} ${need === 1 ? 'picture' : 'pictures'} (${shape}); this deck has ${have} that ${have === 1 ? 'fits' : 'fit'}.` : 'Needs a picture, and this deck has none.';
         continue;
       }
-      if (!look.hasPhoto && fromCanon(id, c, true)) {
+      if (!look.hasPhoto && fromCanon(id, pc, true)) {
         out[id] = 'Needs a picture, and this deck has none.';
         continue;
       }
       // what is missing: add the kinds of text one by one until the layout can take them
-      const base = c as unknown as Record<string, string | string[]>;
+      const base = pc as unknown as Record<string, string | string[]>;
       const withKeys = (ks: string[]) => ({ ...base, ...Object.fromEntries(ks.map((k) => [k, Array.isArray(base[k]) ? ['x'] : 'x'])) }) as unknown as Canon;
       const empties = Object.keys(CANON_WORDS).filter((k) => !(Array.isArray(base[k]) ? base[k].length : base[k]));
       let need = empties.filter((k) => fromCanon(id, withKeys([k]), true)).slice(0, 1);
@@ -271,7 +302,7 @@ export function layoutRefusals(spec: SlideSpec, look: Look): Record<string, stri
         if (fromCanon(id, withKeys(need), true)) need = need.filter((k) => { const rest = need.filter((x) => x !== k); return !fromCanon(id, withKeys(rest), true); });
         else need = [];
       }
-      out[id] = need.length ? `Needs ${need.map((k) => CANON_WORDS[k]).join(' and ')}, which this slide does not have.` : ruleReason(id, c);
+      out[id] = need.length ? `Needs ${need.map((k) => CANON_WORDS[k]).join(' and ')}, which this slide does not have.` : ruleReason(id, pc);
       continue;
     }
     const v = validateSlideContent(id, f);
