@@ -78,10 +78,10 @@ test('AL7 in the app: the numbered item offers more purposes (only those that ke
   await expect(g).not.toHaveAttribute('data-ready-ms', '', { timeout: 60_000 });
   const tiles = await g.locator('[data-testid^="purpose-"]:not([data-testid^="purpose-off-"])').count();
   expect(tiles, 'more than the Numbered step purpose (this deck has no picture: the photo purposes are not offered)').toBeGreaterThanOrEqual(2);
-  // only what keeps the whole slide is a tile: Big statement would leave the item's sentence out, so it is under "Why not the others" with that reason
-  await expect(g.getByTestId('purpose-statement')).toHaveCount(0);
-  await expect(g.getByTestId('purpose-off-statement')).toContainText('Leaves out');
-  await expect(g.locator('.cr-lp-leaves')).toHaveCount(0);
+  // Round AM: Big statement would leave the item's sentence out: it is a tile that fits with a change, marked with what it leaves out (no longer under "Why not the others")
+  await expect(g.getByTestId('purpose-statement')).toHaveAttribute('data-fit', 'change');
+  await expect(g.getByTestId('purpose-statement').locator('.cr-lp-badge').last()).toContainText('Leaves out');
+  await expect(g.getByTestId('purpose-off-statement')).toHaveCount(0);
   await g.getByTestId('purpose-paragraph').locator('button[data-testid^="gal-"]').first().click();
   await expect(g.getByRole('status')).toHaveText(/^Slide 2 is now Headline and paragraph/, { timeout: 60_000 });
   await expect.poll(async () => (await lib()).plan.specs[1].layout, { timeout: 30_000 }).toBe('split-text');
@@ -104,7 +104,7 @@ test('AL7 in the app: the numbered item offers more purposes (only those that ke
   expect(calls, 'one fake writer call; the picker costs nothing').toBe(1);
 });
 
-test('AL8 the grid keeps the whole slide: a picture purpose whose layouts would get no picture (every picture is on another slide) and a purpose whose layouts leave a line out are under "Why not the others" with that reason; a free picture brings the photo purposes back', async ({ page }) => {
+test('AL8 (Round AM) a picture purpose whose layouts would get no free picture (every picture is on another slide) and a purpose whose layouts leave a line out are tiles that fit with a change, each with its change in plain words; a free picture takes away the photo change', async ({ page }) => {
   await page.goto('/images/carousel');
   const r: any = await page.evaluate(async () => {
     const D: any = await import('/src/carousel/designLibrary.ts');
@@ -125,20 +125,25 @@ test('AL8 the grid keeps the whole slide: a picture purpose whose layouts would 
       const m = P.galleryModel(res.library, { hasPhoto: true, images }, '@h', 1);
       const g = LP.purposeGrid(m.entries);
       const by = new Map(m.entries.map((e: any) => [e.layout, e]));
-      return { tiles: g.tiles.map((t: any) => t.purpose.id), shown: g.tiles.flatMap((t: any) => [t.best, ...t.more]).map((l: string) => by.get(l)), off: Object.fromEntries(g.off.map((o: any) => [o.purpose.id, o.reason])) };
+      return { tiles: g.tiles.map((t: any) => t.purpose.id), fit: Object.fromEntries(g.tiles.map((t: any) => [t.purpose.id, t.fit])), badges: Object.fromEntries(g.tiles.map((t: any) => [t.purpose.id, (by.get(t.best) as any)?.badges ?? []])), shown: g.tiles.flatMap((t: any) => [t.best, ...t.more]).map((l: string) => by.get(l)), off: Object.fromEntries(g.off.map((o: any) => [o.purpose.id, o.reason])) };
     };
     return { used: grid(two), free: grid([...two, pic('pC', 1500, 1000)]) };
   });
   for (const k of ['photo-side', 'photo-stack']) {
-    expect(r.used.tiles, `${k}: every picture is on another slide`).not.toContain(k);
-    expect(r.used.off[k]).toBe('All your pictures are on other slides: this layout would show no picture.');
+    expect(r.used.tiles, `${k}: every picture is on another slide, it fits with a change`).toContain(k);
+    expect(r.used.off[k]).toBeUndefined();
+    expect(r.used.fit[k]).toBe('change');
+    expect(r.used.badges[k].join(' | ')).toMatch(/Photo also used on slide [13]/);
+    // a free picture: no photo change (the number before the headline is the change left)
+    expect(r.free.badges[k].join(' | ')).not.toMatch(/Photo also used/);
   }
-  expect(r.used.off.statement, 'Big statement would leave the item\'s sentence out').toMatch(/^Leaves out: "Sunrise/);
+  expect(r.used.off.statement).toBeUndefined();
+  expect(r.used.badges.statement.join(' | '), 'Big statement would leave the item\'s sentence out').toMatch(/Leaves out: "Sunrise/);
+  // an entry the grid shows that is not the slide's own: clean, or a change it names
   for (const e of [...r.used.shown, ...r.free.shown]) {
     if (e.current) continue;
-    expect(e.drops, `${e.layout} leaves nothing out`).toBeFalsy();
-    expect(e.noPicture, `${e.layout} gets a picture`).toBeFalsy();
+    if (e.drops || e.noPicture) expect(e.fit, `${e.layout} fits with a change`).toBe('change');
   }
   expect(r.used.tiles).toEqual(expect.arrayContaining(['step', 'paragraph']));
-  expect(r.free.tiles, 'a free picture brings the photo purposes back').toEqual(expect.arrayContaining(['photo-side', 'photo-stack']));
+  expect(r.free.tiles).toEqual(expect.arrayContaining(['photo-side', 'photo-stack']));
 });
