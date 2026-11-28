@@ -65,7 +65,7 @@ import { cutoutPicture, useCutoutIds } from './cutoutAction';
 import { listCutouts, putCutout, type CutoutRecord } from '../image-engine/cutout/cutoutStore';
 import type { AddFiles } from './PhotoControls';
 import { PictureError, addPicture, currentStorageProblem, hydrate, removePicture, storageRoomNote, syncPictureCrops, useLibraryVersion, workBlobOf, type PictureMeta } from './photoLibrary';
-import { describeOn, describePictures, setDescribeOn } from './pictureCaptions';
+import { DESCRIBE_WAIT_MS, describeOn, describePictures, setDescribeOn } from './pictureCaptions';
 import { drawnSize } from './letterbox';
 import { TALL_SHOT_REFUSAL, isTallShot, tallShotTooSmall } from './photoShape';
 import { SlideCard, type EditTab, type SlideView } from './SlideCard';
@@ -547,6 +547,11 @@ export default function CarouselPage() {
   const providers = useWriters();
   const provider = providers?.[0] ?? null;
   const abort = useRef<AbortController | null>(null);
+  /** Round AN: the picture descriptions still running (each with the pictures it describes): "Make carousel" waits for them, so the writer gets the pictures' names. */
+  const describing = useRef(new Map<Promise<Record<string, string>>, string[]>());
+  /** Round AN: the pictures as the latest render has them (a name typed or a caption filled while "Make carousel" waits is seen). */
+  const photoInfosRef = useRef(photoInfos);
+  photoInfosRef.current = photoInfos;
   const busy = gen.phase === 'writing' || gen.phase === 'retrying' || gen.phase === 'drawing';
 
   useEffect(() => {
@@ -706,9 +711,12 @@ export default function CarouselPage() {
     const toDescribe = added.filter((m) => m.kind === 'photo' && !m.label?.trim());
     if (import.meta.env.DEV && describe && toDescribe.length) {
       const blobs = toDescribe.map((m) => ({ id: m.id, blob: workBlobOf(m.id) })).filter((x): x is { id: string; blob: Blob } => !!x.blob);
-      void describePictures(blobs).then((caps) => {
+      const running = describePictures(blobs);
+      // Round AN: kept while it runs, so "Make carousel" can wait for it
+      describing.current.set(running, blobs.map((b) => b.id));
+      void running.then((caps) => {
         if (Object.keys(caps).length) setPhotos((before) => before.map((p) => (caps[p.id] && !p.label?.trim() ? { ...p, label: caps[p.id], labelAuto: true } : p)));
-      });
+      }).finally(() => describing.current.delete(running));
     }
     const prob = currentStorageProblem();
     if (prob) messages.push(prob);
@@ -886,6 +894,31 @@ export default function CarouselPage() {
     };
     setGen({ phase: 'writing' });
     setNotice('');
+    // Round AN: picture descriptions still running are waited for (at most DESCRIBE_WAIT_MS), so the writer is told the pictures' names and can match them to the slides.
+    // A description that fails or comes too late leaves those pictures without a name: they are placed by their shape, as before, and a note says so. Cancel stops the wait.
+    let captions: Record<string, string> = {};
+    let unnamed: 'late' | 'failed' | null = null;
+    if (describing.current.size) {
+      const runs = [...describing.current.entries()];
+      const ids = runs.flatMap(([, v]) => v);
+      setGen({ phase: 'writing', message: 'Describing your pictures…' });
+      const got = await new Promise<Record<string, string> | 'timeout' | 'cancelled'>((res) => {
+        const t = window.setTimeout(() => res('timeout'), DESCRIBE_WAIT_MS);
+        const stop = () => { window.clearTimeout(t); res('cancelled'); };
+        ctl.signal.addEventListener('abort', stop, { once: true });
+        void Promise.all(runs.map(([p]) => p)).then((all) => { window.clearTimeout(t); ctl.signal.removeEventListener('abort', stop); res(Object.assign({}, ...all) as Record<string, string>); });
+      });
+      if (got === 'cancelled') {
+        abort.current = null;
+        return setGen({ phase: 'idle', message: 'Cancelled. Your text is kept.' });
+      }
+      if (got !== 'timeout') captions = got;
+      const named = (id: string) => !!captions[id] || !!photoInfosRef.current.find((p) => p.id === id)?.label;
+      if (ids.some((id) => !named(id))) unnamed = got === 'timeout' ? 'late' : 'failed';
+      setGen({ phase: 'writing' });
+    }
+    // the pictures with their names: the latest render's, and the captions that arrived while waiting (a name the person typed always wins)
+    const pictureInfos = photoInfosRef.current.map((p) => (p.label || !captions[p.id] ? p : { ...p, label: captions[p.id] }));
     const jobTitle = `Carousel from ${doc.topic.trim().split(/\s+/).filter(Boolean).length} words of text, ${req.slides} slides asked`;
     const job = startJob('one-shot-carousel', jobTitle, [{ id: 'write', label: 'Ask the writer for the script' }, { id: 'apply', label: 'Check the script and pick a style' }, { id: 'draw', label: 'Draw the slides' }]);
     genJob.current = job;
@@ -902,7 +935,7 @@ export default function CarouselPage() {
     const presetPack = presetName ? presetPackFor(presetName) : null;
     const plan = chooseRoute({ style: pickPre ? presetName! : doc.style, activeStyle: ACTIVE_STYLE, pack: refPack, mode: quickAfter ? 'quick' : doc.style === ACTIVE_STYLE ? options.mode : undefined, presetPack, format: doc.format });
     const presetUsed = plan.route === 'designed' && !refPack && presetPack ? presetName : null;
-    const look = { pack: refPack ?? (presetUsed ? presetPack : null), brief: '', hasPhoto: hasPhotoLook, images: photoInfos, site: profileWebsite() };
+    const look = { pack: refPack ?? (presetUsed ? presetPack : null), brief: '', hasPhoto: hasPhotoLook, images: pictureInfos, site: profileWebsite() };
     let routeNote: { route: 'designed' | 'pack'; reason: string; error?: string; requestBytes?: ReturnType<typeof lastRequestBytes> & object } = quickAfter ? { route: 'pack', reason: 'Quick templates were chosen after Designed mode failed: ' + quickAfter.slice(0, 200) } : plan;
     let designedOut: Designed | undefined = noDesign();
     let r: Awaited<ReturnType<typeof runGenerate>>;
@@ -955,7 +988,10 @@ export default function CarouselPage() {
     job.end('apply', pick ? `style: ${pick.name}` : undefined);
     {
       const sw = designedOut?.library?.flavour?.swaps ?? [];
-      if (sw.length) setNotice(flavourLine(sw.map((w) => w.slide), styleByName(presetUsed ?? '')?.spec.title));
+      // Round AN: pictures that got no name in time were placed by their shape: said in plain words
+      const lateNote = unnamed === 'late' ? `Some pictures were placed by their shape: their descriptions did not arrive within ${DESCRIBE_WAIT_MS / 1000} seconds. You can name them and make the carousel again.` : unnamed === 'failed' ? 'Some pictures were placed by their shape: they could not be described. You can name them and make the carousel again.' : '';
+      const notes = [sw.length ? flavourLine(sw.map((w) => w.slide), styleByName(presetUsed ?? '')?.spec.title) : '', lateNote].filter(Boolean).join(' ');
+      if (notes) setNotice(notes);
     }
     job.begin('draw');
     setGen({ phase: 'drawing', note: result.note, ms: result.ms, attempts: result.attempts, provider: result.provider, warnings: result.warnings, message: `Drawing slide 1 of ${result.script.slides.length}…`, styleWhy: (presetUsed ? pickPre : pick)?.why, extra: designedOut ? ` Designed mode: ${Object.keys(designedOut.slides).length} slides designed, ${Object.keys(designedOut.fallbacks).length} fell back, ${designedOut.calls} model call${designedOut.calls === 1 ? '' : 's'}.` : '' });

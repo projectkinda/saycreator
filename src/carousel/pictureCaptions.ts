@@ -8,6 +8,8 @@ const CACHE_KEY = 'creator.carousel.captions.v1';
 const SWITCH_KEY = 'creator.carousel.describe.v1';
 /** The long side of the copy sent to the describer. */
 export const DESCRIBE_SIZE = 768;
+/** Round AN: how long "Make carousel" waits for picture descriptions still running before it makes the deck without their names. */
+export const DESCRIBE_WAIT_MS = 30_000;
 /** At most this many pictures in one request (the route's own limit). */
 export const DESCRIBE_BATCH = 12;
 

@@ -290,7 +290,7 @@ export function MakeIt({ images, scriptBox, scriptMode, onScriptMode, doc, optio
         </div>
         <p className="small cr-cost" data-testid="cost-line">{cost}</p>
         <p className="small" role="status" aria-live="polite" data-testid="progress">
-          {gen.phase === 'writing' && 'Writing the script…'}
+          {gen.phase === 'writing' && (gen.message ?? 'Writing the script…')}
           {gen.phase === 'retrying' && 'The first answer needed fixing. Asking again…'}
           {gen.phase === 'drawing' && (gen.message ?? 'Drawing the slides…')}
           {gen.phase === 'done' && gen.message}
