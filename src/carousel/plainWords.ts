@@ -73,8 +73,19 @@ export function fieldPhrase(layout: string, name: string): string {
   if (/^Paragraph/.test(l) || l === 'Pull line') return 'a paragraph';
   return 'a ' + l.toLowerCase();
 }
+/**
+ * Round AM part 4: a line of the person's text cut to `max` letters for a short mention ("Leaves out: ...", the question, the bring-back line): cut at a word boundary, never inside a
+ * word, and always ending with "…" when anything was cut. A line that fits is shown whole, with no "…".
+ */
+export function cutLine(t: string, max = 40): string {
+  const s = t.trim().replace(/\s+/g, ' ');
+  if (s.length <= max) return s;
+  const sp = s.slice(0, max + 1).lastIndexOf(' ');
+  const cut = sp > 0 ? s.slice(0, sp) : s.split(' ')[0];
+  return cut.replace(/[\s,;:.\-–—]+$/, '') + '…';
+}
 /** The field as the subject of a sentence: "The headline", "The small line" ... */
-const fieldSubject = (layout: string, name: string): string => {
+export const fieldSubject = (layout: string, name: string): string => {
   const p = fieldPhrase(layout, name);
   return p.replace(/^(a|an) /, 'The ').replace(/^numbers$/, 'The numbers').replace(/^labels/, 'The labels').replace(/^The small line above the headline$/, 'The small line');
 };

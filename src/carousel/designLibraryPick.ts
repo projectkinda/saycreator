@@ -15,7 +15,7 @@ import type { WriteProvider } from './writer';
 
 // ----- moving the text between layouts: see layoutMap.ts -----
 import { accentsIn, addedNumber, flat, layoutOptions, layoutRefusals, nearOptions, type LayoutOption } from './layoutMap';
-import { BLOCK_LABEL, plainVariant } from './plainWords';
+import { BLOCK_LABEL, cutLine, plainVariant } from './plainWords';
 export { accentsIn, fromCanon, layoutOptions, layoutRefusals, toCanon, type LayoutOption } from './layoutMap';
 
 // ----- the picture of each option -----
@@ -171,7 +171,7 @@ export function galleryModel(lib: LibraryReport, look: Look, handle: string, i: 
 function badgesOf(c: NonNullable<GalleryEntry['change']>): string[] {
   const out: string[] = [];
   if (c.number) out.push(`Adds '${c.number}.' before the headline`);
-  if (c.drops?.length) out.push(`Leaves out: ${c.drops.map((t) => '"' + clip(t, 40) + '"').join(', ')}`);
+  if (c.drops?.length) out.push(`Leaves out: ${c.drops.map((t) => '"' + cutLine(t) + '"').join(', ')}`);
   if (c.photoFrom?.length) out.push(c.photoFrom.length === 1 ? `Photo also used on slide ${c.photoFrom[0]}` : `Photos also used on slides ${c.photoFrom.slice(0, -1).join(', ')} and ${c.photoFrom[c.photoFrom.length - 1]}`);
   return out;
 }

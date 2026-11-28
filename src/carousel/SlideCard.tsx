@@ -20,6 +20,7 @@ import type { PhotoChoice } from './photoChoices';
 import type { PictureMeta } from './photoLibrary';
 import { SlotPanel, type OnSlotChange, type SlotView } from './PictureSlots';
 import { LibraryText, type OnTextCommit, type TextSpec } from './TextTab';
+import { cutLine } from './plainWords';
 
 export interface SlideView {
   status: 'drawing' | 'ready' | 'error';
@@ -314,7 +315,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
       </div>
       {leftOut && leftOut.lines.length > 0 && (
         <p className="small cr-left-out" data-testid="left-out">
-          <span>Left out of this layout: {leftOut.lines.map((t, k) => (k > 0 ? ', ' : '') + '"' + (t.length > 40 ? t.slice(0, 40).trimEnd() + '…' : t) + '"').join('')}.</span>{' '}
+          <span>Left out of this layout: {leftOut.lines.map((t) => '"' + cutLine(t) + '"').join(', ')}</span>{' '}
           <button type="button" className="btn btn-outline btn-sm" disabled={backBusy} data-testid="left-out-back" onClick={async () => { setBackBusy(true); setBackMsg(''); setBackMsg(await leftOut.onBringBack()); setBackBusy(false); }}>{backBusy ? 'Working…' : 'Bring it back'}</button>
         </p>
       )}

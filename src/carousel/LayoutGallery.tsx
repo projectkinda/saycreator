@@ -11,7 +11,7 @@ import { PICTURE_THUMB_MAX, useLibraryVersion } from './photoLibrary';
 import type { GalleryModel, PickChoice } from './designLibraryPick';
 import type { LayoutId } from './layouts';
 import { layoutDetail, looksOf, purposeGrid } from './layoutPurpose';
-import { clip } from './designLibrary';
+import { cutLine } from './plainWords';
 
 /** Pictures drawn so far, by slide content + style + layout + variant (null: the code could not draw it). Kept for the page's life, capped. */
 const CACHE = new Map<string, string | null>();
@@ -174,7 +174,7 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
       {ask && (
         <div role="alertdialog" aria-labelledby={`cr-lp-ask-${index}`} className="cr-lp-ask" data-testid={`fit-confirm-${index}`} ref={(el) => el?.scrollIntoView({ block: 'nearest' })}>
           <p className="small" id={`cr-lp-ask-${index}`}>
-            This layout has no room for {ask.lines.map((t, k) => <span key={k}>{k > 0 ? ' or ' : ''}"{clip(t, 80)}"</span>)}. Use it anyway? Your words stay with the slide: another layout brings {ask.lines.length > 1 ? 'them' : 'it'} back.
+            This layout has no room for {ask.lines.map((t, k) => <span key={k}>{k > 0 ? ' or ' : ''}"{cutLine(t)}"</span>)}. Use it anyway? Your words stay with the slide: another layout brings {ask.lines.length > 1 ? 'them' : 'it'} back.
           </p>
           <div className="row-actions">
             <button type="button" className="btn btn-primary btn-sm" disabled={busy} data-testid="fit-use" onClick={() => void choose({ layout: ask.layout as LayoutId, variant: v, reuse: true })}>Use it</button>

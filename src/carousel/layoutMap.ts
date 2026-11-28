@@ -3,7 +3,7 @@ import type { Look } from './designed';
 import { LAYOUT_IDS, layoutDef, validateSlideContent, type Fields, type LayoutId } from './layouts';
 import { IMAGE_LAYOUT_IDS, fittingPictures, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, type PicInfo } from './layouts/images';
 import type { SlideSpec } from './designLibrary';
-import { plainProblem } from './plainWords';
+import { fieldSubject, plainProblem } from './plainWords';
 
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
@@ -234,6 +234,44 @@ export function nearOptions(spec: SlideSpec, look: Look): LayoutOption[] {
 // Round AL part 1: what a layout needs, in plain words (no field ids)
 const CANON_WORDS: Record<string, string> = { head: 'a headline', kicker: 'a small line above the headline', sub: 'a line below the headline', body: 'a paragraph', number: 'a number', label: 'a short label', bar: 'a value for the bar', quote: 'a quote', author: 'an author', button: 'a button', items: 'a list', lines: 'a line for each card', numbers: 'numbers', labels: 'labels for the items' };
 const clipText = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t);
+/**
+ * Round AM part 4: what each layout that only takes text written for it is made for, in plain words (it was "Works only with text written for it." for all of them). By purpose
+ * (layoutPurpose.ts): Compare, Do and do not, Feature slider, Call to action (two buttons, contact details, with a portrait), Headline and paragraph (text on a card, longer text),
+ * Full photo (two photos).
+ */
+const MADE_FOR: Record<string, string> = {
+  comparison: 'Made for a side-by-side comparison of two things; this slide isn\'t one.',
+  'do-dont': 'Made for a do and a don\'t side by side; this slide isn\'t one.',
+  'feature-slider': 'Made for one feature with a slider that shows how much; this slide isn\'t one.',
+  'cta-pair': 'Made for a closing with two buttons; this slide isn\'t one.',
+  'contact-closing': 'Made for a closing with your contact details; this slide isn\'t one.',
+  'portrait-closing': 'Made for a closing with your portrait and a few lines about you; this slide isn\'t one.',
+  'headline-card': 'Made for a headline with a card of text under it; this slide isn\'t one.',
+  'twin-photos': 'Made for two photos, each with its own caption; this slide isn\'t one.',
+  prose: 'Made for a few paragraphs of text; this slide has none.',
+};
+/** Round AM part 4: a field of another layout in plain words, where its own name would read oddly for the person's slide ("the author" is the name under a quote). */
+const BECOMES: Record<string, string> = { author: 'the name under the quote', quote: 'the quote', question: 'the question', lead: 'the small line above the headline', kicker: 'the small line above the headline', button: 'the button' };
+/**
+ * Round AM part 4: a length refusal in plain words for the slide in front of the person. When the text that is too long is one of the slide's lines that would go into a part
+ * of the other layout with another name, it says both: "The line below the headline that would become the name under the quote is 57 letters long; this layout holds 40." (it said
+ * "The author is 57 letters long", and the slide has no author).
+ */
+function limitReason(err: string, id: string, f: Fields, spec: SlideSpec, own: Fields): string {
+  const base = plainProblem(err, id);
+  const m = /^(?:[\w-]+: )?"(\w+)" (?:is (\d+) characters; the most is (\d+)|has (\d+) words; the most is (\d+))/.exec(err);
+  if (!m) return base;
+  const v = f[m[1]];
+  if (typeof v !== 'string') return base;
+  const src = Object.entries(own).find(([k, x]) => k !== 'accent' && typeof x === 'string' && x.trim() === v.trim())?.[0];
+  if (!src) return base;
+  const from = fieldSubject(spec.layout, src);
+  const to = fieldSubject(id, m[1]);
+  if (from === to) return base;
+  const what = from.replace(/^The /, '');
+  const target = BECOMES[m[1]] ?? to.replace(/^The /, 'the ');
+  return m[2] ? `The ${what} that would become ${target} is ${m[2]} letters long; this layout holds ${m[3]}.` : `The ${what} that would become ${target} has ${m[4]} words; this layout holds ${m[5]}.`;
+}
 /** Layouts that only take the text written for them (their fields do not map to any other layout's). */
 const OWN_ONLY = ['feature-slider', 'comparison', 'contact-closing', 'cta-pair', 'headline-card', 'twin-photos', 'portrait-closing', 'do-dont'];
 /**
@@ -245,7 +283,7 @@ function ruleReason(id: string, c: Canon): string {
   const hw = words(head);
   const n = c.items.length;
   const items = (lo: number, hi: number) => `Needs a list of ${lo} to ${hi} items; this slide has ${n === 0 ? 'none' : n}.`;
-  if (OWN_ONLY.includes(id) || (id === 'prose' && c.own)) return 'Works only with text written for it.';
+  if (OWN_ONLY.includes(id) || (id === 'prose' && c.own)) return MADE_FOR[id] ?? 'Made for text written for it; this slide isn\'t.';
   if (!head && ['statement-stacked', 'cover-word', 'photo-full-caption', 'title-over-photo'].includes(id)) return 'Needs a headline, which this slide does not have.';
   switch (id) {
     case 'statement-stacked': return `The headline has ${hw} ${hw === 1 ? 'word' : 'words'}; this layout takes 2 to 4.`;
@@ -307,7 +345,7 @@ export function layoutRefusals(spec: SlideSpec, look: Look): Record<string, stri
     }
     const v = validateSlideContent(id, f);
     if (!v.ok) {
-      out[id] = plainProblem(v.errors[0], id);
+      out[id] = limitReason(v.errors[0], id, f, spec, own);
       continue;
     }
     const core = (layoutDef(spec.layout)?.fields ?? []).filter((x) => x.required).flatMap((x) => (Array.isArray(own[x.name]) ? (own[x.name] as string[]) : [String(own[x.name] ?? '')])).map((x) => x.trim()).filter(Boolean);
