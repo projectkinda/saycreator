@@ -1361,7 +1361,7 @@ export default function CarouselPage() {
       const shows = flatWords(r.spec.fields);
       if (had.some((t) => !shows.some((u) => u === t || u.includes(t)))) continue;
       const bad = putSlide(i, r, `Add a picture to slide ${i + 1}`);
-      return bad ?? `Added a picture to slide ${i + 1}: the layout is now ${r.layout}. Undo takes it back.`;
+      return bad ?? `Added a picture to slide ${i + 1}: it is now ${purposeLabel(r.layout)}. Undo takes it back.`;
     }
     return 'No picture layout fits what this slide says without losing words. Pick a layout in the Layout tab.';
   };
@@ -1517,6 +1517,7 @@ export default function CarouselPage() {
           return undefined;
         })()}
         onAddPicture={doc.designed?.library?.plan ? () => addPictureTo(i) : undefined}
+        layoutName={doc.designed?.library?.plan?.specs[i] ? purposeLabel(doc.designed.library.plan.specs[i].layout) : undefined}
         leftOut={(() => {
           // Round AM part 3: the words a layout switch left out stay with the slide (through text edits); one click switches back to the layout that shows them
           const spec = doc.designed?.library?.plan?.specs[i];

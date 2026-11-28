@@ -61,7 +61,7 @@ const TABS: { id: EditTab; label: string }[] = [
 ];
 
 /** The editor of ONE slide, as four tabs: Layout | Text | Pictures | Fine-tune. There is no second preview here: the big preview and the thumbnail strip stay on the left. */
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, pickerBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, leftOut, ownNote, onSplit, onArrange, removeBlocked, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, pickerBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, leftOut, layoutName, ownNote, onSplit, onArrange, removeBlocked, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -114,6 +114,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   picturesState: 'none' | 'free' | 'used';
   /** Library slide without a picture slot: moves it to a picture layout of its own meaning and puts an unused picture in; says what happened. */
   onAddPicture?: () => Promise<string>;
+  /** Round AM part 4: the plain name of the slide's layout (a library slide), shown in the header in place of the script's slide kind ("Cover" for any statement). */
+  layoutName?: string;
   /** Round AM part 3: the words a layout switch left out of this slide, kept with it, and the switch back to the layout that shows them (the person's edits kept). */
   leftOut?: { lines: string[]; onBringBack: () => Promise<string> };
   /** Library slides with pictures: the picture slots (tap one to replace, remove, move or zoom it). */
@@ -137,7 +139,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   const [addBusy, setAddBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const run = (r: ReturnType<Apply>) => setProblem(r.ok ? '' : r.reasons[0]);
-  const title = `Slide ${index + 1} of ${count}, ${TYPE_LABEL[script.type]}`;
+  const title = `Slide ${index + 1} of ${count}, ${layoutName ?? TYPE_LABEL[script.type]}`;
   const [imgText, setImgText] = useState('');
   const [imgMsg, setImgMsg] = useState('');
   const [rdWords, setRdWords] = useState('');
@@ -268,7 +270,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
     <li className="card cr-card cr-card-tabs" aria-label={title} data-status={view?.status ?? 'drawing'}>
       <div className="cr-card-head">
         <h3 className="h4 cr-title">
-          <span className="chip">{index + 1}</span> {TYPE_LABEL[script.type]}
+          <span className="chip">{index + 1}</span> {layoutName ?? TYPE_LABEL[script.type]}
         </h3>
         <LintBadges lint={view?.rendered?.lint} />
         {slide.notes
