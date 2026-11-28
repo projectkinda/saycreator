@@ -98,6 +98,10 @@ export interface GalleryEntry {
   enabled: boolean;
   /** One line: why a greyed-out layout cannot be used (and, for an enabled one, what it would leave out). */
   reason?: string;
+  /** Round AL part 4 fix: an enabled layout that would leave a line of the slide out. */
+  drops?: boolean;
+  /** Round AL part 4 fix: a picture layout (not the slide's own) that would get no picture: every picture of the project is on another slide. */
+  noPicture?: boolean;
 }
 export interface GalleryModel {
   entries: GalleryEntry[];
@@ -120,10 +124,14 @@ export function galleryModel(lib: LibraryReport, look: Look, handle: string, i: 
   const cur = currentOf(lib, i);
   const options = new Map(layoutOptions(spec, look).map((o) => [o.layout as string, o]));
   const why = layoutRefusals(spec, look);
+  const free = look.images?.length ? unusedPictures(lib.plan.specs, look.images, i) : [];
   const entries: GalleryEntry[] = LAYOUT_IDS.map((id) => {
     const def = layoutDef(id)!;
     const o = options.get(id);
-    return { layout: id, label: def.label, variants: def.variants.map(plainVariant) as [string, string], current: id === spec.layout, enabled: !!o, reason: o ? (o.dropped.length ? `Leaves out: ${o.dropped.map((t) => '"' + clip(t, 24) + '"').join(', ')}` : undefined) : why[id] ?? 'This slide\'s text does not fit this layout.' };
+    // the same placement a click makes (choiceDraw): the project pictures no other slide uses, in the slide's look
+    const noPicture = !!o && id !== spec.layout && imageSlotsOf(id).length > 0 && !placeOne(id, cur.variant, free);
+    const reason = o ? (noPicture ? 'All your pictures are on other slides: this layout would show no picture.' : o.dropped.length ? `Leaves out: ${o.dropped.map((t) => '"' + clip(t, 24) + '"').join(', ')}` : undefined) : why[id] ?? 'This slide\'s text does not fit this layout.';
+    return { layout: id, label: def.label, variants: def.variants.map(plainVariant) as [string, string], current: id === spec.layout, enabled: !!o, reason, ...(o && o.dropped.length ? { drops: true } : {}), ...(noPicture ? { noPicture: true } : {}) };
   });
   entries.sort((a, b) => Number(b.current) - Number(a.current) || Number(b.enabled) - Number(a.enabled));
   const CUT_LABELS = CUT_LABEL;

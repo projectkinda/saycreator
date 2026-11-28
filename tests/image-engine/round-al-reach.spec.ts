@@ -53,7 +53,7 @@ const WRITER = JSON.stringify({ title: '5 small habits', slides: [
   S('cta-pair', { headline: 'Save this for your next shoot', button1: 'Save this', button2: 'Tell me', line2: "Tell me which one you'll try first." }),
 ] });
 
-test('AL7 in the app: the numbered item offers more purposes and becomes a Big statement with "1." on the slide; the closing offers one button under "More like this"; one fake writer call', async ({ page }) => {
+test('AL7 in the app: the numbered item offers more purposes (only those that keep every word) and becomes Headline and paragraph with "1." on the slide; the closing offers one button under "More like this"; one fake writer call', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   let calls = 0;
   await page.route('**/__carousel/status', (x) => x.fulfill({ json: { available: true } }));
@@ -77,10 +77,14 @@ test('AL7 in the app: the numbered item offers more purposes and becomes a Big s
   await g.scrollIntoViewIfNeeded();
   await expect(g).not.toHaveAttribute('data-ready-ms', '', { timeout: 60_000 });
   const tiles = await g.locator('[data-testid^="purpose-"]:not([data-testid^="purpose-off-"])').count();
-  expect(tiles, 'more than the Numbered step purpose').toBeGreaterThanOrEqual(3);
-  await g.getByTestId('purpose-statement').locator('button[data-testid^="gal-"]').first().click();
-  await expect(g.getByRole('status')).toHaveText(/^Slide 2 is now Big statement/, { timeout: 60_000 });
-  await expect.poll(async () => (await lib()).plan.specs[1].layout, { timeout: 30_000 }).toMatch(/^statement/);
+  expect(tiles, 'more than the Numbered step purpose (this deck has no picture: the photo purposes are not offered)').toBeGreaterThanOrEqual(2);
+  // only what keeps the whole slide is a tile: Big statement would leave the item's sentence out, so it is under "Why not the others" with that reason
+  await expect(g.getByTestId('purpose-statement')).toHaveCount(0);
+  await expect(g.getByTestId('purpose-off-statement')).toContainText('Leaves out');
+  await expect(g.locator('.cr-lp-leaves')).toHaveCount(0);
+  await g.getByTestId('purpose-paragraph').locator('button[data-testid^="gal-"]').first().click();
+  await expect(g.getByRole('status')).toHaveText(/^Slide 2 is now Headline and paragraph/, { timeout: 60_000 });
+  await expect.poll(async () => (await lib()).plan.specs[1].layout, { timeout: 30_000 }).toBe('split-text');
   const l1 = await lib();
   expect(l1.plan.specs[1].fields.headline).toMatch(/^1\. Shoot at golden hour/);
   const drawn = await page.evaluate(() => { const d = (JSON.parse(localStorage.getItem('creator.carousel.project.v1') ?? '{}') as any).project.doc.designed.slides['1'].built; return d.layers.filter((x: any) => x.kind === 'text').map((x: any) => x.text).join(' | '); });
@@ -98,4 +102,43 @@ test('AL7 in the app: the numbered item offers more purposes and becomes a Big s
   const l2 = await lib();
   expect(l2.plan.specs[3].fields.button).toBe('Save this');
   expect(calls, 'one fake writer call; the picker costs nothing').toBe(1);
+});
+
+test('AL8 the grid keeps the whole slide: a picture purpose whose layouts would get no picture (every picture is on another slide) and a purpose whose layouts leave a line out are under "Why not the others" with that reason; a free picture brings the photo purposes back', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const r: any = await page.evaluate(async () => {
+    const D: any = await import('/src/carousel/designLibrary.ts');
+    const P: any = await import('/src/carousel/designLibraryPick.ts');
+    const LP: any = await import('/src/carousel/layoutPurpose.ts');
+    const PR: any = await import('/src/carousel/presets.ts');
+    const IM: any = await import('/src/carousel/layouts/images.ts');
+    const style = D.styleFromPack(PR.presetPackFor('editorial-collage', false)).style;
+    const pic = (id: string, w: number, h: number) => ({ id, width: w, height: h, content: 'photo' });
+    const two = [pic('pA', 1000, 1500), pic('pB', 1500, 1000)];
+    const lib: any = { route: 'library', provider: 'none', tokenNote: '', calls: 0, tokens: null, seconds: 0, layouts: [], variants: [], cuts: [], inverts: [], densities: [], suggested: { cut: [], invert: [], density: [] }, retries: [], fallbacks: [], codeAdjustments: [], style, styleNotes: [], plan: { title: 'T', specs: [
+      { layout: 'split-half', fields: { headline: 'Look for reflections', body: 'Puddles, windows and wet streets give you a second picture for free.', image: IM.makeRef({ id: 'pA', w: 1000, h: 1500, photo: true }) }, accents: [] },
+      { layout: 'listicle-numeral', fields: { numeral: '1', title: 'Shoot at golden hour', body: 'Sunrise and the hour before sunset do more than any filter.' }, accents: [] },
+      { layout: 'photo-cover', fields: { headline: 'Get low or get high', intro: 'Eye level is what everyone else does.', image: IM.makeRef({ id: 'pB', w: 1500, h: 1000, photo: true }) }, accents: [] },
+    ] } };
+    const res = await D.redrawLibraryDeck(lib, { pack: PR.presetPackFor('editorial-collage', false), hasPhoto: true, images: two }, '@h');
+    const grid = (images: any[]) => {
+      const m = P.galleryModel(res.library, { hasPhoto: true, images }, '@h', 1);
+      const g = LP.purposeGrid(m.entries);
+      const by = new Map(m.entries.map((e: any) => [e.layout, e]));
+      return { tiles: g.tiles.map((t: any) => t.purpose.id), shown: g.tiles.flatMap((t: any) => [t.best, ...t.more]).map((l: string) => by.get(l)), off: Object.fromEntries(g.off.map((o: any) => [o.purpose.id, o.reason])) };
+    };
+    return { used: grid(two), free: grid([...two, pic('pC', 1500, 1000)]) };
+  });
+  for (const k of ['photo-side', 'photo-stack']) {
+    expect(r.used.tiles, `${k}: every picture is on another slide`).not.toContain(k);
+    expect(r.used.off[k]).toBe('All your pictures are on other slides: this layout would show no picture.');
+  }
+  expect(r.used.off.statement, 'Big statement would leave the item\'s sentence out').toMatch(/^Leaves out: "Sunrise/);
+  for (const e of [...r.used.shown, ...r.free.shown]) {
+    if (e.current) continue;
+    expect(e.drops, `${e.layout} leaves nothing out`).toBeFalsy();
+    expect(e.noPicture, `${e.layout} gets a picture`).toBeFalsy();
+  }
+  expect(r.used.tiles).toEqual(expect.arrayContaining(['step', 'paragraph']));
+  expect(r.free.tiles, 'a free picture brings the photo purposes back').toEqual(expect.arrayContaining(['photo-side', 'photo-stack']));
 });

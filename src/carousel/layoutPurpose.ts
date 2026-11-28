@@ -84,7 +84,7 @@ export const looksOf = (layout: string): [string, string] => {
 };
 
 /** The part of a gallery entry the grid needs. */
-export interface PurposeEntry { layout: string; enabled: boolean; current: boolean; reason?: string }
+export interface PurposeEntry { layout: string; enabled: boolean; current: boolean; reason?: string; drops?: boolean; noPicture?: boolean }
 export interface PurposeTile { purpose: Purpose; /** The layout shown on the purpose's tile: the slide's own layout for its purpose, else the first that fits. */ best: string; /** The other layouts of the purpose that fit, in order ("More like this"). */ more: string[]; current: boolean }
 export interface PurposeGrid { tiles: PurposeTile[]; /** Purposes with no layout that fits this slide, each with one plain reason. */ off: { purpose: Purpose; reason: string }[] }
 /** The grid of one slide: a tile per purpose with at least one layout that fits (the slide's own purpose first), the rest under "Why not the others". */
@@ -93,15 +93,18 @@ export function purposeGrid(entries: PurposeEntry[]): PurposeGrid {
   const tiles: PurposeTile[] = [];
   const off: PurposeGrid['off'] = [];
   for (const p of PURPOSES) {
-    const fit = p.layouts.filter((l) => by.get(l)?.enabled);
+    // Round AL part 4 fix: the grid offers only what keeps the whole slide: a layout that would leave a line out, or a picture layout that would get no picture, is listed under
+    // "Why not the others" with that reason (the slide's own layout always stays)
+    const whole = (l: string) => { const e = by.get(l); return !!e?.enabled && (e.current || (!e.drops && !e.noPicture)); };
+    const fit = p.layouts.filter(whole);
     if (!fit.length) {
-      const why = p.layouts.map((l) => by.get(l)?.reason).find(Boolean) ?? 'This slide\'s text does not fit it.';
+      const near = p.layouts.find((l) => by.get(l)?.enabled);
+      const why = (near ? by.get(near)?.reason : undefined) ?? p.layouts.map((l) => by.get(l)?.reason).find(Boolean) ?? 'This slide\'s text does not fit it.';
       off.push({ purpose: p, reason: why });
       continue;
     }
     const cur = fit.find((l) => by.get(l)?.current);
-    // Round AL part 4: a layout that shows every text of the slide comes before one that leaves a line out
-    const best = cur ?? fit.find((l) => !by.get(l)?.reason) ?? fit[0];
+    const best = cur ?? fit[0];
     tiles.push({ purpose: p, best, more: fit.filter((l) => l !== best), current: !!cur });
   }
   tiles.sort((a, b) => Number(b.current) - Number(a.current));
