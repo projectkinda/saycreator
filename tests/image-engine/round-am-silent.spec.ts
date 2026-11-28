@@ -129,12 +129,13 @@ test('S2 in the app at 390 px: a text edit after a switch that left a line out s
   await expect.poll(async () => (await libOf(page)).plan.specs[1].fields.headline, { timeout: 30_000 }).toBe(`1.${NB}Shoot at sunrise`);
   const line = page.getByTestId('left-out');
   await expect(line).toBeVisible();
-  await expect(line).toContainText('Left out of this layout: "Sunrise and the hour before sunset do mo…"');
+  // Round AM part 4: cut at a word boundary with "…", and no stray period after the closing quote
+  await expect(line.locator('span').first()).toHaveText('Left out of this layout: "Sunrise and the hour before sunset do…"');
   await expect(line.getByRole('button', { name: 'Bring it back' })).toBeVisible();
   await plain(page, await line.innerText(), 'the bring-back line');
   await page.evaluate(() => { const bar = document.querySelector('.cr-edit-bar') as HTMLElement | null; if (bar) bar.style.position = 'static'; });
   await line.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: 'out/round-am/part3/bring-back-line-390.png' });
+  await page.screenshot({ path: 'out/round-am/part4/bring-back-line-390.png' });
   // the click: back to the numbered step, with the edit
   await line.getByRole('button', { name: 'Bring it back' }).click();
   await expect(page.getByTestId('left-out-msg')).toHaveText(/^Slide 2 is now Numbered step/, { timeout: 60_000 });
@@ -142,7 +143,7 @@ test('S2 in the app at 390 px: a text edit after a switch that left a line out s
   await expect.poll(async () => (await libOf(page)).plan.specs[1].layout, { timeout: 30_000 }).toBe('listicle-numeral');
   expect((await libOf(page)).plan.specs[1].fields).toMatchObject({ numeral: '1', title: 'Shoot at sunrise', body: ITEM.body });
   await expect(page.getByTestId('left-out')).toHaveCount(0);
-  await page.screenshot({ path: 'out/round-am/part3/bring-back-done-390.png' });
+  await page.screenshot({ path: 'out/round-am/part4/bring-back-done-390.png' });
   expect(f.calls, 'one fake writer call for the deck').toBe(1);
   expect(f.describes).toBe(0);
 });
@@ -166,7 +167,8 @@ test('S3 in the app at 390 px: "Add a picture to this slide" never leaves a word
   await expect(add.getByRole('status')).toHaveText(/^(No picture layout fits what this slide says without losing words|Added a picture)/, { timeout: 60_000 });
   const l1 = await libOf(page);
   expect(keepsAll(s1, words(l1.plan.specs[0].fields)), 'slide 1 keeps every word').toEqual([]);
-  await plain(page, await add.getByRole('status').innerText().then((t) => t.replace(/the layout is now \S+/, '')), 'the add-picture message');
+  // (Round AM part 4: the whole message, no exception: a success names the layout by its plain name)
+  await plain(page, await add.getByRole('status').innerText(), 'the add-picture message');
   await page.evaluate(() => { const bar = document.querySelector('.cr-edit-bar') as HTMLElement | null; if (bar) bar.style.position = 'static'; });
   await add.scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'out/round-am/part3/add-picture-slide1-390.png' });

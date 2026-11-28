@@ -65,8 +65,8 @@ test('AM1 the picker model: the three kinds of change, their plain words, the or
   // a line left out
   expect(r.statement.fit).toBe('change');
   expect(r.statement.badges[0]).toBe("Adds '1.' before the headline");
-  expect(r.statement.badges[1]).toMatch(/^Leaves out: "Sunrise and the hour before sunset do/);
-  expect(r.statement.badges[1].length, 'the line clipped to its first 40 letters').toBeLessThanOrEqual('Leaves out: ""'.length + 41);
+  // Round AM part 4: cut at a word boundary within 40 letters, and "…" because something was cut
+  expect(r.statement.badges[1]).toBe('Leaves out: "Sunrise and the hour before sunset do…"');
   expect(r.statement.change.drops).toEqual(['Sunrise and the hour before sunset do more than any filter.']);
   // a photo another slide shows (every picture is on slides 1 and 3)
   expect(r.splitHalf.fit).toBe('change');
@@ -161,7 +161,7 @@ test('AM2 in the app at 390 px: a line left out asks first and "Keep my words" c
   expect(fits.indexOf('change')).toBeGreaterThan(0);
   expect(fits.slice(fits.indexOf('change')).every((x) => x === 'change')).toBe(true);
   await expect(g.getByTestId('purpose-statement')).toHaveAttribute('data-fit', 'change');
-  await expect(g.getByTestId('purpose-statement').locator('.cr-lp-badge')).toHaveText(["Adds '1.' before the headline", /^Leaves out: "Sunrise and the hour/]);
+  await expect(g.getByTestId('purpose-statement').locator('.cr-lp-badge')).toHaveText(["Adds '1.' before the headline", 'Leaves out: "Sunrise and the hour before sunset do…"']);
   await expect(g.getByTestId('purpose-photo-side').locator('.cr-lp-badge').last()).toHaveText('Photo also used on slide 3');
   await expect(g.getByTestId('purpose-off-statement')).toHaveCount(0);
   await expect(g.getByTestId('purpose-off-photo-side')).toHaveCount(0);
@@ -184,7 +184,7 @@ test('AM2 in the app at 390 px: a line left out asks first and "Keep my words" c
   await g.getByTestId('gal-statement').click();
   const ask = page.getByTestId('fit-confirm-1');
   await expect(ask).toBeVisible();
-  await expect(ask).toContainText('This layout has no room for "Sunrise and the hour before sunset do more than any filter."');
+  await expect(ask).toContainText('This layout has no room for "Sunrise and the hour before sunset do…". Use it anyway?');
   await expect(ask).toContainText('Use it anyway?');
   plain(await ask.innerText(), 'question');
   await page.getByTestId('fit-keep').click();
@@ -363,4 +363,31 @@ test('AM4 in the app at 390 px: the closing\'s Big statement asks first, "Keep m
 
   expect(f.calls, 'one fake writer call for the deck').toBe(1);
   expect(f.describes).toBe(0);
+});
+
+// ----- Round AM part 4: the cut marks and the plain reasons -----
+
+test('AM5 a line cut short is cut at a word boundary and ends with "…"; a refusal names the slide\'s own line; a layout for its own text says what it is for', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const r: any = await page.evaluate(async () => {
+    const PW: any = await import('/src/carousel/plainWords.ts');
+    const LM: any = await import('/src/carousel/layoutMap.ts');
+    const look = { hasPhoto: false };
+    const statement = { layout: 'statement-card', fields: { headline: "5 small habits that make your photos look less like everyone else's.", caption: 'A single leaf on a table can beat a whole landscape, really.' }, accents: [] };
+    const why = LM.layoutRefusals(statement, look);
+    return {
+      cuts: ['Tell me which one', 'Sunrise and the hour before sunset do more than any filter.', 'Supercalifragilisticexpialidociousandmoreandmorewords here', 'Exactly forty letters long, no cut here!'].map((t) => PW.cutLine(t)),
+      quote: why.quote, lead: why['lead-statement'],
+      own: ['comparison', 'do-dont', 'feature-slider', 'cta-pair', 'contact-closing', 'portrait-closing', 'headline-card', 'twin-photos'].map((id) => [id, why[id]]),
+      works: Object.values(why).filter((x: any) => /Works only with text written for it/.test(x)).length,
+    };
+  });
+  expect(r.cuts[0], 'a line that fits is whole, no "…"').toBe('Tell me which one');
+  expect(r.cuts[1]).toBe('Sunrise and the hour before sunset do…');
+  expect(r.cuts[2], 'never inside a word: one long word is kept whole').toBe('Supercalifragilisticexpialidociousandmoreandmorewords…');
+  expect(r.cuts[3]).toBe('Exactly forty letters long, no cut here!');
+  expect(r.quote).toBe('The line below the headline that would become the name under the quote is 60 letters long; this layout holds 40.');
+  expect(r.lead).toBe('The line below the headline that would become the small line above the headline is 60 letters long; this layout holds 40.');
+  expect(r.works).toBe(0);
+  for (const [id, reason] of r.own) expect(reason, id).toMatch(/^Made for .+; this slide isn't one\.$/);
 });

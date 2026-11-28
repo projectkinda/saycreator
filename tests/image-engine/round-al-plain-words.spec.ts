@@ -70,6 +70,9 @@ test('AL1 the Edit slides view on every kind of slide: no layout id, no quoted f
     const gal = page.getByTestId(`gallery-${n - 1}`);
     await gal.scrollIntoViewIfNeeded();
     await expect(gal).not.toHaveAttribute('data-ready-ms', '', { timeout: 60_000 });
+    // Round AM part 4: the reasons under "Why not the others" are read too
+    const off = page.getByTestId(`gallery-off-${n - 1}`);
+    if (await off.count()) { await off.locator('summary').click(); await expect(off).toHaveAttribute('open', ''); }
     await grab(`slide ${n} Layout`);
     for (const tab of ['Text', 'Pictures', 'Fine-tune'] as const) { await openTab(page, tab, n); await grab(`slide ${n} ${tab}`); }
   }
@@ -97,6 +100,20 @@ test('AL1 the Edit slides view on every kind of slide: no layout id, no quoted f
     }
   }
   expect(bad, bad.join('\n')).toEqual([]);
+  // Round AM part 4: no reason that says nothing ("Works only with text written for it."), no part the slide does not have ("The author is ..."), and a line shown cut short is cut
+  // at a word boundary and ends with "…" (a line that fits is whole)
+  const all = texts.map((t) => t.text).join('\n');
+  expect(all).not.toContain('Works only with text written for it');
+  expect(all).not.toMatch(/\bThe author (is|has)\b/);
+  const lines = (JSON.parse(WRITER).slides as any[]).flatMap((s) => Object.values(s.fields) as string[]).map((x) => String(x).trim());
+  const cuts = [...all.matchAll(/(?:Leaves out|Left out of this layout): ((?:"[^"]*"(?:, )?)+)/g)].flatMap((m) => [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]));
+  for (const c of cuts) {
+    if (c.endsWith('…')) {
+      const head = c.slice(0, -1);
+      expect(head.length, `cut to 40 letters: ${c}`).toBeLessThanOrEqual(40);
+      expect(lines.some((l) => l.startsWith(head) && /[\s,;:.\-–—]/.test(l[head.length] ?? ' ')), `cut at a word boundary: ${c}`).toBe(true);
+    } else expect(c.length <= 40 && lines.some((l) => l === c || l.includes(c) || c.includes(l)), `shown whole (the deck may have settled a button to the text's phrase): ${c}`).toBe(true);
+  }
   expect(texts.find((t) => t.where === 'Undo tooltip')!.text).toMatch(/Undoes: Change slide 6 to [A-Z]/);
   expect(calls, 'the fake writer is asked once; the tabs and the change cost nothing').toBe(1);
 });
