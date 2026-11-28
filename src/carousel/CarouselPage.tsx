@@ -29,7 +29,8 @@ import { svgToPng } from '../reference/faithful';
 import { cardSlides, previewDeck, PREVIEW_COUNT } from './stylePreview';
 import { choiceOf, pickPicture } from './picturePick';
 import { SlidePicker } from './SlidePicker';
-import { flavourLine, layoutName, plainProblem, plainWords } from './plainWords';
+import { flavourLine, plainProblem, plainWords } from './plainWords';
+import { purposeLabel } from './layoutPurpose';
 import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
 import { LayoutGallery } from './LayoutGallery';
 import { profileWebsite } from './profileSite';
@@ -1021,8 +1022,8 @@ export default function CarouselPage() {
     const r = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, c);
     // Round AL part 1: the layout's plain name, never its id
     if (!r.ok) return plainWords(`Could not change slide ${i + 1}: ${plainProblem(r.reasons[0])} The slide is unchanged.`);
-    const bad = putSlide(i, r, c.layout ? `Change slide ${i + 1} to ${layoutName(r.layout)}` : `Change the look of slide ${i + 1}`);
-    return bad ? plainWords(bad) : `Slide ${i + 1} ${c.layout ? 'is now ' + layoutName(r.layout) : 'was changed'}: no model call. Undo brings the old one back.`;
+    const bad = putSlide(i, r, c.layout ? `Change slide ${i + 1} to ${purposeLabel(r.layout)}` : `Change the look of slide ${i + 1}`);
+    return bad ? plainWords(bad) : `Slide ${i + 1} ${c.layout ? 'is now ' + purposeLabel(r.layout) : 'was changed'}: no model call. Undo brings the old one back.`;
   };
   /** The picture slots of a library slide (a project picture is in them): where each is on the slide. */
   const pictureSlotsOf = (i: number): SlotView[] | undefined => {

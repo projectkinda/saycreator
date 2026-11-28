@@ -90,8 +90,13 @@ test('N4a: the Picture picker refuses a tall screenshot for a slide that would d
   const i = (d0.designed.library.plan.specs as any[]).findIndex((s) => s.layout === 'photo-cover' && !/picture:/.test(JSON.stringify(s.fields)));
   expect(i, 'the long photo-cover slide is in the deck: ' + d0.designed.library.layouts.join(',') + ' variants ' + d0.designed.library.variants.join(',') + ' pins ' + JSON.stringify(d0.designed.library.plan.specs.map((s: any) => s.pin ?? null))).toBeGreaterThan(0);
   await openTab(page, 'Layout', i + 1);
-  if ((await page.getByTestId('gal-photo-cover-0').getAttribute('data-state')) !== 'current') await page.getByTestId('gal-photo-cover-0').click();
-  await expect(page.getByTestId('gal-photo-cover-0')).toHaveAttribute('data-state', 'current', { timeout: 30_000 });
+  // Round AL part 2: one tile per layout (under "More like this" when it is not its purpose's first), the first look is the Arrangement button look-0
+  const pc = page.getByTestId('gal-photo-cover');
+  if (!(await pc.count())) await page.getByTestId('more-photo-stack').click();
+  if ((await pc.getAttribute('data-state')) !== 'current') await pc.click();
+  await expect(pc).toHaveAttribute('data-state', 'current', { timeout: 30_000 });
+  if ((await page.getByTestId('look-0').getAttribute('aria-pressed')) !== 'true') await page.getByTestId('look-0').click();
+  await expect(page.getByTestId('look-0')).toHaveAttribute('aria-pressed', 'true', { timeout: 30_000 });
   await page.waitForTimeout(800);
   const before = JSON.stringify((await doc()).designed.library.plan.specs[i]);
   await openTab(page, 'Pictures', i + 1);

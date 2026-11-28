@@ -173,7 +173,7 @@ test('Edit slides is four tabs: Layout | Text | Pictures | Fine-tune, with no se
   // library deck: the Layout tab is first; it holds the layout choices and the Variations
   await expect(page.getByRole('tab', { name: 'Layout' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('gallery-1')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Variations' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Adjust this layout' })).toBeVisible(); // Round AL part 2: was "Variations"
   await expect(page.getByTestId('gallery-controls-1')).toBeVisible();
   // no second big preview in the panel
   await expect(page.getByTestId('edit-view').locator('.cr-pic img, .cr-pic-btn')).toHaveCount(0);

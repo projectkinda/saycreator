@@ -109,7 +109,9 @@ test.describe('at 390 px', () => {
     await expect(gallery).toBeVisible();
     const pending = () => gallery.evaluate((g) => [...g.querySelectorAll('button[data-testid^="gal-"]:not([data-testid$="-off"])')].filter((b) => !(b.getAttribute('data-testid') ?? '').startsWith('gal-cut') && b.getAttribute('data-testid') !== 'gal-invert' && !b.querySelector('img')).length);
     await expect.poll(pending, { timeout: 6000, intervals: [250] }).toBe(0);
-    expect(await gallery.locator('img').count(), 'a thumbnail for every layout tile').toBeGreaterThan(8);
+    // Round AL part 2: one tile per purpose that fits (was two per layout): a picture on every tile
+    expect(await gallery.locator('img').count(), 'a thumbnail for every tile').toBe(await gallery.locator('button[data-testid^="gal-"][data-state]').count());
+    expect(await gallery.locator('img').count()).toBeGreaterThanOrEqual(3);
 
     // E: the Variations controls
     const v = await page.evaluate(() => {
@@ -117,7 +119,8 @@ test.describe('at 390 px', () => {
       const box = (e: Element) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
       return { groups: [...c.querySelectorAll('.cr-var-group')].map((g) => ({ label: g.querySelector('.cr-var-label')!.textContent, lb: box(g.querySelector('.cr-var-label')!), btns: [...g.querySelectorAll('button')].map((b) => box(b)), role: g.getAttribute('role'), labelled: g.getAttribute('aria-labelledby') })), overflow: document.documentElement.scrollWidth - window.innerWidth, hasInvert: !!c.querySelector('[data-testid="gal-invert"]'), invertInColours: !!c.querySelector('.cr-var-colours [data-testid="gal-invert"]') };
     });
-    expect(v.groups.map((g: any) => g.label)).toEqual(['Colour block', 'Colours']);
+    // Round AL part 2: the layout's two looks (Arrangement), the colour block when the layout has more than one, the colours
+    expect([['Arrangement', 'Colours'], ['Arrangement', 'Colour block', 'Colours']]).toContainEqual(v.groups.map((g: any) => g.label));
     for (const g of v.groups) {
       expect(g.role).toBe('group');
       expect(g.labelled, 'the group is named by its own label').toBeTruthy();

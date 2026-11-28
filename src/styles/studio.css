@@ -382,3 +382,21 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
 .cr-not-on-slides summary:hover { background: var(--surface-2, rgba(0, 0, 0, .06)); }
 .cr-not-on-slides summary:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .cr-not-on-slides ul { margin: 4px 0 0; padding-left: 18px; }
+
+/* Round AL part 2: the layout picker by purpose: a grid of small pictures of the slide (2 columns at phone width, 3 on desktop); an open purpose spans the row */
+.cr-lp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; margin-top: 6px; }
+.cr-lp-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cr-lp-open { grid-column: 1 / -1; padding: 6px; border: 1px dashed rgba(128, 128, 128, .45); border-radius: 8px; }
+.cr-lp-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.cr-lp-tile { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 4px; width: 100%; height: 100%; white-space: normal; text-align: left; }
+.cr-lp-name { font-size: 12px; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.cr-lp-now { font-weight: 800; }
+.cr-lp-detail { font-size: 11px; line-height: 1.2; }
+.cr-lp-more { align-self: flex-start; font-size: 12px; padding: 2px 8px; }
+.cr-lp-group { font-weight: 600; }
+.cr-lp-off { margin-top: 8px; }
+.cr-lp-off summary { cursor: pointer; }
+/* the slide's own layout ("Now") reads at full strength: it is disabled only because choosing it again would change nothing */
+.cr-lp-tile:disabled[aria-pressed="true"] { opacity: 1; color: inherit; }
+/* the look, colour block and colours the slide has now read at full strength in "Adjust this layout" (disabled only because choosing them again changes nothing) */
+.cr-var-btn:disabled[aria-pressed="true"] { opacity: 1; color: inherit; }

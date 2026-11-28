@@ -91,23 +91,25 @@ test('in the editor: the gallery is in plain sight, a click redraws that slide w
   const g0 = page.getByTestId('gallery-0');
   await g0.scrollIntoViewIfNeeded();
   await expect(g0).toBeVisible();
-  // it holds what the registry holds
-  const regCount = await page.evaluate(async () => (await import('/src/carousel/layouts/index.ts')).LAYOUT_IDS.length);
-  await expect(g0.locator('[data-testid^="gal-item-"]')).toHaveCount(regCount);
+  // Round AL part 2: it holds every PURPOSE: one tile per purpose that fits, the others listed under "Why not the others"
+  const purposes = await page.evaluate(async () => (await import('/src/carousel/layoutPurpose.ts')).PURPOSES.length);
+  await expect.poll(async () => (await g0.locator('[data-testid^="purpose-"]:not([data-testid^="purpose-off-"])').count()) + (await g0.locator('[data-testid^="purpose-off-"]').count())).toBe(purposes);
   // the thumbnails are drawn lazily and are real pictures
   await expect(g0).toHaveAttribute('data-ready-ms', /\d+/, { timeout: 120_000 });
   const ms = Number(await g0.getAttribute('data-ready-ms'));
   console.log('GALLERY_READY_MS', ms, 'tiles', await g0.locator('img').count());
-  expect(await g0.locator('img').count(), 'two variants of every enabled layout').toBe((await g0.locator('[data-enabled="true"]').count()) * 2);
+  expect(await g0.locator('img').count(), 'one picture of this slide on every tile (Round AL part 2: the variant is a button under the grid)').toBe(await g0.locator('[data-enabled="true"]').count());
   // the current layout is clearly marked
   await expect(g0.locator('[data-current="true"]')).toHaveCount(1);
   await expect(g0.locator('[data-state="current"]')).toHaveCount(1);
   const before = (await lib(page))!;
   const callsBefore = f.calls;
-  // a greyed-out layout cannot be applied
-  const off = g0.locator('[data-state="off"]').first();
+  // a purpose with no layout that fits cannot be applied: it is a line of text under "Why not the others", with its reason, not a button (Round AL part 2)
+  await g0.locator('[data-testid^="gallery-off-"] summary').click();
+  const off = g0.locator('[data-testid^="purpose-off-"]').first();
   await expect(off).toBeVisible();
-  await expect(off).toBeDisabled();
+  await expect(off.locator('button')).toHaveCount(0);
+  expect(((await off.textContent()) ?? '').length).toBeGreaterThan(12);
   await off.click({ force: true }).catch(() => undefined);
   await page.waitForTimeout(500);
   expect(await lib(page)).toEqual(before);

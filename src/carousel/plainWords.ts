@@ -101,8 +101,6 @@ export function plainProblem(msg: string, layout0?: string): string {
 /** The colour block shapes (the "cut" of a slide, called "plane" before Round AL). */
 export const BLOCK_LABEL: Record<string, string> = { plain: 'No block', 'edge-h': 'Block at the bottom', 'edge-v': 'Block at the side', angle: 'Angled block', curve: 'Curved block' };
 
-/** The plain name of a layout in a message ("Half photo, half text"), never its id. */
-export const layoutName = (id: string): string => layoutDef(id as never)?.label ?? 'another layout';
 
 /** A variant's name as the tile shows it: the engine word "kicker" is the small line above the headline. */
 export const plainVariant = (v: string): string => v.replace(/\bkicker\b/gi, 'small line');

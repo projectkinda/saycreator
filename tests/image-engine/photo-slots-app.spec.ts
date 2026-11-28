@@ -157,7 +157,9 @@ test('a deck with pictures: one writer call with metadata only, placement by cod
   await openTab(page, 'Layout', 3);
   const g = page.getByTestId('gallery-2');
   await g.scrollIntoViewIfNeeded();
-  await expect(g.locator('[data-state="off"]').first()).toBeVisible({ timeout: 60_000 });
+  // Round AL part 2: a purpose with no layout that fits is listed under "Why not the others" with its reason (no greyed button); a picture purpose says how many pictures it needs
+  await g.locator('[data-testid^="gallery-off-"] summary').click({ timeout: 60_000 });
+  await expect(g.locator('[data-testid^="purpose-off-"]').filter({ hasText: /Needs (a|\d+) pictures?/ }).first()).toBeVisible({ timeout: 60_000 });
   // reload: the pictures are still in the slides, drawn from storage
   await page.reload();
   await deckDrawn(page, 3);

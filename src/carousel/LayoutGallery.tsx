@@ -1,11 +1,13 @@
-// The layout gallery of a library slide, in plain sight under the slide's picture. It lists EVERY layout of the registry (nothing is typed here per layout), each in both
-// variants, drawn by the code with THIS slide's own text and the deck's style. A layout that cannot show the slide's text is greyed out with one line of reason and cannot
-// be applied. One click draws this slide again in code (no model call; one undo step). The plane and colour options sit beside it as small controls.
-// Thumbnails are drawn when the gallery scrolls into view, one after the other, and kept by slide content + style, so coming back to them costs nothing.
+// The layout picker of a library slide (Round AL part 2: by PURPOSE). A grid of small pictures of THIS slide, one per purpose that fits ("Big statement", "Photo on the side",
+// "Numbered step" ...), drawn by the code with the slide's own text and the deck's style; the slide's own layout comes first, marked "Now". "More like this" opens the other
+// layouts of that purpose in the same place. Purposes with no layout that fits are listed under "Why not the others" with one plain reason each. Under the grid, "Adjust this
+// layout": the layout's two looks as plain buttons, the colour block and the light/dark swap. One click draws this slide again in code (no model call; one undo step).
+// Pictures are drawn when the picker scrolls into view, one after the other, and kept by slide content + style, so coming back to them costs nothing.
 import { useEffect, useRef, useState } from 'react';
 import { svgToPng } from '../reference/faithful';
-import type { GalleryEntry, GalleryModel, PickChoice } from './designLibraryPick';
+import type { GalleryModel, PickChoice } from './designLibraryPick';
 import type { LayoutId } from './layouts';
+import { layoutDetail, looksOf, purposeGrid } from './layoutPurpose';
 
 /** Pictures drawn so far, by slide content + style + layout + variant (null: the code could not draw it). Kept for the page's life, capped. */
 const CACHE = new Map<string, string | null>();
@@ -28,10 +30,10 @@ const key = (sig: string, layout: string, v: number) => `${sig}:${layout}:${v}`;
 
 export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section = 'layout' }: {
   index: number;
-  /** 'layout': the layout choices and the Variations (plane, colours). 'rewrite': the Rewrite text button and its optional hint (used in the Text tab). */
+  /** 'layout': the purpose grid and "Adjust this layout". 'rewrite': the Rewrite text button and its optional hint (used in the Text tab). */
   section?: 'layout' | 'rewrite';
   model: GalleryModel | null;
-  /** Draws one tile (no model call): the SVG of the layout in the variant with this slide's text. */
+  /** Draws one picture (no model call): the SVG of the layout in the variant with this slide's text. */
   draw: (layout: LayoutId, variant: 0 | 1) => Promise<string | null>;
   /** Draws the slide again with the choice; says what happened. */
   onChoose: (c: PickChoice) => Promise<string>;
@@ -45,11 +47,12 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [words, setWords] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
   const drawRef = useRef(draw);
   drawRef.current = draw;
   const run = useRef(0);
 
-  // draw the pictures only when the gallery is on screen
+  // draw the pictures only when the picker is on screen
   useEffect(() => {
     const el = root.current;
     if (!el || seen) return;
@@ -60,24 +63,30 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
   }, [seen]);
 
   const sig = model?.signature ?? '';
+  const grid = model ? purposeGrid(model.entries) : { tiles: [], off: [] };
+  const v = model?.variant ?? 0;
+  // the pictures to draw: the tile of every purpose, and the other layouts of the purpose that is open
+  const shown = grid.tiles.flatMap((t) => [t.best, ...(open === t.purpose.id ? t.more : [])]);
+  const want = shown.join(',');
+  // a slide with new text, style or look closes "More like this"
+  useEffect(() => { setOpen(null); }, [sig]);
   useEffect(() => {
     if (!seen || !model) return;
     const id = ++run.current;
     const t0 = performance.now();
     setDone(null);
-    const todo = model.entries.filter((e) => e.enabled).flatMap((e) => ([0, 1] as const).map((v) => ({ e, v })));
-    // what the cache already holds is shown at once
+    const todo = shown;
     const have: Record<string, string | null> = {};
-    for (const { e, v } of todo) { const k = key(sig, e.layout, v); if (CACHE.has(k)) have[k] = CACHE.get(k)!; }
-    setUrls(have);
+    for (const l of todo) { const k = key(sig, l, v); if (CACHE.has(k)) have[k] = CACHE.get(k)!; }
+    setUrls((u) => ({ ...u, ...have }));
     (async () => {
-      for (const { e, v } of todo) {
+      for (const l of todo) {
         if (id !== run.current) return;
-        const k = key(sig, e.layout, v);
+        const k = key(sig, l, v);
         if (CACHE.has(k)) continue;
         let url: string | null = null;
         try {
-          const svg = await drawRef.current(e.layout, v);
+          const svg = await drawRef.current(l as LayoutId, v);
           if (svg) url = URL.createObjectURL(await svgToPng(svg, THUMB_W));
         } catch { url = null; }
         remember(k, url);
@@ -87,7 +96,7 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
       if (id === run.current) setDone(Math.round(performance.now() - t0));
     })();
     return () => { run.current++; };
-  }, [seen, sig]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [seen, sig, want]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const choose = async (c: PickChoice) => {
     setBusy(true);
@@ -105,50 +114,79 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
         {msg && <span className="small" role="status">{msg}</span>}
       </div>
     );
-  const tile = (e: GalleryEntry, v: 0 | 1) => {
-    const now = e.current && model.variant === v;
-    const url = urls[key(sig, e.layout, v)];
-    const label = `${e.label}, ${e.variants[v]}`;
+  const cur = model.entries.find((e) => e.current);
+  const reasonOf = (l: string) => model.entries.find((e) => e.layout === l)?.reason;
+  /** One picture of this slide in a layout: a click lays the slide out that way. */
+  const tile = (l: string, now: boolean, name: string, detail: string) => {
+    const url = urls[key(sig, l, v)];
+    const leaves = reasonOf(l);
     return (
-      <button key={v} type="button" className="btn btn-outline btn-sm" disabled={busy || now} aria-pressed={now} aria-label={`${now ? 'Current: ' : 'Use '}${label}`} title={e.reason ? `${label}. ${e.reason}` : label} data-testid={`gal-${e.layout}-${v}`} data-state={now ? 'current' : 'ready'} onClick={() => void choose(e.current ? { variant: v } : { layout: e.layout, variant: v })} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: 4, width: 128, opacity: 1, outline: now ? '3px solid currentColor' : undefined, outlineOffset: -1 }}>
-        {url ? <img src={url} alt="" width={118} height={148} style={{ objectFit: 'cover', borderRadius: 4, display: 'block' }} /> : <span aria-hidden="true" className="small muted" style={{ width: 118, height: 148, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(128,128,128,.12)', borderRadius: 4 }}>{url === undefined ? '…' : '–'}</span>}
-        <span className="small" style={{ fontSize: 11, lineHeight: 1.2, whiteSpace: 'normal', overflowWrap: 'anywhere', textAlign: 'center', width: '100%', minHeight: 26 }}>{e.variants[v]}{now ? ' (now)' : ''}</span>
+      <button type="button" className="btn btn-outline btn-sm cr-lp-tile" disabled={busy || now} aria-pressed={now} aria-label={`${now ? 'Now: ' : 'Use '}${name}${detail ? ', ' + detail : ''}${leaves ? '. ' + leaves : ''}`} title={leaves ?? undefined} data-testid={`gal-${l}`} data-state={now ? 'current' : 'ready'} onClick={() => void choose({ layout: l as LayoutId, variant: v })} style={{ outline: now ? '3px solid currentColor' : undefined, outlineOffset: -1 }}>
+        {url ? <img src={url} alt="" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', borderRadius: 4, display: 'block' }} /> : <span aria-hidden="true" className="small muted" style={{ width: '100%', aspectRatio: '4 / 5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(128,128,128,.12)', borderRadius: 4 }}>{url === undefined ? '…' : '–'}</span>}
+        <span className="small cr-lp-name">{now && <strong className="cr-lp-now">Now </strong>}{name}</span>
+        {detail && <span className="small muted cr-lp-detail">{detail}</span>}
       </button>
     );
   };
+  const looks = cur ? looksOf(cur.layout) : null;
   return (
     <div ref={root} className="tn-field" data-testid={`gallery-${index}`} data-ready-ms={done ?? ''} data-signature={sig}>
       <h4 className="h4">Layouts</h4>
-      <span className="small muted">Click one to lay this slide out that way. Your words stay the same; no model call.</span>
-      <div role="list" aria-label={`Layouts for slide ${index + 1}`} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 520, overflowY: 'auto', padding: '2px 2px 6px' }}>
-        {model.entries.map((e) => (
-          <div key={e.layout} role="listitem" data-testid={`gal-item-${e.layout}`} data-enabled={e.enabled} data-current={e.current} style={{ opacity: e.enabled ? 1 : 0.55 }}>
-            {e.enabled ? (
-              <>
-                <div className="small" style={{ fontWeight: 600, marginBottom: 3 }}>{e.label}{e.current ? ' — this slide now' : ''}</div>
-                <div style={{ display: 'flex', gap: 6 }}>{tile(e, 0)}{tile(e, 1)}</div>
-                {e.reason && <div className="small muted" style={{ fontSize: 11 }}>{e.reason}</div>}
-              </>
-            ) : (
-              <button type="button" className="btn btn-outline btn-sm" disabled aria-disabled="true" aria-label={`${e.label} cannot be used: ${e.reason}`} data-testid={`gal-${e.layout}-off`} data-state="off" style={{ textAlign: 'left', whiteSpace: 'normal', width: '100%', padding: '4px 8px', display: 'block' }}>
-                <span className="small" style={{ fontWeight: 600, fontSize: 12 }}>{e.label}</span>
-                <span className="small" style={{ fontSize: 11, display: 'block', lineHeight: 1.25 }}>{e.reason}</span>
-              </button>
-            )}
-          </div>
-        ))}
+      <span className="small muted">Pick what this slide should do. Your words stay the same; no model call.</span>
+      <div role="list" aria-label={`Layouts for slide ${index + 1}`} className="cr-lp-grid">
+        {grid.tiles.map((t) => {
+          const isOpen = open === t.purpose.id;
+          return (
+            <div key={t.purpose.id} role="listitem" className={`cr-lp-cell${isOpen ? ' cr-lp-open' : ''}`} data-testid={`purpose-${t.purpose.id}`} data-open={isOpen}>
+              {isOpen && <div className="small cr-lp-group">{t.purpose.name}</div>}
+              <div className={isOpen ? 'cr-lp-row' : undefined}>
+                {[t.best, ...(isOpen ? t.more : [])].map((l) => (
+                  <div key={l} data-testid={`gal-item-${l}`} data-enabled="true" data-current={l === cur?.layout}>
+                    {tile(l, l === cur?.layout, t.purpose.name, layoutDetail(l))}
+                  </div>
+                ))}
+              </div>
+              {t.more.length > 0 && (
+                <button type="button" className="btn btn-outline btn-sm cr-lp-more" aria-expanded={isOpen} data-testid={`more-${t.purpose.id}`} onClick={() => setOpen(isOpen ? null : t.purpose.id)}>
+                  {isOpen ? 'Fewer' : `More like this (${t.more.length})`}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
-      <h4 className="h4">Variations</h4>
-      {/* Round F: each control sits with its own label in its own group; the colour group is its own container (it gets more controls next round). The groups wrap, label above buttons. */}
-      <div className="cr-var" data-testid={`gallery-controls-${index}`}>
-        <div className="cr-var-group" role="group" aria-labelledby={`cr-var-plane-${index}`} data-testid={`gallery-plane-${index}`}>
-          <span className="small muted cr-var-label" id={`cr-var-plane-${index}`}>Colour block</span>
-          <div className="cr-var-buttons">
-            {model.cuts.map((c) => (
-              <button key={c.id} type="button" className="btn btn-outline btn-sm cr-var-btn" disabled={busy || c.current} aria-pressed={c.current} data-testid={`gal-cut-${c.id}`} onClick={() => void choose({ cut: c.id })} style={{ outline: c.current ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{c.label}</button>
+      {grid.off.length > 0 && (
+        <details className="cr-lp-off" data-testid={`gallery-off-${index}`}>
+          <summary className="small">Why not the others ({grid.off.length})</summary>
+          <ul className="small muted" style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+            {grid.off.map((o) => (
+              <li key={o.purpose.id} data-testid={`purpose-off-${o.purpose.id}`}><strong>{o.purpose.name}:</strong> {o.reason}</li>
             ))}
+          </ul>
+        </details>
+      )}
+      <h4 className="h4">Adjust this layout</h4>
+      <div className="cr-var" data-testid={`gallery-controls-${index}`}>
+        {looks && (
+          <div className="cr-var-group" role="group" aria-labelledby={`cr-var-look-${index}`} data-testid={`gallery-look-${index}`}>
+            <span className="small muted cr-var-label" id={`cr-var-look-${index}`}>Arrangement</span>
+            <div className="cr-var-buttons">
+              {([0, 1] as const).map((k) => (
+                <button key={k} type="button" className="btn btn-outline btn-sm cr-var-btn" disabled={busy || model.variant === k} aria-pressed={model.variant === k} data-testid={`look-${k}`} onClick={() => void choose({ variant: k })} style={{ outline: model.variant === k ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{looks[k]}</button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+        {model.cuts.length > 1 && (
+          <div className="cr-var-group" role="group" aria-labelledby={`cr-var-plane-${index}`} data-testid={`gallery-plane-${index}`}>
+            <span className="small muted cr-var-label" id={`cr-var-plane-${index}`}>Colour block</span>
+            <div className="cr-var-buttons">
+              {model.cuts.map((c) => (
+                <button key={c.id} type="button" className="btn btn-outline btn-sm cr-var-btn" disabled={busy || c.current} aria-pressed={c.current} data-testid={`gal-cut-${c.id}`} onClick={() => void choose({ cut: c.id })} style={{ outline: c.current ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{c.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="cr-var-group cr-var-colours" role="group" aria-labelledby={`cr-var-colours-${index}`} data-testid={`gallery-colours-${index}`}>
           <span className="small muted cr-var-label" id={`cr-var-colours-${index}`}>Colours</span>
           <div className="cr-var-buttons">
