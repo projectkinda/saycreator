@@ -42,20 +42,21 @@ const FIRST = { title: 'Stop scrolling', slides: [
   { layout: 'cta-pair', fields: { headline: 'Save this for your next shoot', button1: 'Save this', button2: 'Tell me which one', line2: "Then tell me which one you'll try first." }, accents: [] },
 ] };
 /** The second answer, built from the retry message: `tip`, slide N gets list item N (the bad run); `own`, slide N keeps its own words in split-text. */
-const second = (prompt: string, mode: 'tip' | 'own'): string => {
+const second = (prompt: string, mode: 'tip' | 'own' | 'statement'): string => {
   const asked = [...(prompt.match(/for slide number ([\d, ]+)/)?.[1] ?? '').matchAll(/\d+/g)].map((m) => Number(m[0]));
   const so = JSON.parse(prompt.split('The slides so far (JSON):\n')[1].split('\n')[0]);
   const slides: Record<string, unknown> = {};
   for (const n of asked) {
     const [h, p] = mode === 'tip' ? TIP[n] : [so[n - 1].fields.title, so[n - 1].fields.body];
-    slides[String(n)] = { layout: 'split-text', fields: { headline: h, paragraph: p }, accents: [] };
+    // 'statement': the real writer's answer of one real retry (its own words, the sentence as a caption)
+    slides[String(n)] = mode === 'statement' ? { layout: 'statement', fields: { headline: h, caption: p }, accents: [] } : { layout: 'split-text', fields: { headline: h, paragraph: p }, accents: [] };
   }
   return JSON.stringify({ slides });
 };
 
-async function deck(page: Page, mode: 'tip' | 'own') {
+async function deck(page: Page, mode: 'tip' | 'own' | 'statement', pictures = false) {
   await page.goto('/images/carousel');
-  return page.evaluate(async ({ TEXT, FIRST, TIP, mode, secondSrc }) => {
+  return page.evaluate(async ({ TEXT, FIRST, TIP, mode, secondSrc, pictures }) => {
     const second = new Function('TIP', 'return ' + secondSrc)(TIP);
     const DL: any = await import('/src/carousel/designLibrary.ts');
     const PR: any = await import('/src/carousel/presets.ts');
@@ -63,13 +64,13 @@ async function deck(page: Page, mode: 'tip' | 'own') {
     const fonts: any = await import('/src/image-engine/fonts.ts'); await fonts.loadFonts();
     const prompts: string[] = [];
     const p = { id: 'fake', write: async (prompt: string) => { prompts.push(prompt); return { text: prompts.length === 1 ? JSON.stringify(FIRST) : second(prompt, mode), ms: 5 }; } };
-    const out = await DL.designLibraryDeck({ text: TEXT, slides: 7, tone: 'clear', format: 'carousel', keepEverySentence: true }, { pack: PR.presetPackFor('editorial-collage', false, null), hasPhoto: false, site: '' }, '', p, new AbortController().signal);
+    const out = await DL.designLibraryDeck({ text: TEXT, slides: 7, tone: 'clear', format: 'carousel', keepEverySentence: true }, { pack: PR.presetPackFor('editorial-collage', false, null), hasPhoto: pictures, ...(pictures ? { images: [['p1', 1600, 2400, 'people in dark archway'], ['p2', 1600, 2400, 'orange maple leaf on dark wood'], ['p3', 1600, 2400, 'brick building with neon signs'], ['p4', 2400, 1600, 'person walking rocky path through forest'], ['p5', 750, 422, 'animated boy smiling']].map(([id, width, height, label]) => ({ id, width, height, label, content: 'photo' })) } : {}), site: '' }, '', p, new AbortController().signal);
     const lib = out.designed.library;
     const specs = lib.plan.specs;
     const texts = specs.map((_: any, i: number) => SC.visibleTextOf(out.designed.slides[String(i)]?.built?.layers ?? []));
     const heads = specs.map((s: any) => String(s.fields.headline ?? s.fields.title ?? s.fields.heading ?? ''));
-    return { calls: prompts.length, retry: prompts[1] ?? '', heads, layouts: specs.map((s: any) => s.layout), nums: specs.map((s: any) => s.fields.numeral ?? s.fields.step ?? ''), retries: lib.retries, notes: out.designed.notes, miss: SC.sourceNotOnSlidesOf(TEXT, texts) };
-  }, { TEXT, FIRST, TIP, mode, secondSrc: second.toString() });
+    return { calls: prompts.length, retry: prompts[1] ?? '', heads, texts, layouts: specs.map((s: any) => s.layout), nums: specs.map((s: any) => s.fields.numeral ?? s.fields.step ?? ''), retries: lib.retries, notes: out.designed.notes, miss: SC.sourceNotOnSlidesOf(TEXT, texts) };
+  }, { TEXT, FIRST, TIP, mode, secondSrc: second.toString(), pictures });
 }
 
 test('AQ1 a redone slide with the words of another slide is refused: every tip stays on its own slide, none twice; the notes say why; the retry message names each slide by its headline', async ({ page }) => {
@@ -104,6 +105,15 @@ test('AQ2 a redone slide with its own words is used, and gets its list number ba
   expect(r.layouts[4]).toBe('split-text');
   expect(r.heads[2]).toMatch(/^2\.\s+Make eye contact/);
   expect(r.heads[4]).toMatch(/^4\.\s+Go close on one small thing/);
+  expect(r.miss.count).toBe(0);
+});
+
+test('AQ2b with pictures: a redone slide the picture rescue moves to a picture layout still shows its list number (a real retry answered with statements whose caption left no room for it)', async ({ page }) => {
+  const r: any = await deck(page, 'statement', true);
+  expect(r.calls).toBe(2);
+  expect(r.retries.filter((x: any) => x.refused)).toEqual([]);
+  expect(r.texts[2]).toMatch(/^2\.\s+make eye contact/i);
+  expect(r.texts[4]).toMatch(/^4\.\s+go close on one small thing/i);
   expect(r.miss.count).toBe(0);
 });
 

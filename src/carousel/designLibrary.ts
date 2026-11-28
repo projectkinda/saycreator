@@ -1922,17 +1922,18 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
         break;
       }
     }
-    // the slides the retry changed get the passes the first answer had: the list numbers of the text (Round AI) and a second chance for a picture still unused (Round Q)
+    // the slides the retry changed get the passes the first answer had: a second chance for a picture still unused (Round Q), then the list numbers of the text (Round AI), last, so
+    // a slide the rescue moved to a picture layout still gets its number in that layout
     if (changed.size || refused.size) {
-      const ln = keepListNumbers(specs, req.text);
-      specs = ln.specs;
-      tr.trims.push(...ln.trims);
       if (look.images?.length && pictureRescueRule.on) {
         const rs = await applyPictureRescue(specs, look, style, handle, ctaCtx);
         specs = rs.specs;
         pictureSwaps.push(...rs.swaps);
         for (const row of rs.rows.filter((r) => r.slide !== null)) rescueRows = [...rescueRows.filter((r) => r.picture !== row.picture), row];
       }
+      const ln = keepListNumbers(specs, req.text);
+      specs = ln.specs;
+      tr.trims.push(...ln.trims);
     }
     // Round R: the retry's answer gets the button check too, before a preset's card closing could carry its label as a caption
     {
