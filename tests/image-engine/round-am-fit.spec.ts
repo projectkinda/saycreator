@@ -232,3 +232,135 @@ test('AM2 in the app at 390 px: a line left out asks first and "Keep my words" c
   expect(f.calls, 'one fake writer call for the deck; every click is code only').toBe(1);
   expect(f.describes, 'no describe call').toBe(0);
 });
+
+// ----- Round AM part 2: layouts that leave out words the slide's own layout requires (a closing's buttons, a headline + sentence slide's sentence), picker only -----
+
+test('AM3 the picker reaches the layouts that leave out required words, never the headline, a number or a list item; the deck passes\' list is unchanged; the words come back; the real reason for stacked big words', async ({ page }) => {
+  await page.goto('/images/carousel');
+  const r: any = await page.evaluate(async () => {
+    const D: any = await import('/src/carousel/designLibrary.ts');
+    const P: any = await import('/src/carousel/designLibraryPick.ts');
+    const LM: any = await import('/src/carousel/layoutMap.ts');
+    const PR: any = await import('/src/carousel/presets.ts');
+    const look = { hasPhoto: false };
+    const pair = { layout: 'cta-pair', fields: { headline: 'Save this for your next shoot', button1: 'Save this', button2: 'Tell me which one', line2: "Tell me which one you'll try first." }, accents: [] };
+    const text = { layout: 'split-text', fields: { headline: 'Look for reflections', paragraph: 'Puddles, windows and wet streets give you a second picture for free.' }, accents: [] };
+    const item = { layout: 'listicle-numeral', fields: { numeral: '1', title: 'Shoot at golden hour', body: 'Sunrise and the hour before sunset do more than any filter.' }, accents: [] };
+    const list = { layout: 'checklist', fields: { title: 'Before you post', items: ['Check the light', 'Crop the edges', 'Read it aloud'] }, accents: [] };
+    const near = (s: any) => LM.nearOptions(s, look);
+    const pack = PR.presetPackFor('editorial-collage', false);
+    const style = D.styleFromPack(pack).style;
+    const lib0: any = { route: 'library', provider: 'none', tokenNote: '', calls: 0, tokens: null, seconds: 0, layouts: [], variants: [], cuts: [], inverts: [], densities: [], suggested: { cut: [], invert: [], density: [] }, retries: [], fallbacks: [], codeAdjustments: [], style, styleNotes: [], plan: { title: 'T', specs: [text, pair] } };
+    const lib = (await D.redrawLibraryDeck(lib0, { pack, hasPhoto: false }, '@h')).library;
+    const m = P.galleryModel(lib, look, '@h', 1);
+    const st = m.entries.find((e: any) => e.layout === 'statement');
+    const to = await P.redrawLibrarySlide(lib, look, '@h', 1, { layout: 'statement', variant: 0 });
+    const m2 = P.galleryModel(to.library, look, '@h', 1);
+    const back = await P.redrawLibrarySlide(to.library, look, '@h', 1, { layout: 'cta-pair', variant: 0 });
+    return {
+      pairNear: near(pair).map((o: any) => [o.layout, o.droppedCore]),
+      pairDeck: LM.layoutOptionsFor(pair, look).map((o: any) => o.layout),
+      pairPicker: LM.layoutOptions(pair, look).map((o: any) => o.layout),
+      textNear: near(text).map((o: any) => [o.layout, o.droppedCore]),
+      itemNear: near(item).map((o: any) => [o.layout, LM.flat(o.fields)]),
+      listNear: near(list).map((o: any) => [o.layout, LM.flat(o.fields)]),
+      prose: near({ layout: 'prose', fields: { p1: 'A small subject in a big scene feels like a story.' }, accents: [] }).length,
+      stacked: LM.layoutRefusals(item, look)['statement-stacked'],
+      st: st && { fit: st.fit, near: !!st.near, badges: st.badges, enabled: st.enabled },
+      to: to.ok ? { layout: to.spec.layout, fields: to.spec.fields, left: to.spec.left?.fields } : to.reasons,
+      pairClean: m2.entries.find((e: any) => e.layout === 'cta-pair')?.fit,
+      back: back.ok ? { layout: back.spec.layout, fields: back.spec.fields, left: back.spec.left ?? null } : back.reasons,
+    };
+  });
+  // the closing: Big statement and the others leave out the second button (and the line under it), never the headline
+  const pn = Object.fromEntries(r.pairNear);
+  expect(Object.keys(pn)).toEqual(expect.arrayContaining(['statement', 'big-question', 'quote']));
+  expect(pn.statement).toEqual(['Tell me which one']);
+  expect(r.pairDeck, 'the deck passes\' list is unchanged').toEqual(['cta-pair']);
+  expect(r.pairPicker).not.toContain('statement');
+  // the headline + sentence slide: the sentence may go
+  expect(Object.fromEntries(r.textNear)['big-question']).toEqual(['Puddles, windows and wet streets give you a second picture for free.']);
+  // never the number or a list item; nothing for a slide without a headline
+  for (const [id, shown] of r.itemNear) expect((shown as string[]).join(' | '), `${id} keeps the number`).toMatch(/(^|\| )1(\. | |$)/);
+  for (const [id, shown] of r.listNear) for (const it of ['Check the light', 'Crop the edges', 'Read it aloud']) expect((shown as string[]).join(' | '), `${id} keeps ${it}`).toContain(it);
+  expect(r.prose).toBe(0);
+  // the real reason (it was "Has no place for the number 1.")
+  expect(r.stacked).toBe('The headline has 5 words; this layout takes 2 to 4.');
+  // the tile, the move and the way back
+  expect(r.st).toEqual({ fit: 'change', near: true, enabled: true, badges: ['Leaves out: "Tell me which one", "Tell me which one you\'ll try first."'] });
+  expect(r.to.layout).toBe('statement');
+  expect(r.to.fields).toEqual({ headline: 'Save this for your next shoot' });
+  expect(r.to.left).toEqual({ headline: 'Save this for your next shoot', button1: 'Save this', button2: 'Tell me which one', line2: "Tell me which one you'll try first." });
+  expect(r.pairClean).toBe('clean');
+  expect(r.back).toEqual({ layout: 'cta-pair', fields: { headline: 'Save this for your next shoot', button1: 'Save this', button2: 'Tell me which one', line2: "Tell me which one you'll try first." }, left: null });
+});
+
+test('AM4 in the app at 390 px: the closing\'s Big statement asks first, "Keep my words" changes nothing, "Use it" leaves the buttons out and the closing layout brings them back; "Add a picture" never takes a layout that leaves words out; zero model calls', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const f = { calls: 0, describes: 0 };
+  await page.route('**/__carousel/status', (x) => x.fulfill({ json: { available: true } }));
+  await page.route('**/api/carousel/status', (x) => x.fulfill({ json: { available: false, reason: 'no key' } }));
+  await page.route('**/__reference/status', (x) => x.fulfill({ json: { available: false, reason: 'not used in this test' } }));
+  await page.route('**/api/reference/status', (x) => x.fulfill({ json: { available: false, reason: 'not used in this test' } }));
+  await page.route('**/__picture/describe', (x) => { f.describes++; return x.fulfill({ json: { captions: [], calls: 1 } }); });
+  const write = (x: any) => { f.calls++; return x.fulfill({ json: { text: WRITER, ms: 5, usage: { input: 10, output: 5 } } }); };
+  await page.route('**/__carousel/write', write);
+  await page.route('**/api/carousel/write', write);
+  await page.goto('/images/carousel');
+  await page.getByLabel('Choose images for the slides').setInputFiles([await picture(page, 1500, 1000), { ...(await picture(page, 1000, 1500)), name: 'tall.jpg' }]);
+  await expect(page.getByTestId('image-1')).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel('Your text or topic').fill(TEXT);
+  await toStep(page, 3);
+  await page.getByRole('list', { name: 'Styles' }).getByRole('button', { name: /Warm editorial collage/ }).first().click();
+  await page.getByRole('button', { name: 'Make carousel', exact: true }).click();
+  await deckDrawn(page, 4);
+  const lib = () => page.evaluate(() => (JSON.parse(localStorage.getItem('creator.carousel.project.v1') ?? '{}') as any).project?.doc?.designed?.library);
+  const l0 = await lib();
+  expect(l0.plan.specs[3].layout).toBe('cta-pair');
+  const own = l0.plan.specs[3].fields;
+
+  // "Add a picture" on the closing: never a layout that leaves words out (only the Layout tab offers those, after its question). A third picture, added after the deck, is free.
+  await toStep(page, 1);
+  await page.getByLabel('Choose images for the slides').setInputFiles([{ ...(await picture(page, 1200, 1200)), name: 'square.jpg' }]);
+  await expect(page.getByTestId('image-2')).toBeVisible({ timeout: 30_000 });
+  await openTab(page, 'Pictures', 4);
+  const add = page.getByTestId('add-picture');
+  const addButton = add.getByRole('button', { name: 'Add a picture to this slide' });
+  await addButton.click();
+  await expect(add).toContainText(/No picture layout fits|Added a picture/, { timeout: 60_000 });
+  expect((await lib()).plan.specs[3].fields, 'every word of the closing is still on it').toMatchObject({ headline: own.headline, button1: own.button1, button2: own.button2, line2: own.line2 });
+
+  await openTab(page, 'Layout', 4);
+  const g = page.getByTestId('gallery-3');
+  const ready = async () => { await g.scrollIntoViewIfNeeded(); await expect(g).not.toHaveAttribute('data-ready-ms', '', { timeout: 60_000 }); };
+  await ready();
+  await expect(g.getByTestId('purpose-statement')).toHaveAttribute('data-fit', 'change');
+  // (the deck's closing rule may have lengthened the second button to the text's own phrase: the words are read from the slide)
+  await expect(g.getByTestId('purpose-statement').locator('.cr-lp-badge')).toHaveText([`Leaves out: "${own.button2}", "${own.line2}"`]);
+  await g.getByTestId('gal-statement').click();
+  const ask = page.getByTestId('fit-confirm-3');
+  await expect(ask).toContainText(`This layout has no room for "${own.button2}" or "${own.line2}"`);
+  await page.getByTestId('fit-keep').click();
+  await expect(ask).toHaveCount(0);
+  await page.waitForTimeout(500);
+  expect((await lib()).plan.specs[3].fields).toEqual(own);
+
+  await g.getByTestId('gal-statement').click();
+  await page.getByTestId('fit-use').click();
+  await expect(g.getByRole('status')).toHaveText(/^Slide 4 is now Big statement/, { timeout: 60_000 });
+  await expect.poll(async () => (await lib()).plan.specs[3].layout, { timeout: 30_000 }).toBe('statement');
+  expect((await lib()).plan.specs[3].left.fields).toEqual(own);
+
+  await ready();
+  await expect(g.getByTestId('purpose-cta')).toHaveAttribute('data-fit', 'clean');
+  // (the purpose's first layout is one button; two buttons is under "More like this")
+  if (!(await g.getByTestId('gal-cta-pair').count())) await g.getByTestId('more-cta').click();
+  await expect(g.getByTestId('gal-item-cta-pair')).toHaveAttribute('data-fit', 'clean');
+  await g.getByTestId('gal-cta-pair').click();
+  await expect(g.getByRole('status')).toHaveText(/^Slide 4 is now Call to action, two buttons/, { timeout: 60_000 });
+  await expect.poll(async () => (await lib()).plan.specs[3].layout, { timeout: 30_000 }).toBe('cta-pair');
+  expect((await lib()).plan.specs[3].fields).toEqual(own);
+
+  expect(f.calls, 'one fake writer call for the deck').toBe(1);
+  expect(f.describes).toBe(0);
+});

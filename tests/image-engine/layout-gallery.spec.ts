@@ -58,7 +58,9 @@ test('the gallery lists exactly what the picker allows: every registry layout, t
     const out: any[] = [];
     for (let i = 0; i < res.library.plan.specs.length; i++) {
       const m = P.galleryModel(res.library, look, '@h', i)!;
-      const allowed = P.layoutOptions(res.library.plan.specs[i], look).map((o: any) => o.layout);
+      // Round AM part 2: the picker's list and the layouts that leave out words the slide requires (nearOptions: tiles that ask first)
+      const LM: any = await import('/src/carousel/layoutMap.ts');
+      const allowed = [...P.layoutOptions(res.library.plan.specs[i], look), ...LM.nearOptions(res.library.plan.specs[i], look)].map((o: any) => o.layout);
       const enabled = m.entries.filter((e: any) => e.enabled).map((e: any) => e.layout);
       const drawn: Record<string, boolean[]> = {};
       for (const e of m.entries) drawn[e.layout] = [await P.drawGalleryTile(res.library, look, '@h', i, e.layout, 0).then((s: any) => !!s), await P.drawGalleryTile(res.library, look, '@h', i, e.layout, 1).then((s: any) => !!s)];
