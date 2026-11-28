@@ -18,7 +18,8 @@ import { along, faithfulChecks } from '../reference/faithfulChecks';
 import { cleanPaste, validateScriptText, SLIDE_RANGE } from './script';
 import { WriterError, type GenerateResult, type WriteProvider } from './writer';
 import type { WriteRequest } from './writerPrompt';
-import { layoutOptionsFor } from './layoutMap';
+import { layoutOptions, layoutOptionsFor } from './layoutMap';
+import { retryKeepsWords } from './retryGuard';
 import { IMAGE_LAYOUT_IDS, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, picOrientation, pictureLayoutCap } from './layouts/images';
 import { pictureUseOf, pinnedPicture, placeImages, usedIds } from './imagePlace';
 import { coverKeyOf, styleIdOf, flavourPass, type FlavourKept, type FlavourSwap } from './flavour';
@@ -1323,7 +1324,8 @@ export interface LibraryReport {
   densities: string[];
   /** What the model suggested (cut, invert, density) next to what the code used. */
   suggested: { cut: (string | null)[]; invert: boolean[]; density: (string | null)[] };
-  retries: { slide: number; reasons: string[] }[];
+  /** Round AQ: `refused`: the redone slide was not used (why, in plain words); `keptAs`: the layout the kept slide moved to. */
+  retries: { slide: number; reasons: string[]; refused?: string; keptAs?: string }[];
   fallbacks: { slide: number; layout: string; level: string; reason: string }[];
   /** Cuts or densities the code dropped without a model call (the cut did not fit the content, the headline was too long for statement density). */
   codeAdjustments: string[];
@@ -1604,6 +1606,9 @@ export async function drawOne(spec: SlideSpec, variant: 0 | 1, style: LayoutStyl
   return { built: null, cut: 'plain', invert: false, density: 'normal', adjustments, problems: (last?.errors ?? ['it could not be drawn']).slice(0, 4) };
 }
 
+/** The headline (or title, heading, question) a slide's fields show first, for the notes. */
+const headOf = (f: Fields): string => String(f.headline ?? f.title ?? f.heading ?? f.question ?? '').trim();
+
 function buildRetry(first: string, specs: SlideSpec[], why: Map<number, string[]>): string {
   return [
     first,
@@ -1612,7 +1617,10 @@ function buildRetry(first: string, specs: SlideSpec[], why: Map<number, string[]
     JSON.stringify(specs),
     '',
     'These slides cannot be used, for these reasons:',
-    ...[...why].flatMap(([i, ps]) => ps.slice(0, 5).map((p) => `- slide ${i + 1}: ${p}`)),
+    // Round AQ: each slide is named with its headline, so its number is not read as the number of a list item on it
+    ...[...why].flatMap(([i, ps]) => ps.slice(0, 5).map((p) => `- slide ${i + 1}${headOf(specs[i]?.fields ?? {}) ? ` ("${headOf(specs[i].fields)}")` : ''}: ${p}`)),
+    '',
+    'Slide numbers count every slide in the list above, the first slide included. Each corrected slide keeps its OWN words from that list (you may shorten them; never use the words of another slide); change its layout, or shorten it, as the reasons say.',
     '',
     `Reply with ONLY a JSON object {"slides": {${[...why.keys()].map((i) => `"${i + 1}": {...}`).join(', ')}}} holding the corrected slide for slide number ${[...why.keys()].map((i) => i + 1).join(', ')} (same shape as before: layout, fields, accents, ...). No other slides, no code fence, no explanation. Keep each text within its limit.`,
   ].join('\n');
@@ -1872,12 +1880,57 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
     }
     const slidesObj = isObj(fix) ? fix.slides : null;
     const changed = new Set<number>();
+    // Round AQ: a redone slide is used only when its words are the words of the slide it replaces (cuts allowed; nothing invented, nothing from another slide; with "Keep every
+    // sentence" on, no sentence of the text the slide showed is lost). Otherwise the slide keeps its own words (retryGuard.ts). The closing is not guarded here: its retry exists to
+    // change its words (a new button label), and the closing checks below hold its words to the text (dropInventedButtons, dropBadButtons, settleClosing).
+    const keepOn = KEEP_EVERY_SENTENCE && req.format === 'carousel' && req.keepEverySentence !== false;
+    const refused = new Set<number>();
     for (const i of bad.keys()) {
       const raw = Array.isArray(slidesObj) ? slidesObj[i] : isObj(slidesObj) ? slidesObj[String(i + 1)] : null;
       const sp = toSpec(raw);
       if (sp) {
+        const chk = i === specs.length - 1 ? { ok: true as const } : retryKeepsWords(specs[i].fields, sp.fields, req.text, keepOn);
+        const entry = retries.find((r) => r.slide === i + 1);
+        if (!chk.ok) {
+          refused.add(i);
+          if (entry) entry.refused = `${chk.why}${headOf(sp.fields) ? ` (it read "${headOf(sp.fields).slice(0, 60)}")` : ''}`;
+          continue;
+        }
         specs = specs.map((s, k) => (k === i ? { ...sp, cut: sp.cut ?? s.cut } : s));
         changed.add(i);
+      }
+    }
+    // A refused slide whose only problem was its layout (it repeats the slide before, or a layout is over-used) moves to a layout that shows every one of its words and that the rotation
+    // keeps (the rotation's own choice first; a numbered item may carry its number in front of the headline, as in the layout picker). With none, it stays as it is (the fallbacks below).
+    for (const i of refused) {
+      const rot0 = rotate();
+      if (!rot0.repeats.has(i)) continue;
+      const sp = specs[i];
+      const want = rotationOf(specs, !!look.hasPhoto, style.flavour, pictureLayoutCap(look.images)).rv[i]?.layout;
+      const opts = layoutOptions(sp, look).filter((o) => !o.current && !o.dropped.length && !o.droppedCore.length && !isCoverLayout(o.layout) && !(IMAGE_LAYOUT_IDS as readonly string[]).includes(o.layout) && !isPhotoOnly(o.layout));
+      opts.sort((a, b) => Number(b.layout === want) - Number(a.layout === want));
+      for (const o of opts) {
+        const next: SlideSpec = { ...sp, layout: o.layout, fields: o.fields, density: undefined, variant: undefined };
+        if (/^cta|closing/.test(next.layout) || slideProblems(next, look, ctaCtx).length) continue;
+        const trial = specs.map((s, k) => (k === i ? next : s));
+        const rt = rotate(trial);
+        if ([...rt.repeats.keys()].some((k) => k === i || !rot0.repeats.has(k))) continue;
+        specs = trial;
+        const entry = retries.find((r) => r.slide === i + 1);
+        if (entry) entry.keptAs = o.layout;
+        break;
+      }
+    }
+    // the slides the retry changed get the passes the first answer had: the list numbers of the text (Round AI) and a second chance for a picture still unused (Round Q)
+    if (changed.size || refused.size) {
+      const ln = keepListNumbers(specs, req.text);
+      specs = ln.specs;
+      tr.trims.push(...ln.trims);
+      if (look.images?.length && pictureRescueRule.on) {
+        const rs = await applyPictureRescue(specs, look, style, handle, ctaCtx);
+        specs = rs.specs;
+        pictureSwaps.push(...rs.swaps);
+        for (const row of rs.rows.filter((r) => r.slide !== null)) rescueRows = [...rescueRows.filter((r) => r.picture !== row.picture), row];
       }
     }
     // Round R: the retry's answer gets the button check too, before a preset's card closing could carry its label as a caption
@@ -2125,7 +2178,7 @@ export async function designLibraryDeck(req: WriteRequest, look: Look, handle: s
   report.codeAdjustments.push(...repairs.map((r) => `slide ${r.slide}: ${r.from}${r.result === 'repaired' ? ' -> ' + r.to : ''} (${r.result}: ${r.failed.join('; ')})`));
   report.codeAdjustments.push(...pictureSwaps.filter((w) => w.why.startsWith('screenshot never') || w.why.startsWith('no picture left')).map((w) => `slide ${w.slide}: ${w.from} -> ${w.to} (${w.why})`));
   if (fp) designed.notes.push(...fp.swaps.map((w) => `Flavour: slide ${w.slide} ${w.from} -> ${w.to} (${w.why})${w.droppedOptional.length ? '; leaves out ' + w.droppedOptional.map((t) => '"' + t.slice(0, 24) + '"').join(', ') : ''}.`));
-  designed.notes.push(...retries.map((r) => `Retry for slide ${r.slide}: ${r.reasons.join('; ')}`), ...fallbacks.map((f) => `Slide ${f.slide} fell back to a ${f.level}: ${f.reason}`), ...adjustments);
+  designed.notes.push(...retries.map((r) => `Retry for slide ${r.slide}: ${r.refused ? r.reasons.join('; ').replace(/\.$/, '') : r.reasons.join('; ')}${r.refused ? `. The second answer was not used for it: ${r.refused}, so the slide kept its own words${r.keptAs ? ` (drawn as "${r.keptAs}")` : ''}` : ''}`), ...fallbacks.map((f) => `Slide ${f.slide} fell back to a ${f.level}: ${f.reason}`), ...adjustments);
   return { script, style: null, note: parsed.note, attempts: calls > 1 ? 2 : 1, ms, warnings: v.warnings, provider: p.id, designed };
 }
 

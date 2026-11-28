@@ -146,7 +146,9 @@ export async function buildReport(o: ReportOptions): Promise<{ json: string; com
     // Round O: what the person asked for and what was made (the writer's answer is never cut to the count)
     slidesRequested: o.doc.designed?.library?.slidesRequested ?? null,
     slidesMade: o.doc.script?.slides.length ?? (o.doc.designed?.library?.layouts?.length ?? null),
-    keepEverySentence: o.doc.designed?.library?.keepEverySentence ?? null,
+    // Round AQ: what happened, not the switch: true only when every sentence of the text is on a finished slide (the switch itself is keepEverySentenceAsked)
+    keepEverySentence: o.doc.designed?.library?.keepEverySentence === undefined ? null : sourceNotOnSlidesOf(o.doc.topic ?? '', composed.slides.map((s) => visibleTextOf((s as unknown as { plan?: { layers?: unknown[] } }).plan?.layers ?? []))).count === 0,
+    keepEverySentenceAsked: o.doc.designed?.library?.keepEverySentence ?? null,
     // Round Q: the pictures no slide uses, by the names the person typed
     picturesUnused: o.doc.designed?.library?.plan ? picturesUnusedOf(o.doc.designed.library.plan.specs, o.doc.photos ?? []) : null,
     // Round R: the photo slides the code added for unused photos (no text on them), as the deck is now
