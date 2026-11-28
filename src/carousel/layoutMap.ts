@@ -148,10 +148,31 @@ export interface LayoutOption {
 }
 export const flat = (f: Fields): string[] => Object.entries(f).filter(([k]) => k !== 'accent' && !isImageKey(k)).flatMap(([, v]) => (Array.isArray(v) ? v : [v])).map((x) => String(x).trim()).filter(Boolean);
 
-/** Every layout that can take this slide's text, the slide's own layout first. */
-export const layoutOptions = (spec: SlideSpec, look: Look): LayoutOption[] => layoutOptionsFor(spec, look);
-/** `joinStat`: a stat slide (number + label) may become a headline "10 seconds to flip it" (used by the flavour pass; the picker offers what it always offered). */
-export function layoutOptionsFor(spec: SlideSpec, look: Look, o: { joinStat?: boolean } = {}): LayoutOption[] {
+/** Every layout that can take this slide's text, the slide's own layout first: the LAYOUT PICKER's list (Round AL part 4: with the picker's own moves, see pickerCanon). */
+export const layoutOptions = (spec: SlideSpec, look: Look): LayoutOption[] => layoutOptionsFor(spec, look, { picker: true });
+/** The layouts that hold a number in a field of their own. */
+const NUMBER_SLOT = ['big-stat', 'stat-bar', 'step-numeral', 'listicle-numeral'];
+/**
+ * Round AL part 4: two moves the PERSON may make in the layout picker (never the deck passes: the flavour pass, the picture pass and the rescue call layoutOptionsFor without `picker`,
+ * so the decks they draw are unchanged). Every word stays; nothing is made up:
+ *  - a numbered item (listicle-numeral, step-numeral with a 1 or 2 digit number) on a layout with no number field: the number goes in front of the headline with a no-break space,
+ *    "1. Shoot at golden hour" (the form Round AI already gives an item of a numbered list);
+ *  - two buttons (cta-pair) on one button (cta-button): the first button is the button and the line under the headline the line below; the second button's words must be in that
+ *    line, or the move would leave them out and is not offered (the required-text rule below).
+ */
+function pickerCanon(from: string, own: Fields, c: Canon, to: string): Canon {
+  if ((from === 'listicle-numeral' || from === 'step-numeral') && /^\d{1,2}$/.test(c.number) && c.head && !NUMBER_SLOT.includes(to) && !new RegExp(`^\\s*${c.number}(?:[.)]|\\s)`).test(c.head))
+    return { ...c, head: `${c.number}. ${c.head}`, number: '' };
+  if (from === 'cta-pair' && to === 'cta-button') {
+    const b = txt(own, 'button1');
+    return b ? { ...c, button: b, sub: txt(own, 'line2') } : c;
+  }
+  return c;
+}
+/**
+ * `joinStat`: a stat slide (number + label) may become a headline "10 seconds to flip it" (used by the flavour pass). `picker`: the layout picker's list, with the moves of pickerCanon.
+ */
+export function layoutOptionsFor(spec: SlideSpec, look: Look, o: { joinStat?: boolean; picker?: boolean } = {}): LayoutOption[] {
   const own = Object.fromEntries(Object.entries(spec.fields).filter(([k]) => k !== 'accent')) as Fields;
   const c = toCanon(spec.layout, own);
   if (o.joinStat && !c.head && c.number && c.label) c.head = c.number + ' ' + c.label;
@@ -160,7 +181,7 @@ export function layoutOptionsFor(spec: SlideSpec, look: Look, o: { joinStat?: bo
   const out: LayoutOption[] = [{ layout: spec.layout as LayoutId, fields: own, dropped: [], droppedCore: [], current: true }];
   for (const id of LAYOUT_IDS) {
     if (id === spec.layout) continue;
-    const f = fromCanon(id, c, !!look.hasPhoto, look.images);
+    const f = fromCanon(id, o.picker ? pickerCanon(spec.layout, own, c, id) : c, !!look.hasPhoto, look.images);
     if (!f || !validateSlideContent(id, f).ok) continue;
     const shown = flat(f);
     const lost = (t: string) => !shown.some((u) => u === t || u.includes(t));
@@ -209,7 +230,7 @@ function ruleReason(id: string, c: Canon): string {
  * from LAYOUT_IDS and the reason from asking fromCanon / validateSlideContent, so a layout added later gets its reason with no per-layout code.
  */
 export function layoutRefusals(spec: SlideSpec, look: Look): Record<string, string> {
-  const offered = new Set(layoutOptionsFor(spec, look).map((o) => o.layout as string));
+  const offered = new Set(layoutOptions(spec, look).map((o) => o.layout as string));
   const own = Object.fromEntries(Object.entries(spec.fields).filter(([k]) => k !== 'accent')) as Fields;
   const c = toCanon(spec.layout, own);
   const out: Record<string, string> = {};

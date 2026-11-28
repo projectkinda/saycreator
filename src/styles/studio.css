@@ -400,3 +400,4 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
 .cr-lp-tile:disabled[aria-pressed="true"] { opacity: 1; color: inherit; }
 /* the look, colour block and colours the slide has now read at full strength in "Adjust this layout" (disabled only because choosing them again changes nothing) */
 .cr-var-btn:disabled[aria-pressed="true"] { opacity: 1; color: inherit; }
+.cr-lp-leaves { font-style: italic; }

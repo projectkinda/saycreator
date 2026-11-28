@@ -100,7 +100,8 @@ export function purposeGrid(entries: PurposeEntry[]): PurposeGrid {
       continue;
     }
     const cur = fit.find((l) => by.get(l)?.current);
-    const best = cur ?? fit[0];
+    // Round AL part 4: a layout that shows every text of the slide comes before one that leaves a line out
+    const best = cur ?? fit.find((l) => !by.get(l)?.reason) ?? fit[0];
     tiles.push({ purpose: p, best, more: fit.filter((l) => l !== best), current: !!cur });
   }
   tiles.sort((a, b) => Number(b.current) - Number(a.current));

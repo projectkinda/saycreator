@@ -128,6 +128,7 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
         {url ? <img src={url} alt="" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', borderRadius: 4, display: 'block' }} /> : <span aria-hidden="true" className="small muted" style={{ width: '100%', aspectRatio: '4 / 5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(128,128,128,.12)', borderRadius: 4 }}>{url === undefined ? '…' : '–'}</span>}
         <span className="small cr-lp-name">{now && <strong className="cr-lp-now">Now </strong>}{name}</span>
         {detail && <span className="small muted cr-lp-detail">{detail}</span>}
+        {leaves && <span className="small muted cr-lp-detail cr-lp-leaves">{leaves}</span>}
       </button>
     );
   };
