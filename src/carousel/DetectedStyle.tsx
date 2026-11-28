@@ -24,7 +24,7 @@ export function DetectedStyleBox({ onChange, hasDeck, pack: given }: { onChange:
   return (
     <section className="card ws-card" role="group" aria-label="Detected style" data-testid="detected-style" style={{ marginTop: 12 }}>
       <h3 className="h4">Style details</h3>
-      <p className="small muted">{hasDeck ? 'Flip any of these and the slides are drawn again from the same plan: no model call.' : 'These apply the next time you make a carousel.'}</p>
+      <p className="small muted">{hasDeck ? 'Turn any of these on or off and every slide is drawn again with the same words: no model call.' : 'These apply the next time you make a carousel.'}</p>
       {toggle('Highlight marker', 'marker', now.devices.marker, detected.devices.marker)}
       {toggle('Underline', 'underline', now.devices.underline, detected.devices.underline)}
       {toggle('Profile header', 'profileHeader', now.devices.profileHeader, detected.devices.profileHeader)}

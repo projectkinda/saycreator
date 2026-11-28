@@ -130,7 +130,7 @@ test('hot-flat through the library: 1 writer call, the flavour line in the promp
   await expect(tile).toBeVisible({ timeout: 120_000 });
   const layoutsBefore = (await project(page))!.lib!.layouts;
   await tile.click();
-  await expect(picker.getByText(/^Redrew slide 3/)).toBeVisible({ timeout: 60_000 });
+  await expect(picker.getByText(/^Slide 3 (is now|was changed)/)).toBeVisible({ timeout: 60_000 });
   await expect.poll(async () => (await project(page))!.lib!.layouts[2], { timeout: 30_000 }).not.toBe(layoutsBefore[2]);
   const layoutsAfter = (await project(page))!.lib!.layouts;
   expect(layoutsAfter[2]).not.toBe(layoutsBefore[2]);

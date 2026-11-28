@@ -203,7 +203,7 @@ for (const run of RUNS.filter((r) => !only || r.name === only)) {
     const layoutTile = picker.locator(`[data-current="false"][data-enabled="true"] button:not([disabled])`).first();
     const layoutPicked = (await layoutTile.getAttribute('data-testid')) ?? '';
     await layoutTile.click();
-    await expect(picker.getByText(/^Redrew slide 3/)).toBeVisible({ timeout: 60_000 });
+    await expect(picker.getByText(/^Slide 3 (is now|was changed)/)).toBeVisible({ timeout: 60_000 });
     await page.waitForTimeout(3500);
     const s1s = await srcsNow();
     const changedAfterLayout = s1s.map((x, i) => (x !== s0s[i] ? i : -1)).filter((i) => i >= 0);
@@ -211,7 +211,7 @@ for (const run of RUNS.filter((r) => !only || r.name === only)) {
     const cutPicked = (await cutTile.count()) ? (await cutTile.getAttribute('data-testid')) ?? '' : '';
     if (cutPicked) {
       await cutTile.click();
-      await expect(picker.getByText(/^Redrew slide 3/)).toBeVisible({ timeout: 60_000 });
+      await expect(picker.getByText(/^Slide 3 (is now|was changed)/)).toBeVisible({ timeout: 60_000 });
     }
     const afterPicks = await srcsNow();
     const picksNoModel = { newReaderRequests: reqs.length - pk0.reads, newWriterCalls: writes.length - pk0.writes };

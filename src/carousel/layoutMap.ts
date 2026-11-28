@@ -3,6 +3,7 @@ import type { Look } from './designed';
 import { LAYOUT_IDS, layoutDef, validateSlideContent, type Fields, type LayoutId } from './layouts';
 import { IMAGE_LAYOUT_IDS, fittingPictures, hasEnoughPictures, imageSlotsOf, imagesNeeded, isImageKey, type PicInfo } from './layouts/images';
 import type { SlideSpec } from './designLibrary';
+import { plainProblem } from './plainWords';
 
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
@@ -169,8 +170,40 @@ export function layoutOptionsFor(spec: SlideSpec, look: Look, o: { joinStat?: bo
   }
   return out;
 }
-const CANON_WORDS: Record<string, string> = { head: 'a headline', kicker: 'a lead-in line', sub: 'a second line', body: 'a paragraph', number: 'a number', label: 'a label', bar: 'a bar value', quote: 'a quote', author: 'an author', button: 'a button text', items: 'a list of items', lines: 'card lines', numbers: 'numbers', labels: 'labels' };
+// Round AL part 1: what a layout needs, in plain words (no field ids)
+const CANON_WORDS: Record<string, string> = { head: 'a headline', kicker: 'a small line above the headline', sub: 'a line below the headline', body: 'a paragraph', number: 'a number', label: 'a short label', bar: 'a value for the bar', quote: 'a quote', author: 'an author', button: 'a button', items: 'a list', lines: 'a line for each card', numbers: 'numbers', labels: 'labels for the items' };
 const clipText = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t);
+/** Layouts that only take the text written for them (their fields do not map to any other layout's). */
+const OWN_ONLY = ['feature-slider', 'comparison', 'contact-closing', 'cta-pair', 'headline-card', 'twin-photos', 'portrait-closing', 'do-dont'];
+/**
+ * Round AL part 1: the real reason when no missing kind of text explains a refusal (it was "Only its own layout can draw this text." for every one of them). It reads the same rules
+ * as fromCanon: a word count, a list length, a headline length, text the layout has no place for.
+ */
+function ruleReason(id: string, c: Canon): string {
+  const head = c.head || c.quote;
+  const hw = words(head);
+  const n = c.items.length;
+  const items = (lo: number, hi: number) => `Needs a list of ${lo} to ${hi} items; this slide has ${n === 0 ? 'none' : n}.`;
+  if (OWN_ONLY.includes(id) || (id === 'prose' && c.own)) return 'Works only with text written for it.';
+  if (!head && ['statement-stacked', 'cover-word', 'photo-full-caption', 'title-over-photo'].includes(id)) return 'Needs a headline, which this slide does not have.';
+  switch (id) {
+    case 'statement-stacked': return `The headline has ${hw} ${hw === 1 ? 'word' : 'words'}; this layout takes 2 to 4.`;
+    case 'cover-word': {
+      if (c.kicker || c.sub || c.body) return 'Takes a headline only, and this slide has more text.';
+      if (hw < 3) return 'Needs a headline of 3 words or more.';
+      return 'The last word of the headline must be 3 to 9 letters long.';
+    }
+    case 'numbered-stagger': return items(2, 3);
+    case 'thumb-rows': return items(3, 4);
+    case 'list-under-band': case 'list-beside-picture':
+      if (n < 2 || n > 5) return items(2, 5);
+      if (!head) return 'Needs a headline above the list.';
+      return 'Takes a headline and a list only, and this slide has more text.';
+    case 'photo-full-caption': case 'title-over-photo': return `The headline is ${head.length} letters long; this layout holds 48.`;
+    case 'photo-grid': return 'Takes a headline and one short line only, and this slide has more text.';
+    default: return 'This slide\'s text does not fit this layout.';
+  }
+}
 /**
  * Why each layout that layoutOptions() does NOT offer cannot take this slide, in one plain line (a layout id to a reason). Driven by the registry: the layouts come
  * from LAYOUT_IDS and the reason from asking fromCanon / validateSlideContent, so a layout added later gets its reason with no per-layout code.
@@ -206,19 +239,18 @@ export function layoutRefusals(spec: SlideSpec, look: Look): Record<string, stri
         if (fromCanon(id, withKeys(need), true)) need = need.filter((k) => { const rest = need.filter((x) => x !== k); return !fromCanon(id, withKeys(rest), true); });
         else need = [];
       }
-      out[id] = need.length ? `Needs ${need.map((k) => CANON_WORDS[k]).join(' and ')}, which this slide does not have.` : 'Only its own layout can draw this text.';
+      out[id] = need.length ? `Needs ${need.map((k) => CANON_WORDS[k]).join(' and ')}, which this slide does not have.` : ruleReason(id, c);
       continue;
     }
     const v = validateSlideContent(id, f);
     if (!v.ok) {
-      const req = /"(\w+)" is required/.exec(v.errors[0]);
-      out[id] = req ? `Needs "${req[1]}" text, which this slide does not have.` : `The text is over this layout's limit: ${clipText(v.errors[0].replace(/^[\w-]+: /, ''), 70)}`;
+      out[id] = plainProblem(v.errors[0], id);
       continue;
     }
     const core = (layoutDef(spec.layout)?.fields ?? []).filter((x) => x.required).flatMap((x) => (Array.isArray(own[x.name]) ? (own[x.name] as string[]) : [String(own[x.name] ?? '')])).map((x) => x.trim()).filter(Boolean);
     const shown = flat(f);
     const lost = core.find((t) => !shown.some((u) => u === t || u.includes(t)));
-    out[id] = lost ? `Would leave out "${clipText(lost, 28)}".` : 'This slide\'s text does not fit this layout.';
+    out[id] = lost ? (/^\d{1,3}$/.test(lost) ? `Has no place for the number ${lost}.` : `Would leave out "${clipText(lost, 28)}".`) : 'This slide\'s text does not fit this layout.';
   }
   return out;
 }

@@ -5,24 +5,15 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { layoutDef } from './layouts/library';
 import type { Fields } from './layouts/types';
 import { parseRef } from './layouts/images';
+import { fieldLabel } from './plainWords';
+// Round AL part 1: the plain field names live in plainWords.ts (the Layout tab's reasons use them too)
+export { fieldLabel };
 
 export interface TextSpec { layout: string; fields: Fields; accents: string[]; /** Highlighted words were chosen but nothing is marked in the drawing of this slide. */ unmarked?: boolean }
 /** A change to the slide's text: some fields (null removes an optional one) and/or the highlighted words. The page merges it into the latest plan, draws the slide again and says what happened ('' = fine). */
 export interface TextDelta { fields?: Record<string, string | string[] | null>; accents?: string[] }
 export type OnTextCommit = (delta: TextDelta) => Promise<string>;
 
-/** A plain name for a layout field. */
-export function fieldLabel(name: string, list: boolean): string {
-  if (list) return /items|steps|bullets|callouts/i.test(name) ? 'List (one item per line)' : `${humanize(name)} (one per line)`;
-  if (/^(kicker|lead|tag|leftLabel|rightLabel|label)$/i.test(name)) return 'Small line';
-  if (/^(headline|title|question|heading|subject|quote|statement)$/i.test(name)) return 'Headline';
-  if (/^(caption|line|subtitle|sub|subline|intro|note|source|author)$/i.test(name)) return 'Line below';
-  if (/^(body|paragraph|p\d|pull|card|closing|leftText|rightText|wrong|right)$/i.test(name)) return /^p\d$/i.test(name) ? `Paragraph ${name.slice(1)}` : name === 'pull' ? 'Pull line' : 'Text';
-  if (/^button\d?$/i.test(name)) return 'Button label';
-  if (/^(number|numeral|step)$/i.test(name)) return 'Number';
-  return humanize(name);
-}
-const humanize = (n: string) => n.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
 
 function Field({ id, label, value, multi, onCommit }: { id: string; label: string; value: string; multi: boolean; onCommit: (text: string) => Promise<string> }) {
   const [draft, setDraft] = useState(value);

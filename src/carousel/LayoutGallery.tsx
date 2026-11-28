@@ -119,7 +119,7 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
   return (
     <div ref={root} className="tn-field" data-testid={`gallery-${index}`} data-ready-ms={done ?? ''} data-signature={sig}>
       <h4 className="h4">Layouts</h4>
-      <span className="small muted">Click one to redraw this slide (drawn by the code, no model call).</span>
+      <span className="small muted">Click one to lay this slide out that way. Your words stay the same; no model call.</span>
       <div role="list" aria-label={`Layouts for slide ${index + 1}`} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 520, overflowY: 'auto', padding: '2px 2px 6px' }}>
         {model.entries.map((e) => (
           <div key={e.layout} role="listitem" data-testid={`gal-item-${e.layout}`} data-enabled={e.enabled} data-current={e.current} style={{ opacity: e.enabled ? 1 : 0.55 }}>
@@ -142,7 +142,7 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
       {/* Round F: each control sits with its own label in its own group; the colour group is its own container (it gets more controls next round). The groups wrap, label above buttons. */}
       <div className="cr-var" data-testid={`gallery-controls-${index}`}>
         <div className="cr-var-group" role="group" aria-labelledby={`cr-var-plane-${index}`} data-testid={`gallery-plane-${index}`}>
-          <span className="small muted cr-var-label" id={`cr-var-plane-${index}`}>Plane</span>
+          <span className="small muted cr-var-label" id={`cr-var-plane-${index}`}>Colour block</span>
           <div className="cr-var-buttons">
             {model.cuts.map((c) => (
               <button key={c.id} type="button" className="btn btn-outline btn-sm cr-var-btn" disabled={busy || c.current} aria-pressed={c.current} data-testid={`gal-cut-${c.id}`} onClick={() => void choose({ cut: c.id })} style={{ outline: c.current ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{c.label}</button>
@@ -152,7 +152,7 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
         <div className="cr-var-group cr-var-colours" role="group" aria-labelledby={`cr-var-colours-${index}`} data-testid={`gallery-colours-${index}`}>
           <span className="small muted cr-var-label" id={`cr-var-colours-${index}`}>Colours</span>
           <div className="cr-var-buttons">
-            <button type="button" className="btn btn-outline btn-sm cr-var-btn" disabled={busy} aria-pressed={!!model.invert} data-testid="gal-invert" onClick={() => void choose({ invert: model.invert ? false : 'full' })} style={{ outline: model.invert ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{model.invert ? 'Inverted (click for normal)' : 'Invert'}</button>
+            <button type="button" className="btn btn-outline btn-sm cr-var-btn" disabled={busy} aria-pressed={!!model.invert} data-testid="gal-invert" onClick={() => void choose({ invert: model.invert ? false : 'full' })} style={{ outline: model.invert ? '2px solid currentColor' : undefined, outlineOffset: -1 }}>{model.invert ? 'Light and dark swapped (click to undo)' : 'Swap light and dark'}</button>
           </div>
         </div>
       </div>

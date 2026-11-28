@@ -29,7 +29,7 @@ import { svgToPng } from '../reference/faithful';
 import { cardSlides, previewDeck, PREVIEW_COUNT } from './stylePreview';
 import { choiceOf, pickPicture } from './picturePick';
 import { SlidePicker } from './SlidePicker';
-import { flavourLine, plainWords } from './plainWords';
+import { flavourLine, layoutName, plainProblem, plainWords } from './plainWords';
 import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
 import { LayoutGallery } from './LayoutGallery';
 import { profileWebsite } from './profileSite';
@@ -981,7 +981,7 @@ export default function CarouselPage() {
       setNotice('Saved with this style. The slides on the page were drawn from another style, so it applies the next time you make a carousel.');
     } else if (lib?.plan && doc.designed) {
       const out = await redrawLibraryDeck(lib, { pack, hasPhoto: hasPhotoLook, site: profileWebsite() }, options.handle.trim());
-      apply(patches.setDesigned({ ...doc.designed, slides: out.slides, layouts: out.layouts, library: out.library }, 'Change the style devices'));
+      apply(patches.setDesigned({ ...doc.designed, slides: out.slides, layouts: out.layouts, library: out.library }, 'Change the style details'));
       setNotice('Style devices changed: the slides were drawn again from the same plan, no model call.');
     } else setNotice('Saved with this style: it applies the next time you make a carousel.');
   };
@@ -1019,9 +1019,10 @@ export default function CarouselPage() {
     const lib = doc.designed?.library;
     if (!lib?.plan) return 'This deck has no stored plan to draw from.';
     const r = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, c);
-    if (!r.ok) return `Could not redraw slide ${i + 1}: ${r.reasons[0]} The slide is unchanged.`;
-    const bad = putSlide(i, r, c.layout ? `Change slide ${i + 1} to ${r.layout}` : `Redraw slide ${i + 1}`);
-    return bad ?? `Redrew slide ${i + 1}${c.layout ? ' as ' + r.layout : ''} in code: no model call. Undo brings the old one back.`;
+    // Round AL part 1: the layout's plain name, never its id
+    if (!r.ok) return plainWords(`Could not change slide ${i + 1}: ${plainProblem(r.reasons[0])} The slide is unchanged.`);
+    const bad = putSlide(i, r, c.layout ? `Change slide ${i + 1} to ${layoutName(r.layout)}` : `Change the look of slide ${i + 1}`);
+    return bad ? plainWords(bad) : `Slide ${i + 1} ${c.layout ? 'is now ' + layoutName(r.layout) : 'was changed'}: no model call. Undo brings the old one back.`;
   };
   /** The picture slots of a library slide (a project picture is in them): where each is on the slide. */
   const pictureSlotsOf = (i: number): SlotView[] | undefined => {
@@ -1168,7 +1169,7 @@ export default function CarouselPage() {
         else fields[k] = v as never;
       }
       const r = await redrawLibrarySlide(lib, pickLook, pickHandle(), i, { fields, ...(delta.accents ? { accents: delta.accents } : {}) });
-      if (!r.ok) return `Could not redraw slide ${i + 1}: ${r.reasons[0]} The slide is unchanged.`;
+      if (!r.ok) return plainWords(`Could not redraw slide ${i + 1}: ${plainProblem(r.reasons[0])} The slide is unchanged.`);
       const bad = putSlide(i, r, `Edit the text of slide ${i + 1}`);
       await new Promise((res) => setTimeout(res, 80)); // let the page take the new deck before the next change reads it
       return bad ?? '';
@@ -1830,7 +1831,7 @@ export default function CarouselPage() {
                     <Icon name="upload" size={14} /> Download slide {Math.min(sel, slides.length - 1) + 1} (PNG)
                   </button>
                 </div>
-                <p className="small muted">Pick a slide in the strip to see it large. Press "Edit slides" under the strip to change a layout, a picture or the style devices.</p>
+                <p className="small muted">Pick a slide in the strip to see it large. Press "Edit slides" under the strip to change a layout, a picture or the style details.</p>
               </>
             )}
           </section>

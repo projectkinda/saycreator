@@ -117,7 +117,7 @@ test.describe('at 390 px', () => {
       const box = (e: Element) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
       return { groups: [...c.querySelectorAll('.cr-var-group')].map((g) => ({ label: g.querySelector('.cr-var-label')!.textContent, lb: box(g.querySelector('.cr-var-label')!), btns: [...g.querySelectorAll('button')].map((b) => box(b)), role: g.getAttribute('role'), labelled: g.getAttribute('aria-labelledby') })), overflow: document.documentElement.scrollWidth - window.innerWidth, hasInvert: !!c.querySelector('[data-testid="gal-invert"]'), invertInColours: !!c.querySelector('.cr-var-colours [data-testid="gal-invert"]') };
     });
-    expect(v.groups.map((g: any) => g.label)).toEqual(['Plane', 'Colours']);
+    expect(v.groups.map((g: any) => g.label)).toEqual(['Colour block', 'Colours']);
     for (const g of v.groups) {
       expect(g.role).toBe('group');
       expect(g.labelled, 'the group is named by its own label').toBeTruthy();

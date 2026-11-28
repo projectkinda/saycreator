@@ -115,7 +115,7 @@ test('in the editor: the gallery is in plain sight, a click redraws that slide w
   const tile = g0.locator('[data-testid^="gal-item-"][data-enabled="true"][data-current="false"] button:not([disabled])').first();
   const id = (await tile.getAttribute('data-testid'))!;
   await tile.click();
-  await expect(g0.getByText(/^Redrew slide 1/)).toBeVisible({ timeout: 60_000 });
+  await expect(g0.getByText(/^Slide 1 (is now|was changed)/)).toBeVisible({ timeout: 60_000 });
   await expect.poll(async () => (await lib(page))?.layouts[0], { timeout: 30_000 }).not.toBe(before.layouts[0]);
   const after = (await lib(page))!;
   expect(after.layouts.filter((l, i) => l !== before.layouts[i]).length, `${id}: exactly one slide changed`).toBe(1);

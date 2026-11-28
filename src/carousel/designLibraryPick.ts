@@ -15,6 +15,7 @@ import type { WriteProvider } from './writer';
 
 // ----- moving the text between layouts: see layoutMap.ts -----
 import { accentsIn, flat, layoutOptions, layoutRefusals } from './layoutMap';
+import { BLOCK_LABEL, plainVariant } from './plainWords';
 export { accentsIn, fromCanon, layoutOptions, layoutRefusals, toCanon, type LayoutOption } from './layoutMap';
 
 // ----- the picture of each option -----
@@ -41,7 +42,8 @@ export function currentOf(lib: LibraryReport, i: number): { variant: 0 | 1; cut:
   const inv = lib.inverts[i];
   return { variant: (((lib.variants[i] ?? 1) - 1) % 2) as 0 | 1, cut: (lib.cuts[i] as Cut) ?? 'plain', invert: inv === 'full' || inv === 'tint' ? inv : false, density: lib.densities[i] === 'statement' ? 'statement' : 'normal' };
 }
-const CUT_LABEL: Record<string, string> = { plain: 'No plane', 'edge-h': 'Bottom plane', 'edge-v': 'Side plane', angle: 'Angled plane', curve: 'Curved plane' };
+// Round AL part 1: the colour block shapes in plain words (they were called planes)
+const CUT_LABEL: Record<string, string> = BLOCK_LABEL;
 
 /**
  * Draws every option of the slide for the picker (the code draws; no model). The layouts that can take the text, then the cuts of the current layout, the other variant and
@@ -121,7 +123,7 @@ export function galleryModel(lib: LibraryReport, look: Look, handle: string, i: 
   const entries: GalleryEntry[] = LAYOUT_IDS.map((id) => {
     const def = layoutDef(id)!;
     const o = options.get(id);
-    return { layout: id, label: def.label, variants: def.variants, current: id === spec.layout, enabled: !!o, reason: o ? (o.dropped.length ? `Leaves out: ${o.dropped.map((t) => '"' + clip(t, 24) + '"').join(', ')}` : undefined) : why[id] ?? 'This slide\'s text does not fit this layout.' };
+    return { layout: id, label: def.label, variants: def.variants.map(plainVariant) as [string, string], current: id === spec.layout, enabled: !!o, reason: o ? (o.dropped.length ? `Leaves out: ${o.dropped.map((t) => '"' + clip(t, 24) + '"').join(', ')}` : undefined) : why[id] ?? 'This slide\'s text does not fit this layout.' };
   });
   entries.sort((a, b) => Number(b.current) - Number(a.current) || Number(b.enabled) - Number(a.enabled));
   const CUT_LABELS = CUT_LABEL;

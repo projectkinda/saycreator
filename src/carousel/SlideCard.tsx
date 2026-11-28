@@ -169,7 +169,7 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
     <>
       {pictureSlots?.length && onSlotChange ? (
         <div className="tn-field">
-          <span className="field-label">Picture slots on this slide</span>
+          <span className="field-label">Pictures on this slide</span>
           <div className="row-actions" role="group" aria-label={`Picture slots of slide ${index + 1}`}>
             {pictureSlots.map((sl) => (
               <button key={sl.field} type="button" className="btn btn-outline btn-sm" data-testid={`slot-tab-${index}-${sl.n}`} aria-label={`Edit picture ${sl.n} on slide ${index + 1}`} aria-expanded={openSlot === sl.field} onClick={() => onOpenSlot(openSlot === sl.field ? null : sl.field)}>
