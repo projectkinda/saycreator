@@ -35,6 +35,11 @@ const HEAD_FIELDS = ['headline', 'title', 'heading', 'question'];
 const MANY = ['stepper', 'numbered-list', 'numbered-stagger', 'checklist', 'bullet-list', 'pill-stagger', 'card-grid', 'timeline', 'thumb-rows', 'list-under-band', 'list-beside-picture'];
 /** The number field of a numeral layout. */
 const NUMBER_FIELD: Record<string, string> = { 'listicle-numeral': 'numeral', 'step-numeral': 'step' };
+/**
+ * Round AQ: the layouts that draw "N." in front of their headline themselves, from an optional one-digit `num` field: headline-body-image (num + headline), do-dont (num + title) and
+ * prose (num + heading). big-stat and stat-bar have a `number` too, but it is a stat, not a list number: they are left as they are.
+ */
+const NUM_PREFIX = ['headline-body-image', 'do-dont', 'prose'];
 /** A headline is an item when it holds at least this share of the item's title words, in order, and this share of its own words is from the item. */
 export const ITEM_MATCH = 0.8;
 
@@ -70,8 +75,30 @@ export function keepListNumbers<T extends Spec>(specs: T[], text: string): { spe
       trims.push({ slide: i + 1, field: 'list number', from: String(s.fields[numField] ?? ''), to: String(item.n), max: 0 });
       return { ...s, fields: { ...s.fields, [numField]: String(item.n) } };
     }
+    const numbered = new RegExp(`^\\s*${item.n}(?:[.)]|\\s)`).test(head);
+    // Round AQ: a layout that draws "N." in front of its headline from its own `num` field (one digit): the number goes there, never also in front of the headline ("1. 1. Leave room")
+    if (NUM_PREFIX.includes(s.layout)) {
+      const num = String(s.fields.num ?? '').trim();
+      if (numbered) {
+        if (!num) return s;
+        // the writer wrote it twice: the headline keeps the person's "N." and the number field goes
+        const { num: _drop, ...rest } = s.fields;
+        trims.push({ slide: i + 1, field: 'list number twice', from: num, to: head, max: 0 });
+        return { ...s, fields: rest as Fields };
+      }
+      if (item.n <= 9) {
+        if (num === String(item.n)) return s;
+        trims.push({ slide: i + 1, field: 'list number', from: num, to: String(item.n), max: 0 });
+        return { ...s, fields: { ...s.fields, num: String(item.n) } };
+      }
+      // item 10 or more does not fit the one-digit field: it goes in front of the headline (below), the field is emptied
+      if (num) {
+        const { num: _drop, ...rest } = s.fields;
+        s = { ...s, fields: rest as Fields };
+      }
+    }
     // the headline already shows its number ("2. Look for reflections", "2 Look ...")
-    if (new RegExp(`^\\s*${item.n}(?:[.)]|\\s)`).test(head)) return s;
+    if (numbered) return s;
     // a no-break space after the number: "5." never stands alone on a line above the item's words
     const next = `${item.n}. ${head}`;
     const fields = { ...s.fields, [key]: next } as Fields;
