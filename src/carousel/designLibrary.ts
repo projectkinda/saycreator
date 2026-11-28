@@ -607,6 +607,11 @@ export interface SlideSpec {
   keepAsWritten?: boolean;
   /** What the person chose for this slide in the layout picker: the deck rotation and the style toggles keep it. */
   pin?: { variant?: 0 | 1; cut?: Cut; invert?: false | 'full' | 'tint'; /** The picture picker: "none", or the id of the picture the person chose (their choice is never moved or removed). */ picture?: string; /** The slide as the deck's own placement made it, kept while a picture is pinned so "Auto" can bring it back. */ auto?: { layout: string; fields: Fields; accents: string[] }; /** Round N: the person chose this slide's layout in the Layout tab: no automatic rule moves it. */ layout?: true; /** Round Y: the person chose this slide's variant in the Layout tab: a closing keeps the layout's own look. */ look?: true };
+  /**
+   * Round AM: the slide's words as they were before the person picked a layout that leaves a line out (or puts the item's number in front of the headline). The layout picker maps
+   * from these, so switching layout again brings the line back. Kept while the slide's words are unchanged (`at`: the words the move gave); a text edit makes them stale. UI only.
+   */
+  left?: { layout: string; fields: Fields; accents: string[]; at: string };
   /** A text slide the code turned into a picture layout because a picture was left unused: the pictures the writer's own picture layouts need are placed first. */
   pictureUpgrade?: boolean;
   /** Round 18: the writer's suggestion for a NAMED picture (its number, 1-based). The code keeps it only when the layout rules allow it. */

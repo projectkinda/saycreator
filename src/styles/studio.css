@@ -401,3 +401,8 @@ body:has(.cr-studio) .topbar { background: var(--page); -webkit-backdrop-filter:
 /* the look, colour block and colours the slide has now read at full strength in "Adjust this layout" (disabled only because choosing them again changes nothing) */
 .cr-var-btn:disabled[aria-pressed="true"] { opacity: 1; color: inherit; }
 .cr-lp-leaves { font-style: italic; }
+/* Round AM: a tile that fits with a change: a dashed edge and the change in plain words under it */
+.cr-lp-tile.cr-lp-change { border-style: dashed; }
+.cr-lp-badge { display: block; margin-top: 2px; padding: 1px 6px; border-radius: 4px; background: rgba(128, 128, 128, 0.16); font-size: 12px; line-height: 1.3; text-align: left; white-space: normal; }
+.cr-lp-ask { margin: 8px 0; padding: 8px 10px; border: 1px solid currentColor; border-radius: 6px; }
+.cr-lp-ask p { margin: 0 0 6px; }

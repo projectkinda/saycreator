@@ -8,13 +8,13 @@ import type { DesignedSlide, Look } from './designed';
 import { cutsOf, layoutDef, LAYOUT_IDS, validateSlideContent, type Cut, type Fields, type LayoutId } from './layouts';
 import { clip, drawOne, scriptSlideOf, slideProblems, stubPack, isObj, type Drawn, type LibraryReport, type SlideSpec } from './designLibrary';
 import { cleanPaste, validateScriptText } from './script';
-import { imageSlotsOf } from './layouts/images';
-import { placeOne, unusedPictures, withoutImages } from './imagePlace';
+import { imageSlotsOf, isImageKey, type PicInfo } from './layouts/images';
+import { placeOne, unusedPictures, usedIds, withoutImages } from './imagePlace';
 import type { CarouselScript } from '../image-engine/carousel/types';
 import type { WriteProvider } from './writer';
 
 // ----- moving the text between layouts: see layoutMap.ts -----
-import { accentsIn, flat, layoutOptions, layoutRefusals } from './layoutMap';
+import { accentsIn, addedNumber, flat, layoutOptions, layoutRefusals, type LayoutOption } from './layoutMap';
 import { BLOCK_LABEL, plainVariant } from './plainWords';
 export { accentsIn, fromCanon, layoutOptions, layoutRefusals, toCanon, type LayoutOption } from './layoutMap';
 
@@ -24,6 +24,8 @@ export interface PickChoice {
   variant?: 0 | 1;
   cut?: Cut;
   invert?: false | 'full' | 'tint';
+  /** Round AM: the layout picker may put a picture another slide also shows on this slide when no free picture fits (the tile said so: "Photo also used on slide 3"). */
+  reuse?: true;
   /** Changes to the slide's pin (the picture picker: the pinned picture and the slide as the deck made it). A key set to undefined is removed. */
   pin?: Partial<NonNullable<SlideSpec['pin']>>;
 }
@@ -100,8 +102,17 @@ export interface GalleryEntry {
   reason?: string;
   /** Round AL part 4 fix: an enabled layout that would leave a line of the slide out. */
   drops?: boolean;
-  /** Round AL part 4 fix: a picture layout (not the slide's own) that would get no picture: every picture of the project is on another slide. */
+  /** Round AL part 4 fix: a picture layout (not the slide's own) that would get no FREE picture: every picture that fits is on another slide. */
   noPicture?: boolean;
+  /**
+   * Round AM: how the layout fits this slide. 'clean': every word, a picture of its own; 'change': it fits with a change the tile names (badges) and the person accepts; 'off': it
+   * cannot work (the reason says why).
+   */
+  fit: 'clean' | 'change' | 'off';
+  /** Round AM: the changes of a 'change' layout: the number put before the headline, the lines it leaves out (a click asks first), the slides that also show its picture. */
+  change?: { number?: string; drops?: string[]; photoFrom?: number[] };
+  /** Round AM: the change in plain words, one line each ("Adds '1.' before the headline", "Leaves out: ...", "Photo also used on slide 3"). */
+  badges?: string[];
 }
 export interface GalleryModel {
   entries: GalleryEntry[];
@@ -122,21 +133,63 @@ export function galleryModel(lib: LibraryReport, look: Look, handle: string, i: 
   const spec = lib.plan?.specs[i];
   if (!lib.plan || !spec) return null;
   const cur = currentOf(lib, i);
-  const options = new Map(layoutOptions(spec, look).map((o) => [o.layout as string, o]));
-  const why = layoutRefusals(spec, look);
+  // Round AM: the words the picker maps from: the slide's own, or the words kept from before a move that left a line out (so the line comes back)
+  const src = sourceOf(spec);
+  const options = new Map(layoutOptions(src, look).map((o) => [o.layout as string, o]));
+  const why = layoutRefusals(src, look);
   const free = look.images?.length ? unusedPictures(lib.plan.specs, look.images, i) : [];
   const entries: GalleryEntry[] = LAYOUT_IDS.map((id) => {
     const def = layoutDef(id)!;
     const o = options.get(id);
-    // the same placement a click makes (choiceDraw): the project pictures no other slide uses, in the slide's look
-    const noPicture = !!o && id !== spec.layout && imageSlotsOf(id).length > 0 && !placeOne(id, cur.variant, free);
-    const reason = o ? (noPicture ? 'All your pictures are on other slides: this layout would show no picture.' : o.dropped.length ? `Leaves out: ${o.dropped.map((t) => '"' + clip(t, 24) + '"').join(', ')}` : undefined) : why[id] ?? 'This slide\'s text does not fit this layout.';
-    return { layout: id, label: def.label, variants: def.variants.map(plainVariant) as [string, string], current: id === spec.layout, enabled: !!o, reason, ...(o && o.dropped.length ? { drops: true } : {}), ...(noPicture ? { noPicture: true } : {}) };
+    const current = id === spec.layout;
+    const base = { layout: id, label: def.label, variants: def.variants.map(plainVariant) as [string, string], current };
+    if (!o && !current) return { ...base, enabled: false, fit: 'off' as const, reason: why[id] ?? 'This slide\'s text does not fit this layout.' };
+    // the same placement a click makes (choiceDraw): the project pictures no other slide uses, in the slide's look; when none fits, a picture another slide also shows
+    const noPicture = !!o && !current && imageSlotsOf(id).length > 0 && !placeOne(id, cur.variant, free);
+    const pics = noPicture ? picturesFor(lib.plan!.specs, look.images ?? [], i, id, cur.variant, true) : null;
+    const change: NonNullable<GalleryEntry['change']> = {};
+    const number = o && !current ? addedNumber(src, o) : '';
+    if (number) change.number = number;
+    if (o?.dropped.length) change.drops = o.dropped;
+    if (pics?.fields) change.photoFrom = pics.from;
+    const badges = badgesOf(change);
+    const reason = noPicture && !pics?.fields ? 'None of your pictures fits this layout\'s picture space.' : badges.length ? badges.join('. ') + '.' : undefined;
+    const fit: GalleryEntry['fit'] = current ? 'clean' : noPicture && !pics?.fields ? 'off' : badges.length ? 'change' : 'clean';
+    return { ...base, enabled: true, fit, reason, ...(o?.dropped.length ? { drops: true } : {}), ...(noPicture ? { noPicture: true } : {}), ...(badges.length ? (current ? { badges } : { change, badges }) : {}) };
   });
   entries.sort((a, b) => Number(b.current) - Number(a.current) || Number(b.enabled) - Number(a.enabled));
   const CUT_LABELS = CUT_LABEL;
-  const signature = hash(JSON.stringify([spec.layout, spec.fields, spec.accents, cur, handle, i, lib.plan.specs.length, lib.grounds?.[i] ?? null, !!look.hasPhoto, lib.style]));
+  const signature = hash(JSON.stringify([spec.layout, spec.fields, spec.accents, spec.left ?? null, cur, handle, i, lib.plan.specs.length, lib.grounds?.[i] ?? null, !!look.hasPhoto, lib.style]));
   return { entries, variant: cur.variant, cuts: cutsOf(spec.layout).map((c) => ({ id: c, label: CUT_LABELS[c] ?? c, current: c === cur.cut })), invert: cur.invert, signature };
+}
+/** Round AM: the plain words of a change, one line each. */
+function badgesOf(c: NonNullable<GalleryEntry['change']>): string[] {
+  const out: string[] = [];
+  if (c.number) out.push(`Adds '${c.number}.' before the headline`);
+  if (c.drops?.length) out.push(`Leaves out: ${c.drops.map((t) => '"' + clip(t, 40) + '"').join(', ')}`);
+  if (c.photoFrom?.length) out.push(c.photoFrom.length === 1 ? `Photo also used on slide ${c.photoFrom[0]}` : `Photos also used on slides ${c.photoFrom.slice(0, -1).join(', ')} and ${c.photoFrom[c.photoFrom.length - 1]}`);
+  return out;
+}
+/** Round AM: a slide's words, the picture fields left out: what `left.at` compares. */
+const wordsKey = (f: Fields): string => JSON.stringify(Object.entries(f).filter(([k]) => k !== 'accent' && !isImageKey(k)).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+/** Round AM: the slide the layout picker maps from: the words kept from before a move that left a line out, while the slide's words are still the ones that move gave; else the slide. */
+export function sourceOf(spec: SlideSpec): SlideSpec {
+  const l = spec.left;
+  return l && l.layout !== spec.layout && l.at === wordsKey(spec.fields) ? { layout: l.layout, fields: l.fields, accents: l.accents } : spec;
+}
+/**
+ * Round AM: the picture fields of slide `i` in a layout: the project pictures no other slide uses; with `reuse`, when none of those fits, the pictures of the whole project (the
+ * free ones first). `from`: the slides (1-based) that also show a picture it placed.
+ */
+function picturesFor(specs: SlideSpec[], images: PicInfo[], i: number, layout: string, variant: 0 | 1, reuse: boolean): { fields: Fields | null; from: number[] } {
+  const free = unusedPictures(specs, images, i);
+  const got = placeOne(layout, variant, free);
+  if (got || !reuse) return { fields: got, from: [] };
+  const freeIds = new Set(free.map((p) => p.id));
+  const all = placeOne(layout, variant, [...free, ...images.filter((p) => !freeIds.has(p.id))]);
+  if (!all) return { fields: null, from: [] };
+  const ids = usedIds(all);
+  return { fields: all, from: specs.flatMap((s, k) => (k !== i && usedIds(s.fields).some((id) => ids.includes(id)) ? [k + 1] : [])) };
 }
 /**
  * The picture of one gallery tile: slide `i` drawn exactly as choosing that layout and variant would draw it (choiceDraw, the same code as redrawLibrarySlide): the slide's own text,
@@ -144,7 +197,7 @@ export function galleryModel(lib: LibraryReport, look: Look, handle: string, i: 
  * stand-in before). null when the code cannot draw it.
  */
 export async function drawGalleryTile(lib: LibraryReport, look: Look, handle: string, i: number, layout: LayoutId, variant: 0 | 1): Promise<string | null> {
-  const r = await choiceDraw(lib, look, handle, i, { layout, variant });
+  const r = await choiceDraw(lib, look, handle, i, { layout, variant, reuse: true });
   return r.ok ? r.d.built!.svg : null;
 }
 
@@ -189,13 +242,17 @@ async function choiceDraw(lib: LibraryReport, look: Look, handle: string, i: num
   const layout = (ch.layout ?? cur.layout) as LayoutId;
   let fields = Object.fromEntries(Object.entries(cur.fields).filter(([k]) => k !== 'accent')) as Fields;
   let accents = cur.accents;
+  // Round AM: a layout move maps from the words kept from before a move that left a line out (sourceOf), so the line comes back; the slide's own words otherwise
+  const src = sourceOf(cur);
+  let moved: LayoutOption | undefined;
   if (layout !== cur.layout) {
-    const opt = layoutOptions(cur, look).find((o) => o.layout === layout);
+    const opt = layoutOptions(src, look).find((o) => o.layout === layout);
     // (a caller that hands over the fields itself, like the picture picker, has already kept every word)
     if (!opt && !ch.fields) return { ok: false, reasons: [`The text of slide ${i + 1} cannot be moved to "${layout}" without making text up.`] };
     if (opt) {
+      moved = opt;
       fields = opt.fields;
-      accents = accentsIn(cur.accents, fields);
+      accents = layout === src.layout && src !== cur ? src.accents : accentsIn(src.accents, fields);
     }
   }
   if (ch.fields) {
@@ -206,15 +263,21 @@ async function choiceDraw(lib: LibraryReport, look: Look, handle: string, i: num
   // a slide moved to a layout with picture slots takes the project's pictures that no other slide uses (best fit); a layout that cannot get enough draws its text-only form
   if (layout !== cur.layout && !ch.fields) {
     fields = withoutImages(fields);
+    // (Round AM: with `reuse`, the layout picker's choice, a picture another slide also shows when no free one fits)
     if (look.images?.length && imageSlotsOf(layout).length) {
-      const got = placeOne(layout, variant, unusedPictures(lib.plan.specs, look.images, i));
+      const got = picturesFor(lib.plan.specs, look.images, i, layout, variant, !!ch.reuse).fields;
       if (got) fields = { ...fields, ...got };
     }
   }
+  // Round AM: the words a move leaves out (or the item's number it puts in the headline) stay with the slide: a later move maps from them and brings them back
+  let left: SlideSpec['left'];
+  if (moved && !ch.fields) {
+    if (layout !== src.layout && (moved.dropped.length || addedNumber(src, moved))) left = { layout: src.layout, fields: withoutImages(Object.fromEntries(Object.entries(src.fields).filter(([k]) => k !== 'accent')) as Fields), accents: src.accents, at: wordsKey(fields) };
+  } else if (cur.left && cur.left.at === wordsKey(fields)) left = cur.left;
   const cut: Cut = ch.cut ?? (cutsOf(layout).includes(now.cut) ? now.cut : 'plain');
   const invert = ch.invert !== undefined ? ch.invert : now.invert;
   const density = layout === cur.layout ? now.density : 'normal';
-  const spec: SlideSpec = { layout, fields, accents, ...(density === 'statement' ? { density } : {}) };
+  const spec: SlideSpec = { layout, fields, accents, ...(density === 'statement' ? { density } : {}), ...(left ? { left } : {}) };
   const problems = slideProblems(spec, look);
   if (problems.length) return { ok: false, reasons: problems };
   // Round Y: a layout or a variant the person chose in the picker is theirs: a closing then keeps the layout's own look (a text edit leaves the look to the code)

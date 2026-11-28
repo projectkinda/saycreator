@@ -3,12 +3,15 @@
 // layouts of that purpose in the same place. Purposes with no layout that fits are listed under "Why not the others" with one plain reason each. Under the grid, "Adjust this
 // layout": the layout's two looks as plain buttons, the colour block and the light/dark swap. One click draws this slide again in code (no model call; one undo step).
 // Pictures are drawn when the picker scrolls into view, one after the other, and kept by slide content + style, so coming back to them costs nothing.
+// Round AM: a layout that fits with a change (a number before the headline, a line left out, a photo another slide also shows) is a tile after the clean ones, marked with the change in
+// plain words under it. A tile that leaves a line out asks first ("Use it" / "Keep my words"); the line stays with the slide, so another layout brings it back.
 import { useEffect, useRef, useState } from 'react';
 import { svgToPng } from '../reference/faithful';
 import { PICTURE_THUMB_MAX, useLibraryVersion } from './photoLibrary';
 import type { GalleryModel, PickChoice } from './designLibraryPick';
 import type { LayoutId } from './layouts';
 import { layoutDetail, looksOf, purposeGrid } from './layoutPurpose';
+import { clip } from './designLibrary';
 
 /** Pictures drawn so far, by slide content + style + layout + variant (null: the code could not draw it). Kept for the page's life, capped. */
 const CACHE = new Map<string, string | null>();
@@ -49,6 +52,8 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
   const [busy, setBusy] = useState(false);
   const [words, setWords] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  /** Round AM: the tile that leaves a line out, waiting for "Use it" or "Keep my words". */
+  const [ask, setAsk] = useState<{ layout: string; lines: string[] } | null>(null);
   const drawRef = useRef(draw);
   drawRef.current = draw;
   const run = useRef(0);
@@ -66,13 +71,15 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
   // a tile shows the project's pictures: a picture added, replaced or re-cropped draws the tiles again
   const pics = useLibraryVersion();
   const sig = `${model?.signature ?? ''}|p${pics}`;
-  const grid = model ? purposeGrid(model.entries) : { tiles: [], off: [] };
   const v = model?.variant ?? 0;
+  // a layout whose picture the code could not draw (the text rules: sizes, margins, contrast) cannot work: its purpose takes the next layout, or goes under "Why not the others"
+  const failed = new Set((model?.entries ?? []).map((e) => e.layout as string).filter((l) => urls[key(sig, l, v)] === null));
+  const grid = model ? purposeGrid(model.entries, failed) : { tiles: [], off: [] };
   // the pictures to draw: the tile of every purpose, and the other layouts of the purpose that is open
   const shown = grid.tiles.flatMap((t) => [t.best, ...(open === t.purpose.id ? t.more : [])]);
   const want = shown.join(',');
-  // a slide with new text, style or look closes "More like this"
-  useEffect(() => { setOpen(null); }, [sig]);
+  // a slide with new text, style or look closes "More like this" (and the question of a tile that leaves a line out)
+  useEffect(() => { setOpen(null); setAsk(null); }, [sig]);
   useEffect(() => {
     if (!seen || !model) return;
     const id = ++run.current;
@@ -102,6 +109,7 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
   }, [seen, sig, want]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const choose = async (c: PickChoice) => {
+    setAsk(null);
     setBusy(true);
     setMsg('');
     setMsg(await onChoose(c));
@@ -118,17 +126,21 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
       </div>
     );
   const cur = model.entries.find((e) => e.current);
-  const reasonOf = (l: string) => model.entries.find((e) => e.layout === l)?.reason;
-  /** One picture of this slide in a layout: a click lays the slide out that way. */
+  const entryOf = (l: string) => model.entries.find((e) => e.layout === l);
+  /** One picture of this slide in a layout: a click lays the slide out that way (Round AM: a layout that leaves a line out asks first). */
   const tile = (l: string, now: boolean, name: string, detail: string) => {
     const url = urls[key(sig, l, v)];
-    const leaves = reasonOf(l);
+    const e = entryOf(l);
+    const badges = e?.badges ?? [];
+    const change = !now && e?.fit === 'change';
+    const drops = change ? e?.change?.drops ?? [] : [];
+    const click = () => (drops.length ? setAsk({ layout: l, lines: drops }) : void choose({ layout: l as LayoutId, variant: v, reuse: true }));
     return (
-      <button type="button" className="btn btn-outline btn-sm cr-lp-tile" disabled={busy || now} aria-pressed={now} aria-label={`${now ? 'Now: ' : 'Use '}${name}${detail ? ', ' + detail : ''}${leaves ? '. ' + leaves : ''}`} title={leaves ?? undefined} data-testid={`gal-${l}`} data-state={now ? 'current' : 'ready'} onClick={() => void choose({ layout: l as LayoutId, variant: v })} style={{ outline: now ? '3px solid currentColor' : undefined, outlineOffset: -1 }}>
+      <button type="button" className={`btn btn-outline btn-sm cr-lp-tile${change ? ' cr-lp-change' : ''}`} disabled={busy || now} aria-pressed={now} aria-haspopup={drops.length ? 'dialog' : undefined} aria-label={`${now ? 'Now: ' : 'Use '}${name}${detail ? ', ' + detail : ''}${badges.length ? '. ' + badges.join('. ') : ''}`} title={badges.length ? badges.join('. ') : undefined} data-testid={`gal-${l}`} data-state={now ? 'current' : 'ready'} data-fit={now ? 'clean' : e?.fit ?? 'clean'} onClick={click} style={{ outline: now ? '3px solid currentColor' : undefined, outlineOffset: -1 }}>
         {url ? <img src={url} alt="" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', borderRadius: 4, display: 'block' }} /> : <span aria-hidden="true" className="small muted" style={{ width: '100%', aspectRatio: '4 / 5', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(128,128,128,.12)', borderRadius: 4 }}>{url === undefined ? '…' : '–'}</span>}
         <span className="small cr-lp-name">{now && <strong className="cr-lp-now">Now </strong>}{name}</span>
         {detail && <span className="small muted cr-lp-detail">{detail}</span>}
-        {leaves && <span className="small muted cr-lp-detail cr-lp-leaves">{leaves}</span>}
+        {badges.map((b) => <span key={b} className="small cr-lp-badge">{b}</span>)}
       </button>
     );
   };
@@ -141,11 +153,11 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
         {grid.tiles.map((t) => {
           const isOpen = open === t.purpose.id;
           return (
-            <div key={t.purpose.id} role="listitem" className={`cr-lp-cell${isOpen ? ' cr-lp-open' : ''}`} data-testid={`purpose-${t.purpose.id}`} data-open={isOpen}>
+            <div key={t.purpose.id} role="listitem" className={`cr-lp-cell${isOpen ? ' cr-lp-open' : ''}`} data-testid={`purpose-${t.purpose.id}`} data-open={isOpen} data-fit={t.fit}>
               {isOpen && <div className="small cr-lp-group">{t.purpose.name}</div>}
               <div className={isOpen ? 'cr-lp-row' : undefined}>
                 {[t.best, ...(isOpen ? t.more : [])].map((l) => (
-                  <div key={l} data-testid={`gal-item-${l}`} data-enabled="true" data-current={l === cur?.layout}>
+                  <div key={l} data-testid={`gal-item-${l}`} data-enabled="true" data-current={l === cur?.layout} data-fit={l === cur?.layout ? 'clean' : entryOf(l)?.fit ?? 'clean'}>
                     {tile(l, l === cur?.layout, t.purpose.name, layoutDetail(l))}
                   </div>
                 ))}
@@ -159,6 +171,17 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
           );
         })}
       </div>
+      {ask && (
+        <div role="alertdialog" aria-labelledby={`cr-lp-ask-${index}`} className="cr-lp-ask" data-testid={`fit-confirm-${index}`} ref={(el) => el?.scrollIntoView({ block: 'nearest' })}>
+          <p className="small" id={`cr-lp-ask-${index}`}>
+            This layout has no room for {ask.lines.map((t, k) => <span key={k}>{k > 0 ? ' or ' : ''}"{clip(t, 80)}"</span>)}. Use it anyway? Your words stay with the slide: another layout brings {ask.lines.length > 1 ? 'them' : 'it'} back.
+          </p>
+          <div className="row-actions">
+            <button type="button" className="btn btn-primary btn-sm" disabled={busy} data-testid="fit-use" onClick={() => void choose({ layout: ask.layout as LayoutId, variant: v, reuse: true })}>Use it</button>
+            <button type="button" className="btn btn-outline btn-sm" disabled={busy} data-testid="fit-keep" autoFocus onClick={() => setAsk(null)}>Keep my words</button>
+          </div>
+        </div>
+      )}
       {grid.off.length > 0 && (
         <details className="cr-lp-off" data-testid={`gallery-off-${index}`}>
           <summary className="small">Why not the others ({grid.off.length})</summary>

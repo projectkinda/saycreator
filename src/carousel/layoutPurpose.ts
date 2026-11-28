@@ -84,29 +84,53 @@ export const looksOf = (layout: string): [string, string] => {
 };
 
 /** The part of a gallery entry the grid needs. */
-export interface PurposeEntry { layout: string; enabled: boolean; current: boolean; reason?: string; drops?: boolean; noPicture?: boolean }
-export interface PurposeTile { purpose: Purpose; /** The layout shown on the purpose's tile: the slide's own layout for its purpose, else the first that fits. */ best: string; /** The other layouts of the purpose that fit, in order ("More like this"). */ more: string[]; current: boolean }
-export interface PurposeGrid { tiles: PurposeTile[]; /** Purposes with no layout that fits this slide, each with one plain reason. */ off: { purpose: Purpose; reason: string }[] }
-/** The grid of one slide: a tile per purpose with at least one layout that fits (the slide's own purpose first), the rest under "Why not the others". */
-export function purposeGrid(entries: PurposeEntry[]): PurposeGrid {
+export interface PurposeEntry { layout: string; enabled: boolean; current: boolean; reason?: string; fit?: 'clean' | 'change' | 'off'; change?: { drops?: string[] } }
+export interface PurposeTile {
+  purpose: Purpose;
+  /** The layout shown on the purpose's tile: the slide's own layout for its purpose, else the first that fits as it is, else the first that fits with a change. */
+  best: string;
+  /** The other layouts of the purpose that fit, in order ("More like this"): those that fit as they are, then those that fit with a change. */
+  more: string[];
+  current: boolean;
+  /** Round AM: 'change' when the tile's layout fits only with a change its badges name (the tile sits after the clean ones). */
+  fit: 'clean' | 'change';
+}
+export interface PurposeGrid { tiles: PurposeTile[]; /** Purposes with no layout that can work for this slide, each with one plain reason. */ off: { purpose: Purpose; reason: string }[] }
+/** Round AM: the reason of a layout the code could not draw at the text rules' sizes (minimum sizes, margins, contrast). */
+export const NOT_DRAWN = 'The words do not fit this layout at a readable size.';
+/**
+ * The grid of one slide: a tile per purpose with at least one layout that can work (the slide's own purpose first, then the purposes that fit as they are, then those that fit with a
+ * change: a number before the headline, a line left out, a photo another slide also shows), the rest under "Why not the others". `failed`: layouts whose picture the code could
+ * not draw (the text rules): they cannot work.
+ */
+export function purposeGrid(entries: PurposeEntry[], failed: ReadonlySet<string> = new Set()): PurposeGrid {
   const by = new Map(entries.map((e) => [e.layout, e]));
   const tiles: PurposeTile[] = [];
   const off: PurposeGrid['off'] = [];
+  const fitOf = (l: string): 'clean' | 'change' | 'off' => {
+    const e = by.get(l);
+    if (!e?.enabled) return 'off';
+    if (e.current) return 'clean';
+    if (failed.has(l)) return 'off';
+    return e.fit ?? 'clean';
+  };
   for (const p of PURPOSES) {
-    // Round AL part 4 fix: the grid offers only what keeps the whole slide: a layout that would leave a line out, or a picture layout that would get no picture, is listed under
-    // "Why not the others" with that reason (the slide's own layout always stays)
-    const whole = (l: string) => { const e = by.get(l); return !!e?.enabled && (e.current || (!e.drops && !e.noPicture)); };
-    const fit = p.layouts.filter(whole);
-    if (!fit.length) {
+    const clean = p.layouts.filter((l) => fitOf(l) === 'clean');
+    const change = p.layouts.filter((l) => fitOf(l) === 'change');
+    if (!clean.length && !change.length) {
       const near = p.layouts.find((l) => by.get(l)?.enabled);
-      const why = (near ? by.get(near)?.reason : undefined) ?? p.layouts.map((l) => by.get(l)?.reason).find(Boolean) ?? 'This slide\'s text does not fit it.';
+      const why = near && failed.has(near) ? NOT_DRAWN : (near ? by.get(near)?.reason : undefined) ?? p.layouts.map((l) => by.get(l)?.reason).find(Boolean) ?? 'This slide\'s text does not fit it.';
       off.push({ purpose: p, reason: why });
       continue;
     }
-    const cur = fit.find((l) => by.get(l)?.current);
-    const best = cur ?? fit[0];
-    tiles.push({ purpose: p, best, more: fit.filter((l) => l !== best), current: !!cur });
+    const cur = clean.find((l) => by.get(l)?.current);
+    // a change that keeps every word comes before one that leaves a line out
+    const changes = [...change.filter((l) => !by.get(l)?.change?.drops?.length), ...change.filter((l) => by.get(l)?.change?.drops?.length)];
+    const all = [...clean, ...changes];
+    const best = cur ?? all[0];
+    tiles.push({ purpose: p, best, more: all.filter((l) => l !== best), current: !!cur, fit: clean.includes(best) ? 'clean' : 'change' });
   }
-  tiles.sort((a, b) => Number(b.current) - Number(a.current));
+  const rank = (t: PurposeTile) => (t.current ? 0 : t.fit === 'clean' ? 1 : 2);
+  tiles.sort((a, b) => rank(a) - rank(b));
   return { tiles, off };
 }

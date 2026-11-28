@@ -170,6 +170,17 @@ function pickerCanon(from: string, own: Fields, c: Canon, to: string): Canon {
   return c;
 }
 /**
+ * Round AM: the number a picker move put in front of the headline ("1"), or '' (the move of pickerCanon: a numbered item on a layout with no number of its own). Reads the option,
+ * never changes it.
+ */
+export function addedNumber(spec: SlideSpec, opt: LayoutOption): string {
+  if (opt.current || NUMBER_SLOT.includes(opt.layout)) return '';
+  const own = Object.fromEntries(Object.entries(spec.fields).filter(([k]) => k !== 'accent')) as Fields;
+  const n = toCanon(spec.layout, own).number;
+  if ((spec.layout !== 'listicle-numeral' && spec.layout !== 'step-numeral') || !/^\d{1,2}$/.test(n)) return '';
+  return flat(opt.fields).some((t) => t.startsWith(`${n}. `)) ? n : '';
+}
+/**
  * `joinStat`: a stat slide (number + label) may become a headline "10 seconds to flip it" (used by the flavour pass). `picker`: the layout picker's list, with the moves of pickerCanon.
  */
 export function layoutOptionsFor(spec: SlideSpec, look: Look, o: { joinStat?: boolean; picker?: boolean } = {}): LayoutOption[] {
