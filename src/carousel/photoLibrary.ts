@@ -192,7 +192,7 @@ export async function addPicture(file: File, kind: 'photo' | 'object'): Promise<
 }
 
 export async function removePicture(id: string) {
-  dataUrls.delete(id);
+  dropUrls(id);
   const l = live.get(id);
   if (l) URL.revokeObjectURL(l.url);
   live.delete(id);
@@ -237,14 +237,20 @@ export function syncPictureCrops(metas: PictureMeta[]) {
     if (JSON.stringify(a ?? null) === JSON.stringify(b ?? null)) continue;
     if (b) crops.set(id, b);
     else crops.delete(id);
-    dataUrls.delete(id);
+    dropUrls(id);
     changed = true;
   }
   if (changed) bump();
 }
 export const PICTURE_DRAW_MAX = 1600;
-export function pictureDataUrl(id: string): Promise<string | null> {
-  let p = dataUrls.get(id);
+/** Round AL part 3: the long side of a picture inside a layout picker tile (a tile is 220 px wide: a 480 px copy is sharp there and much quicker to draw than the 1600 px one). */
+export const PICTURE_THUMB_MAX = 480;
+/** Forgets every copy of a picture (the full one and the small ones). */
+const dropUrls = (id: string) => { for (const k of [...dataUrls.keys()]) if (k === id || k.startsWith(id + '@')) dataUrls.delete(k); };
+/** The picture as a data: URL, at most `max` px on its long side (the full drawing size by default). Cached per picture and size. */
+export function pictureDataUrl(id: string, max = PICTURE_DRAW_MAX): Promise<string | null> {
+  const key = max === PICTURE_DRAW_MAX ? id : `${id}@${max}`;
+  let p = dataUrls.get(key);
   if (!p) {
     p = (async () => {
       const blob = live.get(id)?.work;
@@ -255,7 +261,7 @@ export function pictureDataUrl(id: string): Promise<string | null> {
         const cr = crops.get(id);
         const kx = cr ? bm.width / cr.width : 1, ky = cr ? bm.height / cr.height : 1;
         const src = cr ? { x: cr.crop.x * kx, y: cr.crop.y * ky, w: cr.crop.w * kx, h: cr.crop.h * ky } : { x: 0, y: 0, w: bm.width, h: bm.height };
-        const k = Math.min(1, PICTURE_DRAW_MAX / Math.max(src.w, src.h));
+        const k = Math.min(1, max / Math.max(src.w, src.h));
         const c = document.createElement('canvas');
         c.width = Math.max(1, Math.round(src.w * k));
         c.height = Math.max(1, Math.round(src.h * k));
@@ -265,12 +271,12 @@ export function pictureDataUrl(id: string): Promise<string | null> {
         bm.close();
       }
     })();
-    dataUrls.set(id, p);
-    p.then((v) => v === null && dataUrls.delete(id));
+    dataUrls.set(key, p);
+    p.then((v) => v === null && dataUrls.delete(key));
   }
   return p;
 }
-setPictureResolver(async (ref) => pictureDataUrl(ref.slice('picture:'.length).split('#')[0]));
+setPictureResolver(async (ref, max) => pictureDataUrl(ref.slice('picture:'.length).split('#')[0], max));
 
 /** Changes whenever a picture becomes available or goes: a slide drawn before its pictures were loaded must not be reused afterwards. */
 export const pictureStamp = () => version;

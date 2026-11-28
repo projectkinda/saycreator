@@ -5,7 +5,7 @@
 //  - rewriteSlideText(): the only model call here: one small call for one slide, new text for the SAME layout.
 import type { Layer } from '../image-engine/types';
 import type { DesignedSlide, Look } from './designed';
-import { cutsOf, layoutDef, LAYOUT_IDS, placeholderImage, validateSlideContent, type Cut, type Fields, type LayoutId } from './layouts';
+import { cutsOf, layoutDef, LAYOUT_IDS, validateSlideContent, type Cut, type Fields, type LayoutId } from './layouts';
 import { clip, drawOne, scriptSlideOf, slideProblems, stubPack, isObj, type Drawn, type LibraryReport, type SlideSpec } from './designLibrary';
 import { cleanPaste, validateScriptText } from './script';
 import { imageSlotsOf } from './layouts/images';
@@ -130,22 +130,14 @@ export function galleryModel(lib: LibraryReport, look: Look, handle: string, i: 
   const signature = hash(JSON.stringify([spec.layout, spec.fields, spec.accents, cur, handle, i, lib.plan.specs.length, lib.grounds?.[i] ?? null, !!look.hasPhoto, lib.style]));
   return { entries, variant: cur.variant, cuts: cutsOf(spec.layout).map((c) => ({ id: c, label: CUT_LABELS[c] ?? c, current: c === cur.cut })), invert: cur.invert, signature };
 }
-/** The picture of one gallery tile: the layout in the given variant with this slide's text, the slide's current plane and colours. null when the code cannot draw it. */
+/**
+ * The picture of one gallery tile: slide `i` drawn exactly as choosing that layout and variant would draw it (choiceDraw, the same code as redrawLibrarySlide): the slide's own text,
+ * and its own pictures, the slide's own for its own layout, for another layout the project pictures that the change would place (Round AL part 3; the tiles showed a neutral
+ * stand-in before). null when the code cannot draw it.
+ */
 export async function drawGalleryTile(lib: LibraryReport, look: Look, handle: string, i: number, layout: LayoutId, variant: 0 | 1): Promise<string | null> {
-  const spec = lib.plan?.specs[i];
-  if (!lib.plan || !spec) return null;
-  const cur = currentOf(lib, i);
-  const same = layout === spec.layout;
-  const o = same ? null : layoutOptions(spec, look).find((x) => x.layout === layout);
-  if (!same && !o) return null;
-  const fields0 = same ? (Object.fromEntries(Object.entries(spec.fields).filter(([k]) => k !== 'accent')) as Fields) : o!.fields;
-  // a layout with a picture field is shown with a neutral stand-in (a flat tint with a sun and hills): clearly generic, never a photograph
-  const pics = (layoutDef(layout)?.fields ?? []).filter((q) => q.image).map((q) => q.name);
-  const fields: Fields = pics.length ? { ...fields0, ...Object.fromEntries(pics.map((k, i) => [k, placeholderImage(layout === 'portrait-closing' ? 'portrait' : i % 2 ? 'art' : 'photo')])) } : fields0;
-  const accents = same ? spec.accents : accentsIn(spec.accents, fields);
-  const density = same ? cur.density : 'normal';
-  const d = await drawOne({ layout, fields, accents, ...(density === 'statement' ? { density } : {}) }, variant, lib.style, { handle, index: i, total: lib.plan.specs.length, cut: cutsOf(layout).includes(cur.cut) ? cur.cut : 'plain', invert: cur.invert, density, ...(lib.grounds?.[i] != null ? { ground: lib.grounds[i]! } : {}) });
-  return d.built ? d.built.svg : null;
+  const r = await choiceDraw(lib, look, handle, i, { layout, variant });
+  return r.ok ? r.d.built!.svg : null;
 }
 
 // ----- drawing one slide again -----
@@ -153,6 +145,34 @@ export type SlideRedraw = { ok: true; slide: DesignedSlide; layout: string; spec
 
 /** Draws slide `i` again from the stored plan with the person's choice (a layout, a cut, the variant, the invert) or with new fields. Nothing else in the deck changes. No model call. */
 export async function redrawLibrarySlide(lib: LibraryReport, look: Look, handle: string, i: number, ch: PickChoice & { fields?: Fields; accents?: string[] }): Promise<SlideRedraw> {
+  const r = await choiceDraw(lib, look, handle, i, ch);
+  if (!r.ok) return r;
+  const { cur, layout, fields, variant, invert, spec, own, d, style } = r;
+  const built = d.built!;
+  // (a picture the person pinned stays pinned through any later redraw of the slide: the pin is merged, never replaced)
+  // Round N: a layout the person chose in the Layout tab is theirs: the photo shape rule never moves it
+  const pinObj = { ...cur.pin, ...ch.pin, variant, cut: d.cut, invert: d.invert ? invert || 'full' : false, ...own } as NonNullable<SlideSpec['pin']>;
+  for (const k of Object.keys(pinObj) as (keyof typeof pinObj)[]) if (pinObj[k] === undefined) delete pinObj[k];
+  const pinned: SlideSpec = { ...spec, pin: pinObj };
+  const specs = lib.plan!.specs.map((s, k) => (k === i ? pinned : s));
+  const arr = <T,>(a: T[], v: T) => a.map((x, k) => (k === i ? v : x));
+  const library: LibraryReport = {
+    ...lib,
+    layouts: arr(lib.layouts, layout),
+    variants: arr(lib.variants, variant + 1),
+    cuts: arr(lib.cuts, d.cut as string),
+    inverts: arr(lib.inverts, d.invert ? invert || 'full' : 'none'),
+    densities: arr(lib.densities, d.density),
+    plan: { ...lib.plan!, specs },
+    redraws: (lib.redraws ?? 0) + 1,
+  };
+  const slide: DesignedSlide = { pack: stubPack(style, 'library'), built: { svg: built.svg, layers: built.layers as Layer[], bg: built.fieldBg ?? style.palette.bg, ...(built.devices ? { devices: built.devices } : {}), ...(built.images ? { images: built.images } : {}) } };
+  return { ok: true, slide, layout, spec: pinned, library, scriptSlide: scriptSlideOf(layout, fields) };
+}
+
+type ChoiceDrawn = { ok: true; cur: SlideSpec; layout: LayoutId; fields: Fields; variant: 0 | 1; invert: false | 'full' | 'tint'; spec: SlideSpec; own: { layout?: true; look?: true }; d: Drawn; style: LibraryReport['style'] };
+/** Round AL part 3: slide `i` with a choice applied and drawn, shared by the redraw and the gallery tiles (so a tile is exactly what a click gives). No model call. */
+async function choiceDraw(lib: LibraryReport, look: Look, handle: string, i: number, ch: PickChoice & { fields?: Fields; accents?: string[] }): Promise<ChoiceDrawn | { ok: false; reasons: string[] }> {
   if (!lib.plan) return { ok: false, reasons: ['This deck has no stored plan to draw from.'] };
   const style = lib.style; // the style the deck was drawn in (the person's overrides included)
   const cur = lib.plan.specs[i];
@@ -193,25 +213,7 @@ export async function redrawLibrarySlide(lib: LibraryReport, look: Look, handle:
   const own = { ...(cur.pin?.layout || (ch.layout && ch.layout !== cur.layout) ? { layout: true as const } : {}), ...(cur.pin?.look || ch.variant !== undefined ? { look: true as const } : {}) };
   const d = await drawOne({ ...spec, ...(Object.keys(own).length ? { pin: own } : {}) }, variant, style, { handle, index: i, total: lib.plan.specs.length, cut, invert, density, ...(lib.grounds?.[i] != null ? { ground: lib.grounds[i]! } : {}) });
   if (!d.built) return { ok: false, reasons: d.problems };
-  // (a picture the person pinned stays pinned through any later redraw of the slide: the pin is merged, never replaced)
-  // Round N: a layout the person chose in the Layout tab is theirs: the photo shape rule never moves it
-  const pinObj = { ...cur.pin, ...ch.pin, variant, cut: d.cut, invert: d.invert ? invert || 'full' : false, ...own } as NonNullable<SlideSpec['pin']>;
-  for (const k of Object.keys(pinObj) as (keyof typeof pinObj)[]) if (pinObj[k] === undefined) delete pinObj[k];
-  const pinned: SlideSpec = { ...spec, pin: pinObj };
-  const specs = lib.plan.specs.map((s, k) => (k === i ? pinned : s));
-  const arr = <T,>(a: T[], v: T) => a.map((x, k) => (k === i ? v : x));
-  const library: LibraryReport = {
-    ...lib,
-    layouts: arr(lib.layouts, layout),
-    variants: arr(lib.variants, variant + 1),
-    cuts: arr(lib.cuts, d.cut as string),
-    inverts: arr(lib.inverts, d.invert ? invert || 'full' : 'none'),
-    densities: arr(lib.densities, d.density),
-    plan: { ...lib.plan, specs },
-    redraws: (lib.redraws ?? 0) + 1,
-  };
-  const slide: DesignedSlide = { pack: stubPack(style, 'library'), built: { svg: d.built.svg, layers: d.built.layers as Layer[], bg: d.built.fieldBg ?? style.palette.bg, ...(d.built.devices ? { devices: d.built.devices } : {}), ...(d.built.images ? { images: d.built.images } : {}) } };
-  return { ok: true, slide, layout, spec: pinned, library, scriptSlide: scriptSlideOf(layout, fields) };
+  return { ok: true, cur, layout, fields, variant, invert, spec, own, d, style };
 }
 
 /** The deck's script with slide `i` replaced by the library slide's script form (checked by the script validator like at creation). */

@@ -107,13 +107,14 @@ export function faithfulSvg(svg: string, W: number, slots: FaithfulSlot[], hidde
  * `fit`: the PNG has another shape than the picture (a 4:5 design on a square card): the picture is scaled to fit whole and centred on the background colour.
  */
 /** Turns a project picture reference ("picture:<id>#...") into a data: URL, or null when the picture is not available. Set by the carousel's picture library. */
-let pictureResolver: ((ref: string) => Promise<string | null>) | null = null;
-export const setPictureResolver = (fn: ((ref: string) => Promise<string | null>) | null) => {
+/** `max`: the long side of the copy in px (Round AL part 3: a small copy for the layout picker's tiles); the full drawing size when left out. */
+let pictureResolver: ((ref: string, max?: number) => Promise<string | null>) | null = null;
+export const setPictureResolver = (fn: ((ref: string, max?: number) => Promise<string | null>) | null) => {
   pictureResolver = fn;
 };
 /** The data: URL of a project picture reference (null when it is not available): used to read a picture's edge colour. */
 export const resolvePictureRef = async (ref: string): Promise<string | null> => (pictureResolver ? pictureResolver(ref).catch(() => null) : null);
-export async function svgToPng(svg: string, width: number, fit?: { w: number; h: number; bg: string }): Promise<Blob> {
+export async function svgToPng(svg: string, width: number, fit?: { w: number; h: number; bg: string }, o: { pictureMax?: number } = {}): Promise<Blob> {
   await loadFonts();
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
   const root = doc.documentElement;
@@ -121,7 +122,7 @@ export async function svgToPng(svg: string, width: number, fit?: { w: number; h:
   for (const el of Array.from(root.querySelectorAll('image'))) {
     const href = el.getAttribute('href') ?? '';
     if (!href.startsWith('picture:')) continue;
-    const data = pictureResolver ? await pictureResolver(href).catch(() => null) : null;
+    const data = pictureResolver ? await pictureResolver(href, o.pictureMax).catch(() => null) : null;
     if (data) el.setAttribute('href', data);
     else el.parentNode?.removeChild(el);
   }

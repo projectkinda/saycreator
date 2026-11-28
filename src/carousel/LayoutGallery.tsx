@@ -5,6 +5,7 @@
 // Pictures are drawn when the picker scrolls into view, one after the other, and kept by slide content + style, so coming back to them costs nothing.
 import { useEffect, useRef, useState } from 'react';
 import { svgToPng } from '../reference/faithful';
+import { PICTURE_THUMB_MAX, useLibraryVersion } from './photoLibrary';
 import type { GalleryModel, PickChoice } from './designLibraryPick';
 import type { LayoutId } from './layouts';
 import { layoutDetail, looksOf, purposeGrid } from './layoutPurpose';
@@ -62,7 +63,9 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
     return () => io.disconnect();
   }, [seen]);
 
-  const sig = model?.signature ?? '';
+  // a tile shows the project's pictures: a picture added, replaced or re-cropped draws the tiles again
+  const pics = useLibraryVersion();
+  const sig = `${model?.signature ?? ''}|p${pics}`;
   const grid = model ? purposeGrid(model.entries) : { tiles: [], off: [] };
   const v = model?.variant ?? 0;
   // the pictures to draw: the tile of every purpose, and the other layouts of the purpose that is open
@@ -87,7 +90,7 @@ export function LayoutGallery({ index, model, draw, onChoose, onRewrite, section
         let url: string | null = null;
         try {
           const svg = await drawRef.current(l as LayoutId, v);
-          if (svg) url = URL.createObjectURL(await svgToPng(svg, THUMB_W));
+          if (svg) url = URL.createObjectURL(await svgToPng(svg, THUMB_W, undefined, { pictureMax: PICTURE_THUMB_MAX }));
         } catch { url = null; }
         remember(k, url);
         if (id !== run.current) return;

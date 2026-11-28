@@ -144,7 +144,7 @@ test('the picture field: validated, never written by the writer; the layouts are
     const deck = Array.from({ length: 12 }, (_, i) => ({ layout: IDS[i % IDS.length] }));
     out.rotNo = L.rotateVariants(deck as any, { photo: false }).map((p: any) => p.layout).filter((l: string) => IDS.includes(l));
     out.rotYes = L.rotateVariants(deck as any, { photo: true }).map((p: any) => p.layout).filter((l: string) => IDS.includes(l)).length;
-    // gallery: greyed for a deck with no picture, enabled with one; a tile shows the neutral stand-in
+    // gallery: greyed for a deck with no picture, enabled with one; a tile shows the project picture the change would place (Round AL part 3)
     const lib: any = { route: 'library', provider: 'none', tokenNote: '', calls: 0, tokens: null, seconds: 0, layouts: [], variants: [], cuts: [], inverts: [], densities: [], suggested: { cut: [], invert: [], density: [] }, retries: [], fallbacks: [], codeAdjustments: [], style, styleNotes: [], plan: { title: 'T', specs: [{ layout: 'split-text', fields: { headline: 'Why we built it', paragraph: 'We sewed the bag into the hood, so one layer does both jobs.' }, accents: [] }] } };
     const res = await D.redrawLibraryDeck(lib, { pack: PR.presetPackFor('style-7', false), hasPhoto: false }, '@h');
     const m0 = P.galleryModel(res.library, { hasPhoto: false }, '@h', 0)!;
@@ -152,8 +152,9 @@ test('the picture field: validated, never written by the writer; the layouts are
     out.galleryOff = m0.entries.filter((e: any) => IDS.includes(e.layout) && e.enabled).map((e: any) => e.layout);
     out.galleryReason = m0.entries.find((e: any) => e.layout === 'photo-cover')?.reason;
     out.galleryOn = m1.entries.filter((e: any) => IDS.includes(e.layout) && e.enabled).map((e: any) => e.layout);
-    const tile = await P.drawGalleryTile(res.library, { hasPhoto: true }, '@h', 0, 'photo-cover', 0);
-    out.tileHasPicture = typeof tile === 'string' && tile.includes('<image');
+    // Round AL part 3: a tile is what the click gives: with a project picture, that picture (no stand-in); with no picture to place, the layout's text-only form
+    const tile = await P.drawGalleryTile(res.library, { hasPhoto: true, images: [{ id: 'pA', width: 1500, height: 1000, content: 'photo' }] }, '@h', 0, 'photo-cover', 0);
+    out.tileHasPicture = typeof tile === 'string' && tile.includes('picture:pA');
     out.families = IDS.map((i: string) => [i, FL.familyOf(i)]);
     out.meaning = { dd: FL.MEANING['do-dont']?.kind, pc: FL.MEANING['portrait-closing']?.kind };
     return out;
