@@ -77,11 +77,12 @@ export const stripArticle = (p: string): string => {
 export const withAccent = (slide0: Record<string, unknown>, headline: string, f: Fields, st: LayoutStyle): Record<string, unknown> => {
   let slide = slide0;
   const list = Array.isArray(f.accent) ? arr(f, 'accent').slice(0, 3) : str(f, 'accent') ? [str(f, 'accent')] : [lastWord(headline)];
-  const phrases = list.map(stripArticle).filter(Boolean);
-  if (!phrases.length) return slide;
+  // Round AQ: a phrase that lost its article keeps the phrase as written (`within`), so the highlight goes where the writer meant it ("a frame" is the second "frame")
+  const items = list.map((p) => { const t = p.trim().replace(/[.,;:]+$/, ''); const phrase = stripArticle(p); return { phrase, ...(phrase && phrase !== t ? { within: t } : {}) }; }).filter((x) => x.phrase);
+  if (!items.length) return slide;
   // a marker bar is matched word by word: a trailing full stop on the headline would stop it from matching the last accent word
   if (st.accentStyle === 'marker' && typeof slide.headline === 'string') slide = { ...slide, headline: slide.headline.replace(/[.,;:]+$/, '') };
-  return { ...slide, accent: phrases.length === 1 ? { phrase: phrases[0], style: st.accentStyle } : phrases.map((p) => ({ phrase: p, style: st.accentStyle })) };
+  return { ...slide, accent: items.length === 1 ? { ...items[0], style: st.accentStyle } : items.map((x) => ({ ...x, style: st.accentStyle })) };
 };
 /** A headline of three words or fewer is set big (up to 220 px, the statement mechanism puts it back after the engine's fit): the longest word must still fit the width. */
 const heroTitle = (d: Draw, text: string, align: 'left' | 'center', size = 140, gap = 0, lines = 3) => {
@@ -232,11 +233,13 @@ const BASE_LIST: LayoutDef[] = [
           }
           return { size, ok };
         };
-        const accList = Array.isArray(f.accent) ? arr(f, 'accent').slice(0, 3).map(stripArticle) : str(f, 'accent') ? [stripArticle(str(f, 'accent'))] : [lastWord(head)];
+        const accRaw = Array.isArray(f.accent) ? arr(f, 'accent').slice(0, 3) : str(f, 'accent') ? [str(f, 'accent')] : [];
+        const accList = accRaw.length ? accRaw.map(stripArticle) : [lastWord(head)];
         // the headline column: half the width, wider when the headline cannot be set without a lone short word at half
         // The column split that gives the biggest block: a short headline with a wide word needs a wider column to be set big, and a block that is too short leaves the slide
         // half empty. Every candidate must set the headline without a lone short word; ties keep the narrower headline column.
-        const acc = { phrases: accList.filter(Boolean), marker: st.accentStyle === 'marker' };
+        const accKeep = accList.map((p, k) => ({ p, w: accRaw[k]?.trim().replace(/[.,;:]+$/, '') })).filter((x) => x.p);
+        const acc = { phrases: accKeep.map((x) => x.p), within: accKeep.map((x) => (x.w && x.w !== x.p ? x.w : undefined)), marker: st.accentStyle === 'marker' };
         const hfam = st.fonts.headline;
         const bfam = st.fonts.body;
         const hwt = nearestWeight(hfam, 800);

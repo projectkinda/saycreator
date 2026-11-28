@@ -7,6 +7,7 @@ import { layoutText } from '../../image-engine/draw/text';
 import type { Layer } from '../../image-engine/types';
 import { designKey, packSlide, parsePack, slotMetaOf, type SignatureDevices, type StylePack } from '../../reference/pack';
 import { markerInk, type RLayer } from '../../reference/recreate';
+import { accentWithinAt } from '../../reference/accentWithin';
 import { resolveSvgTokens } from '../../reference/faithful';
 import { balanceVertical, clampSlots, finalGuards, fitSlots, readingOrder, recurringLayers, recurringMarkup, resolveCollisions, stepperSvg } from '../designed';
 import { avatarMarkup, chromeFor } from './chrome';
@@ -348,9 +349,12 @@ export async function buildSlide(layoutId: string, variant: 0 | 1, fields0: Fiel
     const bl = ls.find((l) => l.kind === 'text' && l.name === 'body');
     if (tl && bl) {
       // the real heights: the text laid out the way the drawing lays it out (balanced lines, the accent phrase kept whole)
-      const acc = slide.accent as { phrase?: string; phrases?: string[] } | string[] | string | undefined;
-      const phrases = Array.isArray(acc) ? acc : typeof acc === 'string' ? [acc] : acc?.phrases ?? (acc?.phrase ? [acc.phrase] : []);
-      const runs = phrases.flatMap((p) => { const at = String((tl as { text?: string }).text ?? '').toLowerCase().indexOf(String(p).toLowerCase()); return at >= 0 ? [{ start: at, end: at + String(p).length, color: '#000000' }] : []; });
+      const acc = slide.accent as { phrase?: string; phrases?: string[]; within?: string } | ({ phrase?: string; within?: string } | string)[] | string | undefined;
+      // Round AQ: each phrase with the phrase as written (`within`), so the measure marks the same words as the drawing (accentWithin.ts)
+      const list: { phrase: string; within?: string }[] = Array.isArray(acc) ? acc.map((a) => ({ phrase: String(a) })) : typeof acc === 'string' ? [{ phrase: acc }] : acc?.phrases ? acc.phrases.map((p) => ({ phrase: p })) : acc?.phrase ? [{ phrase: acc.phrase, within: acc.within }] : [];
+      // (a list keeps the old reading: String() of each entry, so a list of {phrase} objects gives no run here, as before)
+      const phrases = list.map((x) => x.phrase);
+      const runs = phrases.flatMap((p, k) => { const tt = String((tl as { text?: string }).text ?? ''); const inside = accentWithinAt(tt, String(p), (list[k] as { within?: string }).within); const at = inside >= 0 ? inside : tt.toLowerCase().indexOf(String(p).toLowerCase()); return at >= 0 ? [{ start: at, end: at + String(p).length, color: '#000000' }] : []; });
       const ht = o.stackReal?.ht ?? Math.ceil(layoutText({ ...tl, balance: true, ...(runs.length ? { runs } : {}) } as never).height);
       const hb = o.stackReal?.hb ?? Math.ceil(layoutText({ ...bl, balance: true } as never).height);
       stackEst = { ht, hb };

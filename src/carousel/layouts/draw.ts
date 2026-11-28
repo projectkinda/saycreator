@@ -5,6 +5,7 @@ import { FONT_WEIGHTS } from '../../image-engine/fonts';
 import { contrastRgb, parseColor } from '../../image-engine/lint/color';
 import type { FontFamily, TextLayer } from '../../image-engine/types';
 import type { Cx, LayoutStyle, PlanImage, Slot } from './types';
+import { accentWithinAt } from '../../reference/accentWithin';
 
 export const SIDE = 48;
 /** Content width: the engine never lets a text box reach past 95% of the slide (x 1026), so everything ends there. */
@@ -51,13 +52,15 @@ function measureRaw(text: string, font: FontFamily, weight: number, size: number
 }
 
 /** The lines a text wraps into (at the scaled size), for checks such as a lone short word on a line. */
-export function lineTexts(text: string, font: FontFamily, weight: number, size: number, width: number, lh: number, accents?: { phrases: string[]; marker: boolean }): string[] {
+export function lineTexts(text: string, font: FontFamily, weight: number, size: number, width: number, lh: number, accents?: { phrases: string[]; marker: boolean; within?: (string | undefined)[] }): string[] {
   const l = { kind: 'text', id: 'm', name: 'm', role: 'content', x: 0, y: 0, width, height: 6000, rotation: 0, opacity: 1, text, style: { font, weight, size, color: '#000000', align: 'left', valign: 'top', lineHeight: lh } } as unknown as TextLayer & { balance?: boolean };
   // a headline is laid out like the engine lays it out: balanced, its accent phrases glued, and (on a marker) with the bar's padding and clear space
   if (accents) {
     const runs: { start: number; end: number; color: string }[] = [];
-    for (const p of accents.phrases) {
-      const at = new RegExp('(?<![\\p{L}\\p{N}])' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'iu').exec(text)?.index ?? -1;
+    for (const [k, p] of accents.phrases.entries()) {
+      // Round AQ: the phrase as written decides which of two places it is (accentWithin.ts)
+      const inside = accentWithinAt(text, p, accents.within?.[k]);
+      const at = inside >= 0 ? inside : new RegExp('(?<![\\p{L}\\p{N}])' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'iu').exec(text)?.index ?? -1;
       if (at >= 0 && !runs.some((r) => at < r.end && at + p.length > r.start)) runs.push({ start: at, end: at + p.length, color: '#000000' });
     }
     (l as unknown as { balance: boolean }).balance = true;

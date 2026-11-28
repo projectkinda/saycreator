@@ -8,6 +8,7 @@ import { activeReference } from './active';
 import { templateOfStyle } from './templates';
 import { ACTIVE_STYLE } from './active';
 import type { ReaderImage, ReferenceReader } from './reader';
+import { accentWithinAt } from './accentWithin';
 
 export const FONT_NAMES = Object.keys(FONT_WEIGHTS) as FontFamily[];
 export const ROLES = ['kicker', 'tag', 'title', 'body', 'caption', 'number'] as const;
@@ -741,8 +742,11 @@ export const FILLER_WORDS = new Set(['get', 'the', 'a', 'an', 'your', 'you', 'an
  * Where in the headline the accent goes: the phrase as written when it is in the headline and holds a meaningful word; when it is only filler words, the longest meaningful word
  * of the headline instead. A phrase that is not in the headline is ignored (null).
  */
-export function accentPhrase(headline: string, accent: string): { start: number; end: number } | null {
+export function accentPhrase(headline: string, accent: string, within?: string): { start: number; end: number } | null {
   const want = accent.trim().replace(/^[^\p{L}\p{N}$%]+|[^\p{L}\p{N}%]+$/gu, '');
+  // Round AQ: the phrase as written ("a frame") decides which of two places the phrase ("frame") is (accentWithin.ts)
+  const inside = want ? accentWithinAt(headline, want, within) : -1;
+  if (inside >= 0 && want.toLowerCase().split(/\s+/).some((w) => !FILLER_WORDS.has(w))) return { start: inside, end: inside + want.length };
   // whole words only: "no" is not found inside "cannot"
   const at = want ? (new RegExp('(?<![\\p{L}\\p{N}])' + want.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'iu').exec(headline)?.index ?? -1) : -1;
   if (at < 0) return null;
@@ -756,12 +760,16 @@ export function accentPhrase(headline: string, accent: string): { start: number;
   return best;
 }
 
-export function textsOf(s: SlideLike, handle: string): Partial<Record<RecreateRole, string>> & { accent?: string; accents?: string[]; accentStyle?: 'marker' | 'text' } {
+export function textsOf(s: SlideLike, handle: string): Partial<Record<RecreateRole, string>> & { accent?: string; accents?: string[]; accentWithin?: (string | undefined)[]; accentStyle?: 'marker' | 'text' } {
   // The accent is a phrase, or {phrase, style}: style "marker" sets it on a bar of the accent colour, "text" colours the words.
   // One phrase, or up to 3 (a list of phrases or {phrase, style}); the first one's style counts.
   const accAll = Array.isArray(s.accent) ? (s.accent as unknown[]) : [s.accent as unknown];
   const phraseOf = (a: unknown) => (typeof a === 'string' ? str(a) : a && typeof a === 'object' ? str((a as { phrase?: unknown }).phrase) : '');
   const accPhrases = accAll.map(phraseOf).filter(Boolean).slice(0, 3);
+  // Round AQ: each phrase's phrase as written, when it lost an article (withAccent), in the same order; absent when none did
+  const withinOf = (a: unknown) => (a && typeof a === 'object' ? str((a as { within?: unknown }).within) || undefined : undefined);
+  const accWithin = accAll.filter((a) => phraseOf(a)).map(withinOf).slice(0, 3);
+  const within = accWithin.some(Boolean) ? { accentWithin: accWithin } : {};
   const acc = accAll[0];
   const accentPhrase0 = accPhrases[0] ?? '';
   const accStyle = acc && typeof acc === 'object' ? (acc as { style?: unknown }).style : undefined;
@@ -780,6 +788,7 @@ export function textsOf(s: SlideLike, handle: string): Partial<Record<RecreateRo
     number: typeof s.number === 'number' ? String(s.number) : str(s.value),
     accent: accentPhrase0,
     ...(accPhrases.length > 1 ? { accents: accPhrases } : {}),
+    ...within,
     ...(accentStyle ? { accentStyle } : {}),
   };
 }
@@ -868,8 +877,9 @@ export function fillRecreate(rec: RecreateSpec, texts: Partial<Record<RecreateRo
     if (role === 'title' || role === 'body') filled.balance = true; // balanced lines: no one-word last line in a headline or in body text
     if (role === 'title' && accent && accentColour) {
       const phrases = [accent, ...((texts as { accents?: string[] }).accents ?? []).slice(1)];
+      const withins = (texts as { accentWithin?: (string | undefined)[] }).accentWithin ?? [];
       const hits = phrases
-        .map((p) => accentPhrase(text, p))
+        .map((p, k) => accentPhrase(text, p, withins[k]))
         .filter((h): h is { start: number; end: number } => !!h)
         .sort((x, y) => x.start - y.start)
         .filter((h, i, all) => i === 0 || h.start >= all[i - 1].end);
