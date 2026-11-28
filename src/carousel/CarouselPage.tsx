@@ -31,7 +31,7 @@ import { choiceOf, pickPicture } from './picturePick';
 import { SlidePicker } from './SlidePicker';
 import { flavourLine, plainProblem, plainWords } from './plainWords';
 import { purposeLabel } from './layoutPurpose';
-import { drawGalleryTile, galleryModel, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
+import { drawGalleryTile, galleryModel, leftOutOf, redrawLibrarySlide, rewriteSlideText, scriptWithSlide, type PickChoice } from './designLibraryPick';
 import { LayoutGallery } from './LayoutGallery';
 import { profileWebsite } from './profileSite';
 import { ImagesField } from './ImagesField';
@@ -1512,6 +1512,12 @@ export default function CarouselPage() {
           return undefined;
         })()}
         onAddPicture={doc.designed?.library?.plan ? () => addPictureTo(i) : undefined}
+        leftOut={(() => {
+          // Round AM part 3: the words a layout switch left out stay with the slide (through text edits); one click switches back to the layout that shows them
+          const spec = doc.designed?.library?.plan?.specs[i];
+          const lines = spec ? leftOutOf(spec) : [];
+          return lines.length && spec?.left ? { lines, onBringBack: () => pickChoose(i, { layout: spec.left!.layout as LayoutId, reuse: true }) } : undefined;
+        })()}
         devTools={devTools}
         onDownload={() => downloadOne(i)}
         deckLabel={deck}

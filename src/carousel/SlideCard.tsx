@@ -60,7 +60,7 @@ const TABS: { id: EditTab; label: string }[] = [
 ];
 
 /** The editor of ONE slide, as four tabs: Layout | Text | Pictures | Fine-tune. There is no second preview here: the big preview and the thumbnail strip stay on the left. */
-export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, pickerBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, ownNote, onSplit, onArrange, removeBlocked, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
+export function SlideCard({ index, count, slide, script, swaps, view, apply, onShuffle, onImageText, onRedesign, layoutTab, rewriteBox, libraryText, onTextCommit, unusedBox, pickerBox, fineTuneBox, tab, onTab, devTools, openSlot, onOpenSlot, picturesState, onAddPicture, leftOut, ownNote, onSplit, onArrange, removeBlocked, pictureSlots, onSlotChange, picturesUsedElsewhere, onDownload, deckLabel, photo, object, pictures, palette, hasPhotoStyle, addFiles }: {
   photo?: PhotoChoice;
   object?: ObjectChoice;
   pictures: PictureMeta[];
@@ -113,6 +113,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   picturesState: 'none' | 'free' | 'used';
   /** Library slide without a picture slot: moves it to a picture layout of its own meaning and puts an unused picture in; says what happened. */
   onAddPicture?: () => Promise<string>;
+  /** Round AM part 3: the words a layout switch left out of this slide, kept with it, and the switch back to the layout that shows them (the person's edits kept). */
+  leftOut?: { lines: string[]; onBringBack: () => Promise<string> };
   /** Library slides with pictures: the picture slots (tap one to replace, remove, move or zoom it). */
   pictureSlots?: SlotView[];
   onSlotChange?: OnSlotChange;
@@ -129,6 +131,8 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
   const arrange = async (op: ArrangeOp) => { setArrangeBusy(true); setArrangeMsg(''); const m = await onArrange!(op); setArrangeBusy(false); if (!/^(Removed|Moved) slide/.test(m)) setArrangeMsg(m); };
   const tooManyWords = !!view?.rendered?.lint.some((l) => l.id === 'words' && !l.pass);
   const [addMsg, setAddMsg] = useState('');
+  const [backBusy, setBackBusy] = useState(false);
+  const [backMsg, setBackMsg] = useState('');
   const [addBusy, setAddBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const run = (r: ReturnType<Apply>) => setProblem(r.ok ? '' : r.reasons[0]);
@@ -308,6 +312,13 @@ export function SlideCard({ index, count, slide, script, swaps, view, apply, onS
           </button>
         ))}
       </div>
+      {leftOut && leftOut.lines.length > 0 && (
+        <p className="small cr-left-out" data-testid="left-out">
+          <span>Left out of this layout: {leftOut.lines.map((t, k) => (k > 0 ? ', ' : '') + '"' + (t.length > 40 ? t.slice(0, 40).trimEnd() + '…' : t) + '"').join('')}.</span>{' '}
+          <button type="button" className="btn btn-outline btn-sm" disabled={backBusy} data-testid="left-out-back" onClick={async () => { setBackBusy(true); setBackMsg(''); setBackMsg(await leftOut.onBringBack()); setBackBusy(false); }}>{backBusy ? 'Working…' : 'Bring it back'}</button>
+        </p>
+      )}
+      {backMsg && <p className="small" role="status" data-testid="left-out-msg">{backMsg}</p>}
       <div className="cr-edit cr-tabpanel" role="tabpanel" id="cr-tabpanel" aria-labelledby={`cr-tab-${tab}`}>
         {panels[tab]}
         {problem && <p className="small cr-problem" role="alert">{problem}</p>}

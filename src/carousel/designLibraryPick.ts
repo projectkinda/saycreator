@@ -182,6 +182,53 @@ export function sourceOf(spec: SlideSpec): SlideSpec {
   const l = spec.left;
   return l && l.layout !== spec.layout && l.at === wordsKey(spec.fields) ? { layout: l.layout, fields: l.fields, accents: l.accents } : spec;
 }
+/** Round AM part 3: the slide's text fields as strings and lists (no picture field, no accent). */
+const textFields = (f: Fields): Record<string, string | string[]> => Object.fromEntries(Object.entries(f).filter(([k, v]) => k !== 'accent' && !isImageKey(k) && v != null && v !== '')) as Record<string, string | string[]>;
+/**
+ * Round AM part 3: the kept words of the slide (from before a layout switch that left them out) that it does not show now: what "Bring it back" brings back. Empty when nothing
+ * is kept, or when the switch only put the item's number before the headline.
+ */
+export function leftOutOf(spec: SlideSpec): string[] {
+  if (sourceOf(spec) === spec) return [];
+  const shown = flat(spec.fields);
+  return flat(spec.left!.fields).filter((t) => !shown.some((u) => u === t || u.includes(t)));
+}
+/**
+ * Round AM part 3: the kept words after a text edit in the same layout. Each changed line of the slide is changed the same way in the kept words (the line as it is there,
+ * or without the "1." the switch put in front); the kept words then match the edited slide, so the picker and "Bring it back" use the person's edits. Nothing is kept (undefined)
+ * when the edit wrote the left-out words back, wrote into a part of the slide that was empty (where the left-out line would go), or changed a line the kept words cannot follow.
+ */
+function carryLeft(cur: SlideSpec, next: Fields): SlideSpec['left'] {
+  const l = cur.left!;
+  const lost = leftOutOf(cur);
+  if (!lost.length) return undefined;
+  const before = textFields(cur.fields);
+  const after = textFields(next);
+  const shownAfter = flat(next);
+  if (lost.some((t) => shownAfter.some((u) => u === t || u.includes(t)))) return undefined;
+  if (Object.keys(after).some((k) => !(k in before))) return undefined;
+  const NUM = /^\d{1,2}\. /;
+  let kept = flat(l.fields).length ? (JSON.parse(JSON.stringify(l.fields)) as Fields) : null;
+  if (!kept) return undefined;
+  const pairs: [string, string][] = [];
+  for (const k of Object.keys(before)) {
+    const a = before[k], b = after[k] ?? (Array.isArray(a) ? [] : '');
+    const as = Array.isArray(a) ? a : [a], bs = Array.isArray(b) ? b : [b];
+    for (let n = 0; n < Math.max(as.length, bs.length); n++) if ((as[n] ?? '') !== (bs[n] ?? '')) pairs.push([as[n] ?? '', bs[n] ?? '']);
+  }
+  for (const [a, b] of pairs) {
+    if (!a) return undefined;
+    const tries: [string, string][] = [[a, b], [a.replace(NUM, ''), b.replace(NUM, '')]];
+    let hit = false;
+    const swap = (v: string) => {
+      for (const [x, y] of tries) if (x && v.includes(x)) { hit = true; return v.replace(x, y).trim(); }
+      return v;
+    };
+    kept = Object.fromEntries(Object.entries(kept!).map(([k, v]) => [k, Array.isArray(v) ? (v as string[]).map(swap).filter(Boolean) : typeof v === 'string' ? swap(v) : v]).filter(([, v]) => v !== '' && !(Array.isArray(v) && !v.length))) as Fields;
+    if (!hit) return undefined;
+  }
+  return { ...l, fields: kept!, at: wordsKey(next) };
+}
 /**
  * Round AM: the picture fields of slide `i` in a layout: the project pictures no other slide uses; with `reuse`, when none of those fits, the pictures of the whole project (the
  * free ones first). `from`: the slides (1-based) that also show a picture it placed.
@@ -280,6 +327,8 @@ async function choiceDraw(lib: LibraryReport, look: Look, handle: string, i: num
   if (moved && !ch.fields) {
     if (layout !== src.layout && (moved.dropped.length || addedNumber(src, moved))) left = { layout: src.layout, fields: withoutImages(Object.fromEntries(Object.entries(src.fields).filter(([k]) => k !== 'accent')) as Fields), accents: src.accents, at: wordsKey(fields) };
   } else if (cur.left && cur.left.at === wordsKey(fields)) left = cur.left;
+  // Round AM part 3: a text edit in the same layout keeps the words left out by the switch, with the person's edit carried into them (carryLeft)
+  else if (ch.fields && layout === cur.layout && sourceOf(cur) !== cur) left = carryLeft(cur, fields);
   const cut: Cut = ch.cut ?? (cutsOf(layout).includes(now.cut) ? now.cut : 'plain');
   const invert = ch.invert !== undefined ? ch.invert : now.invert;
   const density = layout === cur.layout ? now.density : 'normal';
